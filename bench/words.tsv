@@ -1,9 +1,0 @@
-# SPDX-License-Identifier: MPL-2.0
-# MIFM1's words for a screen reader (fm1-reader): the screen's text <TAB> what to say.
-# url: https://distortedimages-code.github.io/MIFM1/words/
-MIFM1	M I F M 1
-BANC	bench
-COEUR 0	core zero
-COEUR 1	core one
-PIC	peak
-MOY	average

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MPL-2.0
 # Copyright (C) 2026 Yoann
-"""MIFM1: the site for a release package, without the parts of fm1-base's tools/make_site.py this bench has not (a
+"""MIFM1: the site for a release package, without the parts of fm1-base's tools/make_site.py MIFM1 has not yet (a
 front page in Markdown, a manual, the firmware in the browser). The same installer page (base/web/installer.html,
 with fm1ports.js, fm1pkg.js and fm1ota.js inlined): it writes the firmware, then the resource region (the Mutable
 Instruments tables, NAME-VERSION-res.bin, from beside the package), then offers m-bootloader. And the backup page
-(base/web/backup/index.html): the bench's results to a file (tools/read_results.py reads it).
+(base/web/backup/index.html): the saved project to a file, and back.
 
-    python3 tools/make_installer.py bench/build/mifm1-0.0.fwsc 0.0 site
+    python3 tools/make_installer.py firmware/build/mifm1-0.1.fwsc 0.1 site
 
 Then serve the folder (python3 -m http.server 8000 --directory site) and open http://localhost:8000/install/ in
 Chrome or Edge (Web MIDI wants a page from a server, not a file)."""
@@ -20,7 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "base"
-APP = ROOT / "bench"
+APP = ROOT / "firmware"
 sys.path.insert(0, str(BASE / "tools"))
 from make_site import MBOOT_VERSION, product_of, strip_module, tool_pages  # noqa: E402
 from build import read_conf  # noqa: E402
@@ -34,7 +34,7 @@ def main(pkg, version, out):
     raw = pkg.read_bytes()
     product = product_of(raw)
     if not re.fullmatch(re.escape(conf["id_prefix"]) + r"\d{6}", product):
-        raise SystemExit(f"{pkg}: identity {product!r}: a release build is needed (tools/build.py ../bench --release X.Y)")
+        raise SystemExit(f"{pkg}: identity {product!r}: a release build is needed (tools/build.py ../firmware --release X.Y)")
     if b"FELUCCA-LOADER-1" not in raw:
         raise SystemExit(f"{pkg}: no update loader in it")
     file_name = f"{name.lower()}-{re.sub(r'[^A-Za-z0-9.-]', '-', version)}.fwsc"

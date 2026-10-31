@@ -1,0 +1,88 @@
+# MIFM1 in fm1-base's host simulator: the default patch playing, the pages, a knob turned, a cable made in MOD mode
+# (hold a source key, turn a knob), the matrix, the global page, a save kept across a power-off and in a backup, an
+# FM-1 without the module tables, then the tables arriving. Screenshots in the output folder.
+wait 1500
+shot 01_plaits_t1.png
+tap PLAY
+wait 2500
+shot 02_playing.png
+wav play.wav
+wait 6000
+wavstop
+turn PRESET 1
+wait 300
+turn K3 6
+wait 300
+shot 03_t2_timbre.png
+turn SELECT 1
+wait 300
+shot 04_plaits2.png
+turn SELECT 1
+wait 300
+shot 05_plaits3.png
+tap LFO
+wait 300
+shot 06_tides_a.png
+tap LFO
+wait 300
+shot 07_tides_b.png
+turn SELECT 1
+wait 300
+shot 08_tides_b2.png
+tap SEQ
+wait 300
+shot 09_marbles_t.png
+tap ARP
+wait 300
+shot 10_marbles_x.png
+tap HOME
+wait 300
+shot 11_mixer.png
+tap EDIT
+wait 300
+tap SEL
+wait 300
+shot 12_mod.png
+key 4 down
+turn K4 8
+key 4 up
+wait 300
+shot 13_cable_b1_morph.png
+tap SEL
+wait 300
+press SEL
+wait 900
+release SEL
+wait 300
+shot 14_matrix.png
+turn K1 1
+wait 300
+shot 15_matrix_2.png
+press SEL
+release SEL
+wait 300
+tap GLO
+wait 600
+shot 16_global.png
+tap GLO
+tap PLAY
+wait 500
+press SAVE
+wait 900
+release SAVE
+wait 300
+shot 17_saved.png
+backup out:project.mifm1
+reboot
+wait 1500
+turn PRESET 1
+wait 300
+shot 18_after_reboot.png
+res 0
+reboot
+wait 1500
+shot 19_no_tables.png
+res 1
+restore out:project.mifm1
+wait 1500
+shot 20_tables_back.png

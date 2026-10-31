@@ -13,14 +13,14 @@ byte.
 
     tools/split_tables.py        (after tools/vendor_mi.sh; tools/patch_mi.sh runs it)
 
-Writes bench/res/mi_tables.bin (the region's payload) and symbols.txt (each moved symbol's address), bench/mi/res_tables.h,
+Writes firmware/res/mi_tables.bin (the region's payload) and symbols.txt (each moved symbol's address), firmware/mi/res_tables.h,
 res_abs.cc (the absolute symbols) and res_symbols.cc, and wraps the moved arrays in their resources.cc."""
 import re
 import struct
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TP = ROOT / "bench" / "third_party"
+TP = ROOT / "firmware" / "third_party"
 
 # the region: whole sectors from the data area's start (base/include/plat.h PLAT_DATA_LO), clear of the sectors other
 # firmwares keep their saves in (ZINZIN's song at 0xDA000, every firmware's panel calibration at 0xDC000)
@@ -77,8 +77,8 @@ def main():
     sectors = (RES_HEAD + len(payload) + 4095) // 4096
     if RES_BASE + sectors * 4096 > 0xDA000:
         raise SystemExit("split_tables: the region would reach the sectors other firmwares save in")
-    (ROOT / "bench" / "res").mkdir(exist_ok=True)
-    (ROOT / "bench" / "res" / "mi_tables.bin").write_bytes(bytes(payload))
+    (ROOT / "firmware" / "res").mkdir(exist_ok=True)
+    (ROOT / "firmware" / "res" / "mi_tables.bin").write_bytes(bytes(payload))
     base = XIP(RES_BASE + RES_HEAD)
 
     head = [
@@ -87,12 +87,12 @@ def main():
         "#pragma once",
         f"#define MIFM1_RES_BASE {RES_BASE:#x}u             /* app.h APP_RES_BASE */",
         f"#define MIFM1_RES_SECTORS {sectors}u",
-        f"#define MIFM1_RES_LEN {len(payload)}u               /* the payload: bench/res/mi_tables.bin */",
+        f"#define MIFM1_RES_LEN {len(payload)}u               /* the payload: firmware/res/mi_tables.bin */",
         f"/* the payload reads in place at {base:#010x} (FM1_XIP): the moved symbols' base (mi/res_symbols.cc) */",
         f"#define MIFM1_RES_TABLES {len(entries)}",
         "",
     ]
-    (ROOT / "bench" / "mi" / "res_tables.h").write_text("\n".join(head))
+    (ROOT / "firmware" / "mi" / "res_tables.h").write_text("\n".join(head))
 
     syms = [
         "// SPDX-License-Identifier: MPL-2.0",
@@ -118,8 +118,8 @@ def main():
         sym = mangle(ns, name)
         absu.append(f'    ".globl {sym}\\n.set {sym}, {base + off:#010x}\\n"')
     absu += [");", "#endif", ""]
-    (ROOT / "bench" / "mi" / "res_abs.cc").write_text("\n".join(absu))
-    (ROOT / "bench" / "res" / "symbols.txt").write_text(
+    (ROOT / "firmware" / "mi" / "res_abs.cc").write_text("\n".join(absu))
+    (ROOT / "firmware" / "res" / "symbols.txt").write_text(
         "".join(f"{mangle(ns, name)} {base + off:#010x}\n" for ns, name, ctype, off, count in entries))
     for module_ns in sorted({e[0] for e in entries}):
         syms.append(f"namespace {module_ns} {{")
@@ -156,7 +156,7 @@ def main():
         "#endif",
         "",
     ]
-    (ROOT / "bench" / "mi" / "res_symbols.cc").write_text("\n".join(syms))
+    (ROOT / "firmware" / "mi" / "res_symbols.cc").write_text("\n".join(syms))
     print(f"region: {len(payload)} B in {sectors} sectors at {RES_BASE:#x} (reads at {base:#010x}), "
           f"{len(entries)} tables")
 

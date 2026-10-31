@@ -19,7 +19,7 @@ concurrency:                     # a newer push of the same branch replaces a ru
   group: firmware-${{ github.ref }}
   cancel-in-progress: true
 env:
-  VERSION: "0.0"
+  VERSION: "0.1"
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -32,25 +32,24 @@ jobs:
       - name: The moved tables, as tools/split_tables.py makes them from the vendored code
         run: |
           sh tools/patch_mi.sh
-          git diff --exit-code -- bench/ || { echo "::error title=tables::run tools/patch_mi.sh and commit"; exit 1; }
-      - name: Every scene on a computer (plays, no NaN, not silent; the region's file is the arrays' bytes)
+          git diff --exit-code -- firmware/ || { echo "::error title=tables::run tools/patch_mi.sh and commit"; exit 1; }
+      - name: The engine on a computer (the default patch plays, every track and model sounds; the region's file is the arrays' bytes)
         run: make test
       - name: The FM-1's constraints (no libm, no C++ library, no double; the moved tables at the region's addresses)
         shell: bash                # (pipefail: the check's failure, not tail's success)
         run: sh tools/device_check.sh | tail -14
-      - name: The host simulator's screens (results across a power-off and in a backup; an FM-1 without the tables)
+      - name: The host simulator's screens (the pages, a cable in MOD mode, a save across a power-off and in a backup, an FM-1 without the tables)
         run: |
-          (cd base && python3 tools/build.py ../bench --host) > host.log 2>&1 || { tail -40 host.log; exit 1; }
+          (cd base && python3 tools/build.py ../firmware --host) > host.log 2>&1 || { tail -40 host.log; exit 1; }
           mkdir -p build/host_out
-          bench/build/host/mifm1_host bench/tests/screens.txt build/host_out
-          python3 tools/read_results.py build/host_out/results.mifm1
+          firmware/build/host/mifm1_host firmware/tests/screens.txt build/host_out
       - uses: actions/upload-artifact@v4
         with:
-          name: bench-computer
+          name: computer
           path: |
             build/wav/*.wav
             build/host_out/*.png
-            build/host_out/results.mifm1
+            build/host_out/*.wav
   firmware:
     needs: test
     runs-on: ubuntu-latest
@@ -86,26 +85,26 @@ jobs:
         run: |
           set -o pipefail
           annotate() { python3 -c "import sys; t = sys.stdin.read().replace('%', '%25').replace('\r', '').replace('\n', '%0A'); print('::$1 title=$2::' + t)"; }
-          (cd base && python3 tools/build.py ../bench --release "$VERSION") 2>&1 | tee build.log || {
+          (cd base && python3 tools/build.py ../firmware --release "$VERSION") 2>&1 | tee build.log || {
             { grep -nE "error|build:|undefined|outside the BSP|overflow|too (big|large)" build.log | grep -v "warning:" | tail -n 60
               echo ...; tail -n 25 build.log; } | annotate error "build"; exit 1; }
           # what the build says about sizes and RAM
           tail -n 40 build.log | annotate notice "build"
-          ls -la bench/build/*.fwsc bench/build/*-res.bin
+          ls -la firmware/build/*.fwsc firmware/build/*-res.bin
       - name: The moved tables' references, as linked (their addresses, none with its halfwords swapped)
-        run: python3 tools/check_res_links.py bench/build/mifm1.elf bench/res/symbols.txt
+        run: python3 tools/check_res_links.py firmware/build/mifm1.elf firmware/res/symbols.txt
       - name: No static initializer in the modules as JieLi's compiler built them (the FM-1 never runs one)
-        run: python3 tools/no_static_init.py bench/build/o2/*.o
+        run: python3 tools/no_static_init.py firmware/build/o2/*.o
       - name: The installer and the backup page
         run: |
-          python3 tools/make_installer.py bench/build/mifm1-"$VERSION".fwsc "$VERSION" site
+          python3 tools/make_installer.py firmware/build/mifm1-"$VERSION".fwsc "$VERSION" site
           python3 tools/make_index.py site "$VERSION"
       - uses: actions/upload-artifact@v4
         with:
           name: mifm1-fwsc
           path: |
-            bench/build/*.fwsc
-            bench/build/*-res.bin
+            firmware/build/*.fwsc
+            firmware/build/*-res.bin
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

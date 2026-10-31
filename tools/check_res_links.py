@@ -9,7 +9,7 @@ are right. This reads the linked ELF: no word anywhere in the image (code or dat
 address with its halfwords swapped; mi_res_where (app.c's check) holds the first table's address; and the data that
 points at the tables (Marbles' distributions_table...) points at their addresses.
 
-    tools/check_res_links.py bench/build/mifm1.elf bench/res/symbols.txt"""
+    tools/check_res_links.py firmware/build/mifm1.elf firmware/res/symbols.txt"""
 import struct
 import sys
 

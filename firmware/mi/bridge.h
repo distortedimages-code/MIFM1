@@ -1,0 +1,87 @@
+/* SPDX-License-Identifier: MPL-2.0
+ * Copyright (C) 2026 Yoann */
+/* MIFM1: a C face for each Mutable Instruments module (one C++ unit per module: their resources.h headers define
+ * the same macro names, so no two of them may meet in one unit). Every object lives in memory the caller gives it
+ * (the engine's arena): nothing is allocated, nothing is freed, no static constructor runs.
+ *
+ * Audio is float, -1..1, mono buffers of n frames (any n: each bridge cuts it into its module's own blocks). */
+#ifndef MIFM1_BRIDGE_H_
+#define MIFM1_BRIDGE_H_
+#include <stdint.h>
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define MI_SR 44100.0f                   /* the FM-1's rate */
+
+/* ---- Plaits (Plaits 1.2: 24 models; the kSampleRate of the copy is 44.1 kHz) ---- */
+#define MP_MODELS 24
+uint32_t mp_size(void);                  /* bytes for one voice, its 16 KB engine buffer included */
+void mp_init(void *mem);
+void mp_set(void *v, int model, float note, float harmonics, float timbre, float morph, float decay, float colour);
+void mp_gate(void *v, int high);         /* the TRIG input, held: a rise starts the LPG and decay, its length holds
+                                         * the engines that sustain */
+void mp_amounts(void *v, float fm, float timbre, float morph);   /* the attenuverters: with TRIG patched and nothing
+                                         * else, they let the internal envelope move FM, TIMBRE and MORPH (-1..1) */
+void mp_render(void *v, float *out, float *aux, uint32_t n);
+const char *mp_model_name(int model);
+
+/* ---- Clouds ---- */
+#define MC_MODES 4
+uint32_t mc_size(void);                  /* the processor alone */
+#define MC_LARGE_FULL 118784u            /* Clouds' own buffers (clouds.cc), and a smaller pair for a busy scene */
+#define MC_SMALL_FULL (65536u - 128u)
+void mc_init(void *mem, void *large, uint32_t large_size, void *small, uint32_t small_size);
+void mc_set(void *c, int mode, int quality, float position, float size, float pitch, float density, float texture,
+            float dry_wet, float spread, float feedback, float reverb, int freeze);
+void mc_render(void *c, const float *in_l, const float *in_r, float *out_l, float *out_r, uint32_t n);
+const char *mc_mode_name(int mode);
+
+/* ---- Warps ---- */
+#define MW_ALGOS 9                       /* the 8 positions of ALGORITHM's sweep, then the easter egg */
+uint32_t mw_size(void);
+void mw_init(void *mem);
+void mw_set(void *w, int algo, float timbre, float level1, float level2);
+void mw_render(void *w, const float *carrier, const float *modulator, float *out, float *aux, uint32_t n);
+const char *mw_algo_name(int algo);
+
+/* ---- Tides 2 ---- */
+uint32_t mt_size(void);
+void mt_init(void *mem);
+/* ramp 0 AD, 1 looping, 2 AR; output 0 gates, 1 amplitudes, 2 phases, 3 frequencies; range 0 control, 1 audio */
+void mt_set(void *t, int ramp, int output, int range, float hz, float shape, float slope, float smoothness,
+            float shift);
+void mt_gate(void *t, int high);         /* the trigger / gate input */
+/* out: 4 channels interleaved (n frames x 4); n frames at rate sr (44100 at audio rate, the block rate as a
+ * modulator: one frame per audio block) */
+void mt_render(void *t, float *out4, uint32_t n, float sr);
+
+/* ---- Marbles ---- */
+typedef struct {                         /* its panel, as marbles.cc reads it (all 0..1 unless said) */
+    int t_model;                         /* 0..6: complementary Bernoulli, clusters, drums, independent Bernoulli,
+                                          * divider, three states, Markov */
+    int t_range;                         /* 0 /4, 1 x1, 2 x4 */
+    float rate;                          /* semitones about 2 Hz at x1 (marbles' RATE) */
+    float t_bias, jitter, deja_vu;
+    int length;                          /* 1..16 */
+    int t_deja_vu, x_deja_vu;            /* DEJA VU acts on T, on X */
+    float spread, x_bias, steps;
+    int x_mode;                          /* 0 identical, 1 bump, 2 tilt */
+    int x_range;                         /* 0 narrow (+2 V), 1 positive (+5 V), 2 full (+/-5 V) */
+    int scale;                           /* 0..5: marbles' preset scales */
+    float y_spread, y_bias, y_steps;
+} mm_params_t;
+uint32_t mm_size(void);
+void mm_init(void *mem, uint32_t seed, float sr);   /* sr: the rate it is called at (its times follow it) */
+void mm_set(void *m, const mm_params_t *p);
+void mm_reset(void *m);                  /* the clock from its start, at the next render */
+/* n frames: gates (3 per frame: t1 t2 t3) and voltages (4 per frame: x1 x2 x3 y, in volts), interleaved */
+void mm_render(void *m, uint8_t *gates3, float *cv4, uint32_t n);
+
+/* ---- the C++ runtime the vendored code needs (none of it allocates) ---- */
+#ifdef __cplusplus
+}
+#endif
+#endif

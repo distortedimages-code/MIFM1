@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Yoann
 # The FM-1's constraints, checked with the computer's clang before a push (the JieLi toolchain only runs on
 # GitHub): the C++ units built as the firmware builds them (no C++ library, no libc beyond felucca-bsp's memset /
-# memcpy / memcmp, no libm, bench/shim on the include path) for a 32-bit core with a float-only FPU (RISC-V rv32imf,
+# memcpy / memcmp, no libm, firmware/shim on the include path) for a 32-bit core with a float-only FPU (RISC-V rv32imf,
 # a stand-in for the AC79's pi32v2), then linked with nothing else: any double left in the code links soft-double
 # routines (__adddf3, __extendsfdf2...) and any missing function shows as an undefined symbol.
 # The tables moved to the resource region (tools/split_tables.py) must link to the region's addresses, not be in the
@@ -19,11 +19,11 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 TARGET="--target=riscv32-unknown-elf -march=rv32imfc -mabi=ilp32f"
 FLAGS="$TARGET -O2 -ffunction-sections -fdata-sections -fno-builtin -ffreestanding -ffp-contract=off \
-  -nostdinc -nostdinc++ -isystem $ROOT/bench/shim -isystem $BASE/include -isystem $RES \
-  -I$ROOT/bench -I$ROOT/bench/third_party -DTEST -DMI_ARENA_BYTES=1024 \
+  -nostdinc -nostdinc++ -isystem $ROOT/firmware/shim -isystem $BASE/include -isystem $RES \
+  -I$ROOT/firmware -I$ROOT/firmware/third_party -DTEST -DENG_ARENA_BYTES=1024 \
   -std=gnu++11 -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit"
 fail=0
-for f in "$ROOT"/bench/mi/*.cc $(find "$ROOT/bench/third_party" -name '*.cc' | sort); do
+for f in "$ROOT"/firmware/mi/*.cc $(find "$ROOT/firmware/third_party" -name '*.cc' | sort); do
     o="$OUT/$(echo "${f#$ROOT/}" | tr '/' '_' | sed 's/\.cc$/.o/')"
     if ! $CLANG $FLAGS -c "$f" -o "$o" 2> "$o.log"; then
         echo "FAILED: ${f#$ROOT/}"; head -30 "$o.log"; fail=1
@@ -42,17 +42,15 @@ uint32_t plat_ticks24(void) { return 0; }
 int plat_cpu2_on(void) { return 0; }
 int plat_cpu2_run(void (*fn)(uint32_t), uint32_t a) { (void)fn; (void)a; return 0; }
 int plat_cpu2_wait(void) { return 0; }
-int sc_count(void); int sc_start(int); void sc_render(float *, float *, uint32_t);
-uint32_t sc_size_plaits(void), sc_size_rings(void), sc_size_clouds(void), sc_size_warps(void), sc_size_tides(void), sc_size_marbles(void);
+int eng_init(void); void eng_play(int); void eng_render(float *, float *, uint32_t);
+const void *mi_res_where(void);
 float out_l[128], out_r[128];
 void _start(void)
 {
-    int i;
-    for (i = 0; i < sc_count(); i++) {
-        sc_start(i);
-        sc_render(out_l, out_r, 128);
-    }
-    out_l[0] = (float)(sc_size_plaits() + sc_size_rings() + sc_size_clouds() + sc_size_warps() + sc_size_tides() + sc_size_marbles());
+    eng_init();
+    eng_play(1);
+    eng_render(out_l, out_r, 128);
+    out_l[0] = (float)(uint32_t)mi_res_where();
     for (;;) ;
 }
 STUB
@@ -82,7 +80,7 @@ from pathlib import Path
 root, base = Path(sys.argv[1]), Path(sys.argv[2])
 sys.path.insert(0, str(base / "tools"))
 import build
-build.APP, build.ROOT = root / "bench", root
+build.APP, build.ROOT = root / "firmware", root
 build.CONF = build.read_conf(build.APP / "fm1.toml")
 errors = build.mmio_check()
 for e in errors:

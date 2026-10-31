@@ -1,6 +1,6 @@
 build/
-bench/build/
-bench/web/
+firmware/build/
+firmware/web/
 __pycache__/
 *.pyc
 .DS_Store

@@ -1,75 +1,77 @@
 # MIFM1
 
-Un firmware pour le M-VAVE FM-1 construit uniquement sur le code open source de Mutable Instruments (Plaits, Rings,
-Clouds, Warps, Tides 2, Marbles), sur la base de [fm1-base](https://github.com/charlesvestal/fm1-base).
+Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient du code open source de Mutable Instruments, sur
+la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
 
-**Version 0.0 : le banc d'essai.** Avant d'écrire le moindre écran, on mesure ce que chaque module coûte vraiment
-au FM-1 : le temps de calcul (sur un cœur, puis sur les deux), la RAM et la flash. C'est ce qui décidera de la
-forme du vrai firmware.
+- **Plaits** sur chaque piste, ses 24 modèles au complet ;
+- **Marbles** comme seul séquenceur : ses sorties T déclenchent les pistes, X et Y donnent les notes, DÉJÀ VU fige
+  ou libère la boucle ;
+- **deux Tides 2** comme modulateurs (8 sorties) ;
+- une **matrice de câbles** : 15 sources (Tides A1-A4, B1-B4, Marbles X1-X3, Y, T1-T3) vers presque tous les
+  paramètres, 8 câbles par piste et 8 globaux.
 
-## Un seul firmware, les six modules au complet
-
-Tout tient dans une installation, sans retirer un seul algorithme : les 24 modèles de Plaits, les 6 de Rings, les
-4 modes de Clouds, les algorithmes de Warps, Tides 2 et Marbles. Le code et les tables des modules ne tiennent pas
-ensemble dans les 581 Ko de mémoire programme du FM-1 ; les trois plus grosses tables (les distributions de
-Marbles, les tables d'ondes de Plaits, les courbes de Tides : 145 Ko) vivent donc dans la **zone de ressources**
-de fm1-base, une partie de la zone de données que l'installeur écrit juste après le firmware. Le code de Mutable
-n'est pas modifié : sur le FM-1, ces tables sont simplement lues à leur nouvelle adresse (`tools/split_tables.py`),
-et `make test` vérifie que ce sont exactement les mêmes octets.
-
-Si la zone n'est pas écrite (installation interrompue), le firmware démarre quand même et dit de réinstaller ;
-aucune scène ne joue sans ses tables.
-
-Les **mix** font tourner le cœur 0 (4 voix Plaits jouées par Marbles, 2 Tides en modulation) pendant que le
-second cœur fait les effets (Rings, Clouds, Warps), comme dans la spec.
+Clouds et Warps arrivent en v0.2 (sur le second cœur), les scènes et les projets multiples en v0.3. Rings a été
+retiré après le banc d'essai v0.0 : les modèles MODAL et STRING de Plaits en reprennent le code, en plus léger.
 
 ## Installer
 
 À chaque push, GitHub compile le firmware et publie l'installeur sur
-<https://distortedimages-code.github.io/MIFM1/>. Dans Chrome ou Edge, FM-1 branché en USB et à l'arrêt :
-installer, laisser la page écrire les tables après le firmware, puis accepter m-bootloader (le démarrage USB de
-secours). Le firmware d'origine (V15) se remet de la même façon.
+<https://distortedimages-code.github.io/MIFM1/>. Dans Chrome ou Edge, FM-1 branché en USB et à l'arrêt : installer,
+laisser la page écrire les tables des modules après le firmware. Le firmware d'origine se remet de la même façon.
 
-## Le banc
+## Jouer
+
+Un projet neuf joue déjà (PLAY) : piste 1 une grosse caisse sur chaque temps (T2), piste 2 une basse VA sur T1 et
+X1 ouverte par Tides A, piste 3 un FM 2 opérateurs sur T3 et X2 modulé par Tides B, piste 4 un résonateur MODAL sur
+T3 et X3. Marbles à 120 BPM, gamme mineure, DÉJÀ VU à midi sur 8 pas.
 
 | Contrôle | Effet |
 | --- | --- |
-| **REC** | le banc automatique : chaque scène 3 secondes (54 scènes, moins de 3 minutes). REC à nouveau : stop |
-| **SELECT** | la scène (page LIVE) ou le défilement (page RÉSULTATS) |
-| **PLAY** | le son, oui ou non (le calcul continue) |
-| **HOME** | la page : LIVE, RÉSULTATS, MÉMOIRE |
-| **SEL** | les mix sur deux cœurs ou un seul |
+| **KNOB 1 à 4** | les 4 paramètres de la page affichée |
+| **SELECT** | l'autre face du module (PLAITS 1/3, 2/3, 3/3…) |
+| **ALGORITHM** | le modèle de Plaits, le mode de rampe de Tides, le modèle de T de Marbles, la gamme |
+| **PRESETS** | la piste active, de 1 à 4 |
+| **EDIT** | Plaits de la piste active (appuis suivants : 1/3, 2/3, 3/3) |
+| **LFO** | Tides A, puis Tides B |
+| **SEQ / ARP** | Marbles, rythme (T) / notes (X, Y) |
+| **HOME** | le mixer (niveaux, panoramiques) |
+| **PLAY** | l'horloge de Marbles tourne ou s'arrête |
+| **clavier** | joue la piste active, même à l'arrêt ; **OCT− / OCT+** pour l'octave |
+| **SEL** | le mode MOD (voir plus bas) ; **tenu** : la matrice de la piste |
+| **SAVE tenu** | sauvegarde le projet (à l'arrêt) |
+| **GLO** | la charge des deux cœurs, les tables, la version |
 
-Les chiffres sont en **% d'un bloc audio** (128 échantillons, 2902 µs) : 100 % = le cœur est plein. **MOY** est la
-moyenne, **PIC** le pire bloc. Pour les mix, la colonne **C1** est le second cœur, et l'astérisque veut dire qu'il
-n'a pas démarré (tout a tourné sur le cœur 0). Un **!** signale des blocs en retard.
+La charge de calcul est toujours affichée en haut à droite (le cœur le plus chargé, en %).
 
-Les résultats du dernier banc restent gardés après extinction.
+**Le mode MOD** (SEL) : le clavier devient une rangée de sources. On tient une touche et on tourne un potard : le
+câble est posé, le sens et la quantité de rotation fixent la profondeur ; revenir à 0 le retire. Touches 1-4 :
+Tides A1-A4 ; 5-8 : Tides B1-B4 ; 9-11 : Marbles X1-X3 ; 12 : Y ; 13-15 : T1-T3 ; 17 et 18 : Tides A ou B en éventail
+(A n sur le potard n). Les touches des sources qui modulent la page s'allument.
 
-**Ce qu'il faut renvoyer** : à la fin du banc, la page RÉSULTATS en photos (quatre écrans, SELECT pour défiler) et
-la page MÉMOIRE. Ou, plus simple : la page de sauvegarde du site (« backup ») les enregistre dans un fichier
-`.mifm1`, que `tools/read_results.py` transforme en tableau.
+**La matrice** (SEL tenu) : les 8 câbles de la piste puis les 8 globaux. K1 choisit le câble, K2 sa source, K3 sa
+cible, K4 sa profondeur.
 
-À surveiller : si « MIX+RINGS » coûte bien plus que « MIX 4 VOIX » + « R MODAL », c'est que les nombres
-dénormalisés (les résonances qui s'éteignent) sont lents sur ce processeur.
+**PLAITS 3/3** choisit pour chaque piste sa source de gate (T1-T3, une sortie de Tides, ou le clavier seul) et de
+note (X1-X3, Y ou fixe), la transposition et l'octave.
 
 ## Le dépôt
 
-- `bench/` : le firmware (fm1-base `tools/build.py ../bench`)
-  - `mi/` : un pont C par module (leurs en-têtes ne peuvent pas se croiser dans une même unité), les scènes et la
-    mesure du temps
-  - `third_party/` : le code Mutable Instruments utilisé, copié tel quel ; les quatre retouches sont dans
-    `PATCHES.md`
-  - `res/mi_tables.bin` : la zone de ressources (les tables déplacées), `mi/res_symbols.cc` leurs adresses
+- `firmware/` : le firmware (fm1-base `tools/build.py ../firmware`)
+  - `app.c` : l'écran et les contrôles ; `mi/engine.cc` : le son (les pistes, Marbles, Tides, la matrice, le
+    mixer ; les pistes 3 et 4 sur le second cœur) ; `mi/mi_*.cc` : un pont C par module Mutable
+  - `third_party/` : le code Mutable Instruments utilisé, copié tel quel ; les retouches sont dans `PATCHES.md`
+  - `res/mi_tables.bin` : la zone de ressources (les plus grosses tables, écrites par l'installeur après le
+    firmware), `mi/res_abs.cc` leurs adresses
   - `shim/` : les en-têtes C et C++ que la chaîne JieLi n'a pas (pas de libm, pas de bibliothèque C++)
-- `tools/` : la copie du code Mutable (`vendor_mi.sh`, `patch_mi.sh`, `split_tables.py`), la vérification « comme
-  sur le FM-1 » avec le clang de l'ordinateur (`device_check.sh`), l'installeur, la lecture des résultats
-  (`read_results.py`)
-- `make test` : chaque scène jouée sur l'ordinateur, sans NaN ni silence (WAV dans `build/wav`), et la zone de
-  ressources comparée octet par octet aux tables d'origine
+  - `tests/` : le moteur sur l'ordinateur (`native.cc`) et le simulateur de fm1-base (`screens.txt`)
+- `tools/` : la copie du code Mutable (`vendor_mi.sh`, `patch_mi.sh`, `split_tables.py`), les vérifications « comme
+  sur le FM-1 » (`device_check.sh`, `check_res_links.py`, `no_static_init.py`), l'installeur ; `tools/bench/` : le
+  banc d'essai v0.0 (tag `bench-0.0`)
+- `make test` : le patch par défaut joué 16 s sur l'ordinateur, chaque piste et chaque modèle entendus, sans NaN
+  (WAV dans `build/wav`)
 
 ## Licences
 
 Le code de ce dépôt est sous MPL-2.0, comme fm1-base. Le code de Mutable Instruments (Émilie Gillet) est sous
-licence MIT (`bench/third_party/LICENSE-eurorack`). Mutable Instruments est une marque déposée : ce projet ne
+licence MIT (`firmware/third_party/LICENSE-eurorack`). Mutable Instruments est une marque déposée : ce projet ne
 l'utilise pas comme nom et ne cite les modules que pour dire de qui est le code qu'il fait tourner.

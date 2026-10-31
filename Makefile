@@ -5,9 +5,9 @@ CXX ?= c++
 CC ?= cc
 BASE ?= base
 FLAGS = -O2 -ffp-contract=off -DTEST -DPLAT_HOST -fno-exceptions -fno-rtti -fno-threadsafe-statics
-INC = -Ibench -Ibench/third_party -I$(BASE)/include
+INC = -Ifirmware -Ifirmware/third_party -I$(BASE)/include
 OUT = build
-SRC = $(wildcard bench/mi/*.cc) $(shell find bench/third_party -name '*.cc')
+SRC = $(wildcard firmware/mi/*.cc) $(shell find firmware/third_party -name '*.cc')
 OBJ = $(patsubst %.cc,$(OUT)/obj/%.o,$(SRC))
 
 .PHONY: all test device-check firmware host clean
@@ -19,27 +19,27 @@ $(OUT)/obj/%.o: %.cc
 
 -include $(OBJ:.o=.d) $(OUT)/obj/native.d
 
-$(OUT)/native: bench/tests/native.cc $(OBJ)
-	$(CXX) -std=gnu++11 $(FLAGS) -Wall -MMD -MP $(INC) -c bench/tests/native.cc -o $(OUT)/obj/native.o
+$(OUT)/native: firmware/tests/native.cc $(OBJ)
+	$(CXX) -std=gnu++11 $(FLAGS) -Wall -MMD -MP $(INC) -c firmware/tests/native.cc -o $(OUT)/obj/native.o
 	$(CC) $(OUT)/obj/native.o $(OBJ) -lm -o $@
 
-# every scene on the computer: plays, no NaN, not silent; WAVs in build/wav
+# the engine on a computer: the default patch plays, every track and model sounds, no NaN; WAVs in build/wav
 test: $(OUT)/native
 	@mkdir -p $(OUT)/wav
-	$(OUT)/native $(OUT)/wav 3
+	$(OUT)/native $(OUT)/wav 16
 
 # the FM-1's constraints checked with the computer's clang: no C++ library, no libm, a float-only FPU (any double
 # left in the code links soft-double routines and shows here as an undefined symbol)
 device-check:
 	sh tools/device_check.sh
 
-# the firmware (JieLi toolchain and AC79 SDK: see base/README.md): bench/build/mifm1.fwsc
+# the firmware (JieLi toolchain and AC79 SDK: see base/README.md): firmware/build/mifm1.fwsc
 firmware:
-	cd $(BASE) && python3 tools/build.py ../bench
+	cd $(BASE) && python3 tools/build.py ../firmware
 
 # fm1-base's host simulator, with the real platform code
 host:
-	cd $(BASE) && python3 tools/build.py ../bench --host
+	cd $(BASE) && python3 tools/build.py ../firmware --host
 
 clean:
-	rm -rf $(OUT) bench/build
+	rm -rf $(OUT) firmware/build
