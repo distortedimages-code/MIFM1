@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: MPL-2.0
 # Copyright (C) 2026 Yoann
 # MIFM1 on GitHub (after ZINZIN's workflow): on every push, the tests on a computer (every scene plays; the FM-1's
-# constraints with the computer's clang; the host simulator's screens), then the two firmwares (SONS and EFFETS:
-# the six modules do not fit the FM-1's flash at once) and their web installers with m-bootloader, published on
-# the repository's GitHub Pages (Settings > Pages > Source: GitHub Actions). Then everything happens in Chrome or
-# Edge: https://<account>.github.io/<repository>/
+# constraints with the computer's clang; the host simulator's screens), then the firmware, its resource region (the
+# modules' biggest tables) and its web installer with m-bootloader, published on the repository's GitHub Pages
+# (Settings > Pages > Source: GitHub Actions). Then everything happens in Chrome or Edge:
+# https://<account>.github.io/<repository>/
 # The firmware job fetches JieLi's toolchain (pkgman.jieliapp.com) and the three files of the AC79 SDK a package
 # needs (cpu/wl82/tools, Apache-2.0), as fm1-base's README describes.
 name: firmware
@@ -29,22 +29,27 @@ jobs:
           submodules: recursive
       - run: sudo apt-get install -y -q lld llvm
       - run: pip install pillow
-      - name: Every scene on a computer (plays, no NaN, not silent)
+      - name: The moved tables, as tools/split_tables.py makes them from the vendored code
+        run: |
+          sh tools/patch_mi.sh
+          git diff --exit-code -- bench/ || { echo "::error title=tables::run tools/patch_mi.sh and commit"; exit 1; }
+      - name: Every scene on a computer (plays, no NaN, not silent; the region's file is the arrays' bytes)
         run: make test
-      - name: The FM-1's constraints (no libm, no C++ library, no double), each variant
+      - name: The FM-1's constraints (no libm, no C++ library, no double; the moved tables at the region's addresses)
+        run: sh tools/device_check.sh | tail -12
+      - name: The host simulator's screens (results across a power-off and in a backup; an FM-1 without the tables)
         run: |
-          for v in 1 2; do VARIANT=$v sh tools/device_check.sh | tail -8; done
-      - name: The host simulator's screens
-        run: |
-          (cd base && MIFM1_VARIANT=1 python3 tools/build.py ../bench --host) > host.log 2>&1 || { tail -40 host.log; exit 1; }
+          (cd base && python3 tools/build.py ../bench --host) > host.log 2>&1 || { tail -40 host.log; exit 1; }
           mkdir -p build/host_out
           bench/build/host/mifm1_host bench/tests/screens.txt build/host_out
+          python3 tools/read_results.py build/host_out/results.mifm1
       - uses: actions/upload-artifact@v4
         with:
           name: bench-computer
           path: |
             build/wav/*.wav
             build/host_out/*.png
+            build/host_out/results.mifm1
   firmware:
     runs-on: ubuntu-latest
     steps:
@@ -74,28 +79,26 @@ jobs:
             exit 1
           fi
           echo "AC79_SDK=$SDK" >> "$GITHUB_ENV"
-      - name: The two firmwares
+      - name: The firmware
         shell: bash
         run: |
           set -o pipefail
           annotate() { python3 -c "import sys; t = sys.stdin.read().replace('%', '%25').replace('\r', '').replace('\n', '%0A'); print('::$1 title=$2::' + t)"; }
-          for v in 1:sons 2:effets; do
-            n="${v%%:*}"; name="${v##*:}"
-            (cd base && MIFM1_VARIANT=$n python3 tools/build.py ../bench --release "$VERSION-$name") 2>&1 | tee "build-$name.log" || {
-              tail -n 120 "build-$name.log" | annotate error "build $name"; exit 1; }
-            # what the build says about sizes and RAM
-            tail -n 40 "build-$name.log" | annotate notice "build $name"
-          done
-          ls -la bench/build/*.fwsc
-      - name: The installers
+          (cd base && python3 tools/build.py ../bench --release "$VERSION") 2>&1 | tee build.log || {
+            tail -n 120 build.log | annotate error "build"; exit 1; }
+          # what the build says about sizes and RAM
+          tail -n 40 build.log | annotate notice "build"
+          ls -la bench/build/*.fwsc bench/build/*-res.bin
+      - name: The installer and the backup page
         run: |
-          python3 tools/make_installer.py bench/build/mifm1-"$VERSION"-sons.fwsc "$VERSION-sons" site/sons
-          python3 tools/make_installer.py bench/build/mifm1-"$VERSION"-effets.fwsc "$VERSION-effets" site/effets
+          python3 tools/make_installer.py bench/build/mifm1-"$VERSION".fwsc "$VERSION" site
           python3 tools/make_index.py site "$VERSION"
       - uses: actions/upload-artifact@v4
         with:
           name: mifm1-fwsc
-          path: bench/build/*.fwsc
+          path: |
+            bench/build/*.fwsc
+            bench/build/*-res.bin
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

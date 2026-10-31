@@ -6,7 +6,9 @@
 # memcpy / memcmp, no libm, bench/shim on the include path) for a 32-bit core with a float-only FPU (RISC-V rv32imf,
 # a stand-in for the AC79's pi32v2), then linked with nothing else: any double left in the code links soft-double
 # routines (__adddf3, __extendsfdf2...) and any missing function shows as an undefined symbol.
-#   VARIANT=1 tools/device_check.sh  (base/ is fm1-base: its include/ for plat.h and fastmath.h; VARIANT: scenes.cc)
+# The tables moved to the resource region (tools/split_tables.py) must link to the region's addresses, not be in the
+# image: the last lines show where three of them landed, and what is left of the modules' code and constants.
+#   tools/device_check.sh  (base/ is fm1-base: its include/ for plat.h and fastmath.h)
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BASE="${BASE:-$ROOT/base}"
@@ -18,7 +20,7 @@ mkdir -p "$OUT"
 TARGET="--target=riscv32-unknown-elf -march=rv32imfc -mabi=ilp32f"
 FLAGS="$TARGET -O2 -ffunction-sections -fdata-sections -fno-builtin -ffreestanding -ffp-contract=off \
   -nostdinc -nostdinc++ -isystem $ROOT/bench/shim -isystem $BASE/include -isystem $RES \
-  -I$ROOT/bench -I$ROOT/bench/third_party -DTEST -DMI_ARENA_BYTES=1024 -DMI_VARIANT=${VARIANT:-0} \
+  -I$ROOT/bench -I$ROOT/bench/third_party -DTEST -DMI_ARENA_BYTES=1024 \
   -std=gnu++11 -fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit"
 fail=0
 for f in "$ROOT"/bench/mi/*.cc $(find "$ROOT/bench/third_party" -name '*.cc' | sort); do
@@ -61,4 +63,14 @@ if ! ld.lld --gc-sections -e _start -o "$OUT/check.elf" "$OUT"/*.o 2> "$OUT/link
     exit 1
 fi
 llvm-size -A "$OUT/check.elf" | grep -E "^\.(text|rodata|data|sdata|bss|sbss)" || true
+for sym in _ZN7marbles13dist_icdf_0_0E _ZN6plaits20wav_integrated_wavesE _ZN5tides13lut_wavetableE; do
+    line="$(llvm-nm "$OUT/check.elf" | grep " $sym\$" || true)"
+    case "$line" in
+        *" A $sym") echo "in the region: $line" ;;
+        *) echo "NOT in the region: $sym (${line:-absent})"; exit 1 ;;
+    esac
+done
+if llvm-nm -S "$OUT/check.elf" | grep -E " [rR] _ZN(7marbles13dist_icdf|6plaits20wav_integrated|5tides13lut_wavetable)"; then
+    echo "a moved table is in the image too"; exit 1
+fi
 echo "device check: ok (no libm, no C++ library, no double)"

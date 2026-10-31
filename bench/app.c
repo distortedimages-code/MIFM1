@@ -8,16 +8,14 @@
  *   SEL      the busy scenes on two cores or one             K1    the list, too
  *
  * Part of the unity build (base/device/unity.c, base/host/plat_host.c), after the platform: gfx.c is in scope.
- * The modules and their timing are C++ (mi/, compiled apart at -O2): this file only calls mi/scenes.h. */
+ * The modules and their timing are C++ (mi/, compiled apart at -O2): this file only calls mi/scenes.h.
+ *
+ * The modules' biggest tables are in the resource region (app.h), which the installer writes after the firmware: until
+ * it holds this build's, no scene plays (they would read erased flash) and the screen says to install again. */
 #include "fastmath.h"
 #include "mi/scenes.h"
-#if defined(__has_include)
-#if __has_include("variant.h")
-#include "variant.h"
-#endif
-#endif
-#ifndef MI_VARIANT
-#define MI_VARIANT 0
+#ifdef PLAT_HOST
+int mi_res_check(const uint8_t *payload, uint32_t len);   /* mi/res_symbols.cc: the region's file against the arrays */
 #endif
 
 #define BLOCK_US ((float)APP_BLOCK * 1000000.0f / 44100.0f)   /* 2902 us: a block's time, the 100 % */
@@ -26,8 +24,6 @@
 #define LINES 16                         /* 16 lines of 15 px: the screen */
 #define LINE_H 15
 
-static const char *const VARIANT_NAME[3] = {"TOUT", "SONS", "EFFETS"};
-
 /* ---------------------------------------------------------------- results --- */
 typedef struct {
     uint8_t done;                        /* 1 measured, 2 not enough RAM */
@@ -35,9 +31,21 @@ typedef struct {
     uint16_t c0, c0_pk, c1, c1_pk, tot, tot_pk;   /* tenths of a percent of the block */
     uint16_t xruns;                      /* the platform's late blocks meanwhile */
 } result_t;
-static result_t res[MAX_SCENES];
+static struct {                          /* the results, as saved (OBJ_RESULTS) and in a backup (tools/read_results.py) */
+    uint32_t magic;
+    uint16_t count, size;                /* the scenes; a result's bytes */
+    result_t r[MAX_SCENES];
+    char name[MAX_SCENES][16];           /* each scene's short name: the file says what it holds */
+} saved;
+static result_t *const res = saved.r;
+#define SAVED_MAGIC 0x3152494Du          /* "MIR1" */
+static int save_pending, save_hold;      /* results to save; a backup streaming (no saving meanwhile) */
 
 static int cpu2_ok;                      /* the second core started (plat_cpu2_set) */
+static int data_ok;                      /* the resource region holds this build's tables */
+static int halted;                       /* app_panic: the scene stopped until app_ui_init */
+static int ui_automatic(void);
+static void text_cat(char *d, const char *s, uint32_t max);
 static volatile int listen = 1;          /* the render's sound goes out */
 
 /* ------------------------------------------------------------------ audio --- */
@@ -57,12 +65,69 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     }
 }
 
-void app_panic(void) { listen = 0; }
+/* the tables in the region, where the moved symbols point (on the FM-1), the same bytes (on a computer) */
+static int data_check(void)
+{
+    uint32_t len = 0;
+    const uint8_t *p = plat_res(&len);
+    if (!p || len != MIFM1_RES_LEN)
+        return 0;
+#ifdef PLAT_HOST
+    return mi_res_check(p, len) == -1;
+#else
+    return p == (const uint8_t *)MIFM1_RES_ADDR;
+#endif
+}
+
+/* the results across power-off */
+static void results_load(void)          /* another build's (other scenes) or none: no results */
+{
+    int i, n = sc_count();
+    if (plat_store_load(OBJ_RESULTS, &saved, sizeof saved) != (int)sizeof saved || saved.magic != SAVED_MAGIC ||
+        saved.count != n || saved.size != sizeof(result_t))
+        for (i = 0; i < MAX_SCENES; i++)
+            res[i].done = 0;
+}
+static void results_save(void)
+{
+    int i;
+    if (save_hold) {
+        save_pending = 1;
+        return;
+    }
+    save_pending = 0;
+    saved.magic = SAVED_MAGIC;
+    saved.count = (uint16_t)sc_count();
+    saved.size = sizeof(result_t);
+    for (i = 0; i < MAX_SCENES; i++) {
+        saved.name[i][0] = 0;
+        if (i < saved.count)
+            text_cat(saved.name[i], sc_short(i), sizeof saved.name[i]);
+    }
+    plat_store_save(OBJ_RESULTS, &saved, sizeof saved);
+}
+int app_backup_playing(void) { return ui_automatic(); }
+void app_backup_flush(void)
+{
+    if (save_pending)
+        results_save();
+}
+void app_backup_hold(int on) { save_hold = on; }
+void app_backup_restored(void) { results_load(); }
+
+void app_panic(void)                     /* an update, a restore or the tables' transfer: nothing reads the flash */
+{
+    sc_stop();
+    halted = 1;
+}
 
 void app_init(void)
 {
     cpu2_ok = plat_cpu2_set(1) == 0;     /* the one time it may start: here, at power-on */
-    sc_start(0);
+    data_ok = data_check();
+    results_load();
+    if (data_ok)
+        sc_start(0);
 }
 
 /* --------------------------------------------------------------- the text --- */
@@ -158,6 +223,8 @@ static struct {
     int redraw;
 } ui;
 
+static int ui_automatic(void) { return ui.automatic != 0; }
+
 void app_say(const char *a, const char *b)
 {
     ui.msg[0][0] = ui.msg[1][0] = 0;
@@ -198,6 +265,11 @@ static void take_result(int i)           /* the current scene's numbers into the
 
 static void go(int i)
 {
+    if (!data_ok) {
+        sc_stop();
+        app_say("TABLES ABSENTES", "REINSTALLER");
+        return;
+    }
     if (sc_start(i) != 0)
         res[i].done = 2;
     ui.xruns0 = plat_xruns();
@@ -214,6 +286,7 @@ static void auto_step(void)
         ui.automatic = 0;
         ui.page = PAGE_RESULTS;
         ui.scroll = 0;
+        results_save();
         app_say("BANC TERMINE", "PHOTOGRAPHIE");
         return;
     }
@@ -238,6 +311,8 @@ static void input(void)
             if (ui.automatic) {
                 ui.automatic = 0;
                 app_say("BANC", "ARRETE");
+            } else if (!data_ok) {
+                app_say("TABLES ABSENTES", "REINSTALLER");
             } else {
                 int i;
                 for (i = 0; i < MAX_SCENES; i++)
@@ -268,7 +343,7 @@ static void input(void)
             i = (i % n + n) % n;
             go(i);
         } else if (ui.page == PAGE_RESULTS) {
-            ui.scroll = (int)clamp(ui.scroll + e * 3, 0, n > 12 ? n - 12 : 0);
+            ui.scroll = (int)clamp(ui.scroll + e * 3, 0, n > LINES - 2 ? n - (LINES - 2) : 0);
         }
         ui.redraw = 1;
     }
@@ -282,8 +357,6 @@ static void header(char *t)
 {
     t[0] = 0;
     text_cat(t, "MIFM1 BANC ", 44);
-    text_cat(t, VARIANT_NAME[MI_VARIANT], 44);
-    text_cat(t, " ", 44);
     text_cat(t, APP_VERSION, 44);
 }
 
@@ -329,7 +402,15 @@ static void page_live(void)
     }
     line(2, sc_name(cur), C_WHITE);
     line(3, "", C_GRAY);
-    if (sc_need(cur) > sc_arena()) {
+    if (!data_ok) {                      /* the region not written yet (or another build's) */
+        line(2, "", C_GRAY);
+        line(4, "TABLES DES MODULES ABSENTES", C_WHITE);
+        line(5, "L'INSTALLEUR LES ECRIT APRES", C_GRAY);
+        line(6, "LE FIRMWARE: REINSTALLER DEPUIS", C_GRAY);
+        line(7, "LA PAGE, FM-1 A L'ARRET", C_GRAY);
+        for (int i = 8; i < 10; i++)
+            line(i, "", C_GRAY);
+    } else if (sc_need(cur) > sc_arena()) {
         line(4, "PAS ASSEZ DE RAM", C_WHITE);
         t[0] = 0;
         int_text((int32_t)(sc_need(cur) / 1024u), v);
@@ -386,7 +467,7 @@ static void page_live(void)
     line(10, t, C_DIM);
     line(11, "", C_GRAY);
     line(12, "SELECT  SCENE      PLAY  SON", C_DIM);
-    line(13, "REC  BANC AUTOMATIQUE (2 MIN)", C_DIM);
+    line(13, "REC  BANC AUTOMATIQUE (3 MIN)", C_DIM);
     line(14, "HOME  PAGE    SEL  1 OU 2 COEURS", C_DIM);
     line(15, listen ? "SON: OUI" : "SON: NON", listen ? C_GRAY : C_DIM);
 }
@@ -466,7 +547,9 @@ static void page_memory(void)
     mem_row(8, "MARBLES", sc_size_marbles());
     line(9, "", C_GRAY);
     mem_row(10, "ARENE DES SCENES", sc_arena());
-    line(11, "(0 KO: PAS DANS CETTE VARIANTE)", C_DIM);
+    mem_row(11, "TABLES (ZONE RESSOURCES)", MIFM1_RES_LEN);
+    if (!data_ok)
+        line_right(11, "ABSENTES", C_WHITE);
     line(12, "", C_GRAY);
     line(13, "BLOC AUDIO: 128 ECHANTILLONS,", C_DIM);
     line(14, "2902 MICROSECONDES = 100%", C_DIM);
@@ -492,9 +575,28 @@ static void draw(void)
     draw_lines();
 }
 
-void app_ui_init(void)
+#ifdef PLAT_HOST
+void app_host_reboot(void)
+{
+    memset(&saved, 0, sizeof saved);
+    memset(&ui, 0, sizeof ui);
+    halted = save_pending = save_hold = 0;
+    listen = 1;
+}
+#endif
+
+void app_ui_init(void)                   /* at power-on, and after an update, a restore or the tables' transfer */
 {
     lcd_fill(0, 0, 240, 240, C_BLACK);
+    data_ok = data_check();
+    if (!data_ok)
+        sc_stop();
+    if (halted) {                        /* the scene again, from the start (its state may have read anything) */
+        halted = 0;
+        ui.automatic = 0;
+        if (data_ok)
+            go(sc_current());
+    }
     ui.redraw = 1;
 }
 
@@ -503,6 +605,8 @@ void app_frame(void)
     uint32_t now = plat_ms();
     input();
     auto_step();
+    if (save_pending && !save_hold)
+        results_save();
     if (ui.msg_until && now >= ui.msg_until) {
         ui.msg_until = 0;
         ui.redraw = 1;

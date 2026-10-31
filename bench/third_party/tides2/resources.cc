@@ -883,6 +883,7 @@ const float* lookup_table_table[] = {
   lut_unipolar_fold,
 };
 
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const int16_t lut_wavetable[] = {
        0,   2214,   3103,   3766,
     4311,   4778,   5190,   5560,
@@ -3960,6 +3961,7 @@ const int16_t lut_wavetable[] = {
       16,     14,     11,      9,
        7,      4,      2,      0,
 };
+#endif  // MIFM1
 
 
 const int16_t* lookup_table_i16_table[] = {

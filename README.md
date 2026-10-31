@@ -7,33 +7,34 @@ Clouds, Warps, Tides 2, Marbles), sur la base de [fm1-base](https://github.com/c
 au FM-1 : le temps de calcul (sur un cœur, puis sur les deux), la RAM et la flash. C'est ce qui décidera de la
 forme du vrai firmware.
 
-## Deux firmwares
+## Un seul firmware, les six modules au complet
 
-Le code et les tables des six modules ne tiennent pas d'un coup dans les 581 Ko de flash du FM-1 (environ 540 Ko
-pour les modules seuls, plus 80 Ko de plateforme). Le banc existe donc en deux variantes :
+Tout tient dans une installation, sans retirer un seul algorithme : les 24 modèles de Plaits, les 6 de Rings, les
+4 modes de Clouds, les algorithmes de Warps, Tides 2 et Marbles. Le code et les tables des modules ne tiennent pas
+ensemble dans les 581 Ko de mémoire programme du FM-1 ; les trois plus grosses tables (les distributions de
+Marbles, les tables d'ondes de Plaits, les courbes de Tides : 145 Ko) vivent donc dans la **zone de ressources**
+de fm1-base, une partie de la zone de données que l'installeur écrit juste après le firmware. Le code de Mutable
+n'est pas modifié : sur le FM-1, ces tables sont simplement lues à leur nouvelle adresse (`tools/split_tables.py`),
+et `make test` vérifie que ce sont exactement les mêmes octets.
 
-| Variante | Modules | Scènes |
-| --- | --- | --- |
-| **SONS** | Plaits, Rings, Tides 2, Marbles | les 24 modèles de Plaits, 9 réglages de Rings, Tides x2, Marbles, 2 mix |
-| **EFFETS** | Clouds, Warps (et Plaits pour les mix) | 4 modes de Clouds, 9 algorithmes de Warps, 3 mix |
+Si la zone n'est pas écrite (installation interrompue), le firmware démarre quand même et dit de réinstaller ;
+aucune scène ne joue sans ses tables.
 
 Les **mix** font tourner le cœur 0 (4 voix Plaits jouées par Marbles, 2 Tides en modulation) pendant que le
 second cœur fait les effets (Rings, Clouds, Warps), comme dans la spec.
 
 ## Installer
 
-Une seule fois, sur GitHub : **Settings > Pages > Source : GitHub Actions** pour ce dépôt.
-
-Ensuite, à chaque push, GitHub compile les deux firmwares et publie les installeurs sur
-<https://distortedimages-code.github.io/MIFM1/>. Dans Chrome ou Edge, FM-1 branché en USB : choisir SONS ou
-EFFETS, installer, et accepter m-bootloader (le démarrage USB de secours). Le firmware d'origine (V15) se remet de
-la même façon.
+À chaque push, GitHub compile le firmware et publie l'installeur sur
+<https://distortedimages-code.github.io/MIFM1/>. Dans Chrome ou Edge, FM-1 branché en USB et à l'arrêt :
+installer, laisser la page écrire les tables après le firmware, puis accepter m-bootloader (le démarrage USB de
+secours). Le firmware d'origine (V15) se remet de la même façon.
 
 ## Le banc
 
 | Contrôle | Effet |
 | --- | --- |
-| **REC** | le banc automatique : chaque scène 3 secondes (2 minutes en tout). REC à nouveau : stop |
+| **REC** | le banc automatique : chaque scène 3 secondes (54 scènes, moins de 3 minutes). REC à nouveau : stop |
 | **SELECT** | la scène (page LIVE) ou le défilement (page RÉSULTATS) |
 | **PLAY** | le son, oui ou non (le calcul continue) |
 | **HOME** | la page : LIVE, RÉSULTATS, MÉMOIRE |
@@ -43,23 +44,29 @@ Les chiffres sont en **% d'un bloc audio** (128 échantillons, 2902 µs) : 100 %
 moyenne, **PIC** le pire bloc. Pour les mix, la colonne **C1** est le second cœur, et l'astérisque veut dire qu'il
 n'a pas démarré (tout a tourné sur le cœur 0). Un **!** signale des blocs en retard.
 
-**Ce qu'il faut renvoyer** : à la fin du banc, la page RÉSULTATS en photos (trois écrans, SELECT pour défiler), et
-la page MÉMOIRE, pour chacune des deux variantes.
+Les résultats du dernier banc restent gardés après extinction.
+
+**Ce qu'il faut renvoyer** : à la fin du banc, la page RÉSULTATS en photos (quatre écrans, SELECT pour défiler) et
+la page MÉMOIRE. Ou, plus simple : la page de sauvegarde du site (« backup ») les enregistre dans un fichier
+`.mifm1`, que `tools/read_results.py` transforme en tableau.
 
 À surveiller : si « MIX+RINGS » coûte bien plus que « MIX 4 VOIX » + « R MODAL », c'est que les nombres
 dénormalisés (les résonances qui s'éteignent) sont lents sur ce processeur.
 
 ## Le dépôt
 
-- `bench/` : le firmware (fm1-base `tools/build.py ../bench`, `MIFM1_VARIANT=1` ou `2`)
+- `bench/` : le firmware (fm1-base `tools/build.py ../bench`)
   - `mi/` : un pont C par module (leurs en-têtes ne peuvent pas se croiser dans une même unité), les scènes et la
     mesure du temps
-  - `third_party/` : le code Mutable Instruments utilisé, copié tel quel ; les trois retouches sont dans
+  - `third_party/` : le code Mutable Instruments utilisé, copié tel quel ; les quatre retouches sont dans
     `PATCHES.md`
+  - `res/mi_tables.bin` : la zone de ressources (les tables déplacées), `mi/res_symbols.cc` leurs adresses
   - `shim/` : les en-têtes C et C++ que la chaîne JieLi n'a pas (pas de libm, pas de bibliothèque C++)
-- `tools/` : la copie du code Mutable (`vendor_mi.sh`, `patch_mi.sh`), la vérification « comme sur le FM-1 » avec
-  le clang de l'ordinateur (`device_check.sh`), les installeurs
-- `make test` : chaque scène jouée sur l'ordinateur, sans NaN ni silence (WAV dans `build/wav`)
+- `tools/` : la copie du code Mutable (`vendor_mi.sh`, `patch_mi.sh`, `split_tables.py`), la vérification « comme
+  sur le FM-1 » avec le clang de l'ordinateur (`device_check.sh`), l'installeur, la lecture des résultats
+  (`read_results.py`)
+- `make test` : chaque scène jouée sur l'ordinateur, sans NaN ni silence (WAV dans `build/wav`), et la zone de
+  ressources comparée octet par octet aux tables d'origine
 
 ## Licences
 

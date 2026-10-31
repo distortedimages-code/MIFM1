@@ -16,58 +16,7 @@ extern "C" {
 #define MI_ARENA_BYTES (300u * 1024u)
 #endif
 
-// The FM-1's 581 KB of program flash do not hold the six modules at once (their tables alone are 300 KB): a
-// variant builds some of them (tools/variant.py, from MIFM1_VARIANT, writes variant.h). 0: all (the computer)
-#if defined(__has_include)
-#if __has_include("variant.h")
-#include "variant.h"
-#endif
-#endif
-#ifndef MI_VARIANT
-#define MI_VARIANT 0
-#endif
-#define MI_HAS_PLAITS 1
-#define MI_HAS_RINGS (MI_VARIANT != 2)
-#define MI_HAS_TIDES (MI_VARIANT != 2)
-#define MI_HAS_MARBLES (MI_VARIANT != 2)
-#define MI_HAS_CLOUDS (MI_VARIANT != 1)
-#define MI_HAS_WARPS (MI_VARIANT != 1)
-
 namespace {
-
-// each module through a guard: a variant without it never references it, and the linker leaves it out
-inline uint32_t g_mp_size() { return MI_HAS_PLAITS ? mp_size() : 0; }
-inline void g_mp_init(void *mem) { if (MI_HAS_PLAITS) mp_init(mem); }
-inline void g_mp_set(void *v, int model, float note, float harmonics, float timbre, float morph, float decay, float colour) { if (MI_HAS_PLAITS) mp_set(v, model, note, harmonics, timbre, morph, decay, colour); }
-inline void g_mp_gate(void *v, int high) { if (MI_HAS_PLAITS) mp_gate(v, high); }
-inline void g_mp_render(void *v, float *out, float *aux, uint32_t n) { if (MI_HAS_PLAITS) mp_render(v, out, aux, n); }
-inline const char* g_mp_model_name(int model) { return MI_HAS_PLAITS ? mp_model_name(model) : ""; }
-inline uint32_t g_mr_size() { return MI_HAS_RINGS ? mr_size() : 0; }
-inline uint32_t g_mr_reverb_size() { return MI_HAS_RINGS ? mr_reverb_size() : 0; }
-inline void g_mr_init(void *mem, void *reverb) { if (MI_HAS_RINGS) mr_init(mem, reverb); }
-inline void g_mr_set(void *r, int model, int polyphony, float note, float structure, float brightness, float damping, float position) { if (MI_HAS_RINGS) mr_set(r, model, polyphony, note, structure, brightness, damping, position); }
-inline void g_mr_strum(void *r) { if (MI_HAS_RINGS) mr_strum(r); }
-inline void g_mr_render(void *r, float *out, float *aux, uint32_t n) { if (MI_HAS_RINGS) mr_render(r, out, aux, n); }
-inline const char* g_mr_model_name(int model) { return MI_HAS_RINGS ? mr_model_name(model) : ""; }
-inline uint32_t g_mc_size() { return MI_HAS_CLOUDS ? mc_size() : 0; }
-inline void g_mc_init(void *mem, void *large, uint32_t large_size, void *small, uint32_t small_size) { if (MI_HAS_CLOUDS) mc_init(mem, large, large_size, small, small_size); }
-inline void g_mc_set(void *c, int mode, int quality, float position, float size, float pitch, float density, float texture, float dry_wet, float spread, float feedback, float reverb, int freeze) { if (MI_HAS_CLOUDS) mc_set(c, mode, quality, position, size, pitch, density, texture, dry_wet, spread, feedback, reverb, freeze); }
-inline void g_mc_render(void *c, const float *in_l, const float *in_r, float *out_l, float *out_r, uint32_t n) { if (MI_HAS_CLOUDS) mc_render(c, in_l, in_r, out_l, out_r, n); }
-inline const char* g_mc_mode_name(int mode) { return MI_HAS_CLOUDS ? mc_mode_name(mode) : ""; }
-inline uint32_t g_mw_size() { return MI_HAS_WARPS ? mw_size() : 0; }
-inline void g_mw_init(void *mem) { if (MI_HAS_WARPS) mw_init(mem); }
-inline void g_mw_set(void *w, int algo, float timbre, float level1, float level2) { if (MI_HAS_WARPS) mw_set(w, algo, timbre, level1, level2); }
-inline void g_mw_render(void *w, const float *carrier, const float *modulator, float *out, float *aux, uint32_t n) { if (MI_HAS_WARPS) mw_render(w, carrier, modulator, out, aux, n); }
-inline const char* g_mw_algo_name(int algo) { return MI_HAS_WARPS ? mw_algo_name(algo) : ""; }
-inline uint32_t g_mt_size() { return MI_HAS_TIDES ? mt_size() : 0; }
-inline void g_mt_init(void *mem) { if (MI_HAS_TIDES) mt_init(mem); }
-inline void g_mt_set(void *t, int ramp, int output, int range, float hz, float shape, float slope, float smoothness, float shift) { if (MI_HAS_TIDES) mt_set(t, ramp, output, range, hz, shape, slope, smoothness, shift); }
-inline void g_mt_gate(void *t, int high) { if (MI_HAS_TIDES) mt_gate(t, high); }
-inline void g_mt_render(void *t, float *out4, uint32_t n, float sr) { if (MI_HAS_TIDES) mt_render(t, out4, n, sr); }
-inline uint32_t g_mm_size() { return MI_HAS_MARBLES ? mm_size() : 0; }
-inline void g_mm_init(void *mem, uint32_t seed) { if (MI_HAS_MARBLES) mm_init(mem, seed); }
-inline void g_mm_set(void *m, int t_model, float rate, float t_bias, float jitter, float deja_vu, int length, float spread, float x_bias, float steps) { if (MI_HAS_MARBLES) mm_set(m, t_model, rate, t_bias, jitter, deja_vu, length, spread, x_bias, steps); }
-inline void g_mm_render(void *m, uint8_t *gates3, float *cv4, uint32_t n) { if (MI_HAS_MARBLES) mm_render(m, gates3, cv4, n); }
 
 const uint32_t kMaxN = 128;             // app.h APP_BLOCK
 const uint32_t kWarmup = 40;            // blocks left out of the numbers after a start (buffers filling, first grains)
@@ -124,86 +73,73 @@ void put2(char* d, uint32_t max, int v) {
   put(d, max, t);
 }
 
-bool combo_here(int x) {
-  if (MI_VARIANT == 1) return x == X_TRACKS || x == X_RINGS;
-  if (MI_VARIANT == 2) return x == X_TRACKS || x == X_CLOUDS_WARPS || x == X_FX_ONLY;
-  return true;
-}
-
 void build_table() {
   if (num_scenes) return;
   int n = 0;
-  for (int m = 0; MI_HAS_PLAITS && MI_VARIANT != 2 && m < MP_MODELS; ++m, ++n) {   // (variant 2: in variant 1)
+  for (int m = 0; m < MP_MODELS; ++m, ++n) {
     scenes[n].kind = K_PLAITS; scenes[n].a = m;
-    put(names[n], 32, "PLAITS "); put2(names[n], 32, m + 1); put(names[n], 32, " "); put(names[n], 32, g_mp_model_name(m));
-    put(shorts[n], 16, "P "); put(shorts[n], 16, g_mp_model_name(m));
+    put(names[n], 32, "PLAITS "); put2(names[n], 32, m + 1); put(names[n], 32, " "); put(names[n], 32, mp_model_name(m));
+    put(shorts[n], 16, "P "); put(shorts[n], 16, mp_model_name(m));
   }
-  for (int i = 0; MI_HAS_RINGS && i < kNumRings; ++i, ++n) {
+  for (int i = 0; i < kNumRings; ++i, ++n) {
     scenes[n].kind = K_RINGS; scenes[n].a = kRingsScenes[i][0]; scenes[n].b = kRingsScenes[i][1];
-    put(names[n], 32, "RINGS "); put(names[n], 32, g_mr_model_name(scenes[n].a));
+    put(names[n], 32, "RINGS "); put(names[n], 32, mr_model_name(scenes[n].a));
     put(names[n], 32, " POLY "); put2(names[n], 32, scenes[n].b);
-    put(shorts[n], 16, "R "); put(shorts[n], 16, g_mr_model_name(scenes[n].a));
+    put(shorts[n], 16, "R "); put(shorts[n], 16, mr_model_name(scenes[n].a));
     if (scenes[n].b > 1) { put(shorts[n], 16, " x"); put2(shorts[n], 16, scenes[n].b); }
   }
-  for (int m = 0; MI_HAS_CLOUDS && m < MC_MODES; ++m, ++n) {
+  for (int m = 0; m < MC_MODES; ++m, ++n) {
     scenes[n].kind = K_CLOUDS; scenes[n].a = m;
-    put(names[n], 32, "CLOUDS "); put(names[n], 32, g_mc_mode_name(m));
-    put(shorts[n], 16, "C "); put(shorts[n], 16, g_mc_mode_name(m));
+    put(names[n], 32, "CLOUDS "); put(names[n], 32, mc_mode_name(m));
+    put(shorts[n], 16, "C "); put(shorts[n], 16, mc_mode_name(m));
   }
-  for (int a = 0; MI_HAS_WARPS && a < MW_ALGOS; ++a, ++n) {
+  for (int a = 0; a < MW_ALGOS; ++a, ++n) {
     scenes[n].kind = K_WARPS; scenes[n].a = a;
-    put(names[n], 32, "WARPS "); put(names[n], 32, g_mw_algo_name(a));
-    put(shorts[n], 16, "W "); put(shorts[n], 16, g_mw_algo_name(a));
+    put(names[n], 32, "WARPS "); put(names[n], 32, mw_algo_name(a));
+    put(shorts[n], 16, "W "); put(shorts[n], 16, mw_algo_name(a));
   }
-  if (MI_HAS_TIDES) {
+  {
     scenes[n].kind = K_TIDES; scenes[n].a = 0;
     put(names[n], 32, "TIDES x2 AUDIO"); put(shorts[n], 16, "T x2 AUDIO"); ++n;
     scenes[n].kind = K_TIDES; scenes[n].a = 1;
     put(names[n], 32, "TIDES x2 MODULATION"); put(shorts[n], 16, "T x2 MODUL"); ++n;
   }
-  if (MI_HAS_MARBLES) {
+  {
     scenes[n].kind = K_MARBLES; scenes[n].a = 0;
     put(names[n], 32, "MARBLES T+X+Y"); put(shorts[n], 16, "MARBLES"); ++n;
   }
   for (int x = 0; x < X_COUNT; ++x) {
-    if (!combo_here(x)) continue;
     scenes[n].kind = K_COMBO; scenes[n].a = x;
-    if (x == X_TRACKS && !MI_HAS_MARBLES) {
-      put(names[n], 32, "4 PLAITS (CLOCK)"); put(shorts[n], 16, "MIX 4 VOIX");
-    } else if (x == X_FX_ONLY && !MI_HAS_RINGS) {
-      put(names[n], 32, "CLOUDS+WARPS (C1)"); put(shorts[n], 16, "FX SEULS C1");
-    } else {
-      put(names[n], 32, kComboNames[x]); put(shorts[n], 16, kComboShort[x]);
-    }
+    put(names[n], 32, kComboNames[x]); put(shorts[n], 16, kComboShort[x]);
     ++n;
   }
   num_scenes = n;
 }
 
 uint32_t clouds_bytes(bool full) {
-  return align8(g_mc_size()) + (full ? align8(MC_LARGE_FULL) + align8(MC_SMALL_FULL)
+  return align8(mc_size()) + (full ? align8(MC_LARGE_FULL) + align8(MC_SMALL_FULL)
                                    : align8(kCloudsLarge) + align8(kCloudsSmall));
 }
 
-bool uses_rings(int x) { return MI_HAS_RINGS && (x == X_RINGS || x == X_FX_ONLY || x == X_ALL); }
-bool uses_clouds(int x) { return MI_HAS_CLOUDS && (x == X_CLOUDS_WARPS || x == X_FX_ONLY || x == X_ALL); }
-bool uses_warps(int x) { return MI_HAS_WARPS && (x == X_CLOUDS_WARPS || x == X_FX_ONLY || x == X_ALL); }
+bool uses_rings(int x) { return (x == X_RINGS || x == X_FX_ONLY || x == X_ALL); }
+bool uses_clouds(int x) { return (x == X_CLOUDS_WARPS || x == X_FX_ONLY || x == X_ALL); }
+bool uses_warps(int x) { return (x == X_CLOUDS_WARPS || x == X_FX_ONLY || x == X_ALL); }
 
 uint32_t need_of(const SceneDef& s) {
   switch (s.kind) {
-    case K_PLAITS: return align8(g_mp_size());
-    case K_RINGS: return align8(g_mr_size()) + (s.a == 5 ? align8(g_mr_reverb_size()) : 0u);
+    case K_PLAITS: return align8(mp_size());
+    case K_RINGS: return align8(mr_size()) + (s.a == 5 ? align8(mr_reverb_size()) : 0u);
     case K_CLOUDS: return clouds_bytes(true);
-    case K_WARPS: return align8(g_mw_size());
-    case K_TIDES: return 2u * align8(g_mt_size());
-    case K_MARBLES: return align8(g_mm_size());
+    case K_WARPS: return align8(mw_size());
+    case K_TIDES: return 2u * align8(mt_size());
+    case K_MARBLES: return align8(mm_size());
     default: break;
   }
-  uint32_t n = s.a == X_FX_ONLY ? 0u : 4u * align8(g_mp_size()) + (MI_HAS_TIDES ? 2u * align8(g_mt_size()) : 0u) +
-                                       (MI_HAS_MARBLES ? align8(g_mm_size()) : 0u);
-  if (uses_rings(s.a)) n += align8(g_mr_size());
+  uint32_t n = s.a == X_FX_ONLY ? 0u : 4u * align8(mp_size()) + 2u * align8(mt_size()) +
+                                       align8(mm_size());
+  if (uses_rings(s.a)) n += align8(mr_size());
   if (uses_clouds(s.a)) n += clouds_bytes(false);
-  if (uses_warps(s.a)) n += align8(g_mw_size());
+  if (uses_warps(s.a)) n += align8(mw_size());
   return n;
 }
 
@@ -284,18 +220,18 @@ void core1_job(uint32_t) {
   for (uint32_t i = 0; i < n; ++i) c1_l[i] = c1_r[i] = 0.0f;
   if (rings) {
     if (c1_strum) {
-      g_mr_set(rings, 0, 1, note_of(xorshift(&c1_rng)) - 12.0f, 0.3f + 0.4f * lfo, 0.6f, 0.7f, 0.3f);
-      g_mr_strum(rings);
+      mr_set(rings, 0, 1, note_of(xorshift(&c1_rng)) - 12.0f, 0.3f + 0.4f * lfo, 0.6f, 0.7f, 0.3f);
+      mr_strum(rings);
     }
-    g_mr_render(rings, c1_tmp, c1_aux, n);
+    mr_render(rings, c1_tmp, c1_aux, n);
     for (uint32_t i = 0; i < n; ++i) { c1_l[i] += 0.5f * c1_tmp[i]; c1_r[i] += 0.5f * c1_aux[i]; }
   }
   if (warps) {
-    g_mw_render(warps, prev_v1, prev_v2, c1_tmp, c1_aux, n);
+    mw_render(warps, prev_v1, prev_v2, c1_tmp, c1_aux, n);
     for (uint32_t i = 0; i < n; ++i) { c1_l[i] += 0.3f * c1_tmp[i]; c1_r[i] += 0.3f * c1_tmp[i]; }
   }
   if (clouds) {
-    g_mc_render(clouds, prev_mix, prev_mix, c1_tmp, c1_aux, n);
+    mc_render(clouds, prev_mix, prev_mix, c1_tmp, c1_aux, n);
     for (uint32_t i = 0; i < n; ++i) { c1_l[i] += 0.5f * c1_tmp[i]; c1_r[i] += 0.5f * c1_aux[i]; }
   }
   c1_ticks = plat_ticks24() - t0;
@@ -308,55 +244,55 @@ void build(const SceneDef& s) {
   arena_used = 0;
   switch (s.kind) {
     case K_PLAITS:
-      plaits[0] = take(g_mp_size()); g_mp_init(plaits[0]);
+      plaits[0] = take(mp_size()); mp_init(plaits[0]);
       break;
     case K_RINGS: {
-      rings = take(g_mr_size());
-      void* reverb = s.a == 5 ? take(g_mr_reverb_size()) : 0;
-      g_mr_init(rings, reverb);
+      rings = take(mr_size());
+      void* reverb = s.a == 5 ? take(mr_reverb_size()) : 0;
+      mr_init(rings, reverb);
       break;
     }
     case K_CLOUDS: {
-      clouds = take(g_mc_size());
+      clouds = take(mc_size());
       void* large = take(MC_LARGE_FULL);
       void* small = take(MC_SMALL_FULL);
-      g_mc_init(clouds, large, MC_LARGE_FULL, small, MC_SMALL_FULL);
+      mc_init(clouds, large, MC_LARGE_FULL, small, MC_SMALL_FULL);
       break;
     }
     case K_WARPS:
-      warps = take(g_mw_size()); g_mw_init(warps);
+      warps = take(mw_size()); mw_init(warps);
       break;
     case K_TIDES:
-      for (int i = 0; i < 2; ++i) { tides[i] = take(g_mt_size()); g_mt_init(tides[i]); }
+      for (int i = 0; i < 2; ++i) { tides[i] = take(mt_size()); mt_init(tides[i]); }
       break;
     case K_MARBLES:
-      marbles = take(g_mm_size()); g_mm_init(marbles, 1);
+      marbles = take(mm_size()); mm_init(marbles, 1);
       break;
     default: {
       static const uint8_t kModels[4] = { 21, 8, 10, 20 };   // kick, VA, FM 2-op, modal
       if (s.a != X_FX_ONLY) {
         for (int i = 0; i < 4; ++i) {
-          plaits[i] = take(g_mp_size()); g_mp_init(plaits[i]);
-          g_mp_set(plaits[i], kModels[i], 48.0f, 0.5f, 0.5f, 0.5f, i == 0 ? 0.6f : 0.4f, 0.5f);
+          plaits[i] = take(mp_size()); mp_init(plaits[i]);
+          mp_set(plaits[i], kModels[i], 48.0f, 0.5f, 0.5f, 0.5f, i == 0 ? 0.6f : 0.4f, 0.5f);
         }
-        for (int i = 0; MI_HAS_TIDES && i < 2; ++i) {
-          tides[i] = take(g_mt_size()); g_mt_init(tides[i]);
-          g_mt_set(tides[i], 1, 2, 0, i ? 0.13f : 0.31f, 0.5f, 0.5f, 0.5f, 0.5f);   // two slow LFOs, four phases
+        for (int i = 0; i < 2; ++i) {
+          tides[i] = take(mt_size()); mt_init(tides[i]);
+          mt_set(tides[i], 1, 2, 0, i ? 0.13f : 0.31f, 0.5f, 0.5f, 0.5f, 0.5f);   // two slow LFOs, four phases
         }
-        if (MI_HAS_MARBLES) {
-          marbles = take(g_mm_size()); g_mm_init(marbles, 7);
-          g_mm_set(marbles, 0, 0.0f, 0.5f, 0.1f, 0.4f, 8, 0.5f, 0.5f, 0.7f);
+        {
+          marbles = take(mm_size()); mm_init(marbles, 7);
+          mm_set(marbles, 0, 0.0f, 0.5f, 0.1f, 0.4f, 8, 0.5f, 0.5f, 0.7f);
         }
       }
-      if (uses_rings(s.a)) { rings = take(g_mr_size()); g_mr_init(rings, 0); }
+      if (uses_rings(s.a)) { rings = take(mr_size()); mr_init(rings, 0); }
       if (uses_clouds(s.a)) {
-        clouds = take(g_mc_size());
+        clouds = take(mc_size());
         void* large = take(kCloudsLarge);
         void* small = take(kCloudsSmall);
-        g_mc_init(clouds, large, kCloudsLarge, small, kCloudsSmall);
-        g_mc_set(clouds, 0, 0, 0.4f, 0.5f, 0.0f, 0.6f, 0.5f, 0.6f, 0.5f, 0.2f, 0.4f, 0);
+        mc_init(clouds, large, kCloudsLarge, small, kCloudsSmall);
+        mc_set(clouds, 0, 0, 0.4f, 0.5f, 0.0f, 0.6f, 0.5f, 0.6f, 0.5f, 0.2f, 0.4f, 0);
       }
-      if (uses_warps(s.a)) { warps = take(g_mw_size()); g_mw_init(warps); g_mw_set(warps, 2, 0.5f, 0.8f, 0.8f); }
+      if (uses_warps(s.a)) { warps = take(mw_size()); mw_init(warps); mw_set(warps, 2, 0.5f, 0.8f, 0.8f); }
       break;
     }
   }
@@ -368,32 +304,32 @@ void render_single(uint32_t n, bool step) {
   switch (s.kind) {
     case K_PLAITS:
       if (step) {
-        g_mp_set(plaits[0], s.a, note_of(next_rand()), 0.2f + 0.6f * lfo, 0.3f + 0.4f * lfo, 0.7f - 0.4f * lfo, 0.5f, 0.5f);
+        mp_set(plaits[0], s.a, note_of(next_rand()), 0.2f + 0.6f * lfo, 0.3f + 0.4f * lfo, 0.7f - 0.4f * lfo, 0.5f, 0.5f);
       }
-      g_mp_gate(plaits[0], clock_acc < kStep / 2);   // a gate held for half a step
-      g_mp_render(plaits[0], buf[0], aux, n);
+      mp_gate(plaits[0], clock_acc < kStep / 2);   // a gate held for half a step
+      mp_render(plaits[0], buf[0], aux, n);
       for (uint32_t i = 0; i < n; ++i) mix_l[i] = mix_r[i] = 0.5f * buf[0][i];
       break;
     case K_RINGS:
       if (step) {
-        g_mr_set(rings, s.a, s.b, note_of(next_rand()) - 12.0f, 0.2f + 0.6f * lfo, 0.6f, 0.7f, 0.3f);
-        g_mr_strum(rings);
+        mr_set(rings, s.a, s.b, note_of(next_rand()) - 12.0f, 0.2f + 0.6f * lfo, 0.6f, 0.7f, 0.3f);
+        mr_strum(rings);
       }
-      g_mr_render(rings, mix_l, mix_r, n);
+      mr_render(rings, mix_l, mix_r, n);
       break;
     case K_CLOUDS:
-      if (step) g_mc_set(clouds, s.a, 0, 0.2f + 0.6f * lfo, 0.5f, 0.0f, 0.7f, 0.5f, 0.7f, 0.5f, 0.3f, 0.3f, 0);
-      g_mc_render(clouds, in_l, in_r, mix_l, mix_r, n);
+      if (step) mc_set(clouds, s.a, 0, 0.2f + 0.6f * lfo, 0.5f, 0.0f, 0.7f, 0.5f, 0.7f, 0.5f, 0.3f, 0.3f, 0);
+      mc_render(clouds, in_l, in_r, mix_l, mix_r, n);
       break;
     case K_WARPS:
-      if (step) g_mw_set(warps, s.a, 0.2f + 0.6f * lfo, 0.8f, 0.8f);
-      g_mw_render(warps, in_l, in_r, mix_l, mix_r, n);
+      if (step) mw_set(warps, s.a, 0.2f + 0.6f * lfo, 0.8f, 0.8f);
+      mw_render(warps, in_l, in_r, mix_l, mix_r, n);
       break;
     case K_TIDES:
       if (s.a == 0) {                   // audio rate: two four-voice oscillators
         for (int t = 0; t < 2; ++t) {
-          if (step) g_mt_set(tides[t], 1, 3, 1, t ? 165.0f : 110.0f, 0.3f + 0.4f * lfo, 0.5f, 0.5f, 0.5f);
-          g_mt_render(tides[t], tides_out, n, MI_SR);
+          if (step) mt_set(tides[t], 1, 3, 1, t ? 165.0f : 110.0f, 0.3f + 0.4f * lfo, 0.5f, 0.5f, 0.5f);
+          mt_render(tides[t], tides_out, n, MI_SR);
           for (uint32_t i = 0; i < n; ++i) {
             float v = 0.25f * (tides_out[4 * i] + tides_out[4 * i + 1] + tides_out[4 * i + 2] + tides_out[4 * i + 3]);
             if (t) { mix_r[i] = 0.4f * v; } else { mix_l[i] = 0.4f * v; }
@@ -401,14 +337,14 @@ void render_single(uint32_t n, bool step) {
         }
       } else {                          // as modulators: one value a block
         for (int t = 0; t < 2; ++t) {
-          if (step) g_mt_set(tides[t], 1, 2, 0, t ? 0.7f : 0.25f, 0.5f, 0.5f, 0.5f, 0.5f);
-          g_mt_render(tides[t], tides_out, 1, MI_SR / static_cast<float>(n));
+          if (step) mt_set(tides[t], 1, 2, 0, t ? 0.7f : 0.25f, 0.5f, 0.5f, 0.5f, 0.5f);
+          mt_render(tides[t], tides_out, 1, MI_SR / static_cast<float>(n));
           for (int c = 0; c < 4; ++c) mods[t][c] = tides_out[c];
         }
       }
       break;
     case K_MARBLES:
-      g_mm_render(marbles, m_gates, m_cv, n);
+      mm_render(marbles, m_gates, m_cv, n);
       break;
     default:
       break;
@@ -432,7 +368,7 @@ void render_tracks(uint32_t n) {
     return;
   }
   if (marbles) {
-    g_mm_render(marbles, m_gates, m_cv, n);
+    mm_render(marbles, m_gates, m_cv, n);
   } else {                              // no Marbles in this build: the gates from the clock, notes at random
     for (uint32_t i = 0; i < n; ++i) {
       uint32_t at = clock_acc + i;      // (clock_acc counts this block already: an approximation is enough here)
@@ -455,7 +391,7 @@ void render_tracks(uint32_t n) {
   }
   for (int t = 0; t < 2; ++t) {
     if (tides[t]) {
-      g_mt_render(tides[t], tides_out, 1, MI_SR / static_cast<float>(n));
+      mt_render(tides[t], tides_out, 1, MI_SR / static_cast<float>(n));
       for (int c = 0; c < 4; ++c) mods[t][c] = tides_out[c];
     } else {
       for (int c = 0; c < 4; ++c) mods[t][c] = lfo;
@@ -467,11 +403,11 @@ void render_tracks(uint32_t n) {
     int g = kGateOf[v];
     if (rise[g]) {
       float note = v == 0 ? 36.0f : 45.0f + 12.0f * x[g];
-      g_mp_set(plaits[v], kModels[v], note, 0.5f, 0.3f + 0.5f * mods[0][v], 0.3f + 0.5f * mods[1][v],
+      mp_set(plaits[v], kModels[v], note, 0.5f, 0.3f + 0.5f * mods[0][v], 0.3f + 0.5f * mods[1][v],
              v == 0 ? 0.6f : 0.4f, 0.5f);
     }
-    g_mp_gate(plaits[v], last_gates[g]);   // Marbles' gate as it is at the block's end
-    g_mp_render(plaits[v], buf[v], aux, n);
+    mp_gate(plaits[v], last_gates[g]);   // Marbles' gate as it is at the block's end
+    mp_render(plaits[v], buf[v], aux, n);
   }
   if (rise[2]) strum_next = 1;
   for (uint32_t i = 0; i < n; ++i) {
@@ -530,6 +466,8 @@ int sc_start(int i) {
   ready = 1;
   return 0;
 }
+
+void sc_stop(void) { ready = 0; }
 
 void sc_stats(sc_stats_t* s) { *s = st; }
 void sc_stats_reset(void) {
@@ -632,12 +570,12 @@ void sc_render(float* l, float* r, uint32_t n) {
   }
 }
 
-uint32_t sc_size_plaits(void) { return g_mp_size(); }
-uint32_t sc_size_rings(void) { return g_mr_size(); }
-uint32_t sc_size_rings_reverb(void) { return g_mr_reverb_size(); }
-uint32_t sc_size_clouds(void) { return MI_HAS_CLOUDS ? g_mc_size() + MC_LARGE_FULL + MC_SMALL_FULL : 0u; }
-uint32_t sc_size_warps(void) { return g_mw_size(); }
-uint32_t sc_size_tides(void) { return g_mt_size(); }
-uint32_t sc_size_marbles(void) { return g_mm_size(); }
+uint32_t sc_size_plaits(void) { return mp_size(); }
+uint32_t sc_size_rings(void) { return mr_size(); }
+uint32_t sc_size_rings_reverb(void) { return mr_reverb_size(); }
+uint32_t sc_size_clouds(void) { return mc_size() + MC_LARGE_FULL + MC_SMALL_FULL; }
+uint32_t sc_size_warps(void) { return mw_size(); }
+uint32_t sc_size_tides(void) { return mt_size(); }
+uint32_t sc_size_marbles(void) { return mm_size(); }
 
 }  // extern "C"

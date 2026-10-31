@@ -25,6 +25,7 @@ int sc_has_core1(int i);                 /* the scene has a part for the second 
 uint32_t sc_need(int i);                 /* its RAM, bytes */
 uint32_t sc_arena(void);                 /* the RAM there is for scenes */
 int sc_start(int i);                     /* main loop: 0 = playing, -1 = not enough RAM (silence) */
+void sc_stop(void);                      /* main loop: silence, the modules not called (their tables may be away) */
 int sc_current(void);
 void sc_render(float *l, float *r, uint32_t n);   /* audio interrupt */
 void sc_stats(sc_stats_t *s);            /* a copy of the current scene's numbers */

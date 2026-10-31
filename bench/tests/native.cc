@@ -13,6 +13,8 @@ extern "C" {
 #include "plat.h"
 }
 #include "mi/scenes.h"
+#include "mi/res_tables.h"
+extern "C" int mi_res_check(const uint8_t* payload, uint32_t len);
 
 extern "C" {
 uint32_t plat_ticks24(void) {
@@ -33,6 +35,16 @@ int main(int argc, char** argv) {
   float seconds = argc > 2 ? static_cast<float>(atof(argv[2])) : 3.0f;
   const uint32_t n = 128, blocks = static_cast<uint32_t>(seconds * 44100.0f / n);
   int failures = 0;
+  {  // the resource region's file (bench/res/mi_tables.bin, what the FM-1 reads) against the arrays it replaces there
+    FILE* rf = fopen("bench/res/mi_tables.bin", "rb");
+    static uint8_t region[MIFM1_RES_LEN + 1];
+    size_t got = rf ? fread(region, 1, sizeof region, rf) : 0;
+    if (rf) fclose(rf);
+    int k = mi_res_check(region, static_cast<uint32_t>(got));
+    printf("resource region: %u bytes, %d tables: %s\n", static_cast<unsigned>(got), MIFM1_RES_TABLES,
+           k == -1 ? "the same bytes as the arrays" : "DIFFERENT (run tools/split_tables.py)");
+    if (k != -1) ++failures;
+  }
   printf("%-28s %8s %8s %8s %7s  %s\n", "scene", "RAM KB", "x86 us", "x86 pk", "level", "check");
   for (int s = 0; s < sc_count(); ++s) {
     if (sc_start(s) != 0) {

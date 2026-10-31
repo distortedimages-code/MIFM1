@@ -243,6 +243,7 @@ const float* lookup_table_table[] = {
   lut_logit,
 };
 
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_0_0[] = {
    0.000000000e+00,  4.087982131e-02,  4.305530135e-02,  4.446717099e-02,
    4.554461095e-02,  4.643028146e-02,  4.719036259e-02,  4.786130177e-02,
@@ -342,6 +343,8 @@ const float dist_icdf_0_0[] = {
    9.876859706e-02,  9.958160960e-02,  1.005633646e-01,  1.018086946e-01,
    1.035276807e-01,  1.063778878e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_0_1[] = {
    0.000000000e+00,  5.775967733e-02,  6.707029213e-02,  7.344987461e-02,
    7.848926629e-02,  8.273886990e-02,  8.646080382e-02,  8.980231529e-02,
@@ -441,6 +444,8 @@ const float dist_icdf_0_1[] = {
    4.162585474e-01,  4.216202624e-01,  4.280706728e-01,  4.362131524e-01,
    4.473757968e-01,  4.656744235e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_0_2[] = {
    0.000000000e+00,  2.174355841e-02,  3.092888348e-02,  3.812320475e-02,
    4.429997329e-02,  4.983386356e-02,  5.491617951e-02,  5.966017291e-02,
@@ -540,6 +545,8 @@ const float dist_icdf_0_2[] = {
    7.308731533e-01,  7.394393664e-01,  7.495289276e-01,  7.619271224e-01,
    7.783093378e-01,  8.036267830e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_0_3[] = {
    0.000000000e+00,  1.136630499e-02,  1.812428419e-02,  2.386615269e-02,
    2.905355219e-02,  3.387634622e-02,  3.843584130e-02,  4.279405263e-02,
@@ -639,6 +646,8 @@ const float dist_icdf_0_3[] = {
    8.111807607e-01,  8.194849205e-01,  8.291411365e-01,  8.408153119e-01,
    8.559016189e-01,  8.784043144e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_0_4[] = {
    0.000000000e+00,  4.318552295e-03,  8.136040937e-03,  1.180014022e-02,
    1.537593950e-02,  1.889308061e-02,  2.236853835e-02,  2.581330409e-02,
@@ -738,6 +747,8 @@ const float dist_icdf_0_4[] = {
    8.830042789e-01,  8.901563967e-01,  8.983157447e-01,  9.079445898e-01,
    9.199841476e-01,  9.370265573e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_0_5[] = {
    0.000000000e+00,  1.018114730e-03,  2.447577757e-03,  4.090490249e-03,
    5.890934762e-03,  7.819702758e-03,  9.858497479e-03,  1.199468311e-02,
@@ -837,6 +848,8 @@ const float dist_icdf_0_5[] = {
    9.395396669e-01,  9.446944290e-01,  9.504113165e-01,  9.569212379e-01,
    9.646755908e-01,  9.748442279e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_0_6[] = {
    0.000000000e+00,  1.172340652e-04,  4.021646897e-04,  8.271706545e-04,
    1.379870657e-03,  2.052359069e-03,  2.838935565e-03,  3.735208528e-03,
@@ -936,6 +949,8 @@ const float dist_icdf_0_6[] = {
    9.759914408e-01,  9.788400043e-01,  9.818721051e-01,  9.851508371e-01,
    9.887926216e-01,  9.930744994e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_0_7[] = {
    0.000000000e+00,  4.586558125e-06,  2.646347167e-05,  7.377292896e-05,
    1.526888560e-04,  2.684396949e-04,  4.256561038e-04,  6.285447692e-04,
@@ -1035,6 +1050,8 @@ const float dist_icdf_0_7[] = {
    9.934425643e-01,  9.945153569e-01,  9.955928249e-01,  9.966760129e-01,
    9.977667007e-01,  9.988686588e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_0_8[] = {
    0.000000000e+00,  2.499558898e-16,  5.522325275e-14,  1.298450393e-12,
    1.220058326e-11,  6.935268843e-11,  2.868692324e-10,  9.528604901e-10,
@@ -1134,6 +1151,8 @@ const float dist_icdf_0_8[] = {
    9.999972267e-01,  9.999983021e-01,  9.999990686e-01,  9.999995706e-01,
    9.999998558e-01,  9.999999777e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_1_0[] = {
    0.000000000e+00,  1.100527359e-01,  1.135849643e-01,  1.158490613e-01,
    1.175626723e-01,  1.189624288e-01,  1.201575147e-01,  1.212078128e-01,
@@ -1233,6 +1252,8 @@ const float dist_icdf_1_0[] = {
    1.925116803e-01,  1.935578145e-01,  1.948182966e-01,  1.964128743e-01,
    1.986061731e-01,  2.022235068e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_1_1[] = {
    0.000000000e+00,  1.149786663e-01,  1.284674249e-01,  1.374687029e-01,
    1.444580818e-01,  1.502765114e-01,  1.553196690e-01,  1.598078010e-01,
@@ -1332,6 +1353,8 @@ const float dist_icdf_1_1[] = {
    5.202460657e-01,  5.254711723e-01,  5.317373780e-01,  5.396167222e-01,
    5.503639038e-01,  5.678471904e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_1_2[] = {
    0.000000000e+00,  4.772006582e-02,  6.296615905e-02,  7.427407753e-02,
    8.365153308e-02,  9.184022598e-02,  9.920878639e-02,  1.059710445e-01,
@@ -1431,6 +1454,8 @@ const float dist_icdf_1_2[] = {
    7.977494403e-01,  8.050112561e-01,  8.135187408e-01,  8.239037798e-01,
    8.375058344e-01,  8.582456226e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_1_3[] = {
    0.000000000e+00,  2.816362283e-02,  4.073114933e-02,  5.066862151e-02,
    5.924514514e-02,  6.695453594e-02,  7.405075716e-02,  8.068497887e-02,
@@ -1530,6 +1555,8 @@ const float dist_icdf_1_3[] = {
    8.644789519e-01,  8.711594158e-01,  8.788754109e-01,  8.881261959e-01,
    8.999483706e-01,  9.172824028e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_1_4[] = {
    0.000000000e+00,  1.304208331e-02,  2.155380799e-02,  2.896488608e-02,
    3.575988175e-02,  4.214276896e-02,  4.822411052e-02,  5.407241163e-02,
@@ -1629,6 +1656,8 @@ const float dist_icdf_1_4[] = {
    9.214756757e-01,  9.268307039e-01,  9.328861828e-01,  9.399541098e-01,
    9.486626553e-01,  9.607131225e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_1_5[] = {
    0.000000000e+00,  4.203160627e-03,  8.440297374e-03,  1.269985348e-02,
    1.697952692e-02,  2.127832878e-02,  2.559575951e-02,  2.993155884e-02,
@@ -1728,6 +1757,8 @@ const float dist_icdf_1_5[] = {
    9.632549133e-01,  9.667361640e-01,  9.705512686e-01,  9.748314094e-01,
    9.798291121e-01,  9.861840124e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_1_6[] = {
    0.000000000e+00,  7.877882007e-04,  2.100042262e-03,  3.727177925e-03,
    5.600284917e-03,  7.680990070e-03,  9.944108992e-03,  1.237157422e-02,
@@ -1827,6 +1858,8 @@ const float dist_icdf_1_6[] = {
    9.874067737e-01,  9.890607861e-01,  9.907928124e-01,  9.926278457e-01,
    9.946110324e-01,  9.968464800e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_1_7[] = {
    0.000000000e+00,  6.592502467e-05,  2.648932647e-04,  5.975786147e-04,
    1.064331402e-03,  1.665386233e-03,  2.400913347e-03,  3.271040413e-03,
@@ -1926,6 +1959,8 @@ const float dist_icdf_1_7[] = {
    9.972320395e-01,  9.977313927e-01,  9.982217215e-01,  9.987009239e-01,
    9.991655225e-01,  9.996084633e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_1_8[] = {
    0.000000000e+00,  1.968089292e-12,  1.236989249e-10,  1.394171973e-09,
    7.774761039e-09,  2.948608673e-08,  8.762690108e-08,  2.200748477e-07,
@@ -2025,6 +2060,8 @@ const float dist_icdf_1_8[] = {
    9.999997290e-01,  9.999998433e-01,  9.999999199e-01,  9.999999663e-01,
    9.999999900e-01,  9.999999988e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_2_0[] = {
    0.000000000e+00,  2.237672937e-01,  2.285440040e-01,  2.315843188e-01,
    2.338746000e-01,  2.357386352e-01,  2.373253744e-01,  2.387163221e-01,
@@ -2124,6 +2161,8 @@ const float dist_icdf_2_0[] = {
    3.269768652e-01,  3.281985533e-01,  3.296682426e-01,  3.315238816e-01,
    3.340697709e-01,  3.382524533e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_2_1[] = {
    0.000000000e+00,  1.859542478e-01,  2.030266017e-01,  2.142287108e-01,
    2.228310438e-01,  2.299321245e-01,  2.360449678e-01,  2.414535080e-01,
@@ -2223,6 +2262,8 @@ const float dist_icdf_2_1[] = {
    6.189475113e-01,  6.238484787e-01,  6.297084304e-01,  6.370498843e-01,
    6.470149727e-01,  6.631069916e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_2_2[] = {
    0.000000000e+00,  8.118337049e-02,  1.023138483e-01,  1.174621933e-01,
    1.297526043e-01,  1.403112116e-01,  1.496887316e-01,  1.582007333e-01,
@@ -2322,6 +2363,8 @@ const float dist_icdf_2_2[] = {
    8.508942228e-01,  8.569233339e-01,  8.639474923e-01,  8.724627474e-01,
    8.835133158e-01,  9.001240145e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_2_3[] = {
    0.000000000e+00,  5.156460241e-02,  7.025365981e-02,  8.438877451e-02,
    9.624538510e-02,  1.066801039e-01,  1.161239739e-01,  1.248293697e-01,
@@ -2421,6 +2464,8 @@ const float dist_icdf_2_3[] = {
    9.046023235e-01,  9.098680170e-01,  9.159065992e-01,  9.230819916e-01,
    9.321428628e-01,  9.451837998e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_2_4[] = {
    0.000000000e+00,  2.695397666e-02,  4.110739181e-02,  5.271023992e-02,
    6.294554102e-02,  7.228895093e-02,  8.099050278e-02,  8.920152585e-02,
@@ -2520,6 +2565,8 @@ const float dist_icdf_2_4[] = {
    9.484614628e-01,  9.523808247e-01,  9.567706423e-01,  9.618334432e-01,
    9.679718812e-01,  9.762561128e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_2_5[] = {
    0.000000000e+00,  1.053468150e-02,  1.893424839e-02,  2.670341150e-02,
    3.410025603e-02,  4.123932205e-02,  4.818498632e-02,  5.497827400e-02,
@@ -2619,6 +2666,8 @@ const float dist_icdf_2_5[] = {
    9.783098958e-01,  9.805936863e-01,  9.830637927e-01,  9.857897143e-01,
    9.889029123e-01,  9.927278148e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_2_6[] = {
    0.000000000e+00,  2.669205160e-03,  6.088322551e-03,  9.863908821e-03,
    1.389246828e-02,  1.812115190e-02,  2.251727391e-02,  2.705842519e-02,
@@ -2718,6 +2767,8 @@ const float dist_icdf_2_6[] = {
    9.936645176e-01,  9.945862671e-01,  9.955339916e-01,  9.965153278e-01,
    9.975437379e-01,  9.986491696e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_2_7[] = {
    0.000000000e+00,  3.568661949e-04,  1.146997717e-03,  2.270594482e-03,
    3.685819090e-03,  5.366609188e-03,  7.294389619e-03,  9.454901165e-03,
@@ -2817,6 +2868,8 @@ const float dist_icdf_2_7[] = {
    9.989035176e-01,  9.991219315e-01,  9.993309647e-01,  9.995287935e-01,
    9.997125019e-01,  9.998764622e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_2_8[] = {
    0.000000000e+00,  4.578949286e-10,  1.356106336e-08,  9.841977600e-08,
    4.016257606e-07,  1.195494376e-06,  2.914805441e-06,  6.192491155e-06,
@@ -2916,6 +2969,8 @@ const float dist_icdf_2_8[] = {
    9.999999799e-01,  9.999999891e-01,  9.999999949e-01,  9.999999981e-01,
    9.999999995e-01,  1.000000000e+00,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_3_0[] = {
    0.000000000e+00,  3.357396159e-01,  3.411985141e-01,  3.446595422e-01,
    3.472599302e-01,  3.493720818e-01,  3.511670309e-01,  3.527382471e-01,
@@ -3015,6 +3070,8 @@ const float dist_icdf_3_0[] = {
    4.486283968e-01,  4.499085132e-01,  4.514469445e-01,  4.533869740e-01,
    4.560443034e-01,  4.603992527e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_3_1[] = {
    0.000000000e+00,  2.436959399e-01,  2.629281909e-01,  2.754296495e-01,
    2.849701321e-01,  2.928081818e-01,  2.995291515e-01,  3.054559995e-01,
@@ -3114,6 +3171,8 @@ const float dist_icdf_3_1[] = {
    6.855300505e-01,  6.900967739e-01,  6.955450675e-01,  7.023522382e-01,
    7.115588721e-01,  7.263444178e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_3_2[] = {
    0.000000000e+00,  1.087346134e-01,  1.338426443e-01,  1.515211964e-01,
    1.656975989e-01,  1.777697307e-01,  1.884155353e-01,  1.980210383e-01,
@@ -3213,6 +3272,8 @@ const float dist_icdf_3_2[] = {
    8.821588566e-01,  8.873527672e-01,  8.933779421e-01,  9.006430751e-01,
    9.100037354e-01,  9.239177305e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_3_3[] = {
    0.000000000e+00,  7.167186913e-02,  9.471219680e-02,  1.117382035e-01,
    1.258070441e-01,  1.380505261e-01,  1.490319159e-01,  1.590782570e-01,
@@ -3312,6 +3373,8 @@ const float dist_icdf_3_3[] = {
    9.271352827e-01,  9.315014891e-01,  9.364806173e-01,  9.423557908e-01,
    9.497051553e-01,  9.601283182e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_3_4[] = {
    0.000000000e+00,  3.984384380e-02,  5.832579568e-02,  7.301236815e-02,
    8.571044308e-02,  9.712997207e-02,  1.076384798e-01,  1.174558331e-01,
@@ -3411,6 +3474,8 @@ const float dist_icdf_3_4[] = {
    9.626834653e-01,  9.657551776e-01,  9.691696553e-01,  9.730703746e-01,
    9.777396883e-01,  9.839166584e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_3_5[] = {
    0.000000000e+00,  1.718397325e-02,  2.918666384e-02,  3.982191900e-02,
    4.967010892e-02,  5.898056554e-02,  6.789035732e-02,  7.648534670e-02,
@@ -3510,6 +3575,8 @@ const float dist_icdf_3_5[] = {
    9.855393811e-01,  9.871834551e-01,  9.889431082e-01,  9.908596171e-01,
    9.930099575e-01,  9.955801360e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_3_6[] = {
    0.000000000e+00,  5.080117766e-03,  1.070137945e-02,  1.654833190e-02,
    2.254781636e-02,  2.866409040e-02,  3.487570194e-02,  4.116827592e-02,
@@ -3609,6 +3676,8 @@ const float dist_icdf_3_6[] = {
    9.962760994e-01,  9.968597547e-01,  9.974511113e-01,  9.980522715e-01,
    9.986668684e-01,  9.993027529e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_3_7[] = {
    0.000000000e+00,  8.628158357e-04,  2.475092108e-03,  4.583935209e-03,
    7.096952025e-03,  9.959998080e-03,  1.313608688e-02,  1.659774071e-02,
@@ -3708,6 +3777,8 @@ const float dist_icdf_3_7[] = {
    9.994673926e-01,  9.995814322e-01,  9.996883319e-01,  9.997869049e-01,
    9.998753055e-01,  9.999501124e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_3_8[] = {
    0.000000000e+00,  7.260746841e-09,  1.477806909e-07,  8.612331732e-07,
    3.007830713e-06,  7.934854247e-06,  1.752882833e-05,  3.425937221e-05,
@@ -3807,6 +3878,8 @@ const float dist_icdf_3_8[] = {
    9.999999976e-01,  9.999999988e-01,  9.999999995e-01,  9.999999998e-01,
    1.000000000e+00,  1.000000000e+00,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_4_0[] = {
    0.000000000e+00,  4.467052359e-01,  4.524901822e-01,  4.561468853e-01,
    4.588886998e-01,  4.611122150e-01,  4.629993420e-01,  4.646493976e-01,
@@ -3906,6 +3979,8 @@ const float dist_icdf_4_0[] = {
    5.622721954e-01,  5.635364682e-01,  5.650545553e-01,  5.669669043e-01,
    5.695826590e-01,  5.738603513e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_4_1[] = {
    0.000000000e+00,  2.942760427e-01,  3.149979404e-01,  3.283773557e-01,
    3.385420074e-01,  3.468640109e-01,  3.539797032e-01,  3.602393943e-01,
@@ -4005,6 +4080,8 @@ const float dist_icdf_4_1[] = {
    7.366959127e-01,  7.409333694e-01,  7.459791331e-01,  7.522683945e-01,
    7.607477186e-01,  7.742992783e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_4_2[] = {
    0.000000000e+00,  1.329253218e-01,  1.610934102e-01,  1.806852421e-01,
    1.962705253e-01,  2.094622071e-01,  2.210382042e-01,  2.314396010e-01,
@@ -4104,6 +4181,8 @@ const float dist_icdf_4_2[] = {
    9.039709430e-01,  9.085179554e-01,  9.137727588e-01,  9.200790165e-01,
    9.281525810e-01,  9.400345279e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_4_3[] = {
    0.000000000e+00,  8.975041338e-02,  1.162473991e-01,  1.355249614e-01,
    1.512936819e-01,  1.649122887e-01,  1.770520914e-01,  1.881007254e-01,
@@ -4203,6 +4282,8 @@ const float dist_icdf_4_3[] = {
    9.423013615e-01,  9.460026814e-01,  9.502027085e-01,  9.551278324e-01,
    9.612372658e-01,  9.697888628e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_4_4[] = {
    0.000000000e+00,  5.193814818e-02,  7.401811327e-02,  9.120458682e-02,
    1.058663166e-01,  1.189202006e-01,  1.308362052e-01,  1.418933697e-01,
@@ -4302,6 +4383,8 @@ const float dist_icdf_4_4[] = {
    9.717824807e-01,  9.742627240e-01,  9.770012312e-01,  9.801033654e-01,
    9.837745760e-01,  9.885452928e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_4_5[] = {
    0.000000000e+00,  2.388903283e-02,  3.910358742e-02,  5.220819259e-02,
    6.412196115e-02,  7.523158189e-02,  8.574666414e-02,  9.579710309e-02,
@@ -4401,6 +4484,8 @@ const float dist_icdf_4_5[] = {
    9.898273564e-01,  9.910597055e-01,  9.923664211e-01,  9.937730141e-01,
    9.953264554e-01,  9.971381247e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_4_6[] = {
    0.000000000e+00,  7.812500000e-03,  1.562500000e-02,  2.343750000e-02,
    3.125000000e-02,  3.906250000e-02,  4.687500000e-02,  5.468750000e-02,
@@ -4500,6 +4585,8 @@ const float dist_icdf_4_6[] = {
    9.976562500e-01,  9.980468750e-01,  9.984375000e-01,  9.988281250e-01,
    9.992187500e-01,  9.996093750e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_4_7[] = {
    0.000000000e+00,  1.551652911e-03,  4.133543553e-03,  7.330169583e-03,
    1.100344347e-02,  1.507557444e-02,  1.949484392e-02,  2.422361887e-02,
@@ -4599,6 +4686,8 @@ const float dist_icdf_4_7[] = {
    9.997172341e-01,  9.997814994e-01,  9.998406304e-01,  9.998938990e-01,
    9.999402012e-01,  9.999775625e-01,  1.000000000e+00,
 };
+#endif  // MIFM1
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const float dist_icdf_4_8[] = {
    0.000000000e+00,  4.402192196e-08,  7.043504723e-07,  3.565768144e-06,
    1.126953612e-05,  2.751324776e-05,  5.705045944e-05,  1.056899347e-04,
@@ -4698,6 +4787,7 @@ const float dist_icdf_4_8[] = {
    9.999999996e-01,  9.999999998e-01,  9.999999999e-01,  1.000000000e+00,
    1.000000000e+00,  1.000000000e+00,  1.000000000e+00,
 };
+#endif  // MIFM1
 
 
 const float* distributions_table[] = {

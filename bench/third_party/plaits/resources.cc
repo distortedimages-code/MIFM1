@@ -4200,6 +4200,7 @@ const int8_t* const lookup_table_i8_table[] = {
   lut_lpc_excitation_pulse,
 };
 
+#ifdef PLAT_HOST  // MIFM1: on the FM-1, in the resource region (tools/split_tables.py)
 const int16_t wav_integrated_waves[] = {
   -20556, -20706, -20806, -20857,
   -20857, -20806, -20706, -20556,
@@ -10538,6 +10539,7 @@ const int16_t wav_integrated_waves[] = {
     5839,   5240,   4578,   3843,
     3044,   2181,   1253,    261,
 };
+#endif  // MIFM1
 
 
 const int16_t* const wavetables_table[] = {

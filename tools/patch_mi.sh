@@ -19,4 +19,8 @@ sub rings/dsp/part.cc 's/^  reverb_.Init(reverb_buffer);/  if (reverb_buffer) re
 #    did); nothing calls the mock here, but it must compile
 grep -q "MIFM1: the mock" "$T/plaits/user_data.h" || \
     sub plaits/user_data.h 's/^#ifdef TEST$/#ifdef TEST\n#include <cstdio>  \/\/ MIFM1: the mock below prints/' 'MIFM1: the mock'
+# 4. The biggest tables (Marbles' distributions, Plaits' integrated wavetables, Tides' SHAPE curves: 145 KB) out of
+#    the program flash into fm1-base's resource region: on the FM-1 their arrays are not compiled and their symbols
+#    are the region's addresses (tools/split_tables.py, which also writes the region's file)
+python3 "$(dirname "$0")/split_tables.py"
 echo "patched $T"

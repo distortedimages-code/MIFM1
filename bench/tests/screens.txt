@@ -1,5 +1,6 @@
-# MIFM1 bench in fm1-base's host simulator: the pages, a few scenes, the automatic pass (shortened by the clock of
-# the simulation: it runs the same 3 s a scene), screenshots in the output folder.
+# MIFM1 bench in fm1-base's host simulator: the pages, a few scenes, the automatic pass (the simulation's clock: the
+# same 3 s a scene), the results kept across a power-off and in a backup, an FM-1 without the tables; screenshots in
+# the output folder.
 wait 1500
 shot live.png
 turn SELECT 20
@@ -19,8 +20,21 @@ wait 300
 tap REC
 wait 2000
 shot auto.png
-wait 130000
+wait 165000
 shot results.png
 turn SELECT 6
 wait 300
 shot results_2.png
+backup out:results.mifm1
+reboot
+wait 1500
+tap HOME
+wait 300
+shot results_after_reboot.png
+res 0
+reboot
+wait 1500
+shot no_tables.png
+tap REC
+wait 300
+shot no_tables_rec.png
