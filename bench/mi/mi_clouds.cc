@@ -55,10 +55,15 @@ void mc_set(void* v, int mode, int quality, float position, float size, float pi
             float texture, float dry_wet, float spread, float feedback, float reverb, int freeze) {
   CloudsProc* c = static_cast<CloudsProc*>(v);
   if (mode < 0 || mode >= MC_MODES) mode = 0;
+  bool again = false;                   // a new mode or quality: Prepare() re-lays the buffers out, here and now
   if (mode != c->processor.playback_mode()) {
     c->processor.set_playback_mode(static_cast<clouds::PlaybackMode>(mode));
+    again = true;
   }
-  if (quality != c->processor.quality()) c->processor.set_quality(quality & 3);
+  if (quality != c->processor.quality()) {
+    c->processor.set_quality(quality & 3);
+    again = true;
+  }
   clouds::Parameters* p = c->processor.mutable_parameters();
   p->position = position;
   p->size = size;
@@ -70,6 +75,7 @@ void mc_set(void* v, int mode, int quality, float position, float size, float pi
   p->feedback = feedback;
   p->reverb = reverb;
   p->freeze = freeze != 0;
+  if (again) c->processor.Prepare();
 }
 
 void mc_render(void* v, const float* in_l, const float* in_r, float* out_l, float* out_r, uint32_t n) {

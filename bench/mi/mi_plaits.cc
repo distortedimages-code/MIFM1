@@ -14,6 +14,9 @@ struct PlaitsVoice {
   int gate;                             // the TRIG input as a gate: its edge starts the LPG, its length holds
                                         // the engines that sustain (six-op FM, string machine...)
   char buffer[16384];                   // the engines' shared memory (plaits.cc: shared_buffer)
+  float pend_out[plaits::kBlockSize];   // a block rendered and not yet given out (see mp_render)
+  float pend_aux[plaits::kBlockSize];
+  uint32_t pend_at, pend_n;
 };
 
 const char* const kModelNames[MP_MODELS] = {
@@ -56,6 +59,7 @@ void mp_init(void* mem) {
   p->mod.trigger_patched = true;        // the LPG and the decay envelope follow our triggers
   p->mod.level_patched = false;
   p->gate = 0;
+  p->pend_at = p->pend_n = 0;
 }
 
 void mp_set(void* v, int model, float note, float harmonics, float timbre, float morph, float decay,
@@ -72,20 +76,28 @@ void mp_set(void* v, int model, float note, float harmonics, float timbre, float
 
 void mp_gate(void* v, int high) { static_cast<PlaitsVoice*>(v)->gate = high; }
 
+// Voice::Render times its envelopes, its LPG and the trigger's delay per call as kBlockSize frames (12, plaits.cc's
+// block): it is always called with exactly that many, and a block not wholly wanted waits for the next render (128 is
+// not a multiple of 12)
 void mp_render(void* v, float* out, float* aux, uint32_t n) {
   PlaitsVoice* p = static_cast<PlaitsVoice*>(v);
-  plaits::Voice::Frame frames[plaits::kMaxBlockSize];
+  plaits::Voice::Frame frames[plaits::kBlockSize];
   while (n) {
-    uint32_t size = n < plaits::kMaxBlockSize ? n : plaits::kMaxBlockSize;
-    p->mod.trigger = p->gate ? 1.0f : 0.0f;   // the voice delays it by 1 ms and finds its edges
-    p->voice.Render(p->patch, p->mod, frames, size);
-    for (uint32_t i = 0; i < size; ++i) {
-      out[i] = static_cast<float>(frames[i].out) * (1.0f / 32768.0f);
-      aux[i] = static_cast<float>(frames[i].aux) * (1.0f / 32768.0f);
+    if (p->pend_at == p->pend_n) {
+      p->mod.trigger = p->gate ? 1.0f : 0.0f;   // the voice delays it by 1 ms and finds its edges
+      p->voice.Render(p->patch, p->mod, frames, plaits::kBlockSize);
+      for (uint32_t i = 0; i < plaits::kBlockSize; ++i) {
+        p->pend_out[i] = static_cast<float>(frames[i].out) * (1.0f / 32768.0f);
+        p->pend_aux[i] = static_cast<float>(frames[i].aux) * (1.0f / 32768.0f);
+      }
+      p->pend_at = 0;
+      p->pend_n = plaits::kBlockSize;
     }
-    out += size;
-    aux += size;
-    n -= size;
+    while (n && p->pend_at < p->pend_n) {
+      *out++ = p->pend_out[p->pend_at];
+      *aux++ = p->pend_aux[p->pend_at++];
+      --n;
+    }
   }
 }
 

@@ -15,6 +15,9 @@
    (`bench/res/mi_tables.bin`, written by the installer after the firmware), and their symbols are the addresses
    where the region reads (`bench/mi/res_symbols.cc`, generated). The values are the same bytes: on a computer the
    arrays stay in the build and `make test` compares the region's file with them. No code or value is changed.
+5. `warps/dsp/vocoder.h`: `kFollowerGain = 4.47213595f` instead of `sqrtf(kNumBands)` (kNumBands is 20: the same
+   float). Computed, it is a static initializer, and fm1-base never runs those: unless the compiler folds it, the
+   vocoder's gain would stay 0 on the FM-1 (`tools/no_static_init.py` checks every object).
 
 Not changed, but used differently from the modules: Clouds (written for 32 kHz) and Warps (96 kHz) get the FM-1's
 44.1 kHz frames as they are in the bench, which measures the work per frame; Tides 2 and Marbles are called at

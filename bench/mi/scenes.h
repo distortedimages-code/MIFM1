@@ -11,7 +11,8 @@ extern "C" {
 #endif
 
 typedef struct {
-    uint32_t blocks;                     /* blocks measured (the first ones after a start are left out) */
+    uint32_t measured;                   /* blocks measured (the first ones after a start are left out) */
+    uint32_t blocks;                     /* the sums' weight: the averages are sum / blocks (halved now and then) */
     uint32_t c0_sum, c0_peak;            /* core 0's part of the render, in ticks (PLAT_TICKS_PER_US a us) */
     uint32_t c1_sum, c1_peak;            /* the job on the second core (or after core 0's part, on core 0) */
     uint32_t tot_sum, tot_peak;          /* the whole render, from its start to the last part done */

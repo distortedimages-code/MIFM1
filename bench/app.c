@@ -264,17 +264,22 @@ static void take_result(int i)           /* the current scene's numbers into the
     r->xruns = (uint16_t)(plat_xruns() - ui.xruns0);
 }
 
-static void go(int i)
+static int go(int i)                     /* scene i (another one: the first): 0 = it plays */
 {
+    int rc;
     if (!data_ok) {
         sc_stop();
         app_say("TABLES ABSENTES", "REINSTALLER");
-        return;
+        return -1;
     }
-    if (sc_start(i) != 0)
-        res[i].done = 2;
+    if (i < 0 || i >= sc_count() || i >= MAX_SCENES)
+        i = 0;
+    rc = sc_start(i);
+    if (rc != 0)
+        res[i].done = 2;                 /* (more RAM than the arena) */
     ui.xruns0 = plat_xruns();
     ui.redraw = 1;
+    return rc;
 }
 
 static void auto_step(void)
@@ -291,9 +296,16 @@ static void auto_step(void)
         app_say("BANC TERMINE", "PHOTOGRAPHIE");
         return;
     }
-    ui.automatic++;
-    ui.auto_t = plat_ms();
-    go(ui.automatic - 1);
+    for (;;) {                           /* the next scene; one that cannot play (no RAM) costs no time */
+        ui.automatic++;
+        ui.auto_t = plat_ms();
+        if (go(ui.automatic - 1) == 0)
+            return;
+        if (ui.automatic >= n) {
+            ui.auto_t -= AUTO_MS;        /* the last one: done at the next frame */
+            return;
+        }
+    }
 }
 
 static void input(void)
@@ -438,7 +450,7 @@ static void page_live(void)
             line(6, "", C_GRAY);
         }
         t[0] = 0;
-        int_text((int32_t)s.blocks, v);
+        int_text((int32_t)s.measured, v);
         text_cat(t, v, sizeof t);
         text_cat(t, " BLOCS  RETARDS ", sizeof t);
         int_text((int32_t)(plat_xruns() - ui.xruns0), v);
@@ -592,18 +604,21 @@ void app_ui_init(void)                   /* at power-on, and after an update, a 
     data_ok = data_check();
     if (!data_ok)
         sc_stop();
-    if (halted) {                        /* the scene again, from the start (its state may have read anything) */
-        halted = 0;
-        ui.automatic = 0;
-        if (data_ok)
-            go(sc_current());
-    }
     ui.redraw = 1;
 }
 
 void app_frame(void)
 {
     uint32_t now = plat_ms();
+    if (halted) {                        /* after app_panic (an update, a restore, the tables' transfer: each done
+                                          * before the main loop draws again): the scene again, from its start */
+        halted = 0;
+        ui.automatic = 0;
+        data_ok = data_check();
+        if (data_ok)
+            go(sc_current());            /* (none yet, at the first install: the first) */
+        ui.redraw = 1;
+    }
     input();
     auto_step();
     if (save_pending && !save_hold)

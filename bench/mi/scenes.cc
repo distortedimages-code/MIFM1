@@ -257,6 +257,8 @@ void build(const SceneDef& s) {
       void* large = take(MC_LARGE_FULL);
       void* small = take(MC_SMALL_FULL);
       mc_init(clouds, large, MC_LARGE_FULL, small, MC_SMALL_FULL);
+      // the scene's mode now, in the main loop: its buffers laid out here, not in the first audio block
+      mc_set(clouds, s.a, 0, 0.2f, 0.5f, 0.0f, 0.7f, 0.5f, 0.7f, 0.5f, 0.3f, 0.3f, 0);
       break;
     }
     case K_WARPS:
@@ -418,17 +420,37 @@ void render_tracks(uint32_t n) {
 }
 
 volatile uint32_t warm;                 // blocks since the numbers were reset
+volatile int reset_asked;               // sc_stats_reset while playing: done by the render, between two blocks
+
+// The sums are 32-bit (a 64-bit division would need a runtime the FM-1's build has not): at 4096 blocks (12 s) they
+// and the count are halved, so the average weighs the recent blocks more and never overflows (a block at 100 % is
+// about 70,000 ticks: 4096 of them at 15 times that still fit)
+const uint32_t kHalveAt = 4096;
 
 void count(uint32_t c0, uint32_t c1, uint32_t tot, int on_core1) {
+  if (reset_asked) {
+    sc_stats_t z = {};
+    st = z;
+    warm = 0;
+    reset_asked = 0;
+  }
   if (warm < kWarmup) {
     ++warm;
     return;
   }
+  st.measured++;
   st.blocks++;
   st.c0_sum += c0; if (c0 > st.c0_peak) st.c0_peak = c0;
   st.c1_sum += c1; if (c1 > st.c1_peak) st.c1_peak = c1;
   st.tot_sum += tot; if (tot > st.tot_peak) st.tot_peak = tot;
   if (on_core1) st.c1_jobs++;
+  if (st.blocks >= kHalveAt) {
+    st.blocks >>= 1;
+    st.c0_sum >>= 1;
+    st.c1_sum >>= 1;
+    st.tot_sum >>= 1;
+    st.c1_jobs >>= 1;
+  }
 }
 
 }  // namespace
@@ -471,9 +493,14 @@ void sc_stop(void) { ready = 0; }
 
 void sc_stats(sc_stats_t* s) { *s = st; }
 void sc_stats_reset(void) {
+  if (ready) {                          // the render counts: it resets them itself, before its next block
+    reset_asked = 1;
+    return;
+  }
   sc_stats_t z = {};
   st = z;
   warm = 0;
+  reset_asked = 0;
 }
 
 void sc_render(float* l, float* r, uint32_t n) {

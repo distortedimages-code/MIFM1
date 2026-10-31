@@ -73,6 +73,7 @@ done
 if llvm-nm -S "$OUT/check.elf" | grep -E " [rR] _ZN(7marbles13dist_icdf|6plaits20wav_integrated|5tides13lut_wavetable)"; then
     echo "a moved table is in the image too"; exit 1
 fi
+python3 "$ROOT/tools/no_static_init.py" "$OUT"/*.o
 # fm1-base's rules for an app's C sources, as its firmware build applies them (tools/build.py mmio_check: no register
 # or XIP window address, no inline asm, no volatile cast outside the BSP)
 python3 - "$ROOT" "$BASE" <<'PY'

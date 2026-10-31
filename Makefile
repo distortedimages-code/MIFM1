@@ -15,10 +15,12 @@ all: test
 
 $(OUT)/obj/%.o: %.cc
 	@mkdir -p $(dir $@)
-	$(CXX) -std=gnu++11 $(FLAGS) -w $(INC) -c $< -o $@
+	$(CXX) -std=gnu++11 $(FLAGS) -w -MMD -MP $(INC) -c $< -o $@
+
+-include $(OBJ:.o=.d) $(OUT)/obj/native.d
 
 $(OUT)/native: bench/tests/native.cc $(OBJ)
-	$(CXX) -std=gnu++11 $(FLAGS) -Wall $(INC) -c bench/tests/native.cc -o $(OUT)/obj/native.o
+	$(CXX) -std=gnu++11 $(FLAGS) -Wall -MMD -MP $(INC) -c bench/tests/native.cc -o $(OUT)/obj/native.o
 	$(CC) $(OUT)/obj/native.o $(OBJ) -lm -o $@
 
 # every scene on the computer: plays, no NaN, not silent; WAVs in build/wav

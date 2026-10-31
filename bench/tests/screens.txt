@@ -1,6 +1,7 @@
 # MIFM1 bench in fm1-base's host simulator: the pages, a few scenes, the automatic pass (the simulation's clock: the
-# same 3 s a scene), the results kept across a power-off and in a backup, an FM-1 without the tables; screenshots in
-# the output folder.
+# same 3 s a scene), the results kept across a power-off and in a backup, an FM-1 without the tables, then the
+# tables arriving (as the installer writes them after a first install: app_panic, then the scene starts); screenshots
+# in the output folder.
 wait 1500
 shot live.png
 turn SELECT 20
@@ -38,3 +39,7 @@ shot no_tables.png
 tap REC
 wait 300
 shot no_tables_rec.png
+res 1
+restore out:results.mifm1
+wait 1500
+shot tables_back.png

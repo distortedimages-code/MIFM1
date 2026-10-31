@@ -16,6 +16,9 @@ struct RingsPart {
   int strum;
   int has_reverb;
   float silence[rings::kMaxBlockSize];
+  float pend_out[rings::kMaxBlockSize];  // a block rendered and not yet given out (see mr_render)
+  float pend_aux[rings::kMaxBlockSize];
+  uint32_t pend_at, pend_n;
 };
 
 const char* const kModelNames[MR_MODELS] = {
@@ -50,6 +53,7 @@ void mr_init(void* mem, void* reverb) {
   r->state.chord = 0;
   r->strum = 0;
   for (size_t i = 0; i < rings::kMaxBlockSize; ++i) r->silence[i] = 0.0f;
+  r->pend_at = r->pend_n = 0;
 }
 
 void mr_set(void* v, int model, int polyphony, float note, float structure, float brightness, float damping,
@@ -74,16 +78,23 @@ void mr_set(void* v, int model, int polyphony, float note, float structure, floa
 
 void mr_strum(void* v) { static_cast<RingsPart*>(v)->strum = 1; }
 
+// Part::Process steps its note filter and LFOs once a call, for kMaxBlockSize frames (24, rings.cc's block): it is
+// always called with exactly that many, and a block not wholly wanted waits for the next render (128 = 5 x 24 + 8)
 void mr_render(void* v, float* out, float* aux, uint32_t n) {
   RingsPart* r = static_cast<RingsPart*>(v);
   while (n) {
-    uint32_t size = n < rings::kMaxBlockSize ? n : rings::kMaxBlockSize;
-    r->state.strum = r->strum != 0;
-    r->strum = 0;
-    r->part.Process(r->state, r->patch, r->silence, out, aux, size);
-    out += size;
-    aux += size;
-    n -= size;
+    if (r->pend_at == r->pend_n) {
+      r->state.strum = r->strum != 0;
+      r->strum = 0;
+      r->part.Process(r->state, r->patch, r->silence, r->pend_out, r->pend_aux, rings::kMaxBlockSize);
+      r->pend_at = 0;
+      r->pend_n = rings::kMaxBlockSize;
+    }
+    while (n && r->pend_at < r->pend_n) {
+      *out++ = r->pend_out[r->pend_at];
+      *aux++ = r->pend_aux[r->pend_at++];
+      --n;
+    }
   }
 }
 

@@ -23,4 +23,7 @@ grep -q "MIFM1: the mock" "$T/plaits/user_data.h" || \
 #    the program flash into fm1-base's resource region: on the FM-1 their arrays are not compiled and their symbols
 #    are the region's addresses (tools/split_tables.py, which also writes the region's file)
 python3 "$(dirname "$0")/split_tables.py"
+# 5. Warps' vocoder: a namespace-scope constant computed at start-up (sqrtf), a static initializer fm1-base never runs
+#    (the FM-1's old clang may not fold it): its value written out, sqrtf(20) (tools/no_static_init.py checks)
+sub warps/dsp/vocoder.h 's/^const float kFollowerGain = sqrtf(kNumBands);/const float kFollowerGain = 4.47213595f;  \/\/ MIFM1: sqrtf(kNumBands), kNumBands 20; no static initializer/' 'kFollowerGain = 4.47213595f'
 echo "patched $T"

@@ -36,7 +36,7 @@
 
 namespace warps {
 
-const float kFollowerGain = sqrtf(kNumBands);
+const float kFollowerGain = 4.47213595f;  // MIFM1: sqrtf(kNumBands), kNumBands 20; no static initializer
 
 class EnvelopeFollower {
  public:

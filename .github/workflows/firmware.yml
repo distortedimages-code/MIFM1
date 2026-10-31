@@ -15,8 +15,8 @@ permissions:
   contents: read
   pages: write
   id-token: write
-concurrency:
-  group: pages
+concurrency:                     # a newer push of the same branch replaces a run; branches do not cancel each other
+  group: firmware-${{ github.ref }}
   cancel-in-progress: true
 env:
   VERSION: "0.0"
@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - run: sudo apt-get install -y -q lld llvm
+      - run: sudo apt-get update -q && sudo apt-get install -y -q lld llvm
       - run: pip install pillow
       - name: The moved tables, as tools/split_tables.py makes them from the vendored code
         run: |
@@ -36,7 +36,8 @@ jobs:
       - name: Every scene on a computer (plays, no NaN, not silent; the region's file is the arrays' bytes)
         run: make test
       - name: The FM-1's constraints (no libm, no C++ library, no double; the moved tables at the region's addresses)
-        run: sh tools/device_check.sh | tail -12
+        shell: bash                # (pipefail: the check's failure, not tail's success)
+        run: sh tools/device_check.sh | tail -14
       - name: The host simulator's screens (results across a power-off and in a backup; an FM-1 without the tables)
         run: |
           (cd base && python3 tools/build.py ../bench --host) > host.log 2>&1 || { tail -40 host.log; exit 1; }
@@ -51,6 +52,7 @@ jobs:
             build/host_out/*.png
             build/host_out/results.mifm1
   firmware:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -90,6 +92,8 @@ jobs:
           # what the build says about sizes and RAM
           tail -n 40 build.log | annotate notice "build"
           ls -la bench/build/*.fwsc bench/build/*-res.bin
+      - name: No static initializer in the modules as JieLi's compiler built them (the FM-1 never runs one)
+        run: python3 tools/no_static_init.py bench/build/o2/*.o
       - name: The installer and the backup page
         run: |
           python3 tools/make_installer.py bench/build/mifm1-"$VERSION".fwsc "$VERSION" site
@@ -105,6 +109,7 @@ jobs:
           path: site
   pages:
     needs: firmware
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
