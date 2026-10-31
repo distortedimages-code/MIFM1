@@ -39,6 +39,12 @@ void mc_set(void *c, int mode, int quality, float position, float size, float pi
 void mc_render(void *c, const float *in_l, const float *in_r, float *out_l, float *out_r, uint32_t n);
 const char *mc_mode_name(int mode);
 
+/* ---- Clouds' reverb, alone, as a send (fully wet) ---- */
+uint32_t mrv_size(void);                 /* its 32 KB of delay cells included */
+void mrv_init(void *mem);
+void mrv_set(void *r, float time, float damping, float diffusion);   /* 0..1 each */
+void mrv_process(void *r, const float *in, float *out_l, float *out_r, uint32_t n);
+
 /* ---- Warps ---- */
 #define MW_ALGOS 9                       /* the 8 positions of ALGORITHM's sweep, then the easter egg */
 uint32_t mw_size(void);

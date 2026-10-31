@@ -12,7 +12,7 @@
 #define APP_SPLASH_RGB RGB(120, 200, 255)
 #define APP_PALETTE 2                     /* gfx.c's CYAN */
 #define APP_BLOCK 128u                    /* frames per audio block: 2.9 ms at 44.1 kHz, the control rate's step */
-#define APP_CANVAS_PX (240u * 48u)        /* gfx.c's canvas: a knob's cell (120 x 78) or a band of the screen */
+#define APP_CANVAS_PX (240u * 84u)        /* gfx.c's canvas: the module's display (240 x 82), a knob (60 x 100) */
 
 /* the store: the project (knobs, models, cables) and the panel's calibration (the platform's, where every fm1-base
  * firmware keeps it). 0xD8000: clear of the sectors other firmwares save in */

@@ -22,34 +22,35 @@ extern "C" {
 namespace {
 
 // ---------------------------------------------------------------- parameters ---
-const char* const kGateNames[NGATE] = {"T1", "T2", "T3", "A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "CLAVIER"};
-const char* const kNoteNames[NNOTE] = {"X1", "X2", "X3", "Y", "FIXE"};
-const char* const kTidesOut[4] = {"PORTES", "AMPLITUDES", "PHASES", "FREQUENCES"};
-const char* const kTidesRange[3] = {"LENT", "MOYEN", "RAPIDE"};
-const char* const kTidesTrig[5] = {"LIBRE", "T1", "T2", "T3", "HORLOGE"};
-const char* const kTRange[3] = {"/4", "X1", "X4"};
-const char* const kOnOff[2] = {"NON", "OUI"};
-const char* const kXMode[3] = {"IDENTIQUE", "BOSSE", "PENTE"};
+const char* const kGateNames[NGATE] = {"T1", "T2", "T3", "A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "Keys"};
+const char* const kNoteNames[NNOTE] = {"X1", "X2", "X3", "Y", "Fixed"};
+const char* const kTidesOut[4] = {"Gates", "Amplitude", "Phase", "Frequency"};
+const char* const kTidesRange[3] = {"Slow", "Medium", "Fast"};
+const char* const kTidesTrig[5] = {"Free", "T1", "T2", "T3", "Clock"};
+const char* const kTRange[3] = {"/4", "x1", "x4"};
+const char* const kOnOff[2] = {"Off", "On"};
+const char* const kXMode[3] = {"Identical", "Bump", "Tilt"};
 const char* const kXRange[3] = {"+2 V", "+5 V", "+/-5 V"};
 
+// the names are the modules' own, as their panels print them (sentence case: Mutable's)
 const eng_pdef_t kPages[NPT][4] = {
-  {{"FREQUENCY", K_BIP, 0, 0, 0}, {"HARMONICS", K_UNI, 0, 0, 0}, {"TIMBRE", K_UNI, 0, 0, 0}, {"MORPH", K_UNI, 0, 0, 0}},
-  {{"DECAY", K_UNI, 0, 0, 0}, {"LPG COLOUR", K_UNI, 0, 0, 0}, {"TIMBRE ENV", K_BIP, 0, 0, 0},
-   {"MORPH ENV", K_BIP, 0, 0, 0}},
-  {{"GATE", K_ENUM, 0, NGATE - 1, kGateNames}, {"NOTE", K_ENUM, 0, NNOTE - 1, kNoteNames},
-   {"TRANSPOSE", K_INT, -12, 12, 0}, {"OCTAVE", K_INT, -3, 3, 0}},
-  {{"FREQUENCY", K_UNI, 0, 0, 0}, {"SHAPE", K_UNI, 0, 0, 0}, {"SLOPE", K_UNI, 0, 0, 0}, {"SMOOTHNESS", K_UNI, 0, 0, 0}},
-  {{"SHIFT/LEVEL", K_UNI, 0, 0, 0}, {"SORTIES", K_ENUM, 0, 3, kTidesOut}, {"PLAGE", K_ENUM, 0, 2, kTidesRange},
-   {"DECLENCHEUR", K_ENUM, 0, 4, kTidesTrig}},
-  {{"RATE", K_UNI, 0, 0, 0}, {"BIAS", K_UNI, 0, 0, 0}, {"JITTER", K_UNI, 0, 0, 0}, {"DEJA VU", K_UNI, 0, 0, 0}},
-  {{"LENGTH", K_INT, 1, 16, 0}, {"PLAGE", K_ENUM, 0, 2, kTRange}, {"DEJA VU T", K_ENUM, 0, 1, kOnOff},
-   {"DEJA VU X", K_ENUM, 0, 1, kOnOff}},
-  {{"SPREAD", K_UNI, 0, 0, 0}, {"BIAS", K_UNI, 0, 0, 0}, {"STEPS", K_UNI, 0, 0, 0}, {"MODE X", K_ENUM, 0, 2, kXMode}},
-  {{"PLAGE X", K_ENUM, 0, 2, kXRange}, {"Y SPREAD", K_UNI, 0, 0, 0}, {"Y BIAS", K_UNI, 0, 0, 0},
-   {"Y STEPS", K_UNI, 0, 0, 0}},
-  {{"NIVEAU 1", K_UNI, 0, 0, 0}, {"NIVEAU 2", K_UNI, 0, 0, 0}, {"NIVEAU 3", K_UNI, 0, 0, 0},
-   {"NIVEAU 4", K_UNI, 0, 0, 0}},
-  {{"PAN 1", K_BIP, 0, 0, 0}, {"PAN 2", K_BIP, 0, 0, 0}, {"PAN 3", K_BIP, 0, 0, 0}, {"PAN 4", K_BIP, 0, 0, 0}},
+  {{"Frequency", K_BIP, 0, 0, 0}, {"Harmonics", K_UNI, 0, 0, 0}, {"Timbre", K_UNI, 0, 0, 0}, {"Morph", K_UNI, 0, 0, 0}},
+  {{"Decay", K_UNI, 0, 0, 0}, {"LPG colour", K_UNI, 0, 0, 0}, {"Timbre env", K_BIP, 0, 0, 0},
+   {"Morph env", K_BIP, 0, 0, 0}},
+  {{"Gate", K_ENUM, 0, NGATE - 1, kGateNames}, {"Note", K_ENUM, 0, NNOTE - 1, kNoteNames},
+   {"Transpose", K_INT, -12, 12, 0}, {"Octave", K_INT, -3, 3, 0}},
+  {{"Frequency", K_UNI, 0, 0, 0}, {"Shape", K_UNI, 0, 0, 0}, {"Slope", K_UNI, 0, 0, 0}, {"Smoothness", K_UNI, 0, 0, 0}},
+  {{"Shift/level", K_UNI, 0, 0, 0}, {"Outputs", K_ENUM, 0, 3, kTidesOut}, {"Range", K_ENUM, 0, 2, kTidesRange},
+   {"Trigger", K_ENUM, 0, 4, kTidesTrig}},
+  {{"Rate", K_UNI, 0, 0, 0}, {"Bias", K_UNI, 0, 0, 0}, {"Jitter", K_UNI, 0, 0, 0}, {"Deja vu", K_UNI, 0, 0, 0}},
+  {{"Length", K_INT, 1, 16, 0}, {"t range", K_ENUM, 0, 2, kTRange}, {"Deja vu t", K_ENUM, 0, 1, kOnOff},
+   {"Deja vu X", K_ENUM, 0, 1, kOnOff}},
+  {{"Spread", K_UNI, 0, 0, 0}, {"Bias", K_UNI, 0, 0, 0}, {"Steps", K_UNI, 0, 0, 0}, {"X mode", K_ENUM, 0, 2, kXMode}},
+  {{"X range", K_ENUM, 0, 2, kXRange}, {"Y spread", K_UNI, 0, 0, 0}, {"Y bias", K_UNI, 0, 0, 0},
+   {"Y steps", K_UNI, 0, 0, 0}},
+  {{"Level 1", K_UNI, 0, 0, 0}, {"Level 2", K_UNI, 0, 0, 0}, {"Level 3", K_UNI, 0, 0, 0}, {"Level 4", K_UNI, 0, 0, 0}},
+  {{"Send 1", K_UNI, 0, 0, 0}, {"Send 2", K_UNI, 0, 0, 0}, {"Send 3", K_UNI, 0, 0, 0}, {"Send 4", K_UNI, 0, 0, 0}},
+  {{"Time", K_UNI, 0, 0, 0}, {"Damping", K_UNI, 0, 0, 0}, {"Diffusion", K_UNI, 0, 0, 0}, {"Return", K_UNI, 0, 0, 0}},
 };
 
 const char* const kModels[24] = {
@@ -57,22 +58,22 @@ const char* const kModels[24] = {
   "VIRTUAL ANALOG", "WAVESHAPER", "FM 2-OP", "FORMANT", "HARMONIC", "WAVETABLE", "CHORDS", "SPEECH",
   "SWARM", "NOISE", "PARTICLES", "STRING", "MODAL", "KICK", "SNARE", "HI-HAT",
 };
-const char* const kRamps[3] = {"AD", "BOUCLE", "AR"};
-const char* const kTModels[7] = {"BERNOULLI COMPL.", "CLUSTERS", "BATTERIE", "BERNOULLI INDEP.", "DIVISEUR",
-                                 "TROIS ETATS", "MARKOV"};
-const char* const kScales[6] = {"MAJEUR", "MINEUR", "PENTATONIQUE", "PELOG", "RAAG BHAIRAV", "RAAG SHRI"};
+const char* const kRamps[3] = {"AD", "LOOPING", "AR"};
+const char* const kTModels[7] = {"COIN TOSS", "CLUSTERS", "DRUMS", "INDEPENDENT", "DIVIDER", "THREE STATES",
+                                 "MARKOV"};
+const char* const kScales[6] = {"MAJOR", "MINOR", "PENTATONIC", "PELOG", "RAAG BHAIRAV", "RAAG SHRI"};
 const char* const kSrcNames[NSRC] = {"-", "A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "X1", "X2", "X3", "Y",
                                      "T1", "T2", "T3"};
 
 const float kTidesRatios[9] = {4.0f, 2.0f, 1.0f, 0.5f, 0.25f, 0.125f, 1.0f / 16.0f, 1.0f / 32.0f, 1.0f / 64.0f};
-const char* const kTidesRatioNames[9] = {"4 / TEMPS", "2 / TEMPS", "1 / TEMPS", "1 / 2 TEMPS", "1 / MESURE",
-                                         "1 / 2 MES.", "1 / 4 MES.", "1 / 8 MES.", "1 / 16 MES."};
+const char* const kTidesRatioNames[9] = {"4 / beat", "2 / beat", "1 / beat", "1 / 2 beats", "1 / bar",
+                                         "1 / 2 bars", "1 / 4 bars", "1 / 8 bars", "1 / 16 bars"};
 
 int page_type(int page) {
   if (page < 12) return PT_PLAITS1 + page % 3;
   if (page < 16) return PT_TIDES1 + (page - 12) % 2;
   if (page < 20) return PT_MARB_T1 + (page - 16);
-  return PT_MIX1 + (page - 20);
+  return PT_MIX + (page - 20);
 }
 
 inline float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -93,12 +94,13 @@ float fin[ENG_NPARAMS];                 // the parameters after the cables (the 
 float src[NSRC];
 
 #ifndef ENG_ARENA_BYTES
-#define ENG_ARENA_BYTES (124u * 1024u)
+#define ENG_ARENA_BYTES (160u * 1024u)
 #endif
 uint8_t arena[ENG_ARENA_BYTES] __attribute__((aligned(8))) PLAT_POOL;
 void* voice[ENG_TRACKS];
 void* marbles;
 void* tides[2];
+void* reverb;
 int ready;
 
 volatile int playing, use_core1 = 1;
@@ -113,6 +115,10 @@ uint32_t gates_now;
 
 float vbuf[ENG_TRACKS][kN];
 float vaux[ENG_TRACKS][kN];
+float send[kN], wet_l[kN], wet_r[kN];
+float meter[ENG_TRACKS + 1];
+int8_t hist[NSRC][ENG_HIST];
+uint32_t hist_at, hist_div;
 
 volatile uint32_t load0, load1, peak, peak_hold_blocks, c1_ticks;
 volatile int on_core1_last;
@@ -341,7 +347,7 @@ void eng_param_text(int param, float v, char* b, int n) {
     put_num(b, n, static_cast<int32_t>(hz * 100.0f + 0.5f), 2, 0);
     int l = 0;
     while (b[l]) ++l;
-    put(b + l, n - l, " HZ");
+    put(b + l, n - l, " Hz");
   } else if (d->kind == K_BIP) {
     put_num(b, n, static_cast<int32_t>(v * 100.0f + (v < 0 ? -0.5f : 0.5f)), 0, 1);
   } else {
@@ -393,7 +399,7 @@ void eng_defaults(project_t* p) {
   static const int kNote[4] = {NOTE_FIXED, NOTE_X1, NOTE_X2, NOTE_X3};
   static const int kOct[4] = {-1, -2, 0, 0};
   static const int kModel[4] = {21, 8, 10, 20};   // kick, virtual analog, FM 2-op, modal
-  static const float kPan[4] = {0.0f, -0.2f, 0.3f, -0.35f};
+  static const float kSend[4] = {0.0f, 0.1f, 0.3f, 0.5f};   // the spec's Clouds sends, now the reverb's
   for (int t = 0; t < ENG_TRACKS; ++t) {
     for (int pg = 0; pg < 3; ++pg)
       for (int k = 0; k < 4; ++k) p->val[PG_TRACK(t, pg) * 4 + k] = kTrack[pg][k];
@@ -401,15 +407,19 @@ void eng_defaults(project_t* p) {
     p->val[PG_TRACK(t, 2) * 4 + 1] = static_cast<float>(kNote[t]);
     p->val[PG_TRACK(t, 2) * 4 + 3] = static_cast<float>(kOct[t]);
     p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(kModel[t]);
-    p->val[PG_MIX(0) * 4 + t] = 0.75f;
-    p->val[PG_MIX(1) * 4 + t] = kPan[t];
+    p->val[PG_MIX * 4 + t] = 0.75f;
+    p->val[PG_FX(0) * 4 + t] = kSend[t];
   }
   p->val[PG_TRACK(0, 1) * 4 + 0] = 0.4f;          // the kick: a short decay, its own colour
   p->val[PG_TRACK(1, 0) * 4 + 3] = 0.3f;          // the bass: MORPH low, opened by Tides A
   p->val[PG_TRACK(1, 1) * 4 + 0] = 0.35f;
   p->val[PG_TRACK(2, 1) * 4 + 0] = 0.45f;
   p->val[PG_TRACK(3, 1) * 4 + 0] = 0.7f;          // the resonator rings longer
-  p->val[PG_MIX(0) * 4 + 0] = 0.9f;
+  p->val[PG_MIX * 4 + 0] = 0.9f;
+  p->val[PG_FX(1) * 4 + 0] = 0.6f;               // the reverb: a medium room, a little dark, its return at 60
+  p->val[PG_FX(1) * 4 + 1] = 0.4f;
+  p->val[PG_FX(1) * 4 + 2] = 0.6f;
+  p->val[PG_FX(1) * 4 + 3] = 0.6f;
   // Tides A: AD from T1, Tides B: a loop on the clock, phases spread
   p->algo[PG_TIDES(0, 0)] = 0;
   p->algo[PG_TIDES(1, 0)] = 1;
@@ -439,7 +449,8 @@ int eng_check(const project_t* p) {
 
 int eng_init(void) {
   uint32_t need = 0, a = 0;
-  need = 4u * ((mp_size() + 7u) & ~7u) + ((mm_size() + 7u) & ~7u) + 2u * ((mt_size() + 7u) & ~7u);
+  need = 4u * ((mp_size() + 7u) & ~7u) + ((mm_size() + 7u) & ~7u) + 2u * ((mt_size() + 7u) & ~7u) +
+         ((mrv_size() + 7u) & ~7u);
   if (need > sizeof(arena)) return -1;
   for (int t = 0; t < ENG_TRACKS; ++t) {
     voice[t] = arena + a;
@@ -457,6 +468,9 @@ int eng_init(void) {
     a += (mt_size() + 7u) & ~7u;
     mt_init(tides[i]);
   }
+  reverb = arena + a;
+  a += (mrv_size() + 7u) & ~7u;
+  mrv_init(reverb);
   if (!eng_check(&proj)) eng_defaults(&proj);
   for (uint32_t k = 0; k < kFrames * 3; ++k) mgates[k] = 0;
   for (uint32_t k = 0; k < kFrames * 4; ++k) mcv[k] = 0.0f;
@@ -518,24 +532,45 @@ void eng_render(float* l, float* r, uint32_t n) {
     c0 = plat_ticks24() - t0;
   }
   on_core1_last = on_core1;
-  // 5. the mixer
+  // 5. the mixer: the levels, the sends into Clouds' reverb (core 0, once the four voices are done), its return
   uint32_t g = 0;
   for (int t = 0; t < ENG_TRACKS; ++t) g |= vgate[t] ? 1u << t : 0u;
   gates_now = g;
-  float gl[ENG_TRACKS], gr[ENG_TRACKS];
+  float gain[ENG_TRACKS], sends[ENG_TRACKS];
   for (int t = 0; t < ENG_TRACKS; ++t) {
-    float level = P(PG_MIX(0), t) * 0.7f, pan = P(PG_MIX(1), t);
-    gl[t] = level * (pan > 0.0f ? 1.0f - pan : 1.0f);
-    gr[t] = level * (pan < 0.0f ? 1.0f + pan : 1.0f);
+    gain[t] = P(PG_MIX, t) * 0.7f;
+    sends[t] = P(PG_FX(0), t) * gain[t];   // post-fader
   }
+  mrv_set(reverb, P(PG_FX(1), 0), P(PG_FX(1), 1), P(PG_FX(1), 2));
+  float ret = P(PG_FX(1), 3) * 1.6f, pk[ENG_TRACKS + 1] = {0, 0, 0, 0, 0};
   for (uint32_t i = 0; i < n; ++i) {
-    float sl = 0.0f, sr = 0.0f;
+    float s = 0.0f;
     for (int t = 0; t < ENG_TRACKS; ++t) {
-      sl += gl[t] * vbuf[t][i];
-      sr += gr[t] * vbuf[t][i];
+      s += sends[t] * vbuf[t][i];
+      float a = fm_fabsf(vbuf[t][i] * gain[t]);
+      if (a > pk[t]) pk[t] = a;
     }
-    l[i] = sat(sl);
-    r[i] = sat(sr);
+    send[i] = s;
+  }
+  mrv_process(reverb, send, wet_l, wet_r, n);
+  for (uint32_t i = 0; i < n; ++i) {
+    float dry = 0.0f;
+    for (int t = 0; t < ENG_TRACKS; ++t) dry += gain[t] * vbuf[t][i];
+    float wl = ret * wet_l[i], wr = ret * wet_r[i];
+    float a = fm_fabsf(wl) > fm_fabsf(wr) ? fm_fabsf(wl) : fm_fabsf(wr);
+    if (a > pk[ENG_TRACKS]) pk[ENG_TRACKS] = a;
+    l[i] = sat(dry + wl);
+    r[i] = sat(dry + wr);
+  }
+  for (int t = 0; t <= ENG_TRACKS; ++t)    // the meters: up at once, down slowly
+    meter[t] = pk[t] > meter[t] ? pk[t] : meter[t] * 0.985f;
+  if (++hist_div >= 4u) {                 // the sources' past, for the screen
+    hist_div = 0;
+    for (int s = 1; s < NSRC; ++s) {
+      float v = src[s] * 127.0f;
+      hist[s][hist_at] = static_cast<int8_t>(v > 127.0f ? 127 : v < -127.0f ? -127 : static_cast<int>(v));
+    }
+    hist_at = (hist_at + 1u) % ENG_HIST;
   }
   // the load: one-pole averages, the worst total held a second
   uint32_t tot = plat_ticks24() - t0;
@@ -554,6 +589,11 @@ uint32_t eng_gates(void) { return gates_now; }
 int eng_note(int t) { return t >= 0 && t < ENG_TRACKS ? static_cast<int>(vnote[t] + 0.5f) : 0; }
 uint32_t eng_load(int core) { return core ? load1 : load0; }
 uint32_t eng_peak(void) { return peak; }
+float eng_meter(int t) { return t >= 0 && t <= ENG_TRACKS ? meter[t] : 0.0f; }
+int eng_hist(int s, int i) {
+  if (s <= SRC_NONE || s >= NSRC || i < 0 || i >= ENG_HIST) return 0;
+  return hist[s][(hist_at + static_cast<uint32_t>(i)) % ENG_HIST];
+}
 int eng_core1_running(void) { return on_core1_last; }
 
 }  // extern "C"

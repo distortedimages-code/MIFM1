@@ -21,7 +21,7 @@ td:first-child {{ white-space: nowrap; color: #7cf; }}
 <h1>MIFM1 {version}</h1>
 <p>Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient du code open source de Mutable Instruments :
 Plaits sur chaque piste (ses 24 modèles), Marbles comme seul séquenceur, deux Tides pour moduler, et une matrice de
-câbles.</p>
+câbles, un mixer simple et un départ vers la réverbe de Clouds.</p>
 <div class="card"><b>Installer</b><br><a href="install/">Installer MIFM1 {version}</a>
 <p>Dans Chrome ou Edge, le FM-1 branché en USB et à l'arrêt. Laisser la page aller jusqu'au bout : le firmware, puis
 les tables des modules.</p></div>
@@ -31,7 +31,8 @@ les tables des modules.</p></div>
 <tr><td>SELECT</td><td>l'autre face du module (1/3, 2/3…)</td></tr>
 <tr><td>ALGORITHM</td><td>le modèle de Plaits, le mode de Tides, le modèle de T, la gamme</td></tr>
 <tr><td>PRESETS</td><td>la piste active, de 1 à 4</td></tr>
-<tr><td>EDIT · LFO · SEQ · ARP · HOME</td><td>Plaits · Tides A puis B · Marbles T · Marbles X · mixer</td></tr>
+<tr><td>EDIT · LFO · SEQ · ARP</td><td>Plaits · Tides A puis B · Marbles t · Marbles X</td></tr>
+<tr><td>HOME · FX</td><td>le mixer (les niveaux) · la réverbe (les envois, puis ses réglages)</td></tr>
 <tr><td>PLAY</td><td>l'horloge de Marbles tourne ou s'arrête</td></tr>
 <tr><td>clavier</td><td>joue la piste active, même à l'arrêt (OCT− OCT+ pour l'octave)</td></tr>
 <tr><td>SEL</td><td>mode MOD : tenir une touche-source et tourner un potard pose un câble (touches 1-4 Tides A,

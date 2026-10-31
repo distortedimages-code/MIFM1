@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
   printf(", TIDES B %s", t);
   eng_param_text(PG_TIDES(0, 0) * 4 + 0, 0.0f, t, sizeof t);
   printf(", TIDES A at 0: %s\n", t);
-  if (strcmp(t, "0.02 HZ")) ++failures, printf(" (FAIL: 0.02 HZ expected)\n");
+  if (strcmp(t, "0.02 Hz")) ++failures, printf(" (FAIL: 0.02 Hz expected)\n");
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;

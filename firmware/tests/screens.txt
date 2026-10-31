@@ -38,6 +38,12 @@ shot 10_marbles_x.png
 tap HOME
 wait 300
 shot 11_mixer.png
+tap FX
+wait 300
+shot 11b_reverb_sends.png
+tap FX
+wait 300
+shot 11c_reverb.png
 tap EDIT
 wait 300
 tap SEL

@@ -104,3 +104,62 @@ void mc_render(void* v, const float* in_l, const float* in_r, float* out_l, floa
 const char* mc_mode_name(int mode) { return mode >= 0 && mode < MC_MODES ? kModeNames[mode] : "?"; }
 
 }  // extern "C"
+
+// ---- Clouds' reverb alone (clouds/dsp/fx/reverb.h: the Griesinger topology of Dattorro's paper), as a send ----
+// Its 16384 delay cells at 12 bits (32 KB) in the object; at 44.1 kHz instead of Clouds' 32 its room is 0.73 x as
+// large. Fully wet: the engine sets the return level.
+namespace {
+
+const uint32_t kRvChunk = 32;
+
+struct ReverbFx {
+  clouds::Reverb reverb;
+  uint16_t buffer[16384];
+  clouds::FloatFrame frames[kRvChunk];
+};
+
+}  // namespace
+
+extern "C" {
+
+uint32_t mrv_size(void) { return sizeof(ReverbFx); }
+
+void mrv_init(void* mem) {
+  ReverbFx* r = new (mem) ReverbFx();
+  for (uint32_t i = 0; i < 16384; ++i) r->buffer[i] = 0;
+  r->reverb.Init(r->buffer);
+  r->reverb.set_amount(1.0f);
+  r->reverb.set_input_gain(0.2f);
+  r->reverb.set_time(0.7f);
+  r->reverb.set_diffusion(0.625f);
+  r->reverb.set_lp(0.7f);
+}
+
+void mrv_set(void* v, float time, float damping, float diffusion) {
+  ReverbFx* r = static_cast<ReverbFx*>(v);
+  r->reverb.set_time(0.35f + 0.63f * (time < 0.0f ? 0.0f : time > 1.0f ? 1.0f : time));   // granular_processor.cc's
+  r->reverb.set_lp(0.95f - 0.6f * (damping < 0.0f ? 0.0f : damping > 1.0f ? 1.0f : damping));
+  r->reverb.set_diffusion(0.4f + 0.35f * (diffusion < 0.0f ? 0.0f : diffusion > 1.0f ? 1.0f : diffusion));
+}
+
+void mrv_process(void* v, const float* in, float* out_l, float* out_r, uint32_t n) {
+  ReverbFx* r = static_cast<ReverbFx*>(v);
+  while (n) {
+    uint32_t size = n < kRvChunk ? n : kRvChunk;
+    for (uint32_t i = 0; i < size; ++i) {
+      r->frames[i].l = in[i];
+      r->frames[i].r = 0.0f;
+    }
+    r->reverb.Process(r->frames, size);
+    for (uint32_t i = 0; i < size; ++i) {
+      out_l[i] = r->frames[i].l;
+      out_r[i] = r->frames[i].r;
+    }
+    in += size;
+    out_l += size;
+    out_r += size;
+    n -= size;
+  }
+}
+
+}  // extern "C"

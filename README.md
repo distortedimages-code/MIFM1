@@ -8,9 +8,10 @@ la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
   ou libère la boucle ;
 - **deux Tides 2** comme modulateurs (8 sorties) ;
 - une **matrice de câbles** : 15 sources (Tides A1-A4, B1-B4, Marbles X1-X3, Y, T1-T3) vers presque tous les
-  paramètres, 8 câbles par piste et 8 globaux.
+  paramètres, 8 câbles par piste et 8 globaux ;
+- un **mixer simple** (un niveau par piste) et un **départ réverbe** par piste vers la réverbe de Clouds.
 
-Clouds et Warps arrivent en v0.2 (sur le second cœur), les scènes et les projets multiples en v0.3. Rings a été
+Le granulaire de Clouds et Warps arrivent en v0.2 (sur le second cœur), les scènes et les projets multiples en v0.3. Rings a été
 retiré après le banc d'essai v0.0 : les modèles MODAL et STRING de Plaits en reprennent le code, en plus léger.
 
 ## Installer
@@ -23,7 +24,11 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 
 Un projet neuf joue déjà (PLAY) : piste 1 une grosse caisse sur chaque temps (T2), piste 2 une basse VA sur T1 et
 X1 ouverte par Tides A, piste 3 un FM 2 opérateurs sur T3 et X2 modulé par Tides B, piste 4 un résonateur MODAL sur
-T3 et X3. Marbles à 120 BPM, gamme mineure, DÉJÀ VU à midi sur 8 pas.
+T3 et X3, les pistes 3 et 4 envoyées dans la réverbe. Marbles à 120 BPM, gamme mineure, DÉJÀ VU à midi sur 8 pas.
+
+L'écran est la façade du module affiché : en haut son nom et son propre affichage (les LED des trois banques de
+Plaits, les quatre sorties de Tides, les portes et les tensions de Marbles, les vumètres du mixer, la queue de la
+réverbe), puis ses quatre potards côte à côte, dans l'ordre des KNOB 1 à 4, avec les noms des panneaux d'origine.
 
 | Contrôle | Effet |
 | --- | --- |
@@ -34,7 +39,8 @@ T3 et X3. Marbles à 120 BPM, gamme mineure, DÉJÀ VU à midi sur 8 pas.
 | **EDIT** | Plaits de la piste active (appuis suivants : 1/3, 2/3, 3/3) |
 | **LFO** | Tides A, puis Tides B |
 | **SEQ / ARP** | Marbles, rythme (T) / notes (X, Y) |
-| **HOME** | le mixer (niveaux, panoramiques) |
+| **HOME** | le mixer : les niveaux des 4 pistes |
+| **FX** | la réverbe : les envois des 4 pistes, puis ses réglages (Time, Damping, Diffusion, Return) |
 | **PLAY** | l'horloge de Marbles tourne ou s'arrête |
 | **clavier** | joue la piste active, même à l'arrêt ; **OCT− / OCT+** pour l'octave |
 | **SEL** | le mode MOD (voir plus bas) ; **tenu** : la matrice de la piste |

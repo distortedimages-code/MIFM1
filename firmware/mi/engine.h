@@ -5,7 +5,7 @@
  * audio block (the control rate, 344 Hz), runs Marbles and Tides, adds the cables to the knobs and plays the voices,
  * two of them on the second core when it runs.
  *
- * Parameters: 22 pages of 4 knobs (a page per face of a module, as the screen shows them). A parameter is
+ * Parameters: 23 pages of 4 knobs (a page per face of a module, as the screen shows them). A parameter is
  * page * 4 + knob; its knob is val[] (0..1, bipolar -1..1, or an integer), its value after the cables final[]. */
 #ifndef MIFM1_ENGINE_H_
 #define MIFM1_ENGINE_H_
@@ -17,16 +17,17 @@ extern "C" {
 
 #define ENG_TRACKS 4
 #define ENG_CABLES 8                     /* per track, and as many global */
-#define ENG_NPAGES 22
+#define ENG_NPAGES 23
 #define ENG_NPARAMS (ENG_NPAGES * 4)
 
-/* the pages: 3 per track, 2 per Tides, 4 for Marbles, 2 for the mixer */
+/* the pages: 3 per track, 2 per Tides, 4 for Marbles, the mixer's levels, the reverb's sends and its own knobs */
 #define PG_TRACK(t, p) ((t) * 3 + (p))
 #define PG_TIDES(i, p) (12 + (i) * 2 + (p))
 #define PG_MARBLES(p) (16 + (p))
-#define PG_MIX(p) (20 + (p))
+#define PG_MIX 20
+#define PG_FX(p) (21 + (p))
 enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_TIDES1, PT_TIDES2, PT_MARB_T1, PT_MARB_T2, PT_MARB_X1, PT_MARB_X2,
-       PT_MIX1, PT_MIX2, NPT };
+       PT_MIX, PT_FX1, PT_FX2, NPT };
 int eng_page_type(int page);
 int eng_page_track(int page);            /* the track a page belongs to, -1: global */
 
@@ -59,7 +60,7 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 1u
+#define PROJECT_VERSION 2u               /* (1: v0.1's, with the mixer's pans and no reverb) */
 typedef struct {
     uint32_t magic;
     uint16_t version, size;
@@ -90,6 +91,9 @@ uint32_t eng_gates(void);                /* bit t: track t's gate now */
 int eng_note(int track);                 /* its note now (MIDI number) */
 uint32_t eng_load(int core);             /* the render's time on core 0 or 1, in tenths of % of the block (smoothed) */
 uint32_t eng_peak(void);                 /* the worst total of the last second, same unit */
+float eng_meter(int t);                  /* track t's output (4: the reverb's return), its peak, falling slowly */
+#define ENG_HIST 120                     /* the sources' recent past: one value every 4 blocks (1.4 s) */
+int eng_hist(int src, int i);            /* -127..127, i 0 the oldest .. ENG_HIST - 1 the newest */
 int eng_core1_running(void);
 
 #ifdef __cplusplus
