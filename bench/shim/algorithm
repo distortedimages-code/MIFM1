@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (C) 2026 Yoann
+// <algorithm> for the FM-1 build (no C++ standard library there): what the vendored code calls.
+#ifndef MIFM1_SHIM_ALGORITHM_
+#define MIFM1_SHIM_ALGORITHM_
+namespace std {
+template <class T> inline const T& min(const T& a, const T& b) { return b < a ? b : a; }
+template <class T> inline const T& max(const T& a, const T& b) { return a < b ? b : a; }
+template <class T> inline void swap(T& a, T& b) { T t = a; a = b; b = t; }
+template <class I, class T> inline void fill(I first, I last, const T& v) { for (; first != last; ++first) *first = v; }
+template <class I, class S, class T> inline I fill_n(I first, S n, const T& v) { for (; n > 0; --n) *first++ = v; return first; }
+template <class I, class O> inline O copy(I first, I last, O out) { for (; first != last; ++first, ++out) *out = *first; return out; }
+template <class I, class O> inline O copy_backward(I first, I last, O out) { while (first != last) *--out = *--last; return out; }
+template <class I> inline I max_element(I first, I last) { I best = first; if (first == last) return last; while (++first != last) if (*best < *first) best = first; return best; }
+template <class I> inline I min_element(I first, I last) { I best = first; if (first == last) return last; while (++first != last) if (*first < *best) best = first; return best; }
+template <class I, class T> inline I upper_bound(I first, I last, const T& v) {
+  long n = last - first;
+  while (n > 0) { long h = n / 2; I m = first + h; if (!(v < *m)) { first = m + 1; n -= h + 1; } else { n = h; } }
+  return first;
+}
+template <class I, class T> inline I lower_bound(I first, I last, const T& v) {
+  long n = last - first;
+  while (n > 0) { long h = n / 2; I m = first + h; if (*m < v) { first = m + 1; n -= h + 1; } else { n = h; } }
+  return first;
+}
+template <class I> inline void reverse(I first, I last) { while (first != last && first != --last) { swap(*first, *last); ++first; } }
+template <class I> inline I rotate(I first, I middle, I last) {
+  if (first == middle) return last;
+  if (middle == last) return first;
+  reverse(first, middle); reverse(middle, last); reverse(first, last);
+  return first + (last - middle);
+}
+template <class I, class C> inline void sort(I first, I last, C less) {   // insertion sort: the vendored sorts are short
+  if (first == last) return;
+  for (I i = first + 1; i != last; ++i) {
+    for (I j = i; j != first && less(*j, *(j - 1)); --j) swap(*j, *(j - 1));
+  }
+}
+template <class T> struct shim_less { bool operator()(const T& a, const T& b) const { return a < b; } };
+template <class I> inline void sort(I first, I last) {
+  if (first == last) return;
+  for (I i = first + 1; i != last; ++i) {
+    for (I j = i; j != first && *j < *(j - 1); --j) swap(*j, *(j - 1));
+  }
+}
+}
+#endif

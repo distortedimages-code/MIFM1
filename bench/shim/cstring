@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (C) 2026 Yoann
+#ifndef MIFM1_SHIM_CSTRING_
+#define MIFM1_SHIM_CSTRING_
+#include "string.h"
+namespace std { using ::memset; using ::memcpy; using ::memcmp; using ::memmove; }
+#endif

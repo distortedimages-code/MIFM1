@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (C) 2026 Yoann
+// <new> for the FM-1 build: placement new only (objects live in the bench's arena, nothing is allocated)
+#ifndef MIFM1_SHIM_NEW_
+#define MIFM1_SHIM_NEW_
+#include <stddef.h>
+inline void* operator new(size_t, void* p) noexcept { return p; }
+inline void operator delete(void*, void*) noexcept { }
+#endif

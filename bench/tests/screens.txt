@@ -1,0 +1,26 @@
+# MIFM1 bench in fm1-base's host simulator: the pages, a few scenes, the automatic pass (shortened by the clock of
+# the simulation: it runs the same 3 s a scene), screenshots in the output folder.
+wait 1500
+shot live.png
+turn SELECT 20
+wait 1200
+shot live_scene21.png
+wav scene21.wav
+wait 3000
+wavstop
+tap HOME
+wait 300
+shot results_empty.png
+tap HOME
+wait 300
+shot memory.png
+tap HOME
+wait 300
+tap REC
+wait 2000
+shot auto.png
+wait 130000
+shot results.png
+turn SELECT 6
+wait 300
+shot results_2.png

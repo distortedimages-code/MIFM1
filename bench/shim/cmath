@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (C) 2026 Yoann
+// <cmath> for the FM-1 build: shim/math.h's float functions, also in namespace std.
+#ifndef MIFM1_SHIM_CMATH_
+#define MIFM1_SHIM_CMATH_
+#include "math.h"
+namespace std {
+using ::fabsf; using ::floorf; using ::ceilf; using ::sqrtf; using ::sinf; using ::cosf; using ::tanf; using ::tanhf;
+using ::expf; using ::exp2f; using ::logf; using ::log2f; using ::powf; using ::fmodf; using ::fminf; using ::fmaxf;
+using ::atanf; using ::atan2f; using ::roundf; using ::log10f; using ::truncf;
+using ::fabs; using ::floor; using ::ceil; using ::sqrt; using ::sin; using ::cos; using ::tan; using ::tanh;
+using ::exp; using ::log; using ::log2; using ::log10; using ::pow; using ::fmod; using ::atan; using ::atan2; using ::round;
+inline int abs(int x) { return x < 0 ? -x : x; }
+inline long abs(long x) { return x < 0 ? -x : x; }
+}
+#endif

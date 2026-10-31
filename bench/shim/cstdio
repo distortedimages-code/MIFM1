@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (C) 2026 Yoann
+#ifndef MIFM1_SHIM_CSTDIO_
+#define MIFM1_SHIM_CSTDIO_
+#include "stdio.h"
+namespace std { using ::printf; }
+#endif

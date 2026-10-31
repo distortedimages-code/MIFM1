@@ -1,0 +1,110 @@
+# SPDX-License-Identifier: MPL-2.0
+# Copyright (C) 2026 Yoann
+# MIFM1 on GitHub (after ZINZIN's workflow): on every push, the tests on a computer (every scene plays; the FM-1's
+# constraints with the computer's clang; the host simulator's screens), then the two firmwares (SONS and EFFETS:
+# the six modules do not fit the FM-1's flash at once) and their web installers with m-bootloader, published on
+# the repository's GitHub Pages (Settings > Pages > Source: GitHub Actions). Then everything happens in Chrome or
+# Edge: https://<account>.github.io/<repository>/
+# The firmware job fetches JieLi's toolchain (pkgman.jieliapp.com) and the three files of the AC79 SDK a package
+# needs (cpu/wl82/tools, Apache-2.0), as fm1-base's README describes.
+name: firmware
+on:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+env:
+  VERSION: "0.0"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: sudo apt-get install -y -q lld llvm
+      - run: pip install pillow
+      - name: Every scene on a computer (plays, no NaN, not silent)
+        run: make test
+      - name: The FM-1's constraints (no libm, no C++ library, no double), each variant
+        run: |
+          for v in 1 2; do VARIANT=$v sh tools/device_check.sh | tail -8; done
+      - name: The host simulator's screens
+        run: |
+          (cd base && MIFM1_VARIANT=1 python3 tools/build.py ../bench --host) > host.log 2>&1 || { tail -40 host.log; exit 1; }
+          mkdir -p build/host_out
+          bench/build/host/mifm1_host bench/tests/screens.txt build/host_out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-computer
+          path: |
+            build/wav/*.wav
+            build/host_out/*.png
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: pip install pillow
+      - name: JieLi toolchain
+        run: |
+          sh base/tools/get_toolchain.sh "$HOME/.jieli"
+          echo "JIELI_TOOLCHAIN=$HOME/.jieli/toolchain" >> "$GITHUB_ENV"
+      - name: AC79 SDK (the package's three files, as in AC79NN_SDK_V1.2.1, the version fm1-base was tested with)
+        shell: bash
+        run: |
+          SDK="$HOME/fw-AC79_AIoT_SDK"
+          git clone -q --filter=blob:none --no-checkout https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK "$SDK"
+          cd "$SDK"
+          git sparse-checkout set --no-cone cpu/wl82/tools/uboot.boot cpu/wl82/tools/cfg_tool.bin cpu/wl82/tools/cfg/eq_cfg_hw.bin
+          want=4e3b4c220dc96641cb5a723f41e68ce41d5261ae9434bb33fbd7f2c59976ded4
+          found=""
+          for ref in $(git log --all --format=%H -- cpu/wl82/tools/uboot.boot); do
+            git checkout -q "$ref" 2>/dev/null || continue
+            if [ "$(sha256sum cpu/wl82/tools/uboot.boot | cut -d' ' -f1)" = "$want" ]; then found="$ref"; break; fi
+          done
+          if [ -z "$found" ]; then
+            echo "::error title=sdk::no commit with V1.2.1's uboot.boot. Tags: $(git tag -l | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "AC79_SDK=$SDK" >> "$GITHUB_ENV"
+      - name: The two firmwares
+        shell: bash
+        run: |
+          set -o pipefail
+          annotate() { python3 -c "import sys; t = sys.stdin.read().replace('%', '%25').replace('\r', '').replace('\n', '%0A'); print('::$1 title=$2::' + t)"; }
+          for v in 1:sons 2:effets; do
+            n="${v%%:*}"; name="${v##*:}"
+            (cd base && MIFM1_VARIANT=$n python3 tools/build.py ../bench --release "$VERSION-$name") 2>&1 | tee "build-$name.log" || {
+              tail -n 120 "build-$name.log" | annotate error "build $name"; exit 1; }
+            # what the build says about sizes and RAM
+            tail -n 40 "build-$name.log" | annotate notice "build $name"
+          done
+          ls -la bench/build/*.fwsc
+      - name: The installers
+        run: |
+          python3 tools/make_installer.py bench/build/mifm1-"$VERSION"-sons.fwsc "$VERSION-sons" site/sons
+          python3 tools/make_installer.py bench/build/mifm1-"$VERSION"-effets.fwsc "$VERSION-effets" site/effets
+          python3 tools/make_index.py site "$VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mifm1-fwsc
+          path: bench/build/*.fwsc
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+  pages:
+    needs: firmware
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

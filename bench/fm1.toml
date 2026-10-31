@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: MPL-2.0
+# Copyright (C) 2026 Yoann
+# MIFM1 v0.0, the bench (fm1-base tools/build.py: from base/, `tools/build.py ../bench`). Two variants, from
+# MIFM1_VARIANT in the environment (tools/variant.py): 1 SONS (Plaits, Rings, Tides, Marbles), 2 EFFETS (Clouds,
+# Warps, with Plaits for the busy scenes). The six modules' code and tables do not fit the 581 KB of flash at once.
+name = "MIFM1"
+id_prefix = "FM-1_67"          # package identity: dev FM-1_6700, releases FM-1_67XXYYZZ
+usb_manufacturer = "mifm1"
+usb_product = "MIFM1 FM-1"
+# the modules (C++, -O2), each directory listed: Mutable Instruments' code (third_party, MIT) and the bridges (mi)
+o2 = ["mi/*.cc",
+      "third_party/stmlib/dsp/*.cc", "third_party/stmlib/utils/*.cc",
+      "third_party/plaits/*.cc", "third_party/plaits/dsp/*.cc", "third_party/plaits/dsp/engine/*.cc",
+      "third_party/plaits/dsp/engine2/*.cc", "third_party/plaits/dsp/chords/*.cc", "third_party/plaits/dsp/fm/*.cc",
+      "third_party/plaits/dsp/physical_modelling/*.cc", "third_party/plaits/dsp/speech/*.cc",
+      "third_party/rings/*.cc", "third_party/rings/dsp/*.cc",
+      "third_party/clouds/*.cc", "third_party/clouds/dsp/*.cc", "third_party/clouds/dsp/pvoc/*.cc",
+      "third_party/warps/*.cc", "third_party/warps/dsp/*.cc",
+      "third_party/tides2/*.cc",
+      "third_party/marbles/*.cc", "third_party/marbles/random/*.cc", "third_party/marbles/ramp/*.cc"]
+o2_cflags = ["-std=gnu++11", "-fno-exceptions", "-fno-rtti", "-fno-threadsafe-statics", "-fno-use-cxa-atexit",
+             "-fdata-sections", "-DTEST"]
+include = ["third_party"]
+device_include = ["shim"]      # the C and C++ headers the FM-1's toolchain has not (no libm, no C++ library)
+vendored = ["third_party/"]
+gen = ["tools/variant.py --out {gen}/variant.h"]
+words = "words.tsv"
+ble = false                    # no radio: its RAM goes to the modules
+usb_audio_in = false
+usb_audio_out = false
+cpu2 = true                    # the second core, for the busy scenes
+cpu2_fallback = true           # a failure of it: one core until power-off, not a restart
+# the site (the installer)
+tagline = "banc d'essai Mutable Instruments"
+repo = "https://github.com/distortedimages-code/MIFM1"
+licence = "MPL-2.0; Mutable Instruments' code MIT"
+credits = "Built on Mutable Instruments' open source code (Emilie Gillet, MIT) and fm1-base (MPL-2.0)."
