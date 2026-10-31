@@ -190,6 +190,41 @@ int main(int argc, char** argv) {
   printf(", TIDES A at 0: %s\n", t);
   if (strcmp(t, "0.02 Hz")) ++failures, printf(" (FAIL: 0.02 Hz expected)\n");
 
+  // 5. INIT: four Plaits on VIRTUAL ANALOG, nothing patched; each track plays
+  eng_blank(p);
+  int cables = 0, models = 0;
+  for (int g = 0; g <= ENG_TRACKS; ++g)
+    for (int c = 0; c < ENG_CABLES; ++c) cables += p->cable[g][c].depth != 0;
+  for (int tr = 0; tr < ENG_TRACKS; ++tr) models += p->algo[PG_TRACK(tr, 0)] == 8;
+  snprintf(path, sizeof path, "%s/init.wav", dir);
+  Wav wi;
+  const uint32_t iblocks = 8u * 44100u / n;
+  if (!wi.open(path, iblocks * n)) { perror(path); return 1; }
+  eng_play(0);
+  eng_play(1);
+  uint32_t irises[ENG_TRACKS] = {0};
+  prev = 0;
+  double ie = 0.0;
+  int inan = 0;
+  for (uint32_t b = 0; b < iblocks; ++b) {
+    eng_render(l, r, n);
+    for (uint32_t i = 0; i < n; ++i) {
+      if (!std::isfinite(l[i])) inan = 1;
+      ie += static_cast<double>(l[i]) * l[i];
+    }
+    uint32_t g = eng_gates();
+    for (int tr = 0; tr < ENG_TRACKS; ++tr)
+      if ((g & (1u << tr)) && !(prev & (1u << tr))) ++irises[tr];
+    prev = g;
+    wi.add(l, r, n);
+  }
+  wi.close();
+  printf("init: %d cables, %d tracks on VIRTUAL ANALOG (%s), rms %.3f, gates %u %u %u %u\n", cables, models,
+         eng_algo_name(PG_TRACK(0, 0), 8), std::sqrt(ie / (iblocks * n)), irises[0], irises[1], irises[2], irises[3]);
+  if (cables || models != ENG_TRACKS || inan || ie < 1e-3) ++failures, printf("FAIL: the INIT project\n");
+  for (int tr = 0; tr < ENG_TRACKS; ++tr)
+    if (!irises[tr]) ++failures, printf("FAIL: INIT, track %d never plays\n", tr + 1);
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

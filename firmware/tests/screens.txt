@@ -1,6 +1,7 @@
 # MIFM1 in fm1-base's host simulator: the default patch playing, the pages, a knob turned, a cable made in MOD mode
-# (hold a source key, turn a knob), the matrix, the global page, a save kept across a power-off and in a backup, an
-# FM-1 without the module tables, then the tables arriving. Screenshots in the output folder.
+# (hold a source key, turn a knob), the matrix, the global page, a save kept across a power-off and in a backup, a
+# new project (INIT: GLO, REC held) and the saved one back, an FM-1 without the module tables, then the tables
+# arriving. Screenshots in the output folder.
 wait 1500
 shot 01_plaits_t1.png
 tap PLAY
@@ -84,6 +85,31 @@ wait 1500
 turn PRESET 1
 wait 300
 shot 18_after_reboot.png
+tap GLO
+wait 300
+press REC
+wait 900
+release REC
+wait 400
+shot 18b_init.png
+wav init.wav
+tap PLAY
+wait 4000
+wavstop
+tap PLAY
+tap EDIT
+wait 300
+shot 18c_init_plaits2.png
+tap GLO
+wait 300
+turn K1 2
+wait 300
+shot 18d_glo_saved.png
+press REC
+wait 900
+release REC
+wait 400
+shot 18e_saved_back.png
 res 0
 reboot
 wait 1500

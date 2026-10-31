@@ -3,16 +3,20 @@
 /* MIFM1: the screen and the panel. The sound is mi/engine.cc's (C++, compiled apart): this file edits its project
  * (eng_project) and shows what it plays.
  *
- * The screen is a module's face: its name and its own display at the top (Plaits' bank of LEDs, Tides' four
- * outputs, Marbles' gates and voltages, the mixer's meters, the reverb's tail), then its four knobs in a row, as
- * KNOB 1 to 4 sit on the FM-1, then the four tracks.
+ * The screen is a module's face, drawn the way Mutable Instruments drew theirs (each module's panel artwork is in
+ * pichenettes/eurorack, in its hardware_design/panel): the light grey aluminium, the woven band across the top, black
+ * legends in capitals, the pink and teal icons (and Tides 2's orange), white knobs with their "- +" when they go
+ * both ways, dotted lines for what is patched, the outputs in their dark grey box. From the top: the module's name,
+ * its own display (Plaits' models and LEDs, Tides' modes and outputs, Marbles' t and X, the mixer's meters, Clouds'
+ * reverb), its four knobs in a row as KNOB 1 to 4 sit on the FM-1, then the four tracks as four outputs.
  *
  *   KNOB 1..4   the page's four parameters        SELECT   the module's other face (1/3, 2/3...)
  *   ALGORITHM   the page's model or mode          PRESETS  the active track, 1 to 4
  *   EDIT        Plaits, the active track          LFO      Tides A, then B
  *   SEQ         Marbles, rhythm (t)               ARP      Marbles, notes (X, Y)
  *   HOME        the mixer (the levels)            FX       the reverb (the sends, then its own knobs)
- *   GLO         the load of both cores, the tables, the version
+ *   GLO         the load of both cores, the tables; there K1 picks a project and REC held loads it (INIT: four
+ *               Plaits, nothing patched; the demo patch; the saved project)
  *   PLAY        Marbles' clock runs or stops      SAVE     held: the project saved (stopped)
  *   SEL         MOD mode: hold a source key, turn a knob: a cable. Held: the track's cables (MATRIX)
  *   keys        play the active track (MOD mode: the 15 sources, then Tides A and B fanned over the 4 knobs)
@@ -31,22 +35,36 @@ int mi_res_check(const uint8_t *payload, uint32_t len);   /* mi/res_symbols.cc: 
 
 #define LONG_MS 600u                     /* a long press */
 #define SHOW_MS 1500u                    /* a message's time */
-#define HEAD_H 22                        /* the screen: the header, the module's display, the knobs, the tracks */
-#define PANEL_Y 22
-#define PANEL_H 82
+#define HEAD_H 28                        /* the screen: the band and the header, the module's display, the knobs, */
+#define PANEL_Y 28                       /* the tracks */
+#define PANEL_H 76
 #define KNOB_Y 104
 #define KNOB_W 60
 #define KNOB_H 100
 #define FOOT_Y 204
 #define FOOT_H 36
 
-/* the modules' colours: their LEDs (Plaits' three banks, Tides' outputs, Marbles' sections) */
-#define C_GREEN RGB(70, 214, 110)
-#define C_RED RGB(240, 76, 64)
-#define C_ORANGE RGB(250, 152, 40)
-#define C_YELLOW RGB(238, 214, 72)
-#define C_BLUE RGB(86, 170, 255)
-#define C_KNOB RGB(46, 46, 52)
+/* Mutable Instruments' colours, as their panels' artwork has them */
+#define MI_PANEL RGB(226, 226, 222)      /* the aluminium */
+#define MI_INK RGB(35, 31, 32)           /* the legends (#231f20) */
+#define MI_MUTED RGB(116, 113, 114)
+#define MI_RULE RGB(189, 188, 188)       /* the band, the rules (#bdbcbc) */
+#define MI_FAINT RGB(207, 206, 203)      /* the engravings, an LED off */
+#define MI_BOX RGB(101, 98, 99)          /* the outputs' box (#656263) */
+#define MI_BOX_LO RGB(76, 73, 74)        /* in it: an LED off */
+#define MI_BOX_HI RGB(130, 127, 128)     /* in it: a floor, the active track */
+#define BOX_TEXT RGB(240, 240, 236)
+#define BOX_DIM RGB(178, 176, 176)
+#define MI_CAP RGB(249, 249, 247)        /* a knob */
+#define MI_CAP_EDGE RGB(156, 154, 153)
+#define MI_CAP_TOP RGB(233, 233, 230)
+#define MI_SHADOW RGB(196, 196, 191)
+#define MI_PINK RGB(219, 40, 93)         /* #db285d */
+#define MI_TEAL RGB(3, 163, 172)         /* #03a3ac */
+#define MI_ORANGE RGB(230, 160, 18)      /* #e6a012, Tides 2's third colour */
+#define LED_GREEN RGB(80, 222, 100)      /* the LEDs themselves */
+#define LED_RED RGB(246, 62, 52)
+#define LED_ORANGE RGB(255, 172, 30)
 
 /* ------------------------------------------------------------------ state --- */
 static int data_ok;                      /* the resource region holds this build's tables */
@@ -54,6 +72,7 @@ static int halted;                       /* app_panic: the engine stopped until 
 static int engine_ok;
 static int cpu2_ok;
 static int save_hold, dirty;
+static project_t scratch;                /* a project read or made before it replaces the live one */
 
 static struct {
     int page;                            /* the page shown (engine.h: 23 of them) */
@@ -61,6 +80,7 @@ static struct {
     int track;                           /* the active track */
     int mod;                             /* MOD mode */
     int msel;                            /* MATRIX: the cable chosen (0..7 the track's, 8..15 the global ones) */
+    int init_sel;                        /* GLO: the project REC held loads (0 new, 1 the demo, 2 the saved one) */
     int octave;                          /* the keyboard's */
     uint32_t keys, btn;
     uint32_t down_at[NB];
@@ -104,23 +124,68 @@ static const char *module_name(int page)
     }
 }
 
-static uint16_t module_colour(int page)
+/* the colours of a module's state, as its icons print them: teal, orange, pink */
+static uint16_t accent3(int i) { return i <= 0 ? MI_TEAL : i == 1 ? MI_ORANGE : MI_PINK; }
+
+static uint16_t model_accent(int m)      /* Plaits' banks: teal the classic models, pink the noisy and the drums,
+                                          * orange the eight of 1.2 (which have no printed icons) */
+{
+    return m < 8 ? MI_ORANGE : m < 16 ? MI_TEAL : MI_PINK;
+}
+static uint16_t track_accent(int t) { return model_accent(eng_project()->algo[PG_TRACK(t, 0)]); }
+
+static uint16_t page_accent(int page)
 {
     project_t *p = eng_project();
     switch (eng_page_type(page)) {
-    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: {
-        int m = p->algo[page_first(page)];   /* Plaits' banks: the 1.2 models, the pitched, the noisy and drums */
-        return m < 8 ? C_ORANGE : m < 16 ? C_GREEN : C_RED;
+    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: return model_accent(p->algo[page_first(page)]);
+    case PT_TIDES1: case PT_TIDES2: return accent3(p->algo[page_first(page)]);
+    case PT_MARB_T1: case PT_MARB_T2: {
+        int m = p->algo[PG_MARBLES(0)];
+        return m < 3 ? accent3(m) : MI_TEAL;
     }
-    case PT_TIDES1: case PT_TIDES2: return C_GREEN;
-    case PT_MARB_T1: case PT_MARB_T2: return C_GREEN;
-    case PT_MARB_X1: case PT_MARB_X2: return C_YELLOW;
-    case PT_MIX: return C_HI;
-    default: return C_BLUE;
+    case PT_MARB_X1: case PT_MARB_X2: return accent3((int)(p->val[PG_MARBLES(2) * 4 + 3] + 0.5f));
+    case PT_MIX: return MI_TEAL;
+    default: return MI_PINK;
     }
 }
 
+/* Clouds' labels: the reverb's knobs named in pink and teal pills, the last one plain with its dot (BLEND's) */
+static uint16_t knob_accent(int page, int k)
+{
+    if (page == PG_FX(0))
+        return k & 1 ? MI_TEAL : MI_PINK;
+    if (page == PG_FX(1))
+        return k < 2 ? MI_PINK : MI_TEAL;
+    return page_accent(page);
+}
+static int knob_pill(int page, int k)    /* 0 a plain label, 1 a pill, 2 plain with a dot */
+{
+    if (page == PG_FX(0))
+        return 1;
+    if (page == PG_FX(1))
+        return k < 3 ? 1 : 2;
+    return 0;
+}
+static int knob_big(int page, int k)     /* the panels' big knobs: Plaits' FREQUENCY and HARMONICS, Tides' FREQUENCY
+                                          * and SHAPE, Marbles' RATE, SPREAD and DEJA VU */
+{
+    switch (eng_page_type(page)) {
+    case PT_PLAITS1: case PT_TIDES1: return k < 2;
+    case PT_MARB_T1: return k == 0 || k == 3;
+    case PT_MARB_X1: return k == 0;
+    default: return 0;
+    }
+}
+static int knob_star(int page, int k)    /* Marbles' RATE and SPREAD sit in an eight-pointed star */
+{
+    int pt = eng_page_type(page);
+    return k == 0 && (pt == PT_MARB_T1 || pt == PT_MARB_X1);
+}
+
 /* ------------------------------------------------------------------ text --- */
+static int iabs(int v) { return v < 0 ? -v : v; }
+
 static void text_cat(char *d, const char *s, uint32_t max)
 {
     uint32_t n = 0;
@@ -170,6 +235,17 @@ static int text_hash(const char *s)
     return h;
 }
 
+/* a knob's name as the panels write it: in capitals, Marbles' t left small */
+static void label_text(const char *s, char *b, uint32_t max)
+{
+    uint32_t n = 0;
+    for (const char *c = s; *c && n < max - 1; c++, n++) {
+        int lone_t = *c == 't' && (c == s || c[-1] == ' ') && (c[1] == 0 || c[1] == ' ');
+        b[n] = (char)(*c >= 'a' && *c <= 'z' && !lone_t ? *c - 32 : *c);
+    }
+    b[n] = 0;
+}
+
 /* a parameter's short name, for the matrix: its module, then its own */
 static void param_name(int param, char *b, uint32_t max)
 {
@@ -210,10 +286,9 @@ static int data_check(void)
 /* ---------------------------------------------------------------- store --- */
 static void project_load(void)
 {
-    static project_t tmp;
     project_t *p = eng_project();
-    if (plat_store_load(OBJ_PROJECT, &tmp, sizeof tmp) == (int)sizeof tmp && eng_check(&tmp))
-        *p = tmp;
+    if (plat_store_load(OBJ_PROJECT, &scratch, sizeof scratch) == (int)sizeof scratch && eng_check(&scratch))
+        *p = scratch;
     else
         eng_defaults(p);
     dirty = 0;
@@ -279,6 +354,287 @@ void app_init(void)
     ui.touched_k = -1;
 }
 
+/* ---------------------------------------------------------- drawing kit --- */
+/* shapes with soft edges, on gfx.c's canvas: a pixel's coverage a (0..1) blends c over what is there */
+static void blend_px(int32_t x, int32_t y, uint16_t c, float a)
+{
+    uint16_t *px;
+    if (a <= 0.0f)
+        return;
+    y += cv_oy;
+    if ((uint32_t)x >= cv_w || y < cv_y0 || y >= cv_y1)
+        return;
+    px = &cv_px[(uint32_t)y * cv_w + (uint32_t)x];
+    if (a >= 0.99f) {
+        *px = swap16(c);
+    } else {
+        uint32_t k = (uint32_t)(a * 256.0f), bg = swap16(*px);
+        uint32_t r = ((uint32_t)(c >> 11) * k + (bg >> 11) * (256u - k)) >> 8;
+        uint32_t g = ((uint32_t)((c >> 5) & 63u) * k + ((bg >> 5) & 63u) * (256u - k)) >> 8;
+        uint32_t b = ((uint32_t)(c & 31u) * k + (bg & 31u) * (256u - k)) >> 8;
+        *px = swap16((uint16_t)(r << 11 | g << 5 | b));
+    }
+}
+
+static uint16_t tint(uint16_t c, uint16_t bg, int a)   /* a / 8 of c over bg */
+{
+    uint32_t r = ((uint32_t)(c >> 11) * (uint32_t)a + (uint32_t)(bg >> 11) * (uint32_t)(8 - a)) / 8u;
+    uint32_t g = ((uint32_t)((c >> 5) & 63u) * (uint32_t)a + (uint32_t)((bg >> 5) & 63u) * (uint32_t)(8 - a)) / 8u;
+    uint32_t b = ((uint32_t)(c & 31u) * (uint32_t)a + (uint32_t)(bg & 31u) * (uint32_t)(8 - a)) / 8u;
+    return (uint16_t)(r << 11 | g << 5 | b);
+}
+
+#define BOX_OF(cx, cy, r)                                                                                         \
+    int xa = (int)fm_floorf((cx) - (r) - 1.0f), xb = (int)fm_floorf((cx) + (r) + 2.0f);                        \
+    int ya = (int)fm_floorf((cy) - (r) - 1.0f), yb = (int)fm_floorf((cy) + (r) + 2.0f)
+
+static void disc(float cx, float cy, float r, uint16_t c)
+{
+    BOX_OF(cx, cy, r);
+    for (int y = ya; y <= yb; y++)
+        for (int x = xa; x <= xb; x++) {
+            float dx = (float)x - cx, dy = (float)y - cy;
+            blend_px(x, y, c, r + 0.5f - fm_sqrtf(dx * dx + dy * dy));
+        }
+}
+
+static void ring(float cx, float cy, float r, float w, uint16_t c)   /* r the outer edge, w its width */
+{
+    BOX_OF(cx, cy, r);
+    for (int y = ya; y <= yb; y++)
+        for (int x = xa; x <= xb; x++) {
+            float dx = (float)x - cx, dy = (float)y - cy, d = fm_sqrtf(dx * dx + dy * dy);
+            blend_px(x, y, c, fm_minf(fm_minf(r + 0.5f - d, d - (r - w) + 0.5f), 1.0f));
+        }
+}
+
+static void seg(float x0, float y0, float x1, float y1, float w, uint16_t c)   /* a stroke w wide, round ends */
+{
+    float vx = x1 - x0, vy = y1 - y0, l2 = vx * vx + vy * vy, h = w * 0.5f;
+    int xa = (int)fm_floorf(fm_minf(x0, x1) - h - 1.0f), xb = (int)fm_floorf(fm_maxf(x0, x1) + h + 2.0f);
+    int ya = (int)fm_floorf(fm_minf(y0, y1) - h - 1.0f), yb = (int)fm_floorf(fm_maxf(y0, y1) + h + 2.0f);
+    for (int y = ya; y <= yb; y++)
+        for (int x = xa; x <= xb; x++) {
+            float px = (float)x - x0, py = (float)y - y0;
+            float t = l2 > 0.0f ? fm_clampf((px * vx + py * vy) / l2, 0.0f, 1.0f) : 0.0f;
+            float dx = px - t * vx, dy = py - t * vy;
+            blend_px(x, y, c, h + 0.5f - fm_sqrtf(dx * dx + dy * dy));
+        }
+}
+
+static float atan2_deg(float y, float x) /* degrees, to a few hundredths */
+{
+    float ax = fm_fabsf(x), ay = fm_fabsf(y), mx = fm_maxf(ax, ay), a, s, r;
+    if (mx <= 0.0f)
+        return 0.0f;
+    a = fm_minf(ax, ay) / mx;
+    s = a * a;
+    r = (((-0.0464964749f * s + 0.15931422f) * s - 0.327622764f) * s * a + a) * 57.2957795f;
+    if (ay > ax)
+        r = 90.0f - r;
+    if (x < 0.0f)
+        r = 180.0f - r;
+    return y < 0.0f ? -r : r;
+}
+
+/* a knob's travel: 270 degrees from the bottom left, clockwise; u 0..1 along it (a direction, y up) */
+static float travel_u(float dx, float dy)
+{
+    float a = atan2_deg(dy, dx);
+    if (a < -90.0f)
+        a += 360.0f;
+    return (225.0f - a) / 270.0f;
+}
+static void travel_xy(float cx, float cy, float u, float r, float *x, float *y)
+{
+    float a = (225.0f - 270.0f * u) * (3.14159265f / 180.0f);
+    *x = cx + r * fm_cosf(a);
+    *y = cy - r * fm_sinf(a);
+}
+
+static void arc(float cx, float cy, float r0, float r1, float u0, float u1, uint16_t c)   /* u0..u1, r0..r1 */
+{
+    BOX_OF(cx, cy, r1);
+    if (u1 <= u0)
+        return;
+    for (int y = ya; y <= yb; y++)
+        for (int x = xa; x <= xb; x++) {
+            float dx = (float)x - cx, dy = cy - (float)y, d = fm_sqrtf(dx * dx + dy * dy);
+            float cov = fm_minf(r1 + 0.5f - d, d - r0 + 0.5f), u, e;
+            if (cov <= 0.0f)
+                continue;
+            u = travel_u(dx, dy);
+            e = fm_minf(u - u0, u1 - u) * 4.712389f * d + 0.5f;   /* its ends, soft too */
+            if (e > 0.0f)
+                blend_px(x, y, c, fm_minf(cov, 1.0f) * fm_minf(e, 1.0f));
+        }
+}
+
+static void pill(int x, int y, int w, int h, uint16_t c)
+{
+    float r = (float)h * 0.5f;
+    if (w < h)
+        w = h;
+    disc((float)x + r - 0.5f, (float)y + r - 0.5f, r, c);
+    disc((float)(x + w) - r - 0.5f, (float)y + r - 0.5f, r, c);
+    cv_rect(x + h / 2, y, w - 2 * (h / 2), h, c);
+}
+
+static void rrect(int x, int y, int w, int h, int r, uint16_t c)   /* the outputs' box: a rectangle, round corners */
+{
+    float fr = (float)r;
+    cv_rect(x + r, y, w - 2 * r, h, c);
+    cv_rect(x, y + r, w, h - 2 * r, c);
+    disc((float)x + fr - 0.5f, (float)y + fr - 0.5f, fr, c);
+    disc((float)(x + w) - fr - 0.5f, (float)y + fr - 0.5f, fr, c);
+    disc((float)x + fr - 0.5f, (float)(y + h) - fr - 0.5f, fr, c);
+    disc((float)(x + w) - fr - 0.5f, (float)(y + h) - fr - 0.5f, fr, c);
+}
+
+static void dotted(int x0, int y0, int x1, int y1, uint16_t c)   /* the panels' dotted lines: round dots */
+{
+    int dx = x1 - x0, dy = y1 - y0, l = iabs(dx) > iabs(dy) ? iabs(dx) : iabs(dy);
+    if (!l) {
+        disc((float)x0, (float)y0, 1.1f, c);
+        return;
+    }
+    for (int i = 0; i <= l; i += 4)
+        disc((float)(x0 + dx * i / l), (float)(y0 + dy * i / l), 1.1f, c);
+}
+
+/* the woven band across the top of the panels: chevrons toward a cross, away from a diamond */
+static void band(int y, uint16_t c)
+{
+    cv_rect(0, y, 240, 1, c);
+    cv_rect(0, y + 6, 240, 1, c);
+    for (int x0 = -10; x0 < 240; x0 += 56)
+        for (int r = 0; r < 5; r++) {
+            int o = 2 - iabs(r - 2);
+            for (int i = 0; i < 5; i++) {
+                cv_rect(x0 + i * 4 + o, y + 1 + r, 2, 1, c);              /* > > > > > */
+                cv_rect(x0 + 28 + i * 4 + 2 - o, y + 1 + r, 2, 1, c);     /* < < < < < */
+            }
+            cv_rect(x0 + 21 + r, y + 1 + r, 2, 1, c);                     /* X */
+            cv_rect(x0 + 25 - r, y + 1 + r, 2, 1, c);
+            cv_rect(x0 + 51 - o, y + 1 + r, 1, 1, c);                     /* a diamond */
+            cv_rect(x0 + 52 + o, y + 1 + r, 1, 1, c);
+        }
+}
+
+/* the icons, 7 x 7: Plaits' models (the printed sixteen), Tides' ramps, Marbles' t models and X modes, the projects */
+enum { IC_VA, IC_SHAPE, IC_FM, IC_GRAIN, IC_ADD, IC_TABLE, IC_CHORD, IC_SPEECH,
+       IC_SWARM, IC_NOISE, IC_DUST, IC_STRING, IC_MODAL, IC_KICK, IC_SNARE, IC_HAT,
+       IC_AD, IC_LOOP, IC_AR, IC_COIN, IC_CLUSTER, IC_DRUMS, IC_SAME, IC_BUMP, IC_TILT,
+       IC_NEW, IC_DEMO, IC_SAVED, NICON };
+static const char ICONS[NICON][7][8] = {
+    {".......", ".###...", ".#.#...", ".#.#.#.", "...#.#.", "...###.", "......."},   /* virtual analog */
+    {".......", ".......", ".##....", "#..#..#", "....##.", ".......", "......."},   /* waveshaping */
+    {"####...", "#..#...", "#.####.", "####.#.", "..#..#.", "..####.", "......."},   /* FM */
+    {".......", "...#...", "..#.#..", "..#.#..", ".#...#.", "#.....#", "......."},   /* grain */
+    {".......", ".#.....", ".#.#...", ".#.#.#.", ".#.#.#.", "#######", "......."},   /* additive */
+    {".......", ".##.##.", ".##.##.", ".......", ".##.##.", ".##.##.", "......."},   /* wavetable */
+    {".......", "#####..", ".......", ".#####.", ".......", "..#####", "......."},   /* chords */
+    {"#######", "#.....#", "#.....#", "#######", ".#.....", "#......", "......."},   /* speech */
+    {".......", "...##..", ".##..#.", "#.....#", "#######", ".......", "......."},   /* swarm */
+    {".......", "..#...#", "#.#.#.#", "#.###.#", "#######", ".......", "......."},   /* noise */
+    {"#...#..", "..#...#", "#...#..", "..#...#", "#...#..", ".......", "......."},   /* particles */
+    {"#.#.#.#", "#.#.#.#", "#.#.#.#", "#.#.#.#", "#.#.#.#", ".......", "......."},   /* string */
+    {".#####.", "#.....#", "#.###.#", "#.#.#.#", "#.###.#", "#.....#", ".#####."},   /* modal */
+    {".......", "..###..", ".#...#.", ".#.#.#.", ".#...#.", "..###..", "......."},   /* kick */
+    {".......", ".#####.", "#.....#", "#######", "#.....#", ".#####.", "......."},   /* snare */
+    {"...#...", "..###..", "#######", "...#...", "...#...", "..###..", "......."},   /* hi-hat */
+    {".......", "...#...", "..#.#..", ".#...#.", "#.....#", ".......", "......."},   /* AD */
+    {".......", ".......", "..#...#", ".#.#.#.", "#...#..", ".......", "......."},   /* looping */
+    {".......", "..###..", ".#...#.", "#.....#", "#.....#", ".......", "......."},   /* AR */
+    {"#.....#", ".#...#.", "..#.#..", "...#...", "...#...", "...#...", "......."},   /* coin toss */
+    {".##....", ".##.##.", "....##.", ".##....", ".##....", ".......", "......."},   /* clusters */
+    {".#.#.#.", ".......", ".#.#.#.", ".......", ".#.#.#.", ".......", "......."},   /* drums */
+    {".......", ".#.#.#.", ".#.#.#.", ".#.#.#.", ".#.#.#.", ".......", "......."},   /* X: identical */
+    {".......", "...#...", ".#.#.#.", ".#.#.#.", ".#.#.#.", ".......", "......."},   /* X: bump */
+    {".......", ".....#.", "...#.#.", ".#.#.#.", ".#.#.#.", ".......", "......."},   /* X: tilt */
+    {"...#...", "...#...", "#######", "...#...", "...#...", ".......", "......."},   /* a new project */
+    {"..#....", "..##...", "..###..", "..##...", "..#....", ".......", "......."},   /* the demo */
+    {"...#...", "...#...", ".#.#.#.", "..###..", "...#...", "#.....#", "#######"},   /* the saved one */
+};
+
+static void icon(float cx, float cy, float r, uint16_t bg, int which)   /* a printed icon: a disc, a white glyph */
+{
+    int x0 = (int)cx - 3, y0 = (int)cy - 3;
+    disc(cx, cy, r, bg);
+    for (int y = 0; y < 7; y++)
+        for (int x = 0; x < 7; x++)
+            if (ICONS[which][y][x] == '#')
+                cv_rect(x0 + x, y0 + y, 1, 1, C_WHITE);
+}
+
+static int pill_h(const felucca_font_t *f) { return f == &FONT_T ? 13 : 15; }
+static int text_pill(int cx, int y, const felucca_font_t *f, const char *s, uint16_t bg, uint16_t fg)
+{                                        /* a label in a pill, centred on cx; its width */
+    int h = pill_h(f), tw = text_w(f, s), w = tw + h - 3, x = cx - w / 2;
+    pill(x, y, w, h, bg);
+    cv_text(x + (w - tw) / 2, y + (h - f->h) / 2 + 1, f, s, fg);
+    return w;
+}
+
+static void lens(float cx, float cy, float r, uint16_t lit, int on, uint16_t off)   /* an LED */
+{
+    disc(cx, cy, r, on ? lit : off);
+    if (on)
+        disc(cx - r * 0.3f, cy - r * 0.3f, r * 0.35f, tint(C_WHITE, lit, 5));
+}
+
+static void jack(float cx, float cy)     /* a socket: its nut, its hole */
+{
+    disc(cx, cy, 9.0f, MI_RULE);
+    disc(cx, cy, 7.8f, RGB(216, 216, 212));
+    disc(cx, cy, 4.8f, MI_INK);
+}
+
+static void italic_t(float x, float y, uint16_t c)   /* Marbles' t, a serif italic 20 px tall */
+{
+    seg(x + 8.0f, y + 1.0f, x + 4.0f, y + 16.5f, 2.6f, c);
+    seg(x + 1.5f, y + 6.0f, x + 11.5f, y + 6.0f, 1.6f, c);
+    seg(x + 4.0f, y + 16.5f, x + 5.6f, y + 19.0f, 2.2f, c);
+    seg(x + 5.6f, y + 19.0f, x + 10.5f, y + 15.8f, 1.6f, c);
+}
+static void italic_X(float x, float y, uint16_t c)   /* and its X */
+{
+    seg(x + 5.0f, y + 1.0f, x + 13.5f, y + 19.0f, 2.8f, c);
+    seg(x + 17.0f, y + 1.0f, x + 2.0f, y + 19.0f, 1.4f, c);
+    seg(x + 1.5f, y + 1.0f, x + 8.5f, y + 1.0f, 1.3f, c);
+    seg(x + 13.5f, y + 1.0f, x + 19.5f, y + 1.0f, 1.3f, c);
+    seg(x - 1.0f, y + 19.0f, x + 5.0f, y + 19.0f, 1.3f, c);
+    seg(x + 10.0f, y + 19.0f, x + 17.0f, y + 19.0f, 1.3f, c);
+}
+
+static void star8(float cx, float cy, float r, uint16_t c)   /* Marbles' eight-pointed star (two squares) */
+{
+    float s = r * 0.70710678f;
+    BOX_OF(cx, cy, r);
+    for (int y = ya; y <= yb; y++)
+        for (int x = xa; x <= xb; x++) {
+            float dx = fm_fabsf((float)x - cx), dy = fm_fabsf((float)y - cy);
+            float a = s - (dx + dy) * 0.70710678f, b = s - fm_maxf(dx, dy);
+            blend_px(x, y, c, fm_maxf(a, b) + 0.5f);
+        }
+}
+
+static void mandala(float cx, float cy, float r, uint16_t c)   /* Clouds' engraved discs, simplified */
+{
+    ring(cx, cy, r, 1.2f, c);
+    ring(cx, cy, r * 0.82f, 1.0f, c);
+    for (int i = 0; i < 12; i++) {
+        float a = (float)i * 0.5235988f;
+        ring(cx + r * 0.91f * fm_cosf(a), cy + r * 0.91f * fm_sinf(a), r * 0.08f, 1.0f, c);
+    }
+    ring(cx, cy, r * 0.58f, 1.0f, c);
+    for (int i = 0; i < 8; i++) {
+        float a = (float)i * 0.7853982f + 0.3926991f;
+        ring(cx + r * 0.42f * fm_cosf(a), cy + r * 0.42f * fm_sinf(a), r * 0.14f, 1.0f, c);
+    }
+    ring(cx, cy, r * 0.22f, 1.0f, c);
+}
+
 /* -------------------------------------------------------------- drawing --- */
 void app_say(const char *a, const char *b)
 {
@@ -295,199 +651,218 @@ static int load_now(void)                /* the busier core, in % */
     return (int)(((a > b ? a : b) + 5u) / 10u);
 }
 
-static void fill_circle(int cx, int cy, int r, uint16_t c)
-{
-    for (int y = -r; y <= r; y++) {
-        int w = (int)fm_sqrtf((float)(r * r - y * y) + 0.5f);
-        cv_rect(cx - w, cy + y, 2 * w + 1, 1, c);
-    }
-}
-
 static void draw_header(void)
 {
     static int load = -1;
     static uint32_t load_at;
     char t[32], v[12];
-    int tr = eng_page_track(ui.page);
+    int tr = eng_page_track(ui.page), x;
+    uint16_t ac = page_accent(ui.page);
     if (load < 0 || plat_ms() - load_at >= 250u) {
         load = load_now();
         load_at = plat_ms();
     }
     int32_t s[5] = {ui.page | ui.matrix << 8 | ui.global << 9 | ui.mod << 10, load, eng_playing() | dirty << 1,
-                    ui.track, module_colour(ui.page)};
+                    ui.track | track_accent(ui.track) << 4, ac};
     if (!ui.full && !memcmp(s, ui.head_shown, sizeof s))
         return;
     memcpy(ui.head_shown, s, sizeof s);
-    cv_begin(240, HEAD_H, C_BLACK);
+    cv_begin(240, HEAD_H, MI_PANEL);
+    band(0, ui.mod ? MI_PINK : ui.matrix ? MI_TEAL : MI_RULE);
     t[0] = 0;
     text_cat(t, ui.global ? "Global" : ui.matrix ? "Matrix" : module_name(ui.page), sizeof t);
-    uint16_t mc = ui.global || ui.matrix ? C_HI : module_colour(ui.page);
-    int x = cv_text(6, 3, &FONT_B, t, mc);
-    if (!ui.global && !ui.matrix && page_count(ui.page) > 1) {   /* the faces: a dot each, the one shown filled */
+    x = cv_text(6, 10, &FONT_B, t, MI_INK);
+    if (!ui.global && !ui.matrix && page_count(ui.page) > 1) {   /* the faces: an LED each, the one shown lit */
         for (int f = 0; f < page_count(ui.page); f++) {
-            int fx = x + 4 + f * 10;
+            float fx = (float)(x + 7 + f * 10);
             if (f == page_face(ui.page))
-                cv_rect(fx, 9, 6, 6, mc);
-            else {
-                cv_rect(fx, 9, 6, 1, C_DIM);
-                cv_rect(fx, 14, 6, 1, C_DIM);
-                cv_rect(fx, 9, 1, 6, C_DIM);
-                cv_rect(fx + 5, 9, 1, 6, C_DIM);
-            }
+                disc(fx, 18.0f, 3.2f, ac);
+            else
+                ring(fx, 18.0f, 3.2f, 1.2f, MI_RULE);
         }
+        x += 7 + page_count(ui.page) * 10;
     }
-    if (tr >= 0 || ui.matrix) {          /* the track, as a badge */
-        cv_rect(138, 3, 24, 16, C_LINE);
+    if (ui.mod)
+        text_pill(x + 22, 11, &FONT_T, "MOD", MI_PINK, C_WHITE);
+    if (tr >= 0 || ui.matrix) {          /* the track, in its model's colour */
         t[0] = 'T';
         t[1] = (char)('1' + ui.track);
         t[2] = 0;
-        cv_text(150 - text_w(&FONT_XS, t) / 2, 3, &FONT_XS, t, C_WHITE);
+        text_pill(150, 10, &FONT_XS, t, track_accent(ui.track), C_WHITE);
     }
-    if (eng_playing())                   /* a play triangle */
-        for (int y = 0; y < 11; y++)
-            cv_rect(172, 6 + y, y < 6 ? y + 1 : 11 - y, 1, C_GREEN);
+    disc(177.0f, 17.5f, 7.5f, eng_playing() ? MI_TEAL : MI_RULE);   /* PLAY, as an icon */
+    for (int y = -4; y <= 4; y++)
+        cv_rect(175, 17 + y, 7 - (iabs(y) * 7 + 2) / 4, 1, C_WHITE);
     t[0] = 0;
     int_text(load, v);
     text_cat(t, v, sizeof t);
     text_cat(t, "%", sizeof t);
-    cv_text(234 - text_w(&FONT_XS, t), 3, &FONT_XS, t, load >= 80 ? C_RED : load >= 60 ? C_ORANGE : C_GRAY);
-    if (dirty)
-        cv_rect(1, 1, 3, 3, C_ORANGE);
-    cv_rect(0, HEAD_H - 1, 240, 1, ui.mod ? C_WHITE : C_LINE);
+    x = 234 - text_w(&FONT_XS, t);
+    cv_text(x, 10, &FONT_XS, t, load >= 80 ? MI_PINK : load >= 60 ? MI_ORANGE : MI_MUTED);
+    if (dirty)                           /* not saved */
+        disc((float)(x - 7), 17.5f, 2.4f, MI_PINK);
     cv_blit(0, 0);
 }
 
 /* the module's own display -------------------------------------------------------------------------------- */
 
-static void panel_plaits_bank(int model, uint16_t mc)   /* the model's name, and Plaits' LEDs: 3 banks of 8 */
+static void panel_plaits_bank(int model)  /* the model's name; Plaits' column of LEDs between its two rows of icons,
+                                           * laid on its side */
 {
     const char *name = eng_algo_name(PG_TRACK(ui.track, 0), model);
     const felucca_font_t *f = text_w(&FONT_M, name) <= 232 ? &FONT_M : &FONT_B;
-    cv_text(120 - text_w(f, name) / 2, f == &FONT_M ? 2 : 6, f, name, C_WHITE);
-    for (int b = 0; b < 3; b++) {
-        uint16_t c = b == 0 ? C_ORANGE : b == 1 ? C_GREEN : C_RED;
-        for (int i = 0; i < 8; i++) {
-            int x = 52 + i * 17, y = 36 + b * 15, on = model == b * 8 + i;
-            if (on) {
-                cv_rect(x - 2, y - 2, 15, 12, C_LINE);
-                cv_rect(x, y, 11, 8, c);
-            } else {
-                cv_rect(x, y, 11, 8, C_KNOB);
-                cv_rect(x + 4, y + 3, 3, 2, b == model / 8 ? c : C_DIM);
-            }
-        }
+    uint16_t led = model < 8 ? LED_ORANGE : model < 16 ? LED_GREEN : LED_RED;
+    cv_text(120 - text_w(f, name) / 2, f == &FONT_M ? 0 : 4, f, name, MI_INK);
+    for (int i = 0; i < 8; i++) {
+        float x = (float)(22 + i * 28);
+        int on = model % 8 == i;
+        icon(x, 35.0f, 6.5f, MI_TEAL, IC_VA + i);
+        icon(x, 63.0f, 6.5f, MI_PINK, IC_SWARM + i);
+        if (!on)
+            ring(x, 49.0f, 3.6f, 1.0f, MI_RULE);
+        lens(x, 49.0f, on ? 3.6f : 2.6f, led, on, MI_FAINT);
+        if (on && model >= 8)
+            ring(x, model < 16 ? 35.0f : 63.0f, 9.3f, 1.4f, MI_INK);
+        else if (on)
+            ring(x, 49.0f, 6.2f, 1.3f, MI_INK);
     }
-    (void)mc;
 }
 
-static void panel_plaits_lpg(int t, uint16_t mc)    /* the low-pass gate's response: DECAY's tail, COLOUR's tone */
+static void panel_plaits_lpg(int t, uint16_t ac)   /* the low-pass gate's response: DECAY's tail, COLOUR's tone */
 {
-    int pg = PG_TRACK(t, 1);
+    int pg = PG_TRACK(t, 1), y0 = 68, h = 48;
     float decay = eng_final(pg * 4 + 0), colour = eng_final(pg * 4 + 1);
     float k = 0.002f + 0.12f * (1.0f - decay) * (1.0f - decay) * (1.0f - decay);   /* the fall a pixel */
-    int y0 = 74, h = 56, px = -1, py = 0;
-    cv_text(6, 2, &FONT_XS, "Low-pass gate", C_GRAY);
-    cv_rect(20, y0, 210, 1, C_LINE);
-    for (int x = 0; x < 200; x++) {
+    float px = 0.0f, py = (float)y0;
+    uint16_t fill = tint(ac, MI_PANEL, 2 + (int)(colour * 4.0f));
+    cv_text(6, 1, &FONT_B, "LOW-PASS GATE", MI_INK);
+    cv_text(234 - text_w(&FONT_XS, colour < 0.5f ? "VCFA" : "VCA"), 2, &FONT_XS, colour < 0.5f ? "VCFA" : "VCA",
+            MI_MUTED);
+    cv_rect(10, y0 + 2, 220, 1, MI_RULE);
+    for (int x = 0; x < 206; x++) {
         float env = x < 4 ? (float)x / 4.0f : fm_exp2f(-(float)(x - 4) * k * 1.4427f);
-        int y = y0 - (int)(env * (float)h);
-        uint16_t c = colour > 0.66f ? C_HI : colour > 0.33f ? mc : C_ORANGE;
-        if (px >= 0)
-            cv_line(24 + px, py, 24 + x, y, c);
-        if (!(x & 3))
-            cv_rect(24 + x, y + 1, 1, y0 - y - 1, C_KNOB);
-        px = x;
+        float y = (float)y0 - env * (float)h;
+        if (!(x % 3) && y < (float)y0 - 2.0f)
+            cv_rect(16 + x, (int)y + 3, 1, y0 - (int)y - 2, fill);
+        if (x)
+            seg(16.0f + px, py, 16.0f + (float)x, y, 2.0f, MI_INK);
+        px = (float)x;
         py = y;
     }
 }
 
-static void panel_plaits_route(int t, uint16_t mc) /* where the track's gate and note come from */
+static void panel_plaits_route(int t, uint16_t ac)   /* where the track's gate and note come from: TRIG, V/OCT, OUT */
 {
     project_t *p = eng_project();
-    char a[32], n[8];
-    int pg = PG_TRACK(t, 2);
-    a[0] = 0;
-    text_cat(a, "Gate  <  ", sizeof a);
-    text_cat(a, eng_pdef(pg * 4)->names[(int)(p->val[pg * 4] + 0.5f)], sizeof a);
-    cv_text(20, 10, &FONT_B, a, C_WHITE);
-    a[0] = 0;
-    text_cat(a, "Note  <  ", sizeof a);
-    text_cat(a, eng_pdef(pg * 4 + 1)->names[(int)(p->val[pg * 4 + 1] + 0.5f)], sizeof a);
-    cv_text(20, 34, &FONT_B, a, C_WHITE);
+    char n[8];
+    int pg = PG_TRACK(t, 2), on = (int)((eng_gates() >> t) & 1u);
+    static const char *const L[2] = {"TRIG", "V/OCT"};
+    for (int j = 0; j < 2; j++) {
+        int cx = 34 + j * 72;
+        const char *src = eng_pdef(pg * 4 + j)->names[(int)(p->val[pg * 4 + j] + 0.5f)];
+        cv_text(cx - text_w(&FONT_XS, L[j]) / 2, 0, &FONT_XS, L[j], MI_INK);
+        jack((float)cx, 28.0f);
+        dotted(cx, 40, cx, 52, MI_INK);
+        char u[12];
+        label_text(src, u, sizeof u);
+        text_pill(cx, 56, &FONT_XS, u, ac, C_WHITE);
+    }
+    rrect(150, 0, 88, 75, 6, MI_BOX);    /* the outputs' box: the note played */
+    cv_text(160, 3, &FONT_XS, "OUT", BOX_TEXT);
+    lens(226.0f, 11.0f, 4.0f, LED_GREEN, on, MI_BOX_LO);
     note_text(eng_note(t), n);
-    cv_text(234 - text_w(&FONT_M, n), 24, &FONT_M, n, (eng_gates() >> t) & 1u ? mc : C_GRAY);
-    cv_text(20, 60, &FONT_XS, "Transpose and octave on the knobs", C_DIM);
+    cv_text(194 - text_w(&FONT_M, n) / 2, 30, &FONT_M, n, on ? C_WHITE : BOX_DIM);
 }
 
-static void trace(int src, int x0, int y0, int h, int bipolar, uint16_t pos, uint16_t neg)
-{                                        /* a source's last 1.4 s in a band h tall, its middle (or its foot) at y0 */
+static void trace(int src, int x0, int w, int y0, int h, int bipolar, uint16_t c)
+{                                        /* a source's last 1.4 s in w px, its middle (or its foot) at y0 */
     int py = 0;
-    for (int i = 0; i < ENG_HIST; i++) {
-        int v = eng_hist(src, i);
+    for (int j = 0; j < w; j++) {
+        int v = eng_hist(src, j * (ENG_HIST - 1) / (w - 1));
         int y = bipolar ? y0 - v * (h / 2) / 127 : y0 - v * h / 127;
-        uint16_t c = v >= 0 ? pos : neg;
-        if (i)
-            cv_line(x0 + i - 1, py, x0 + i, y, c);
+        if (j)
+            cv_line(x0 + j - 1, py, x0 + j, y, c);
         py = y;
     }
 }
 
-static void panel_tides(int tide, uint16_t mc)
+static void mode_icons(int x0, int sel, int first, int n)   /* a row of printed icons, the chosen one ringed */
+{
+    for (int i = 0; i < n; i++) {
+        float x = (float)(x0 + i * 21);
+        icon(x, 11.0f, 7.8f, i == sel ? accent3(i) : tint(accent3(i), MI_PANEL, 3), first + i);
+        if (i == sel)
+            ring(x, 11.0f, 10.6f, 1.4f, MI_INK);
+    }
+}
+
+static void panel_tides(int tide)
 {
     project_t *p = eng_project();
     int ramp = p->algo[PG_TIDES(tide, 0)], src0 = tide ? SRC_B1 : SRC_A1;
-    static const char *const R[3] = {"AD", "Looping", "AR"};
-    for (int c = 0; c < 4; c++) {        /* the four outputs, as Tides' four LEDs and their voltages */
-        int y = 4 + c * 19, mid = ramp == 1 ? y + 9 : y + 17;
+    int range = (int)(p->val[PG_TIDES(tide, 1) * 4 + 2] + 0.5f);
+    static const char *const R[3] = {"/8", "X1", "X8"};
+    mode_icons(12, ramp, IC_AD, 3);      /* the ramp: AD, looping, AR */
+    cv_text(70, 3, &FONT_B, eng_algo_name(PG_TIDES(tide, 0), ramp), MI_INK);
+    for (int i = 0; i < 3; i++) {        /* the range, as Tides 2's three pills */
+        float x = (float)(184 + i * 21);
+        disc(x, 11.0f, 7.8f, i == range ? accent3(i) : tint(accent3(i), MI_PANEL, 3));
+        cv_text((int)x - text_w(&FONT_T, R[i]) / 2, 5, &FONT_T, R[i], C_WHITE);
+        if (i == range)
+            ring(x, 11.0f, 10.6f, 1.4f, MI_INK);
+    }
+    rrect(2, 24, 236, 51, 6, MI_BOX);    /* the four outputs, in their box */
+    for (int c = 0; c < 4; c++) {
+        int x0 = 4 + c * 59, v = eng_hist(src0 + c, ENG_HIST - 1), mid = ramp == 1 ? 55 : 69;
         char n[2] = {(char)('1' + c), 0};
-        int v = eng_hist(src0 + c, ENG_HIST - 1);
-        cv_rect(6, y + 4, 9, 9, v > 8 ? C_GREEN : v < -8 ? C_RED : C_KNOB);
-        cv_text(20, y + 1, &FONT_XS, n, C_GRAY);
-        cv_rect(34, mid, ENG_HIST, 1, C_LINE);
-        trace(src0 + c, 34, mid, 16, ramp == 1, C_GREEN, C_RED);
-    }
-    for (int i = 0; i < 3; i++) {        /* the ramp modes, Tides' mode LEDs */
-        int y = 10 + i * 22, on = ramp == i;
-        fill_circle(170, y + 7, 4, on ? mc : C_KNOB);
-        cv_text(180, y, &FONT_XS, R[i], on ? C_WHITE : C_DIM);
+        lens((float)(x0 + 10), 32.0f, 3.4f, v > 8 ? LED_GREEN : LED_RED, v > 8 || v < -8, MI_BOX_LO);
+        cv_text(x0 + 18, 25, &FONT_XS, n, BOX_TEXT);
+        cv_rect(x0 + 4, mid, 50, 1, MI_BOX_HI);
+        trace(src0 + c, x0 + 4, 50, mid, ramp == 1 ? 26 : 28, ramp == 1, BOX_TEXT);
     }
 }
 
-static void panel_marbles_t(uint16_t mc)
+static void panel_marbles_t(void)
 {
     project_t *p = eng_project();
-    const char *m = eng_algo_name(PG_MARBLES(0), p->algo[PG_MARBLES(0)]);
-    cv_text(6, 1, &FONT_B, m, C_WHITE);
-    for (int c = 0; c < 3; c++) {        /* t1 t2 t3: their gates, as Marbles' LEDs and a strip of the last steps */
-        int y = 24 + c * 19;
+    int m = p->algo[PG_MARBLES(0)];
+    italic_t(5.0f, 1.0f, MI_INK);
+    mode_icons(34, m, IC_COIN, 3);       /* coin toss, clusters, drums (the others: their name alone) */
+    cv_text(92, 3, &FONT_B, eng_algo_name(PG_MARBLES(0), m), MI_INK);
+    rrect(2, 24, 236, 51, 6, MI_BOX);
+    for (int c = 0; c < 3; c++) {        /* t1 t2 t3, their LEDs and the gates of the last 1.4 s */
+        int y = 27 + c * 16, on = eng_hist(SRC_T1 + c, ENG_HIST - 1) > 64;
         char n[3] = {'t', (char)('1' + c), 0};
-        int on = eng_hist(SRC_T1 + c, ENG_HIST - 1) > 64;
-        cv_rect(6, y + 4, 9, 9, on ? mc : C_KNOB);
-        cv_text(20, y + 1, &FONT_XS, n, C_GRAY);
-        for (int i = 0; i < ENG_HIST; i++)
+        lens(11.0f, (float)(y + 7), 3.4f, LED_GREEN, on, MI_BOX_LO);
+        cv_text(19, y, &FONT_XS, n, BOX_TEXT);
+        for (int i = 0; i < ENG_HIST; i++) {
+            int x = 38 + i * 194 / ENG_HIST;
             if (eng_hist(SRC_T1 + c, i) > 64)
-                cv_rect(40 + i * 3 / 2, y + 4, 2, 10, c == 1 ? C_HI : mc);
+                cv_rect(x, y + 3, 2, 9, BOX_TEXT);
             else if (!(i & 7))
-                cv_rect(40 + i * 3 / 2, y + 8, 1, 2, C_LINE);
+                cv_rect(x, y + 7, 1, 2, MI_BOX_HI);
+        }
     }
 }
 
-static void panel_marbles_x(uint16_t mc)
+static void panel_marbles_x(void)
 {
     project_t *p = eng_project();
-    const char *s = eng_algo_name(PG_MARBLES(2), p->algo[PG_MARBLES(2)]);
+    int xm = (int)(p->val[PG_MARBLES(2) * 4 + 3] + 0.5f);
     static const char *const N[4] = {"X1", "X2", "X3", "Y"};
-    cv_text(6, 1, &FONT_B, s, C_WHITE);
+    mode_icons(12, xm, IC_SAME, 3);      /* identical, bump, tilt */
+    cv_text(70, 3, &FONT_B, eng_algo_name(PG_MARBLES(2), p->algo[PG_MARBLES(2)]), MI_INK);
+    italic_X(214.0f, 1.0f, MI_INK);
+    rrect(2, 24, 236, 51, 6, MI_BOX);
     for (int c = 0; c < 4; c++) {        /* the voltages, stepped as they are drawn */
-        int y = 24 + c * 14;
-        cv_text(6, y - 2, &FONT_XS, N[c], C_GRAY);
-        cv_rect(30, y + 12, 200, 1, C_LINE);
-        int py = 0;
+        int y = 26 + c * 12, py = 0;
+        uint16_t col = c == 3 ? tint(MI_PINK, C_WHITE, 4) : BOX_TEXT;
+        cv_text(9, y - 1, &FONT_T, N[c], BOX_DIM);
         for (int i = 0; i < ENG_HIST; i++) {
-            int v = eng_hist(SRC_X1 + c, i), yy = y + 12 - v * 11 / 127;
+            int v = eng_hist(SRC_X1 + c, i), x = 30 + i * 200 / ENG_HIST, yy = y + 10 - v * 9 / 127;
             if (i && yy != py)
-                cv_rect(30 + (i * 5) / 3, py < yy ? py : yy, 1, (py < yy ? yy - py : py - yy) + 1, C_DIM);
-            cv_rect(30 + (i * 5) / 3, yy, 2, 1, c == 3 ? C_HI : mc);
+                cv_rect(x, py < yy ? py : yy, 1, iabs(yy - py) + 1, MI_BOX_HI);
+            cv_rect(x, yy, 2, 1, col);
             py = yy;
         }
     }
@@ -495,31 +870,44 @@ static void panel_marbles_x(uint16_t mc)
 
 static void panel_mixer(void)
 {
-    for (int t = 0; t < ENG_TRACKS; t++) {   /* a meter under each level knob */
-        int x = t * KNOB_W + 22, h = 66;
-        float m = eng_meter(t);
-        int lit = (int)(fm_clampf(m * 1.25f, 0.0f, 1.0f) * (float)(h / 4));
-        for (int k = 0; k < h / 4; k++) {
-            uint16_t c = k >= lit ? C_KNOB : k > h / 4 - 3 ? C_RED : k > h / 4 - 6 ? C_ORANGE : C_GREEN;
-            cv_rect(x, 72 - k * 4, 16, 3, c);
-        }
+    rrect(2, 0, 236, 75, 6, MI_BOX);
+    for (int t = 0; t < ENG_TRACKS; t++) {   /* a column of LEDs over each level knob */
+        int cx = t * KNOB_W + 30, lit = (int)(fm_clampf(eng_meter(t) * 1.25f, 0.0f, 1.0f) * 7.0f + 0.5f);
+        char n[2] = {(char)('1' + t), 0};
+        cv_text(cx - 12, 1, &FONT_XS, n, BOX_TEXT);
+        disc((float)(cx + 6), 9.0f, 2.4f, track_accent(t));
+        for (int k = 0; k < 7; k++)
+            lens((float)cx, (float)(67 - k * 8), 3.0f, k == 6 ? LED_RED : k >= 4 ? LED_ORANGE : LED_GREEN, k < lit,
+                 MI_BOX_LO);
     }
 }
 
-static void panel_reverb(void)          /* the tail as Clouds' reverb would leave it: TIME long, DAMPING dark */
+static void panel_reverb(void)          /* Clouds' disc, and the tail its reverb would leave: TIME long, DAMPING dark */
 {
     float time = eng_final(PG_FX(1) * 4 + 0), damp = eng_final(PG_FX(1) * 4 + 1);
-    float ret = eng_final(PG_FX(1) * 4 + 3), m = eng_meter(ENG_TRACKS);
-    float k = 0.06f - 0.054f * time;
-    cv_text(6, 1, &FONT_XS, "Clouds reverb, sends post-fader", C_GRAY);
-    for (int i = 0; i < 52; i++) {
+    float ret = eng_final(PG_FX(1) * 4 + 3), k = 0.06f - 0.054f * time;
+    mandala(37.0f, 38.0f, 33.0f, MI_FAINT);
+    cv_text(80, 0, &FONT_XS, "from Clouds, sends post-fader", MI_MUTED);
+    for (int i = 0; i < 36; i++) {
         float a = fm_exp2f(-(float)i * k * 4.0f * 1.4427f) * (0.4f + 0.6f * ret);
         int h = (int)(a * 50.0f);
-        uint16_t c = (float)i / 52.0f > 1.0f - damp * 0.8f ? C_LINE : i & 1 ? C_BLUE : C_HI;
-        cv_rect(10 + i * 4, 74 - h, 2, h, c);
+        uint16_t c = i & 1 ? MI_TEAL : MI_PINK;
+        if ((float)i / 36.0f > 1.0f - damp * 0.8f)
+            c = tint(c, MI_PANEL, 3);
+        cv_rect(82 + i * 4, 72 - h, 2, h, c);
     }
-    cv_rect(230, 74 - (int)(fm_clampf(m * 2.0f, 0.0f, 1.0f) * 56.0f), 4,
-            (int)(fm_clampf(m * 2.0f, 0.0f, 1.0f) * 56.0f), C_BLUE);
+}
+
+static void reverb_meter(int force)      /* the return's meter, alone: the disc is not drawn again for it */
+{
+    static int shown = -1;
+    int m = (int)(fm_clampf(eng_meter(ENG_TRACKS) * 2.0f, 0.0f, 1.0f) * 54.0f);
+    if (!force && m == shown)
+        return;
+    shown = m;
+    cv_begin(5, 54, MI_FAINT);
+    cv_rect(0, 54 - m, 5, m, MI_PINK);
+    cv_blit(230, PANEL_Y + 18);
 }
 
 static void draw_panel(void)
@@ -527,32 +915,51 @@ static void draw_panel(void)
     project_t *p = eng_project();
     int pt = eng_page_type(ui.page), live = 0, tr = eng_page_track(ui.page);
     uint32_t now = plat_ms();
-    uint16_t mc = module_colour(ui.page);
+    uint16_t ac = page_accent(ui.page);
     int32_t s[3] = {ui.page, eng_algo_count(page_first(ui.page)) ? p->algo[page_first(ui.page)] : -1, 0};
     switch (pt) {
-    case PT_PLAITS2: s[2] = (int)(eng_final(ui.page * 4) * 200.0f) | (int)(eng_final(ui.page * 4 + 1) * 3.0f) << 8; break;
+    case PT_PLAITS2: s[2] = (int)(eng_final(ui.page * 4) * 200.0f) | (int)(eng_final(ui.page * 4 + 1) * 8.0f) << 8; break;
     case PT_PLAITS3: s[2] = eng_note(tr) | (int)((eng_gates() >> tr) & 1u) << 8 | (int)p->val[ui.page * 4] << 9 |
                             (int)p->val[ui.page * 4 + 1] << 14; break;
-    case PT_TIDES1: case PT_TIDES2: case PT_MARB_T1: case PT_MARB_T2: case PT_MARB_X1: case PT_MARB_X2:
-    case PT_MIX: case PT_FX1: case PT_FX2: live = 1; break;
+    case PT_TIDES1: case PT_TIDES2:
+        s[2] = (int)p->val[PG_TIDES(ui.page >= PG_TIDES(1, 0), 1) * 4 + 2];
+        live = 1;
+        break;
+    case PT_MARB_X1: case PT_MARB_X2: s[2] = (int)(p->val[PG_MARBLES(2) * 4 + 3] + 0.5f); live = 1; break;
+    case PT_MARB_T1: case PT_MARB_T2: live = 1; break;
+    case PT_MIX:                         /* the meters: drawn again when a LED changes */
+        for (int t = 0; t < ENG_TRACKS; t++)
+            s[2] |= (int)(fm_clampf(eng_meter(t) * 1.25f, 0.0f, 1.0f) * 7.0f + 0.5f) << (t * 3);
+        s[2] |= (int)(p->algo[PG_TRACK(0, 0)] / 8) << 12 | (int)(p->algo[PG_TRACK(1, 0)] / 8) << 14 |
+                (int)(p->algo[PG_TRACK(2, 0)] / 8) << 16 | (int)(p->algo[PG_TRACK(3, 0)] / 8) << 18;
+        break;
+    case PT_FX1: case PT_FX2:            /* the tail's knobs (the meter: reverb_meter) */
+        for (int i = 0; i < 4; i++)
+            s[2] = s[2] * 41 + (int)(eng_final(PG_FX(1) * 4 + i) * 40.0f);
+        break;
     default: break;
     }
-    if (!ui.full && !memcmp(s, ui.panel_shown, sizeof s) && (!live || now - ui.panel_at < 80u))
+    if (!ui.full && !memcmp(s, ui.panel_shown, sizeof s) && (!live || now - ui.panel_at < 80u)) {
+        if (pt == PT_FX1 || pt == PT_FX2)
+            reverb_meter(0);
         return;
+    }
     memcpy(ui.panel_shown, s, sizeof s);
     ui.panel_at = now;
-    cv_begin(240, PANEL_H, C_BLACK);
+    cv_begin(240, PANEL_H, MI_PANEL);
     switch (pt) {
-    case PT_PLAITS1: panel_plaits_bank(p->algo[page_first(ui.page)], mc); break;
-    case PT_PLAITS2: panel_plaits_lpg(tr, mc); break;
-    case PT_PLAITS3: panel_plaits_route(tr, mc); break;
-    case PT_TIDES1: case PT_TIDES2: panel_tides(ui.page >= PG_TIDES(1, 0), mc); break;
-    case PT_MARB_T1: case PT_MARB_T2: panel_marbles_t(mc); break;
-    case PT_MARB_X1: case PT_MARB_X2: panel_marbles_x(mc); break;
+    case PT_PLAITS1: panel_plaits_bank(p->algo[page_first(ui.page)]); break;
+    case PT_PLAITS2: panel_plaits_lpg(tr, ac); break;
+    case PT_PLAITS3: panel_plaits_route(tr, ac); break;
+    case PT_TIDES1: case PT_TIDES2: panel_tides(ui.page >= PG_TIDES(1, 0)); break;
+    case PT_MARB_T1: case PT_MARB_T2: panel_marbles_t(); break;
+    case PT_MARB_X1: case PT_MARB_X2: panel_marbles_x(); break;
     case PT_MIX: panel_mixer(); break;
     default: panel_reverb(); break;
     }
     cv_blit(0, PANEL_Y);
+    if (pt == PT_FX1 || pt == PT_FX2)
+        reverb_meter(1);
 }
 
 /* the knobs ------------------------------------------------------------------------------------------------ */
@@ -599,38 +1006,44 @@ static float knob_u(int param, float v)  /* a value's place on its knob, 0..1 */
     return d->hi > d->lo ? (v - (float)d->lo) / (float)(d->hi - d->lo) : 0.0f;
 }
 
-#define DIAL_X 30
-#define DIAL_Y 44
-static void dial_xy(float u, float r, int *x, int *y)   /* 0..1 over 270 degrees, from bottom left, clockwise */
+#define DIAL_X 30.0f
+#define DIAL_Y 43.0f
+static void draw_dial(float u, float uf, int bip, int has_mod, uint16_t ac, int big, int star)
 {
-    float a = (225.0f - 270.0f * u) * (3.14159265f / 180.0f);
-    *x = DIAL_X + (int)(r * fm_cosf(a) + (r * fm_cosf(a) >= 0 ? 0.5f : -0.5f));
-    *y = DIAL_Y - (int)(r * fm_sinf(a) + (r * fm_sinf(a) >= 0 ? 0.5f : -0.5f));
-}
-
-static void draw_dial(float u, float uf, int bip, int has_mod, uint16_t mc)
-{
-    float lo = bip ? (u < 0.5f ? u : 0.5f) : 0.0f, hi = bip ? (u > 0.5f ? u : 0.5f) : u;
-    fill_circle(DIAL_X, DIAL_Y, 15, C_KNOB);           /* the knob */
-    for (int i = 0; i <= 180; i++) {                   /* its scale: lit from the start (the middle) to the value */
-        float s = (float)i / 180.0f;
-        uint16_t c = s >= lo - 0.003f && s <= hi + 0.003f ? mc : C_LINE;
-        for (int r = 18; r <= 21; r++) {
-            int x, y;
-            dial_xy(s, (float)r, &x, &y);
-            cv_rect(x, y, 1, 1, c);
-        }
+    float rc = big ? 13.5f : 11.0f, r0 = rc + 3.6f, r1 = rc + 6.2f, x, y;
+    u = fm_clampf(u, 0.0f, 1.0f);
+    uf = fm_clampf(uf, 0.0f, 1.0f);
+    if (star) {
+        star8(DIAL_X, DIAL_Y, 25.0f, MI_FAINT);
+        star8(DIAL_X, DIAL_Y, 22.6f, MI_PANEL);
+        star8(DIAL_X, DIAL_Y, 20.5f, tint(MI_FAINT, MI_PANEL, 4));
     }
+    for (int i = 0; i <= 10; i++) {      /* the scale: eleven dots */
+        travel_xy(DIAL_X, DIAL_Y, (float)i * 0.1f, (r0 + r1) * 0.5f, &x, &y);
+        disc(x, y, 0.9f, MI_RULE);
+    }
+    arc(DIAL_X, DIAL_Y, r0, r1, bip ? fm_minf(u, 0.5f) : 0.0f, bip ? fm_maxf(u, 0.5f) : u, ac);
+    if (bip) {                           /* an attenuverter's marks: - +, and its middle */
+        float my = DIAL_Y - r1 + 1.0f;
+        seg(DIAL_X - r1 - 3.5f, my, DIAL_X - r1 + 1.0f, my, 1.4f, MI_INK);
+        seg(DIAL_X + r1 - 1.0f, my, DIAL_X + r1 + 3.5f, my, 1.4f, MI_INK);
+        seg(DIAL_X + r1 + 1.25f, my - 2.25f, DIAL_X + r1 + 1.25f, my + 2.25f, 1.4f, MI_INK);
+        seg(DIAL_X, DIAL_Y - r1 - 4.5f, DIAL_X, DIAL_Y - r1 - 0.5f, 2.2f, MI_INK);
+    }
+    disc(DIAL_X + 0.8f, DIAL_Y + 1.8f, rc + 0.4f, MI_SHADOW);   /* the knob: its shadow, its skirt, its cap, its line */
+    disc(DIAL_X, DIAL_Y, rc, MI_CAP_EDGE);
+    disc(DIAL_X, DIAL_Y, rc - 1.2f, MI_CAP);
+    ring(DIAL_X, DIAL_Y, rc - 3.0f, 1.0f, MI_CAP_TOP);
     {
-        int x, y;                                      /* its pointer */
-        dial_xy(u, 13.0f, &x, &y);
-        cv_line(DIAL_X, DIAL_Y, x, y, C_WHITE);
-        cv_line(DIAL_X + 1, DIAL_Y, x + 1, y, C_WHITE);
+        float x0, y0;
+        travel_xy(DIAL_X, DIAL_Y, u, rc * 0.25f, &x0, &y0);
+        travel_xy(DIAL_X, DIAL_Y, u, rc - 2.0f, &x, &y);
+        seg(x0, y0, x, y, 2.2f, MI_INK);
     }
-    if (has_mod) {                                     /* where the cables take it */
-        int x, y;
-        dial_xy(uf, 25.0f, &x, &y);
-        cv_rect(x - 1, y - 1, 3, 3, C_WHITE);
+    if (has_mod) {                       /* where the cables take it */
+        travel_xy(DIAL_X, DIAL_Y, uf, r1 + 3.2f, &x, &y);
+        disc(x, y, 2.6f, MI_PANEL);
+        disc(x, y, 2.0f, ac);
     }
 }
 
@@ -640,36 +1053,59 @@ static void draw_knob(int k)
     int param = ui.page * 4 + k;
     const eng_pdef_t *d = eng_pdef(param);
     float v = p->val[param], f = eng_final(param);
-    char t[32], c[32];
+    char t[32], c[32], lab[24];
     int hash = 0, hot = ui.touched_k == k && plat_ms() - ui.touched_at[k] < 1200u;
-    int ncab = cables_on(param, c, sizeof c, &hash);
-    uint16_t mc = module_colour(ui.page);
+    int ncab = cables_on(param, c, sizeof c, &hash), lp = knob_pill(ui.page, k), big = knob_big(ui.page, k);
+    uint16_t ac = knob_accent(ui.page, k);
     eng_param_text(param, ncab ? f : v, t, sizeof t);
     int32_t s[4] = {(int32_t)(knob_u(param, v) * 270.0f) | (int32_t)(knob_u(param, f) * 270.0f) << 10,
-                    text_hash(t), hash, hot | ui.mod << 1 | mc << 2};
+                    text_hash(t), hash, hot | ui.mod << 1 | (int32_t)ac << 2 | big << 18 | lp << 19};
     if (!ui.full && !memcmp(s, ui.knob_shown[k], sizeof s))
         return;
     memcpy(ui.knob_shown[k], s, sizeof s);
-    cv_begin(KNOB_W, KNOB_H, C_BLACK);
-    cv_text(30 - text_w(&FONT_XS, d->name) / 2, 1, &FONT_XS, d->name, hot ? C_WHITE : C_GRAY);
-    if (d->kind == K_ENUM) {                           /* a switch: its position written, its choices as dots */
-        int n = d->hi - d->lo + 1, i = (int)(v + 0.5f) - d->lo;
-        cv_rect(4, 30, 52, 26, C_KNOB);
-        const felucca_font_t *ft = text_w(&FONT_XS, t) <= 50 ? &FONT_XS : &FONT_T;
-        cv_text(30 - text_w(ft, t) / 2, ft == &FONT_XS ? 35 : 37, ft, t, C_WHITE);
-        int w = n > 8 ? 4 : 6;
-        for (int j = 0; j < n; j++)
-            cv_rect(30 - n * w / 2 + j * w, 62, w - 2, 3, j == i ? mc : C_LINE);
-    } else {
-        draw_dial(knob_u(param, v), knob_u(param, f), d->kind == K_BIP || (d->kind == K_INT && d->lo < 0), ncab, mc);
-        cv_text(30 - text_w(&FONT_XS, t) / 2, 68, &FONT_XS, t, ncab ? mc : C_WHITE);
+    cv_begin(KNOB_W, KNOB_H, MI_PANEL);
+    label_text(d->name, lab, sizeof lab);  /* the name as the panel prints it (touched: in black) */
+    {
+        const felucca_font_t *lf = text_w(&FONT_XS, lab) <= (hot || lp == 1 ? 46 : 58) ? &FONT_XS : &FONT_T;
+        if (hot || lp == 1) {
+            text_pill(30, 1, lf, lab, hot ? MI_INK : ac, C_WHITE);
+        } else {
+            int w = text_w(lf, lab), x = 30 - w / 2 - (lp == 2 ? 4 : 0);
+            cv_text(x, lf == &FONT_XS ? 1 : 3, lf, lab, MI_INK);
+            if (lp == 2)
+                disc((float)(x + w + 5), 9.0f, 2.6f, ac);
+        }
     }
-    if (ncab)
-        cv_text(30 - text_w(&FONT_T, c) / 2, 86, &FONT_T, c, C_AMB);
-    else if (ui.mod && eng_param_mod(param))
-        cv_text(30 - text_w(&FONT_T, "FREE") / 2, 86, &FONT_T, "FREE", C_LINE);
-    if (k)
-        cv_rect(0, 8, 1, KNOB_H - 16, C_LINE);
+    if (d->kind == K_ENUM) {             /* a choice: its position in a pill, the choices as LEDs */
+        int n = d->hi - d->lo + 1, i = (int)(v + 0.5f) - d->lo;
+        float sp = n <= 5 ? 11.0f : 4.8f, r = n <= 5 ? 3.0f : 1.7f;
+        char u[24];
+        label_text(t, u, sizeof u);
+        text_pill(30, 30, text_w(&FONT_XS, u) <= 44 ? &FONT_XS : &FONT_T, u, ac, C_WHITE);
+        for (int j = 0; j < n; j++) {
+            float x = 30.0f - (float)(n - 1) * sp * 0.5f + (float)j * sp;
+            if (j == i)
+                disc(x, 56.0f, r + 0.6f, MI_INK);
+            else
+                ring(x, 56.0f, r, 1.0f, MI_RULE);
+        }
+    } else {
+        draw_dial(knob_u(param, v), knob_u(param, f), d->kind == K_BIP || (d->kind == K_INT && d->lo < 0), ncab, ac,
+                  big, knob_star(ui.page, k));
+        cv_text(30 - text_w(&FONT_XS, t) / 2, 66, &FONT_XS, t, ncab ? ac : MI_INK);
+    }
+    if (ncab) {                          /* the cables: their sources in a pill, a dotted line up to the knob */
+        int w = text_pill(30, 84, &FONT_T, c, MI_BOX, C_WHITE);
+        int xl = 30 - w / 2 - 2, xr = (int)(DIAL_X - (big ? 13.5f : 11.0f) - 8.0f);
+        if (d->kind != K_ENUM) {
+            dotted(xl, 90, 3, 90, MI_INK);
+            dotted(3, 86, 3, (int)DIAL_Y, MI_INK);
+            dotted(7, (int)DIAL_Y, xr, (int)DIAL_Y, MI_INK);
+        }
+    } else if (ui.mod && eng_param_mod(param)) {   /* MOD mode: a socket free for a cable */
+        ring(30.0f, 90.0f, 5.5f, 1.5f, MI_MUTED);
+        disc(30.0f, 90.0f, 2.0f, MI_MUTED);
+    }
     cv_blit((uint32_t)(k * KNOB_W), KNOB_Y);
 }
 
@@ -677,8 +1113,10 @@ static void draw_knob(int k)
 static void draw_lines(int y, int h, const char *const *lines, const uint16_t *colours, int n, int sel)
 {
     for (int i = 0; i < n; i++) {
-        cv_begin(240, (uint32_t)h, i == sel ? C_LINE : C_BLACK);
-        cv_text(6, (h - 15) / 2, &FONT_XS, lines[i], colours[i]);
+        cv_begin(240, (uint32_t)h, MI_PANEL);
+        if (i == sel)
+            pill(2, 1, 236, h - 2, MI_BOX);
+        cv_text(8, (h - 15) / 2, &FONT_XS, lines[i], i == sel ? C_WHITE : colours[i]);
         cv_blit(0, (uint32_t)(y + i * h));
     }
 }
@@ -701,7 +1139,7 @@ static void draw_matrix(void)
         text_cat(rows[i], first + i + 1 < 10 ? "    " : "  ", 40);
         if (!k->depth || k->src == SRC_NONE) {
             text_cat(rows[i], "-", 40);
-            col[i] = C_DIM;
+            col[i] = MI_MUTED;
         } else {
             text_cat(rows[i], eng_src_name(k->src), 40);
             text_cat(rows[i], "  >  ", 40);
@@ -712,75 +1150,101 @@ static void draw_matrix(void)
             if (k->depth > 0)
                 text_cat(rows[i], "+", 40);
             text_cat(rows[i], d, 40);
-            col[i] = C_HI;
+            col[i] = MI_INK;
         }
-        if (first + i == ui.msel)
-            col[i] = C_WHITE;
         lines[i] = rows[i];
     }
     h = h * 17 + ui.msel + g * 1000;
     if (!ui.full && h == shown)
         return;
     shown = h;
-    cv_begin(240, 24, C_BLACK);
-    cv_text(6, 1, &FONT_XS, g < ENG_TRACKS ? "The track's cables" : "Global cables (Tides, Marbles, reverb)", C_GRAY);
-    cv_text(6, 13, &FONT_T, "K1 CABLE   K2 SOURCE   K3 TARGET   K4 DEPTH", C_DIM);
+    cv_begin(240, 24, MI_PANEL);
+    cv_text(8, 0, &FONT_XS, g < ENG_TRACKS ? "The track's cables" : "Global cables (Tides, Marbles, reverb)", MI_INK);
+    cv_text(8, 12, &FONT_T, "K1 CABLE   K2 SOURCE   K3 TARGET   K4 DEPTH", MI_MUTED);
     cv_blit(0, PANEL_Y);
     draw_lines(PANEL_Y + 24, 19, lines, col, 8, ui.msel - first);
-    cv_begin(240, FOOT_Y - (PANEL_Y + 24 + 8 * 19), C_BLACK);
-    cv_blit(0, PANEL_Y + 24 + 8 * 19);
 }
 
 static void draw_global(void)
 {
     static uint32_t at;
-    char rows[9][40], v[12];
-    const char *lines[9];
-    uint16_t col[9];
+    static int shown = -1;
+    static const char *const P[3] = {"New: 4 Plaits, nothing patched", "The demo patch", "The saved project"};
+    char v[24];
+    if (ui.full || shown != ui.init_sel) {   /* the projects REC held loads, in the module's display */
+        shown = ui.init_sel;
+        cv_begin(240, PANEL_H, MI_PANEL);
+        cv_text(8, 1, &FONT_B, "PROJECT", MI_INK);
+        cv_text(232 - text_w(&FONT_T, "K1 CHOOSE, REC HELD LOADS"), 4, &FONT_T, "K1 CHOOSE, REC HELD LOADS",
+                MI_MUTED);
+        for (int i = 0; i < 3; i++) {
+            int y = 20 + i * 18, sel = i == ui.init_sel;
+            if (sel)
+                pill(2, y, 236, 17, MI_BOX);
+            icon(14.0f, (float)y + 8.0f, 6.5f, accent3(i), IC_NEW + i);
+            cv_text(28, y + 1, &FONT_XS, P[i], sel ? C_WHITE : MI_INK);
+        }
+        cv_blit(0, PANEL_Y);
+    }
     if (!ui.full && plat_ms() - at < 400u)
         return;
     at = plat_ms();
-    for (int i = 0; i < 9; i++) {
-        rows[i][0] = 0;
-        lines[i] = rows[i];
-        col[i] = C_GRAY;
+    for (int i = 0; i < 6; i++) {        /* the machine, where the knobs are: two canvases of three rows (a 240 x 100
+                                          * one is more than gfx.c's canvas holds) */
+        const char *l = "";
+        uint16_t c = MI_INK;
+        int y = i < 3 ? 4 + i * 15 : (i - 3) * 15;   /* a row every 15 px: rows 4..48, then 49..99 */
+        if (i % 3 == 0) {
+            cv_begin(240, i ? 51 : 49, MI_PANEL);
+            if (!i)
+                cv_rect(8, 1, 224, 1, MI_RULE);
+        }
+        v[0] = 0;
+        switch (i) {
+        case 0:
+            l = "Core 0: tracks 1-2, Marbles, Tides";
+            int_text((int32_t)((eng_load(0) + 5u) / 10u), v);
+            text_cat(v, "%", sizeof v);
+            break;
+        case 1:
+            l = "Core 1: tracks 3-4";
+            if (eng_core1_running()) {
+                int_text((int32_t)((eng_load(1) + 5u) / 10u), v);
+                text_cat(v, "%", sizeof v);
+            } else {
+                text_cat(v, cpu2_ok ? "paused" : "off: all on core 0", sizeof v);
+                c = MI_ORANGE;
+            }
+            break;
+        case 2:
+            l = "Peak over a second";
+            int_text((int32_t)((eng_peak() + 5u) / 10u), v);
+            text_cat(v, "%", sizeof v);
+            if (eng_peak() >= 900u)
+                c = MI_PINK;
+            break;
+        case 3:
+            l = "Platform (audio)";
+            int_text((int32_t)plat_cpu_pct(), v);
+            text_cat(v, "%", sizeof v);
+            break;
+        case 4:
+            l = "Core 1's stack";
+            int_text((int32_t)plat_cpu2_stack(), v);
+            text_cat(v, " / 2816 B", sizeof v);
+            break;
+        default:
+            l = dirty ? "MIFM1 " APP_VERSION ", not saved" : "MIFM1 " APP_VERSION;
+            text_cat(v, data_ok ? "tables OK" : "tables MISSING", sizeof v);
+            if (!data_ok)
+                c = MI_PINK;
+            break;
+        }
+        cv_text(8, y, &FONT_XS, l, MI_MUTED);
+        cv_text(232 - text_w(&FONT_XS, v), y, &FONT_XS, v, c);
+        if (i % 3 == 2)
+            cv_blit(0, (uint32_t)(KNOB_Y + (i < 3 ? 0 : 49)));
     }
-    text_cat(rows[0], "Core 0: tracks 1-2, Marbles, Tides  ", 40);
-    int_text((int32_t)((eng_load(0) + 5u) / 10u), v);
-    text_cat(rows[0], v, 40);
-    text_cat(rows[0], "%", 40);
-    col[0] = C_HI;
-    text_cat(rows[1], "Core 1: tracks 3-4  ", 40);
-    if (eng_core1_running()) {
-        int_text((int32_t)((eng_load(1) + 5u) / 10u), v);
-        text_cat(rows[1], v, 40);
-        text_cat(rows[1], "%", 40);
-        col[1] = C_HI;
-    } else {
-        text_cat(rows[1], cpu2_ok ? "paused" : "off: all on core 0", 40);
-        col[1] = C_ORANGE;
-    }
-    text_cat(rows[2], "Peak over a second  ", 40);
-    int_text((int32_t)((eng_peak() + 5u) / 10u), v);
-    text_cat(rows[2], v, 40);
-    text_cat(rows[2], "%", 40);
-    col[2] = eng_peak() >= 900u ? C_RED : C_GRAY;
-    text_cat(rows[3], "Platform (audio)  ", 40);
-    int_text((int32_t)plat_cpu_pct(), v);
-    text_cat(rows[3], v, 40);
-    text_cat(rows[3], "%", 40);
-    text_cat(rows[4], data_ok ? "Module tables: OK" : "Module tables: MISSING", 40);
-    col[4] = data_ok ? C_GRAY : C_RED;
-    text_cat(rows[5], "Core 1's stack  ", 40);
-    int_text((int32_t)plat_cpu2_stack(), v);
-    text_cat(rows[5], v, 40);
-    text_cat(rows[5], " / 2816 B", 40);
-    text_cat(rows[6], "MIFM1 ", 40);
-    text_cat(rows[6], APP_VERSION, 40);
-    text_cat(rows[6], dirty ? "  (not saved)" : "", 40);
-    text_cat(rows[7], "SAVE held: save (stopped)", 40);
-    col[7] = C_DIM;
-    draw_lines(PANEL_Y + 4, 19, lines, col, 8, -1);
 }
 
 static void draw_missing(void)
@@ -791,42 +1255,43 @@ static void draw_missing(void)
     if (!ui.full)
         return;
     for (int i = 0; i < 8; i++)
-        col[i] = i == 1 ? C_RED : C_GRAY;
+        col[i] = i == 1 ? MI_PINK : MI_INK;
     draw_lines(PANEL_Y + 4, 19, L, col, 8, -1);
 }
 
-static void draw_footer(void)
+static void draw_footer(void)            /* the tracks, as four outputs in their box */
 {
     char t[40], n[8];
     uint32_t now = plat_ms(), g = eng_gates();
     int msg = now < ui.msg_until;
-    int32_t s[6] = {(int32_t)g, msg, ui.track | ui.mod << 4, eng_note(0) | eng_note(1) << 8 | eng_note(2) << 16,
-                    eng_note(3) | (int32_t)(ui.keys & 0xFFFFu) << 8, ui.octave};
+    int32_t s[6] = {(int32_t)g | ui.mod << 8 | msg << 9, (int32_t)(track_accent(0) ^ track_accent(1) << 1 ^
+                    track_accent(2) << 2 ^ track_accent(3) << 3), ui.track,
+                    eng_note(0) | eng_note(1) << 8 | eng_note(2) << 16, eng_note(3), msg ? text_hash(ui.msg[0]) : 0};
     if (!ui.full && !memcmp(s, ui.foot_shown, sizeof s))
         return;
     memcpy(ui.foot_shown, s, sizeof s);
-    cv_begin(240, FOOT_H, C_BLACK);
-    cv_rect(0, 0, 240, 1, C_LINE);
+    cv_begin(240, FOOT_H, MI_PANEL);
+    rrect(2, 1, 236, 33, 6, MI_BOX);
     if (msg) {
         t[0] = 0;
         text_cat(t, ui.msg[0], sizeof t);
         text_cat(t, "  ", sizeof t);
         text_cat(t, ui.msg[1], sizeof t);
-        cv_text(120 - text_w(&FONT_B, t) / 2, 10, &FONT_B, t, C_WHITE);
+        cv_text(120 - text_w(&FONT_B, t) / 2, 9, &FONT_B, t, C_WHITE);
     } else if (ui.mod) {
-        cv_text(6, 3, &FONT_XS, "MOD: hold a source key, turn a knob", C_WHITE);
-        cv_text(6, 19, &FONT_T, "KEYS 1-4 A  5-8 B  9-11 X  12 Y  13-15 T", C_GRAY);
+        cv_text(10, 2, &FONT_XS, "MOD: hold a source key, turn a knob", C_WHITE);
+        cv_text(10, 18, &FONT_T, "KEYS 1-4 A  5-8 B  9-11 X  12 Y  13-15 T", BOX_DIM);
     } else {
-        for (int tr = 0; tr < ENG_TRACKS; tr++) {   /* the tracks: a gate LED, the number, the note */
-            int x = tr * 60, on = (g >> tr) & 1u, act = tr == ui.track;
+        for (int tr = 0; tr < ENG_TRACKS; tr++) {   /* a gate LED in the track's colour, its number, its note */
+            int x = 2 + tr * 59, on = (g >> tr) & 1u, act = tr == ui.track;
+            if (act)
+                rrect(x + 3, 4, 53, 27, 5, MI_BOX_HI);
+            lens((float)(x + 14), 17.5f, 4.4f, track_accent(tr), on, MI_BOX_LO);
             n[0] = (char)('1' + tr);
             n[1] = 0;
-            fill_circle(x + 11, 17, 5, on ? C_GREEN : C_KNOB);
-            cv_text(x + 21, 9, &FONT_B, n, act ? C_WHITE : C_GRAY);
+            cv_text(x + 24, 9, &FONT_B, n, act ? C_WHITE : BOX_DIM);
             note_text(eng_note(tr), t);
-            cv_text(x + 31, 10, &FONT_XS, t, act ? C_HI : C_DIM);
-            if (act)
-                cv_rect(x + 4, 32, 52, 2, C_WHITE);
+            cv_text(x + 35, 10, &FONT_XS, t, act ? BOX_TEXT : BOX_DIM);
         }
     }
     cv_blit(0, FOOT_Y);
@@ -835,7 +1300,7 @@ static void draw_footer(void)
 static void draw(void)
 {
     if (ui.full)
-        lcd_fill(0, 0, 240, 240, C_BLACK);
+        lcd_fill(0, 0, 240, 240, MI_PANEL);
     draw_header();
     if (!data_ok || !engine_ok) {
         draw_missing();
@@ -859,6 +1324,27 @@ static void go_page(int page)
     ui.touched_k = -1;
     ui.matrix = ui.global = 0;
     ui.full = 1;
+}
+
+/* GLO, REC held: a new project (four Plaits, nothing patched), the demo patch, or the saved project again. The
+ * transport stops; nothing is saved until SAVE is held */
+static void project_init(int which)
+{
+    eng_play(0);
+    if (which == 2) {
+        project_load();
+        app_say("SAVED PROJECT", "LOADED");
+    } else {
+        if (which == 0)
+            eng_blank(&scratch);
+        else
+            eng_defaults(&scratch);
+        *eng_project() = scratch;
+        dirty = 1;
+        app_say(which == 0 ? "NEW PROJECT" : "DEMO PATCH", which == 0 ? "4 PLAITS" : "LOADED");
+    }
+    ui.track = 0;
+    go_page(PG_TRACK(0, 0));
 }
 
 static void edit_param(int param, int32_t e)
@@ -994,6 +1480,7 @@ static void button_down(int b)
         break;
     case B_SEL:
     case B_SAVE:
+    case B_REC:
         break;                           /* on release (short) or held (long) */
     default:
         module_button(b);
@@ -1016,6 +1503,11 @@ static void button_long(int b)
             app_say("PROJECT", "SAVED");
         else
             app_say("COULD NOT", "SAVE");
+    } else if (b == B_REC) {
+        if (ui.global)
+            project_init(ui.init_sel);
+        else
+            app_say("INIT:", "GLO, THEN REC HELD");
     }
 }
 
@@ -1123,8 +1615,13 @@ static void input(void)
         }
         for (int i = 0; i < 4; i++) {
             e = plat_enc(EN_K1 + i);
-            if (!e || !data_ok || ui.global)
+            if (!e || !data_ok)
                 continue;
+            if (ui.global) {             /* GLO: K1 picks the project REC held loads */
+                if (i == 0)
+                    ui.init_sel = clamp(ui.init_sel + (e > 0 ? 1 : -1), 0, 2);
+                continue;
+            }
             if (ui.matrix) {
                 matrix_turn(i, e);
                 continue;
@@ -1140,7 +1637,7 @@ static void input(void)
             ui.touched_k = i;
         }
     }
-    /* lights: the page's button, PLAY, SEL in MOD mode; the keys: held, or the sources on this page */
+    /* lights: the page's button, PLAY, SEL in MOD mode, REC on GLO; the keys: held, or the sources on this page */
     {
         uint32_t bb = 0, kk = ui.keys;
         int pt = eng_page_type(ui.page);
@@ -1149,7 +1646,7 @@ static void input(void)
         if (!ui.global && !ui.matrix)
             bb |= 1u << PAGE_BTN[pt];
         if (ui.global)
-            bb |= 1u << B_GLO;
+            bb |= 1u << B_GLO | 1u << B_REC;
         if (ui.mod || ui.matrix)
             bb |= 1u << B_SEL;
         if (eng_playing())

@@ -12,11 +12,16 @@ page = f"""<!doctype html>
 <html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MIFM1 {version}</title>
 <style>
-body {{ font: 16px/1.5 system-ui, sans-serif; max-width: 36em; margin: 2em auto; padding: 0 1em; background: #111; color: #ddd; }}
-h1 {{ font-size: 1.4em; }} h2 {{ font-size: 1.1em; margin-top: 1.6em; }} a {{ color: #7cf; }}
-.card {{ border: 1px solid #333; border-radius: 8px; padding: 1em; margin: 1em 0; }}
-table {{ border-collapse: collapse; width: 100%; }} td {{ border-top: 1px solid #333; padding: .3em .4em; vertical-align: top; }}
-td:first-child {{ white-space: nowrap; color: #7cf; }}
+/* Mutable Instruments' panels: the aluminium, black legends, pink and teal, the outputs' dark grey box */
+body {{ font: 16px/1.5 system-ui, sans-serif; max-width: 36em; margin: 2em auto; padding: 0 1em; background: #e2e2de;
+       color: #231f20; }}
+h1 {{ font-size: 1.4em; letter-spacing: .04em; border-top: 6px double #bdbcbc; padding-top: .5em; }}
+h2 {{ font-size: 1.1em; margin-top: 1.6em; text-transform: uppercase; letter-spacing: .04em; }}
+a {{ color: #03a3ac; font-weight: 600; }}
+.card {{ background: #656263; color: #f0f0ec; border-radius: 8px; padding: 1em; margin: 1em 0; }}
+.card a {{ color: #fff; background: #db285d; padding: .15em .7em; border-radius: 1em; text-decoration: none; }}
+table {{ border-collapse: collapse; width: 100%; }} td {{ border-top: 1px dotted #656263; padding: .3em .4em; vertical-align: top; }}
+td:first-child {{ white-space: nowrap; font-weight: 700; }}
 </style>
 <h1>MIFM1 {version}</h1>
 <p>Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient du code open source de Mutable Instruments :
@@ -40,6 +45,8 @@ les tables des modules.</p></div>
 <tr><td>SEL tenu</td><td>la matrice de la piste : K1 le câble, K2 la source, K3 la cible, K4 la dose</td></tr>
 <tr><td>SAVE tenu</td><td>sauvegarde le projet (à l'arrêt)</td></tr>
 <tr><td>GLO</td><td>la charge des deux cœurs, les tables</td></tr>
+<tr><td>GLO, K1, REC tenu</td><td>INIT : un projet neuf (4 Plaits sur VIRTUAL ANALOG, rien de câblé), le patch de démo
+ou le projet sauvegardé ; rien n'est sauvegardé avant SAVE tenu</td></tr>
 </table>
 <p><a href="backup/">Sauvegarder ou restaurer le projet dans un fichier</a></p>
 </html>

@@ -443,6 +443,33 @@ void eng_defaults(project_t* p) {
   cable(p, 3, 1, SRC_B2, PG_TRACK(3, 0) * 4 + 2, 30);   // and B2 -> TIMBRE (brightness)
 }
 
+// INIT: four Plaits on VIRTUAL ANALOG (the first model of the classic bank), every knob at noon, played by t1, t2,
+// t3 and t2 with X1, X2, X3 and Y; Marbles as the demo's but in C major; nothing patched, nothing sent to the reverb
+void eng_blank(project_t* p) {
+  eng_defaults(p);
+  static const int kGate[4] = {GATE_T1, GATE_T2, GATE_T3, GATE_T2};
+  static const int kNote[4] = {NOTE_X1, NOTE_X2, NOTE_X3, NOTE_Y};
+  static const float kTrack[2][4] = {{0.0f, 0.5f, 0.5f, 0.5f}, {0.5f, 0.5f, 0.0f, 0.0f}};
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    for (int pg = 0; pg < 2; ++pg)
+      for (int k = 0; k < 4; ++k) p->val[PG_TRACK(t, pg) * 4 + k] = kTrack[pg][k];
+    p->val[PG_TRACK(t, 2) * 4 + 0] = static_cast<float>(kGate[t]);
+    p->val[PG_TRACK(t, 2) * 4 + 1] = static_cast<float>(kNote[t]);
+    p->val[PG_TRACK(t, 2) * 4 + 2] = 0.0f;
+    p->val[PG_TRACK(t, 2) * 4 + 3] = 0.0f;
+    p->algo[PG_TRACK(t, 0)] = 8;                   // VIRTUAL ANALOG
+    p->val[PG_MIX * 4 + t] = 0.75f;
+    p->val[PG_FX(0) * 4 + t] = 0.0f;
+  }
+  p->algo[PG_MARBLES(2)] = 0;                      // major
+  for (int g = 0; g <= ENG_TRACKS; ++g)
+    for (int c = 0; c < ENG_CABLES; ++c) {
+      p->cable[g][c].src = SRC_NONE;
+      p->cable[g][c].dst = 0;
+      p->cable[g][c].depth = 0;
+    }
+}
+
 int eng_check(const project_t* p) {
   return p->magic == PROJECT_MAGIC && p->version == PROJECT_VERSION && p->size == sizeof(project_t);
 }

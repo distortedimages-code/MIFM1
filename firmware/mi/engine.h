@@ -76,7 +76,8 @@ const char *eng_algo_name(int page, int a);
 /* the engine */
 int eng_init(void);                      /* main loop, once: the modules in the engine's memory (0 ok) */
 project_t *eng_project(void);            /* the live project: the screen writes it, the render reads it */
-void eng_defaults(project_t *p);         /* the patch a new project plays */
+void eng_defaults(project_t *p);         /* the patch a new project plays (the demo) */
+void eng_blank(project_t *p);            /* INIT: four Plaits at noon, nothing patched */
 int eng_check(const project_t *p);       /* 1: a project this version can load */
 void eng_render(float *l, float *r, uint32_t n);   /* audio interrupt */
 void eng_play(int on);                   /* the transport: Marbles' clock runs or stops (from its start) */

@@ -26,9 +26,20 @@ Un projet neuf joue déjà (PLAY) : piste 1 une grosse caisse sur chaque temps (
 X1 ouverte par Tides A, piste 3 un FM 2 opérateurs sur T3 et X2 modulé par Tides B, piste 4 un résonateur MODAL sur
 T3 et X3, les pistes 3 et 4 envoyées dans la réverbe. Marbles à 120 BPM, gamme mineure, DÉJÀ VU à midi sur 8 pas.
 
-L'écran est la façade du module affiché : en haut son nom et son propre affichage (les LED des trois banques de
-Plaits, les quatre sorties de Tides, les portes et les tensions de Marbles, les vumètres du mixer, la queue de la
-réverbe), puis ses quatre potards côte à côte, dans l'ordre des KNOB 1 à 4, avec les noms des panneaux d'origine.
+**Repartir de zéro (INIT)** : GLO, puis **K1** choisit le projet et **REC tenu** le charge : *New* (4 pistes
+Plaits sur VIRTUAL ANALOG, tous les potards à midi, jouées par t1, t2, t3 et t2 avec X1, X2, X3 et Y, aucun câble,
+rien vers la réverbe, Marbles en do majeur), *The demo patch* (le patch ci-dessus) ou *The saved project* (le dernier
+sauvegardé, pour annuler). Le transport s'arrête ; rien n'est sauvegardé tant que SAVE n'est pas tenu.
+
+L'écran est la façade du module affiché, dessinée comme Mutable Instruments dessinait les siennes (d'après les
+fichiers des panneaux publiés avec leur code) : l'aluminium gris clair, la frise tissée en haut, les légendes noires en
+capitales, les icônes rose et bleu-vert (et l'orange de Tides 2), des boutons blancs avec leurs « − + » quand ils vont
+dans les deux sens, des pointillés pour ce qui est câblé, les sorties dans leur boîte gris foncé. En haut le nom du
+module et son affichage : les 16 icônes de Plaits et sa rangée de LED (couchée), les modes et les quatre sorties de
+Tides, le *t* et le *X* de Marbles avec leurs icônes et leurs sorties, l'étoile autour de RATE et SPREAD, le disque
+gravé de Clouds et ses étiquettes rose et bleu-vert pour la réverbe. Puis les quatre potards côte à côte, dans l'ordre
+des KNOB 1 à 4, avec les noms des panneaux d'origine ; en bas les quatre pistes comme quatre sorties, la LED de chaque
+piste dans la couleur de son modèle. La frise devient rose en mode MOD, bleu-vert dans la matrice.
 
 | Contrôle | Effet |
 | --- | --- |
@@ -45,7 +56,7 @@ réverbe), puis ses quatre potards côte à côte, dans l'ordre des KNOB 1 à 4,
 | **clavier** | joue la piste active, même à l'arrêt ; **OCT− / OCT+** pour l'octave |
 | **SEL** | le mode MOD (voir plus bas) ; **tenu** : la matrice de la piste |
 | **SAVE tenu** | sauvegarde le projet (à l'arrêt) |
-| **GLO** | la charge des deux cœurs, les tables, la version |
+| **GLO** | la charge des deux cœurs, les tables, la version ; **K1** choisit un projet, **REC tenu** le charge (INIT) |
 
 La charge de calcul est toujours affichée en haut à droite (le cœur le plus chargé, en %).
 
