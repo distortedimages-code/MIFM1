@@ -31,15 +31,13 @@ Plaits sur VIRTUAL ANALOG, tous les potards à midi, jouées par t1, t2, t3 et t
 rien vers la réverbe, Marbles en do majeur), *The demo patch* (le patch ci-dessus) ou *The saved project* (le dernier
 sauvegardé, pour annuler). Le transport s'arrête ; rien n'est sauvegardé tant que SAVE n'est pas tenu.
 
-L'écran est la façade du module affiché, dessinée comme Mutable Instruments dessinait les siennes (d'après les
-fichiers des panneaux publiés avec leur code) : l'aluminium gris clair, la frise tissée en haut, les légendes noires en
-capitales, les icônes rose et bleu-vert (et l'orange de Tides 2), des boutons blancs avec leurs « − + » quand ils vont
-dans les deux sens, des pointillés pour ce qui est câblé, les sorties dans leur boîte gris foncé. En haut le nom du
-module et son affichage : les 16 icônes de Plaits et sa rangée de LED (couchée), les modes et les quatre sorties de
-Tides, le *t* et le *X* de Marbles avec leurs icônes et leurs sorties, l'étoile autour de RATE et SPREAD, le disque
-gravé de Clouds et ses étiquettes rose et bleu-vert pour la réverbe. Puis les quatre potards côte à côte, dans l'ordre
-des KNOB 1 à 4, avec les noms des panneaux d'origine ; en bas les quatre pistes comme quatre sorties, la LED de chaque
-piste dans la couleur de son modèle. La frise devient rose en mode MOD, bleu-vert dans la matrice.
+L'écran est sombre, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
+icônes). En haut, l'icône du module dans un anneau lumineux, son nom en grand et une ligne sur son état : sur Plaits,
+le seul logo du modèle et son nom (KICK, VIRTUAL ANALOG…), sur Tides la rampe, sur Marbles le modèle de *t* ou la
+gamme. Puis les quatre potards côte à côte, dans l'ordre des KNOB 1 à 4 : un anneau allumé de son début (ou de son
+milieu, avec « − + ») jusqu'à la valeur, la valeur dedans, un câble en pointillé et son point d'arrivée dans l'autre
+couleur, la source écrite dessous. En bas les quatre pistes, une LED chacune allumée par sa gate dans la couleur de son
+modèle ; sur les pages de Tides et de Marbles, leurs sorties, allumées à leur hauteur.
 
 | Contrôle | Effet |
 | --- | --- |

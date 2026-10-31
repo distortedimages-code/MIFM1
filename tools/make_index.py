@@ -12,16 +12,17 @@ page = f"""<!doctype html>
 <html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MIFM1 {version}</title>
 <style>
-/* Mutable Instruments' panels: the aluminium, black legends, pink and teal, the outputs' dark grey box */
-body {{ font: 16px/1.5 system-ui, sans-serif; max-width: 36em; margin: 2em auto; padding: 0 1em; background: #e2e2de;
-       color: #231f20; }}
-h1 {{ font-size: 1.4em; letter-spacing: .04em; border-top: 6px double #bdbcbc; padding-top: .5em; }}
-h2 {{ font-size: 1.1em; margin-top: 1.6em; text-transform: uppercase; letter-spacing: .04em; }}
-a {{ color: #03a3ac; font-weight: 600; }}
-.card {{ background: #656263; color: #f0f0ec; border-radius: 8px; padding: 1em; margin: 1em 0; }}
-.card a {{ color: #fff; background: #db285d; padding: .15em .7em; border-radius: 1em; text-decoration: none; }}
-table {{ border-collapse: collapse; width: 100%; }} td {{ border-top: 1px dotted #656263; padding: .3em .4em; vertical-align: top; }}
-td:first-child {{ white-space: nowrap; font-weight: 700; }}
+/* the screen's colours: dark, lit in Mutable Instruments' teal, orange and pink */
+body {{ font: 16px/1.5 system-ui, sans-serif; max-width: 36em; margin: 2em auto; padding: 0 1em; background: #191718;
+       color: #f0efeb; }}
+h1 {{ font-size: 1.4em; letter-spacing: .04em; }}
+h2 {{ font-size: 1.1em; margin-top: 1.6em; text-transform: uppercase; letter-spacing: .04em; color: #9a9798; }}
+a {{ color: #18c9d4; font-weight: 600; }}
+.card {{ border: 2px solid #ff4a7d; box-shadow: 0 0 12px rgba(255, 74, 125, .35); border-radius: 10px; padding: 1em;
+        margin: 1em 0; }}
+.card a {{ color: #191718; background: #18c9d4; padding: .15em .7em; border-radius: 1em; text-decoration: none; }}
+table {{ border-collapse: collapse; width: 100%; }} td {{ border-top: 1px solid #2e2b2c; padding: .3em .4em; vertical-align: top; }}
+td:first-child {{ white-space: nowrap; font-weight: 700; color: #ffb22e; }}
 </style>
 <h1>MIFM1 {version}</h1>
 <p>Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient du code open source de Mutable Instruments :
