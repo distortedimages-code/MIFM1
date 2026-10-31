@@ -101,13 +101,12 @@ void* marbles;
 void* tides[2];
 int ready;
 
-volatile int playing, play_changed, use_core1 = 1;
+volatile int playing, use_core1 = 1;
 volatile int key_note[ENG_TRACKS], key_on[ENG_TRACKS];
 
 uint8_t mgates[kFrames * 3];
 float mcv[kFrames * 4];
 float tout[2][4];
-int tgate_prev[2];
 int vgate[ENG_TRACKS];                  // each voice's gate as last set
 float vnote[ENG_TRACKS];                // its note (latched at the gate's rise)
 uint32_t gates_now;

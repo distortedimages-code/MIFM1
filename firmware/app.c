@@ -258,7 +258,12 @@ static int load_now(void)                /* the worse core, in % */
 static void draw_header(void)
 {
     char t[32], v[12];
-    int load = load_now();
+    static int load = -1;
+    static uint32_t load_at;
+    if (load < 0 || plat_ms() - load_at >= 250u) {
+        load = load_now();
+        load_at = plat_ms();
+    }
     int s[4] = {ui.page | ui.matrix << 8 | ui.global << 9 | ui.mod << 10, load, eng_playing() | dirty << 1, ui.track};
     if (!ui.full && !memcmp(s, ui.head_shown, sizeof s))
         return;
@@ -367,7 +372,13 @@ static void draw_cell(int k)
     char t[32], c[32];
     int hash = 0, hot = plat_ms() - ui.touched_at[k] < 1200u && ui.touched_k == k;
     int ncab = cables_on(param, c, sizeof c, &hash);
-    int16_t s[4] = {(int16_t)(v * 1000.0f), (int16_t)(f * 1000.0f), (int16_t)hash, (int16_t)(hot | ui.mod << 1)};
+    int th = 0;
+    eng_param_text(param, ncab ? f : v, t, sizeof t);
+    for (const char *q = t; *q; q++)
+        th = th * 31 + *q;
+    /* what the cell shows: the knob's and the value's pixel on the bar, the value's text, the cables, the light */
+    int16_t s[4] = {(int16_t)(bar_x(v, d->kind) | bar_x(f, d->kind) << 7), (int16_t)th, (int16_t)hash,
+                    (int16_t)(hot | ui.mod << 1)};
     if (!ui.full && !memcmp(s, ui.cell_shown[k], sizeof s))
         return;
     memcpy(ui.cell_shown[k], s, sizeof s);
@@ -375,7 +386,6 @@ static void draw_cell(int k)
     if (hot)
         cv_rect(0, 0, CELL_W, CELL_H, C_LINE);
     cv_text(6, 3, &FONT_XS, d->name, hot ? C_WHITE : C_GRAY);
-    eng_param_text(param, ncab ? f : v, t, sizeof t);
     {
         const felucca_font_t *ft = text_w(&FONT_M, t) <= 108 ? &FONT_M : &FONT_B;
         int up = 1;                          /* FONT_M has capitals only */
@@ -957,7 +967,7 @@ void app_frame(void)
         ui.msg_until = 0;
         ui.foot_shown[0] = -1;
     }
-    if (ui.full || now - ui.drawn_at >= 33u) {
+    if (ui.full || now - ui.drawn_at >= 40u) {   /* 25 frames a second at most: what changed */
         ui.drawn_at = now;
         draw();
     }

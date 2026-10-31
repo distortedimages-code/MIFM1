@@ -66,7 +66,7 @@ note (X1-X3, Y ou fixe), la transposition et l'octave.
   - `tests/` : le moteur sur l'ordinateur (`native.cc`) et le simulateur de fm1-base (`screens.txt`)
 - `tools/` : la copie du code Mutable (`vendor_mi.sh`, `patch_mi.sh`, `split_tables.py`), les vérifications « comme
   sur le FM-1 » (`device_check.sh`, `check_res_links.py`, `no_static_init.py`), l'installeur ; `tools/bench/` : le
-  banc d'essai v0.0 (tag `bench-0.0`)
+  banc d'essai v0.0
 - `make test` : le patch par défaut joué 16 s sur l'ordinateur, chaque piste et chaque modèle entendus, sans NaN
   (WAV dans `build/wav`)
 
