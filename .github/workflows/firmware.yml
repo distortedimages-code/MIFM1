@@ -92,6 +92,26 @@ jobs:
           # what the build says about sizes and RAM
           tail -n 40 build.log | annotate notice "build"
           ls -la bench/build/*.fwsc bench/build/*-res.bin
+      - name: Where the moved tables link (diagnostic)
+        shell: bash
+        run: |
+          T="$JIELI_TOOLCHAIN/common/bin"
+          ls bench/build/
+          elf=$(ls bench/build/*.elf | head -1)
+          {
+            echo "== symbols"
+            "$T/objdump" -t "$elf" | grep -E "dist_icdf_0_0E|wav_integrated_wavesE|lut_wavetableE|mi_res_where|plat_res|plat_data" || true
+            echo "== mi_res_where"
+            awk '/<mi_res_where>:/{p=1} p{print} p&&/^$/{exit}' bench/build/*.dis | head -30
+            echo "== mi_res_where in the object"
+            "$T/objdump" -d -r -mcpu=r3 bench/build/o2/mi_res_symbols.o | head -40
+            "$T/objdump" -t bench/build/o2/mi_res_symbols.o | grep -E "dist_icdf_0_0E|mi_res_where"
+            echo "== a user of the tables (marbles quantizer / distributions)"
+            "$T/objdump" -d -r -mcpu=r3 bench/build/o2/third_party_marbles_random_output_channel.o | grep -n -B3 -A3 "dist_icdf\|distributions_table" | head -30
+            "$T/objdump" -s -j .rodata bench/build/o2/third_party_marbles_resources.o 2>/dev/null | head -5
+            "$T/objdump" -r bench/build/o2/third_party_marbles_resources.o | head -20
+          } 2>&1 | tee diag.txt
+          python3 -c "import sys; t = open('diag.txt').read()[-30000:].replace('%', '%25').replace('\r', '').replace('\n', '%0A'); print('::notice title=diag::' + t)"
       - name: No static initializer in the modules as JieLi's compiler built them (the FM-1 never runs one)
         run: python3 tools/no_static_init.py bench/build/o2/*.o
       - name: The installer and the backup page
