@@ -225,6 +225,103 @@ int main(int argc, char** argv) {
   for (int tr = 0; tr < ENG_TRACKS; ++tr)
     if (!irises[tr]) ++failures, printf("FAIL: INIT, track %d never plays\n", tr + 1);
 
+  // 6. the step sequencer: the demo's patterns at 120 BPM (a sixteenth 125 ms), 8 s = 4 bars
+  eng_play(0);
+  eng_defaults(p);
+  p->val[PG_GLOBAL * 4] = SEQ_STEPS;
+  auto run = [&](int seconds, uint32_t* rises, int* lo, int* hi, uint16_t* inscale) {
+    uint32_t pv = 0, bl = static_cast<uint32_t>(seconds) * 44100u / n;
+    for (int tr = 0; tr < ENG_TRACKS; ++tr) rises[tr] = 0, lo[tr] = 999, hi[tr] = -999;
+    *inscale = 1;
+    for (int b = 0; b < 400; ++b) eng_render(l, r, n);   // stopped: the tails die away
+    eng_play(1);
+    for (uint32_t b = 0; b < bl; ++b) {
+      eng_render(l, r, n);
+      uint32_t g = eng_gates();
+      for (int tr = 0; tr < ENG_TRACKS; ++tr)
+        if ((g & (1u << tr)) && !(pv & (1u << tr))) {
+          ++rises[tr];
+          int nt = eng_note(tr);
+          if (nt < lo[tr]) lo[tr] = nt;
+          if (nt > hi[tr]) hi[tr] = nt;
+          if (eng_quantize(nt) != nt) *inscale = 0;
+        }
+      pv = g;
+    }
+    eng_play(0);
+  };
+  uint32_t sr[ENG_TRACKS];
+  int slo[ENG_TRACKS], shi[ENG_TRACKS];
+  uint16_t ok_scale;
+  run(8, sr, slo, shi, &ok_scale);
+  printf("steps, 4 bars: trigs %u %u %u %u (20 20 12 24 expected: track 1 has a ratchet x2 a bar), track 2 notes %d..%d\n",
+         sr[0], sr[1], sr[2], sr[3], slo[1], shi[1]);
+  static const uint32_t kExpect[4] = {20, 20, 12, 24};
+  for (int tr = 0; tr < ENG_TRACKS; ++tr)
+    if (sr[tr] + 1 < kExpect[tr] || sr[tr] > kExpect[tr] + 1) ++failures, printf("FAIL: steps, track %d\n", tr + 1);
+  if (shi[1] - slo[1] < 12) ++failures, printf("FAIL: track 2's lock (an octave up on step 15) not played\n");
+
+  // 7. probability, ratchets, a random tune kept in the scale
+  p->val[PG_STEP(2) * 4 + 1] = 0.0f;                   // track 3 never
+  p->val[PG_STEP(0) * 4 + 2] = 3.0f;                   // track 1: three a trig (its locked step: two)
+  p->rnd[3][TP_NOTE] = 100;                             // track 4: any note an octave around, new at each trig
+  p->val[PG_GLOBAL * 4 + 2] = 11.0f;                    // minor pentatonic
+  run(8, sr, slo, shi, &ok_scale);
+  printf("prob 0 on track 3: %u trigs; ratchets x3 on track 1: %u (44 expected); random tune on track 4: %d..%d, %s\n",
+         sr[2], sr[0], slo[3], shi[3], ok_scale ? "all in the scale" : "OUT OF THE SCALE");
+  if (sr[2]) ++failures, printf("FAIL: probability 0 played\n");
+  if (sr[0] + 2 < 44 || sr[0] > 45) ++failures, printf("FAIL: ratchets\n");
+  if (!ok_scale || shi[3] - slo[3] < 5) ++failures, printf("FAIL: the random tune or the quantizer\n");
+  p->rnd[3][TP_NOTE] = -100;                            // looped: the same notes each bar
+  run(4, sr, slo, shi, &ok_scale);
+  int a0 = slo[3], a1 = shi[3];
+  run(4, sr, slo, shi, &ok_scale);
+  printf("looped random tune: %d..%d then %d..%d\n", a0, a1, slo[3], shi[3]);
+  if (a0 != slo[3] || a1 != shi[3]) ++failures, printf("FAIL: the looped random is not a loop\n");
+
+  // 8. the keyboard: a key pressed while another is held is a new trig
+  eng_defaults(p);
+  for (int b = 0; b < 400; ++b) eng_render(l, r, n);
+  {
+    uint32_t r0 = eng_rises(1), kr;
+    for (int b = 0; b < 300; ++b) {
+      if (b == 10) eng_key(1, 60, 1);
+      if (b == 100) eng_key(1, 62, 1);                  // legato
+      if (b == 101) eng_key(1, 60, 0);
+      if (b == 200) eng_key(1, 62, 0);
+      if (b == 250) {                                   // a tap shorter than a block
+        eng_key(1, 64, 1);
+        eng_key(1, 64, 0);
+      }
+      eng_render(l, r, n);
+    }
+    kr = eng_rises(1) - r0;
+    printf("keyboard: legato then a short tap: %u trigs (3 expected)\n", kr);
+    if (kr != 3) ++failures, printf("FAIL: legato keys\n");
+  }
+
+  // 9. v0.1's project (version 2) read into this version's
+  {
+    static uint8_t buf[sizeof(project_t)];
+    project_t* q = reinterpret_cast<project_t*>(buf);
+    for (uint32_t i = 0; i < sizeof buf; ++i) buf[i] = 0;
+    q->magic = PROJECT_MAGIC;
+    q->version = 2;
+    q->size = 564;
+    float* val = reinterpret_cast<float*>(buf + 8);
+    for (int i = 0; i < 92; ++i) val[i] = 0.25f;
+    buf[8 + 92 * 4 + PG_TRACK(1, 0)] = 17;                // track 2 on NOISE
+    cable_t* cab = reinterpret_cast<cable_t*>(buf + 8 + 92 * 4 + 25);
+    cab[0].src = SRC_A2;
+    cab[0].dst = 3;
+    cab[0].depth = 33;
+    int ok = eng_upgrade(q, 564);
+    printf("a version 2 project: %s, track 2 model %d, a cable %s, knob %.2f, %d locks\n", ok ? "read" : "REFUSED",
+           q->algo[PG_TRACK(1, 0)], q->cable[0][0].depth == 33 ? "kept" : "LOST", q->val[5], eng_step_locked(0, 12));
+    if (!ok || !eng_check(q) || q->algo[PG_TRACK(1, 0)] != 17 || q->cable[0][0].depth != 33 || q->val[5] != 0.25f)
+      ++failures, printf("FAIL: the version 2 project\n");
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

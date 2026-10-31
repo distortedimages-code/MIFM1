@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: MPL-2.0
 // Copyright (C) 2026 Yoann
-// MIFM1's sound (mi/engine.h): four Plaits voices, Marbles as the only sequencer, two Tides as modulators, a matrix
-// of cables, a mixer. Only bridge.h's C functions reach the modules: no module's header meets another's here.
+// MIFM1's sound (mi/engine.h): four Plaits voices, played by Marbles or by a step sequencer, two Tides as modulators,
+// a matrix of cables, a mixer. Only bridge.h's C functions reach the modules: no module's header meets another's here.
 //
 // One audio block (128 frames, 2.9 ms) is one control step:
 //   1. Marbles and Tides take their knobs as the cables left them at the last block;
 //   2. Marbles runs 8 frames (16 audio frames each: its gates land within 0.4 ms), Tides one;
 //   3. the sources are read, and every parameter is its knob plus its cables;
-//   4. each voice plays the block, cut where its gate changes (a rising gate first takes its note from the source);
+//   4. the trigs, frame by frame: Marbles' gates, or the steps on the tempo's sixteenths; each trig takes its locks
+//      and its randoms (over the knobs, until the next trig), its probability and its ratchets; the keyboard plays
+//      over, a new key a new trig; a note is put in the global scale;
+//   5. each voice plays the block, cut where its gate changes (a rising gate first takes its trig's note);
 //      voices 3 and 4 on the second core while core 0 plays 1 and 2;
-//   5. the mixer: level and pan per track, a soft limit on the sum.
+//   6. the mixer: level and pan per track (the trig's), the sends, a soft limit on the sum.
 #include <stdint.h>
 #include <stddef.h>
 extern "C" {
@@ -31,6 +34,13 @@ const char* const kTRange[3] = {"/4", "x1", "x4"};
 const char* const kOnOff[2] = {"Off", "On"};
 const char* const kXMode[3] = {"Identical", "Bump", "Tilt"};
 const char* const kXRange[3] = {"+2 V", "+5 V", "+/-5 V"};
+const char* const kSeqNames[2] = {"Marbles", "Steps"};
+const char* const kScaleNames[15] = {"Off", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
+                                     "Locrian", "Harm. minor", "Mel. minor", "Maj. penta", "Min. penta", "Blues",
+                                     "Whole tone", "Hirajoshi"};
+const uint16_t kScaleMasks[15] = {0xFFF, 0xAB5, 0x5AD, 0x6AD, 0x5AB, 0xAD5, 0x6B5, 0x56B, 0x9AD, 0xAAD, 0x295, 0x4A9,
+                                  0x4E9, 0x555, 0x18D};   // bit i: i semitones over the root
+const char* const kNoteName[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 
 // the names are the modules' own, as their panels print them (sentence case: Mutable's)
 const eng_pdef_t kPages[NPT][4] = {
@@ -51,6 +61,10 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Level 1", K_UNI, 0, 0, 0}, {"Level 2", K_UNI, 0, 0, 0}, {"Level 3", K_UNI, 0, 0, 0}, {"Level 4", K_UNI, 0, 0, 0}},
   {{"Send 1", K_UNI, 0, 0, 0}, {"Send 2", K_UNI, 0, 0, 0}, {"Send 3", K_UNI, 0, 0, 0}, {"Send 4", K_UNI, 0, 0, 0}},
   {{"Time", K_UNI, 0, 0, 0}, {"Damping", K_UNI, 0, 0, 0}, {"Diffusion", K_UNI, 0, 0, 0}, {"Return", K_UNI, 0, 0, 0}},
+  {{"Pan 1", K_BIP, 0, 0, 0}, {"Pan 2", K_BIP, 0, 0, 0}, {"Pan 3", K_BIP, 0, 0, 0}, {"Pan 4", K_BIP, 0, 0, 0}},
+  {{"Note", K_INT, -24, 24, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Ratchet", K_INT, 1, 8, 0}, {"Length", K_INT, 1, 64, 0}},
+  {{"Sequencer", K_ENUM, 0, 1, kSeqNames}, {"Tempo", K_UNI, 0, 0, 0}, {"Scale", K_ENUM, 0, 14, kScaleNames},
+   {"Root", K_ENUM, 0, 11, kNoteName}},
 };
 
 const char* const kModels[24] = {
@@ -73,7 +87,9 @@ int page_type(int page) {
   if (page < 12) return PT_PLAITS1 + page % 3;
   if (page < 16) return PT_TIDES1 + (page - 12) % 2;
   if (page < 20) return PT_MARB_T1 + (page - 16);
-  return PT_MIX + (page - 20);
+  if (page < PG_PAN) return PT_MIX + (page - 20);
+  if (page == PG_PAN) return PT_PAN;
+  return page < PG_GLOBAL ? PT_STEP : PT_GLOBAL;
 }
 
 inline float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -94,7 +110,7 @@ float fin[ENG_NPARAMS];                 // the parameters after the cables (the 
 float src[NSRC];
 
 #ifndef ENG_ARENA_BYTES
-#define ENG_ARENA_BYTES (160u * 1024u)
+#define ENG_ARENA_BYTES (184u * 1024u)        /* 4 Plaits 108 KB, Marbles 9, the reverb in floats 64 */
 #endif
 uint8_t arena[ENG_ARENA_BYTES] __attribute__((aligned(8))) PLAT_POOL;
 void* voice[ENG_TRACKS];
@@ -106,12 +122,32 @@ int ready;
 volatile int playing, use_core1 = 1;
 volatile int key_note[ENG_TRACKS], key_on[ENG_TRACKS];
 
+volatile int key_retrig[ENG_TRACKS], key_hold[ENG_TRACKS];   // a key pressed since the last block; its frames left
+
 uint8_t mgates[kFrames * 3];
 float mcv[kFrames * 4];
 float tout[2][4];
 int vgate[ENG_TRACKS];                  // each voice's gate as last set
 float vnote[ENG_TRACKS];                // its note (latched at the gate's rise)
+volatile uint32_t vrises[ENG_TRACKS];   // the trigs it played
 uint32_t gates_now;
+
+// the trigs: the step clock, then per track what its trig decided
+int restart;                            // PLAY: the steps from the first, Marbles' loop count from 0
+float step_clk;                         // samples into the sixteenth
+int32_t tick;                           // sixteenths since PLAY
+int cur_step[ENG_TRACKS];
+float raw_left[ENG_TRACKS];             // a step's gate: its samples left
+int raw_prev[ENG_TRACKS];
+float since_rise[ENG_TRACKS], interval[ENG_TRACKS];   // Marbles' trigs: the time between two (for the ratchets)
+uint32_t trig_count[ENG_TRACKS];
+int rat_on[ENG_TRACKS], rat_n[ENG_TRACKS];
+float rat_pos[ENG_TRACKS], rat_period[ENG_TRACKS];
+float tdelta[ENG_TRACKS][ENG_NTP];      // the trig's locks and randoms, over the knobs, until the next trig
+float tnote[ENG_TRACKS];                // its note
+uint8_t fg[ENG_TRACKS][kFrames];        // the gates the voices play, frame by frame
+float fnote[ENG_TRACKS][kFrames];       // the note a rise in that frame takes
+uint32_t rng = 0x9E3779B9u;
 
 float vbuf[ENG_TRACKS][kN];
 float vaux[ENG_TRACKS][kN];
@@ -152,6 +188,68 @@ void apply_cables() {
 
 inline float P(int page, int k) { return fin[page * 4 + k]; }
 inline int Pi(int page, int k) { return static_cast<int>(fin[page * 4 + k] + (fin[page * 4 + k] < 0 ? -0.5f : 0.5f)); }
+inline int iround(float v) { return static_cast<int>(v + (v < 0 ? -0.5f : 0.5f)); }
+
+float clamp_param(int param, float v) {
+  const eng_pdef_t* d = eng_pdef(param);
+  return d->kind == K_BIP ? clampf(v, -1.0f, 1.0f) : d->kind == K_UNI ? clampf(v, 0.0f, 1.0f)
+                                                    : clampf(v, static_cast<float>(d->lo), static_cast<float>(d->hi));
+}
+float to_u(int param, float v) {        // a value as 0..1 of its travel (a lock's byte)
+  const eng_pdef_t* d = eng_pdef(param);
+  if (d->kind == K_BIP) return (v + 1.0f) * 0.5f;
+  if (d->kind == K_UNI) return v;
+  return d->hi > d->lo ? (v - static_cast<float>(d->lo)) / static_cast<float>(d->hi - d->lo) : 0.0f;
+}
+float from_u(int param, float u) {
+  const eng_pdef_t* d = eng_pdef(param);
+  if (d->kind == K_BIP) return u * 2.0f - 1.0f;
+  if (d->kind == K_UNI) return u;
+  return static_cast<float>(d->lo + iround(u * static_cast<float>(d->hi - d->lo)));
+}
+
+// a track parameter as the trig plays it: its knob and cables, then the trig's lock and random
+float E(int t, int tp) {
+  int param = eng_track_param(t, tp);
+  return clamp_param(param, fin[param] + tdelta[t][tp]);
+}
+
+uint32_t rand_u32() {                   // xorshift32
+  rng ^= rng << 13;
+  rng ^= rng >> 17;
+  rng ^= rng << 5;
+  return rng;
+}
+float rand01() { return static_cast<float>(rand_u32() >> 8) * (1.0f / 16777216.0f); }
+float loop01(int t, int step, int tp) { // the looped random: the same for this track, step and parameter
+  uint32_t h = (proj.seed[t] + 1u) * 2654435761u ^ static_cast<uint32_t>(step) * 40503u ^
+               static_cast<uint32_t>(tp * 9973 + t * 7919);
+  h ^= h >> 15;
+  h *= 0x2C1B3C6Du;
+  h ^= h >> 12;
+  h *= 0x297A2D39u;
+  h ^= h >> 15;
+  return static_cast<float>(h & 0xFFFFu) * (1.0f / 65535.0f);
+}
+
+int quantize(int n) {                   // the nearest note of the global scale (a tie: the lower)
+  int sc = Pi(PG_GLOBAL, 2), root = Pi(PG_GLOBAL, 3);
+  if (sc <= 0 || sc >= 15) return n;
+  uint32_t m = kScaleMasks[sc];
+  int rel = ((n - root) % 12 + 12) % 12;
+  for (int d = 0; d <= 6; ++d) {
+    if ((m >> ((rel - d + 12) % 12)) & 1u) return n - d;
+    if ((m >> ((rel + d) % 12)) & 1u) return n + d;
+  }
+  return n;
+}
+
+int lock_find(int t, int step, int tp) {
+  uint8_t ts = static_cast<uint8_t>(t << 6 | step);
+  for (int i = 0; i < ENG_PLOCKS; ++i)
+    if (proj.lock[i].tp == tp && proj.lock[i].ts == ts) return i;
+  return -1;
+}
 
 void set_marbles() {
   mm_params_t p;
@@ -218,35 +316,123 @@ void read_sources() {
   for (int t = 0; t < 3; ++t) src[SRC_T1 + t] = mgates[(kFrames - 1) * 3 + t] ? 1.0f : 0.0f;
 }
 
-// a track's gate in Marbles' frame k
-int gate_at(int t, int k) {
-  if (key_on[t]) return 1;
+// a track's gate from Marbles (or a Tides output) in Marbles' frame k
+int marbles_gate(int t, int k) {
   int g = Pi(PG_TRACK(t, 2), 0);
   if (g <= GATE_T3) return mgates[k * 3 + g];
   if (g <= GATE_B4) return src[SRC_A1 + (g - GATE_A1)] > 0.5f;
   return 0;
 }
 
-float note_of(int t, int k) {           // the note a rising gate takes
-  float base = 48.0f + 12.0f * static_cast<float>(Pi(PG_TRACK(t, 2), 3)) + static_cast<float>(Pi(PG_TRACK(t, 2), 2));
-  if (key_on[t]) return static_cast<float>(key_note[t]) + static_cast<float>(Pi(PG_TRACK(t, 2), 2));
+float trig_note(int t, int k, int steps) {   // the note a trig takes: the step's, or Marbles' X or Y; its random tune
+  float base = 48.0f + 12.0f * static_cast<float>(iround(E(t, TP_OCTAVE))) + static_cast<float>(iround(E(t, TP_TRANSPOSE)));
+  if (steps) return static_cast<float>(quantize(iround(base + E(t, TP_NOTE))));
   int s = Pi(PG_TRACK(t, 2), 1);
-  if (s == NOTE_FIXED) return base;
-  float v = mcv[k * 4 + (s == NOTE_Y ? 3 : s)];
-  return base + 12.0f * v;
+  float v = s == NOTE_FIXED ? 0.0f : 12.0f * mcv[k * 4 + (s == NOTE_Y ? 3 : s)];
+  return static_cast<float>(quantize(iround(base + v + tdelta[t][TP_NOTE])));
+}
+
+// a trig: its locks (STEPS) and randoms over the knobs, whether it plays (its probability), its ratchets
+void new_trig(int t, int step, int steps) {
+  for (int tp = 0; tp < ENG_NTP; ++tp) {
+    tdelta[t][tp] = 0.0f;
+    if (!eng_tp_lockable(tp)) continue;
+    int param = eng_track_param(t, tp), i;
+    const eng_pdef_t* d = eng_pdef(param);
+    float base = proj.val[param], v = base;
+    if (steps && (i = lock_find(t, step, tp)) >= 0) v = from_u(param, static_cast<float>(proj.lock[i].v) / 255.0f);
+    int r = proj.rnd[t][tp];
+    if (r) {                            // > 0: a new random at each trig; < 0: the same at each pass (a loop)
+      float a = static_cast<float>(r < 0 ? -r : r) * 0.01f, x = r > 0 ? rand01() : loop01(t, step, tp);
+      if (tp == TP_RATCHET) v += a * x * 7.0f;              // only more
+      else if (tp == TP_NOTE) v += a * (x * 2.0f - 1.0f) * 12.0f;   // up to an octave either way
+      else v += a * (x * 2.0f - 1.0f) * (d->kind == K_BIP ? 2.0f : d->kind == K_UNI ? 1.0f
+                                                                    : static_cast<float>(d->hi - d->lo));
+    }
+    tdelta[t][tp] = v - base;
+  }
+  float prob = E(t, TP_PROB);
+  rat_n[t] = static_cast<int>(clampf(static_cast<float>(iround(fin[eng_track_param(t, TP_RATCHET)] +
+                                                                tdelta[t][TP_RATCHET])), 1.0f, 8.0f));
+  rat_on[t] = prob >= 0.999f || rand01() < prob;
+  rat_pos[t] = 0.0f;
+}
+
+// the trigs of one block, frame by frame: fg (the gates) and fnote (the notes) for the voices
+void sequence(uint32_t n) {
+  float fl = static_cast<float>(n / kFrames);
+  int steps = Pi(PG_GLOBAL, 0) == SEQ_STEPS, loop = Pi(PG_MARBLES(1), 0);
+  float step_len = kSr * 60.0f / (bpm_of(P(PG_MARBLES(0), 0)) * 4.0f);
+  if (restart) {
+    restart = 0;
+    step_clk = step_len;
+    tick = -1;
+    for (int t = 0; t < ENG_TRACKS; ++t) trig_count[t] = 0;
+  }
+  if (loop < 1) loop = 1;
+  for (uint32_t k = 0; k < kFrames; ++k) {
+    if (steps && playing && (step_clk += fl) >= step_len) {   // a sixteenth: each track's step, its trig
+      step_clk -= step_len;
+      if (step_clk >= step_len) step_clk = 0.0f;
+      ++tick;
+      for (int t = 0; t < ENG_TRACKS; ++t) {
+        int len = Pi(PG_STEP(t), 3);
+        cur_step[t] = static_cast<int>(tick % (len < 1 ? 1 : len));
+        if (eng_trig(t, cur_step[t])) raw_left[t] = step_len * 0.5f;
+      }
+    }
+    for (int t = 0; t < ENG_TRACKS; ++t) {
+      int raw, g;
+      if (steps) {
+        raw = playing && raw_left[t] > 0.0f;
+        raw_left[t] -= fl;
+      } else {
+        raw = playing && marbles_gate(t, static_cast<int>(k));
+      }
+      since_rise[t] += fl;
+      if (raw && !raw_prev[t]) {        // a trig
+        if (since_rise[t] > 4.0f * fl && since_rise[t] < 4.0f * kSr) interval[t] = since_rise[t];
+        since_rise[t] = 0.0f;
+        int step = steps ? cur_step[t] : static_cast<int>(trig_count[t] % static_cast<uint32_t>(loop));
+        ++trig_count[t];
+        new_trig(t, step, steps);
+        rat_period[t] = (steps ? step_len : (interval[t] > 0.0f ? interval[t] : kSr * 0.25f)) /
+                        static_cast<float>(rat_n[t]);
+        tnote[t] = trig_note(t, static_cast<int>(k), steps);
+      }
+      raw_prev[t] = raw;
+      if (!rat_on[t]) {
+        g = 0;
+      } else if (rat_n[t] <= 1) {
+        g = raw;
+        if (!raw) rat_on[t] = 0;
+      } else {                          // the ratchets: n gates in the step (or in the time between two trigs)
+        int i = static_cast<int>(rat_pos[t] / rat_period[t]);
+        g = i < rat_n[t] && rat_pos[t] - static_cast<float>(i) * rat_period[t] < rat_period[t] * 0.5f;
+        rat_pos[t] += fl;
+        if (i >= rat_n[t]) rat_on[t] = 0;
+      }
+      fnote[t][k] = tnote[t];
+      if (key_on[t] || key_hold[t] > 0) {   // the keyboard plays over; a new key, a new trig
+        g = !(key_retrig[t] && k == 0);
+        fnote[t][k] = static_cast<float>(quantize(key_note[t] + iround(E(t, TP_TRANSPOSE))));
+        if (key_hold[t] > 0) --key_hold[t];
+      }
+      fg[t][k] = static_cast<uint8_t>(g);
+    }
+  }
+  for (int t = 0; t < ENG_TRACKS; ++t) key_retrig[t] = 0;
 }
 
 void set_voice(int t) {
-  int pg1 = PG_TRACK(t, 0), pg2 = PG_TRACK(t, 1);
-  mp_set(voice[t], proj.algo[pg1], vnote[t] + 24.0f * P(pg1, 0), P(pg1, 1), P(pg1, 2), P(pg1, 3), P(pg2, 0),
-         P(pg2, 1));
-  mp_amounts(voice[t], 0.0f, P(pg2, 2), P(pg2, 3));
+  mp_set(voice[t], proj.algo[PG_TRACK(t, 0)], vnote[t] + 24.0f * E(t, 0), E(t, 1), E(t, 2), E(t, 3), E(t, 4), E(t, 5));
+  mp_amounts(voice[t], 0.0f, E(t, 6), E(t, 7));
 }
 
 void render_voice(int t, uint32_t n) {
   uint32_t step = n / kFrames, pos = 0;
   for (uint32_t k = 0; k < kFrames; ++k) {
-    int g = gate_at(t, static_cast<int>(k));
+    int g = fg[t][k];
     if (g == vgate[t]) continue;
     uint32_t at = k * step;
     if (at > pos) {
@@ -254,8 +440,9 @@ void render_voice(int t, uint32_t n) {
       pos = at;
     }
     if (g) {
-      vnote[t] = note_of(t, static_cast<int>(k));
+      vnote[t] = fnote[t][k];
       set_voice(t);
+      ++vrises[t];
     }
     mp_gate(voice[t], g);
     vgate[t] = g;
@@ -282,7 +469,37 @@ uint32_t pct10(uint32_t ticks, uint32_t n) {   // ticks as tenths of a percent o
 extern "C" {
 
 int eng_page_type(int page) { return page_type(page); }
-int eng_page_track(int page) { return page < 12 ? page / 3 : -1; }
+int eng_page_track(int page) {
+  if (page < 12) return page / 3;
+  return page >= PG_STEP(0) && page < PG_GLOBAL ? page - PG_STEP(0) : -1;
+}
+
+int eng_track_param(int t, int tp) {
+  if (tp < 12) return PG_TRACK(t, tp / 4) * 4 + tp % 4;
+  if (tp == TP_LEVEL) return PG_MIX * 4 + t;
+  if (tp == TP_SEND) return PG_FX(0) * 4 + t;
+  if (tp == TP_PAN) return PG_PAN * 4 + t;
+  return PG_STEP(t) * 4 + (tp - TP_NOTE);
+}
+
+int eng_param_tp(int param, int* t) {
+  int page = param / 4, k = param % 4, tr = -1, tp = -1;
+  if (page < 12) {
+    tr = page / 3;
+    tp = (page % 3) * 4 + k;
+  } else if (page == PG_MIX || page == PG_FX(0) || page == PG_PAN) {
+    tr = k;
+    tp = page == PG_MIX ? TP_LEVEL : page == PG_PAN ? TP_PAN : TP_SEND;
+  } else if (page >= PG_STEP(0) && page < PG_GLOBAL && k < 3) {
+    tr = page - PG_STEP(0);
+    tp = TP_NOTE + k;
+  }
+  if (t) *t = tr;
+  return tp;
+}
+
+int eng_tp_lockable(int tp) { return tp >= 0 && tp < ENG_NTP && tp != 8 && tp != 9; }   // not the gate's and note's
+                                                                                         // sources
 
 const eng_pdef_t* eng_pdef(int param) {
   if (param < 0 || param >= ENG_NPARAMS) param = 0;
@@ -291,7 +508,7 @@ const eng_pdef_t* eng_pdef(int param) {
 
 int eng_param_mod(int param) {
   int k = eng_pdef(param)->kind;
-  return k == K_UNI || k == K_BIP;
+  return (k == K_UNI || k == K_BIP) && param / 4 != PG_GLOBAL;
 }
 
 static void put(char* b, int n, const char* s) {
@@ -329,9 +546,30 @@ void eng_param_text(int param, float v, char* b, int n) {
   if (d->kind == K_ENUM) {
     int i = static_cast<int>(v + 0.5f);
     put(b, n, d->names[i < d->lo ? d->lo : i > d->hi ? d->hi : i]);
+  } else if (pt == PT_STEP && k == 0) {  // the note, from C3
+    int nt = 48 + static_cast<int>(v + (v < 0 ? -0.5f : 0.5f)), l = 0;
+    put(b, n, kNoteName[nt % 12]);
+    while (b[l]) ++l;
+    put_num(b + l, n - l, nt / 12 - 1, 0, 0);
+  } else if (pt == PT_STEP && k == 2) {
+    put(b, n, "x");
+    put_num(b + 1, n - 1, static_cast<int32_t>(v + 0.5f), 0, 0);
   } else if (d->kind == K_INT) {
-    put_num(b, n, static_cast<int32_t>(v + (v < 0 ? -0.5f : 0.5f)), 0, 1);
-  } else if (pt == PT_MARB_T1 && k == 0) {
+    put_num(b, n, static_cast<int32_t>(v + (v < 0 ? -0.5f : 0.5f)), 0, d->lo < 0);
+  } else if (pt == PT_PAN) {
+    int32_t q = static_cast<int32_t>(v * 100.0f + (v < 0 ? -0.5f : 0.5f));
+    if (!q) {
+      put(b, n, "C");
+    } else {
+      put(b, n, q < 0 ? "L" : "R");
+      put_num(b + 1, n - 1, q < 0 ? -q : q, 0, 0);
+    }
+  } else if (pt == PT_STEP && k == 1) {
+    put_num(b, n, static_cast<int32_t>(v * 100.0f + 0.5f), 0, 0);
+    int l = 0;
+    while (b[l]) ++l;
+    put(b + l, n - l, "%");
+  } else if ((pt == PT_MARB_T1 && k == 0) || (pt == PT_GLOBAL && k == 1)) {
     put_num(b, n, static_cast<int32_t>(bpm_of(v) + 0.5f), 0, 0);
     int l = 0;
     while (b[l]) ++l;
@@ -441,6 +679,32 @@ void eng_defaults(project_t* p) {
   cable(p, 2, 0, SRC_B1, PG_TRACK(2, 0) * 4 + 2, 40);   // track 3: B1 -> TIMBRE (the loop)
   cable(p, 3, 0, SRC_Y, PG_TRACK(3, 0) * 4 + 1, 40);    // track 4: Y -> HARMONICS (structure)
   cable(p, 3, 1, SRC_B2, PG_TRACK(3, 0) * 4 + 2, 30);   // and B2 -> TIMBRE (brightness)
+  // the step sequencer (SEQUENCER on STEPS): a pattern a track, a few locks; the global scale: C minor
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    p->val[PG_PAN * 4 + t] = 0.0f;
+    p->val[PG_STEP(t) * 4 + 0] = 0.0f;
+    p->val[PG_STEP(t) * 4 + 1] = 1.0f;
+    p->val[PG_STEP(t) * 4 + 2] = 1.0f;
+    p->val[PG_STEP(t) * 4 + 3] = 16.0f;
+    p->seed[t] = static_cast<uint16_t>(0x2A5 + 977 * t);
+  }
+  for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i].tp = 0xFF;
+  p->val[PG_GLOBAL * 4 + 0] = static_cast<float>(SEQ_MARBLES);
+  p->val[PG_GLOBAL * 4 + 2] = 2.0f;                     // minor
+  p->val[PG_GLOBAL * 4 + 3] = 0.0f;                     // C
+  static const uint16_t kPat[4] = {0x1111, 0x6444, 0x1090, 0x4A49};   // bit s: step s
+  for (int t = 0; t < ENG_TRACKS; ++t)
+    for (int st = 0; st < 16; ++st)
+      if ((kPat[t] >> st) & 1u) p->trig[t][st / 8] |= static_cast<uint8_t>(1u << (st % 8));
+  static const struct { uint8_t t, st, tp; float v; } kLocks[] = {
+      {0, 12, TP_RATCHET, 2.0f}, {1, 14, TP_NOTE, 12.0f}, {1, 10, TP_NOTE, 7.0f}, {2, 7, TP_NOTE, 3.0f},
+      {3, 9, TP_DECAY, 0.95f}};
+  for (uint32_t i = 0; i < sizeof kLocks / sizeof kLocks[0]; ++i) {
+    int param = eng_track_param(kLocks[i].t, kLocks[i].tp);
+    p->lock[i].ts = static_cast<uint8_t>(kLocks[i].t << 6 | kLocks[i].st);
+    p->lock[i].tp = kLocks[i].tp;
+    p->lock[i].v = static_cast<uint8_t>(to_u(param, kLocks[i].v) * 255.0f + 0.5f);
+  }
 }
 
 // INIT: four Plaits on VIRTUAL ANALOG (the first model of the classic bank), every knob at noon, played by t1, t2,
@@ -462,6 +726,10 @@ void eng_blank(project_t* p) {
     p->val[PG_FX(0) * 4 + t] = 0.0f;
   }
   p->algo[PG_MARBLES(2)] = 0;                      // major
+  p->val[PG_GLOBAL * 4 + 2] = 1.0f;                // the global scale too
+  for (int t = 0; t < ENG_TRACKS; ++t)
+    for (int b = 0; b < ENG_STEPS / 8; ++b) p->trig[t][b] = 0;
+  for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i].tp = 0xFF;
   for (int g = 0; g <= ENG_TRACKS; ++g)
     for (int c = 0; c < ENG_CABLES; ++c) {
       p->cable[g][c].src = SRC_NONE;
@@ -472,6 +740,35 @@ void eng_blank(project_t* p) {
 
 int eng_check(const project_t* p) {
   return p->magic == PROJECT_MAGIC && p->version == PROJECT_VERSION && p->size == sizeof(project_t);
+}
+
+// v0.1's project (version 2): its knobs, models and cables kept, the rest the demo's (the steps, no locks, no randoms)
+struct project_v2 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[92];
+  uint8_t algo[23];
+  uint8_t rsv[2];
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+};
+
+int eng_upgrade(project_t* p, int bytes) {
+  static project_v2 old;
+  if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
+  if (bytes != static_cast<int>(sizeof(project_v2)) || p->magic != PROJECT_MAGIC || p->version != 2 ||
+      p->size != sizeof(project_v2))
+    return 0;
+  const uint8_t* from = reinterpret_cast<const uint8_t*>(p);
+  uint8_t* to = reinterpret_cast<uint8_t*>(&old);
+  for (uint32_t i = 0; i < sizeof old; ++i) to[i] = from[i];
+  eng_defaults(p);
+  for (int i = 0; i < 92; ++i) p->val[i] = old.val[i];
+  for (int i = 0; i < 23; ++i) p->algo[i] = old.algo[i];
+  for (int g = 0; g <= ENG_TRACKS; ++g)
+    for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c] = old.cable[g][c];
+  for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i].tp = 0xFF;
+  p->val[PG_GLOBAL * 4 + 2] = static_cast<float>(old.algo[PG_MARBLES(2)] < 2 ? old.algo[PG_MARBLES(2)] + 1 : 0);
+  return 1;
 }
 
 int eng_init(void) {
@@ -507,7 +804,15 @@ int eng_init(void) {
 }
 
 void eng_play(int on) {
-  if (on && !playing && ready) mm_reset(marbles);
+  if (on && !playing && ready) {
+    mm_reset(marbles);
+    restart = 1;
+  }
+  if (!on)
+    for (int t = 0; t < ENG_TRACKS; ++t) {
+      raw_left[t] = 0.0f;
+      rat_on[t] = 0;
+    }
   playing = on != 0;
 }
 int eng_playing(void) { return playing; }
@@ -517,6 +822,8 @@ void eng_key(int track, int note, int on) {
   if (on) {
     key_note[track] = note;
     key_on[track] = 1;
+    key_retrig[track] = 1;              // a new key: a new trig, even played legato
+    key_hold[track] = static_cast<int>(kFrames) * 3;   // and at least three blocks, however short the press
   } else if (key_note[track] == note) {
     key_on[track] = 0;
   }
@@ -541,6 +848,8 @@ void eng_render(float* l, float* r, uint32_t n) {
   // 3. the sources, then every parameter
   read_sources();
   apply_cables();
+  // 4. the trigs
+  sequence(n);
   for (int t = 0; t < ENG_TRACKS; ++t) set_voice(t);
   // 4. the voices: 3 and 4 on the second core
   job_n = n;
@@ -563,10 +872,13 @@ void eng_render(float* l, float* r, uint32_t n) {
   uint32_t g = 0;
   for (int t = 0; t < ENG_TRACKS; ++t) g |= vgate[t] ? 1u << t : 0u;
   gates_now = g;
-  float gain[ENG_TRACKS], sends[ENG_TRACKS];
+  float gain[ENG_TRACKS], gl[ENG_TRACKS], gr[ENG_TRACKS], sends[ENG_TRACKS];
   for (int t = 0; t < ENG_TRACKS; ++t) {
-    gain[t] = P(PG_MIX, t) * 0.7f;
-    sends[t] = P(PG_FX(0), t) * gain[t];   // post-fader
+    float pan = E(t, TP_PAN);
+    gain[t] = E(t, TP_LEVEL) * 0.7f;
+    gl[t] = gain[t] * (pan > 0.0f ? 1.0f - pan : 1.0f);
+    gr[t] = gain[t] * (pan < 0.0f ? 1.0f + pan : 1.0f);
+    sends[t] = E(t, TP_SEND) * gain[t];   // post-fader
   }
   mrv_set(reverb, P(PG_FX(1), 0), P(PG_FX(1), 1), P(PG_FX(1), 2));
   float ret = P(PG_FX(1), 3) * 1.6f, pk[ENG_TRACKS + 1] = {0, 0, 0, 0, 0};
@@ -581,13 +893,16 @@ void eng_render(float* l, float* r, uint32_t n) {
   }
   mrv_process(reverb, send, wet_l, wet_r, n);
   for (uint32_t i = 0; i < n; ++i) {
-    float dry = 0.0f;
-    for (int t = 0; t < ENG_TRACKS; ++t) dry += gain[t] * vbuf[t][i];
+    float dl = 0.0f, dr = 0.0f;
+    for (int t = 0; t < ENG_TRACKS; ++t) {
+      dl += gl[t] * vbuf[t][i];
+      dr += gr[t] * vbuf[t][i];
+    }
     float wl = ret * wet_l[i], wr = ret * wet_r[i];
     float a = fm_fabsf(wl) > fm_fabsf(wr) ? fm_fabsf(wl) : fm_fabsf(wr);
     if (a > pk[ENG_TRACKS]) pk[ENG_TRACKS] = a;
-    l[i] = sat(dry + wl);
-    r[i] = sat(dry + wr);
+    l[i] = sat(dl + wl);
+    r[i] = sat(dr + wr);
   }
   for (int t = 0; t <= ENG_TRACKS; ++t)    // the meters: up at once, down slowly
     meter[t] = pk[t] > meter[t] ? pk[t] : meter[t] * 0.985f;
@@ -622,5 +937,48 @@ int eng_hist(int s, int i) {
   return hist[s][(hist_at + static_cast<uint32_t>(i)) % ENG_HIST];
 }
 int eng_core1_running(void) { return on_core1_last; }
+
+int eng_steps_mode(void) { return iround(proj.val[PG_GLOBAL * 4]) == SEQ_STEPS; }
+int eng_trig(int t, int step) {
+  if (t < 0 || t >= ENG_TRACKS || step < 0 || step >= ENG_STEPS) return 0;
+  return (proj.trig[t][step / 8] >> (step % 8)) & 1;
+}
+void eng_trig_set(int t, int step, int on) {
+  if (t < 0 || t >= ENG_TRACKS || step < 0 || step >= ENG_STEPS) return;
+  if (on) proj.trig[t][step / 8] = static_cast<uint8_t>(proj.trig[t][step / 8] | (1u << (step % 8)));
+  else proj.trig[t][step / 8] = static_cast<uint8_t>(proj.trig[t][step / 8] & ~(1u << (step % 8)));
+}
+int eng_lock(int t, int step, int tp, float* v) {
+  int i = lock_find(t, step, tp);
+  if (i < 0) return 0;
+  if (v) *v = from_u(eng_track_param(t, tp), static_cast<float>(proj.lock[i].v) / 255.0f);
+  return 1;
+}
+int eng_lock_set(int t, int step, int tp, float v) {   // the value first, the slot's names last (the render reads it)
+  int i = lock_find(t, step, tp);
+  uint8_t u = static_cast<uint8_t>(clampf(to_u(eng_track_param(t, tp), v), 0.0f, 1.0f) * 255.0f + 0.5f);
+  if (i < 0)
+    for (int j = 0; j < ENG_PLOCKS && i < 0; ++j)
+      if (proj.lock[j].tp == 0xFF) i = j;
+  if (i < 0) return -1;
+  proj.lock[i].v = u;
+  proj.lock[i].ts = static_cast<uint8_t>(t << 6 | step);
+  proj.lock[i].tp = static_cast<uint8_t>(tp);
+  return 0;
+}
+void eng_lock_clear(int t, int step) {
+  uint8_t ts = static_cast<uint8_t>(t << 6 | step);
+  for (int i = 0; i < ENG_PLOCKS; ++i)
+    if (proj.lock[i].tp != 0xFF && proj.lock[i].ts == ts) proj.lock[i].tp = 0xFF;
+}
+int eng_step_locked(int t, int step) {
+  uint8_t ts = static_cast<uint8_t>(t << 6 | step);
+  int n = 0;
+  for (int i = 0; i < ENG_PLOCKS; ++i) n += proj.lock[i].tp != 0xFF && proj.lock[i].ts == ts;
+  return n;
+}
+int eng_step_now(int t) { return playing && eng_steps_mode() && t >= 0 && t < ENG_TRACKS && tick >= 0 ? cur_step[t] : -1; }
+int eng_quantize(int note) { return quantize(note); }
+uint32_t eng_rises(int t) { return t >= 0 && t < ENG_TRACKS ? vrises[t] : 0u; }
 
 }  // extern "C"

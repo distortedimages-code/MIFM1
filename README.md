@@ -4,12 +4,16 @@ Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient du code open s
 la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
 
 - **Plaits** sur chaque piste, ses 24 modèles au complet ;
-- **Marbles** comme seul séquenceur : ses sorties T déclenchent les pistes, X et Y donnent les notes, DÉJÀ VU fige
-  ou libère la boucle ;
+- **deux séquenceurs au choix** (GLO) : **Marbles** (ses sorties T déclenchent les pistes, X et Y donnent les notes,
+  DÉJÀ VU fige ou libère la boucle) ou un **séquenceur pas à pas** à la Elektron, 64 pas par piste, avec P-locks ;
+- sur chaque trig : **probabilité**, **ratchets**, et un **aléatoire** sur n'importe quel réglage de la piste (à
+  droite nouveau à chaque trig, à gauche en boucle) ;
+- un **quantiseur global** (15 gammes et la tonique) : aucune fausse note, sur toutes les pistes et au clavier ;
 - **deux Tides 2** comme modulateurs (8 sorties) ;
 - une **matrice de câbles** : 15 sources (Tides A1-A4, B1-B4, Marbles X1-X3, Y, T1-T3) vers presque tous les
   paramètres, 8 câbles par piste et 8 globaux ;
-- un **mixer simple** (un niveau par piste) et un **départ réverbe** par piste vers la réverbe de Clouds.
+- un **mixer simple** (un niveau et un pan par piste) et un **départ réverbe** par piste vers la réverbe de Clouds
+  (ses lignes de retard en flottants : la réverbe du module les stockait sur 12 bits, d'où un grain et un souffle).
 
 Le granulaire de Clouds et Warps arrivent en v0.2 (sur le second cœur), les scènes et les projets multiples en v0.3. Rings a été
 retiré après le banc d'essai v0.0 : les modèles MODAL et STRING de Plaits en reprennent le code, en plus léger.
@@ -26,7 +30,7 @@ Un projet neuf joue déjà (PLAY) : piste 1 une grosse caisse sur chaque temps (
 X1 ouverte par Tides A, piste 3 un FM 2 opérateurs sur T3 et X2 modulé par Tides B, piste 4 un résonateur MODAL sur
 T3 et X3, les pistes 3 et 4 envoyées dans la réverbe. Marbles à 120 BPM, gamme mineure, DÉJÀ VU à midi sur 8 pas.
 
-**Repartir de zéro (INIT)** : GLO, puis **K1** choisit le projet et **REC tenu** le charge : *New* (4 pistes
+**Repartir de zéro (INIT)** : GLO, SELECT (la page PROJECT), puis **K1** choisit le projet et **REC tenu** le charge : *New* (4 pistes
 Plaits sur VIRTUAL ANALOG, tous les potards à midi, jouées par t1, t2, t3 et t2 avec X1, X2, X3 et Y, aucun câble,
 rien vers la réverbe, Marbles en do majeur), *The demo patch* (le patch ci-dessus) ou *The saved project* (le dernier
 sauvegardé, pour annuler). Le transport s'arrête ; rien n'est sauvegardé tant que SAVE n'est pas tenu.
@@ -37,7 +41,8 @@ le seul logo du modèle et son nom (KICK, VIRTUAL ANALOG…), sur Tides la rampe
 gamme. Puis les quatre potards côte à côte, dans l'ordre des KNOB 1 à 4 : un anneau allumé de son début (ou de son
 milieu, avec « − + ») jusqu'à la valeur, la valeur dedans, un câble en pointillé et son point d'arrivée dans l'autre
 couleur, la source écrite dessous. En bas les quatre pistes, une LED chacune allumée par sa gate dans la couleur de son
-modèle ; sur les pages de Tides et de Marbles, leurs sorties, allumées à leur hauteur.
+modèle ; sur les pages de Tides et de Marbles, leurs sorties, allumées à leur hauteur ; avec le séquenceur pas à pas,
+les 16 pas de la piste (allumés : un trig ; un point : des locks ; cerclé : celui qui joue).
 
 | Contrôle | Effet |
 | --- | --- |
@@ -47,14 +52,17 @@ modèle ; sur les pages de Tides et de Marbles, leurs sorties, allumées à leur
 | **PRESETS** | la piste active, de 1 à 4 |
 | **EDIT** | Plaits de la piste active (appuis suivants : 1/3, 2/3, 3/3) |
 | **LFO** | Tides A, puis Tides B |
-| **SEQ / ARP** | Marbles, rythme (T) / notes (X, Y) |
-| **HOME** | le mixer : les niveaux des 4 pistes |
+| **SEQ / ARP** | Marbles, rythme (T) / notes (X, Y) ; avec STEPS : SEQ les pas de la piste (TRIG, puis RANDOM), ARP Marbles |
+| **HOME** | le mixer : les niveaux des 4 pistes, puis leurs pans |
 | **FX** | la réverbe : les envois des 4 pistes, puis ses réglages (Time, Damping, Diffusion, Return) |
 | **PLAY** | l'horloge de Marbles tourne ou s'arrête |
 | **clavier** | joue la piste active, même à l'arrêt ; **OCT− / OCT+** pour l'octave |
 | **SEL** | le mode MOD (voir plus bas) ; **tenu** : la matrice de la piste |
 | **SAVE tenu** | sauvegarde le projet (à l'arrêt) |
-| **GLO** | la charge des deux cœurs, les tables, la version ; **K1** choisit un projet, **REC tenu** le charge (INIT) |
+| **GLO** | SEQUENCER (Marbles ou Steps), TEMPO, SCALE, ROOT ; SELECT : le projet (INIT) et la machine ; GLO encore : retour |
+| **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle |
+| **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage sur la piste (avec GLO tenu aussi : sur les 4) |
+| **REC** | avec STEPS : les touches blanches deviennent les 16 pas, les 4 premières noires les pages |
 
 La charge de calcul est toujours affichée en haut à droite (le cœur le plus chargé, en %).
 
@@ -67,13 +75,38 @@ Tides A1-A4 ; 5-8 : Tides B1-B4 ; 9-11 : Marbles X1-X3 ; 12 : Y ; 13-15 : T1-T3 
 cible, K4 sa profondeur.
 
 **PLAITS 3/3** choisit pour chaque piste sa source de gate (T1-T3, une sortie de Tides, ou le clavier seul) et de
-note (X1-X3, Y ou fixe), la transposition et l'octave.
+note (X1-X3, Y ou fixe), la transposition et l'octave (avec Marbles ; avec STEPS, les pas jouent la piste).
+
+**Le séquenceur pas à pas** (GLO, K1 sur STEPS ; le tempo est celui de Marbles, K2 sur GLO) : chaque piste a son
+pattern, jusqu'à 64 pas (LENGTH). **REC** : les 16 touches blanches sont les pas de la page (allumés : un trig, celui
+qui joue clignote), les 4 premières touches noires choisissent la page. Appuyer sur un pas pose un trig ; appuyer sur
+un trig l'enlève (avec ses locks). **Tenir un pas et tourner un potard pose un P-lock** sur ce pas, sur n'importe
+quelle page de la piste (Plaits, son niveau, son envoi, son pan, sa note…) ; le potard montre alors la valeur du pas
+(LOCK dessous). Tenir un pas et taper SEL efface ses locks. La page SEQ de la piste : **NOTE**, **PROB**
+(probabilité), **RATCHET** (1 à 8 coups dans le pas) et **LENGTH** ; les trois premiers se lockent aussi pas par pas.
+
+**L'aléatoire** : la page RANDOM (SEQ, puis SELECT) a quatre potards, PAN, DECAY, TUNE et RATCHET. Tourné à droite,
+une nouvelle valeur au hasard à chaque trig ; à gauche, des valeurs au hasard mais qui reviennent les mêmes à chaque
+tour (une boucle) ; plus on tourne, plus l'écart est grand (100 : toute la course ; TUNE : une octave de part et
+d'autre ; RATCHET : jusqu'à 7 coups de plus). Au centre, rien : le réglage retrouve exactement sa valeur. **ENV tenu
++ un potard** fait la même chose sur n'importe quel réglage de la piste (le TIMBRE, le MORPH, le niveau…). Les deux
+marchent aussi avec Marbles (la boucle suit alors la LENGTH de Marbles).
+
+**Le quantiseur** (GLO, SCALE et ROOT) : chaque note, de Marbles, des pas, de l'aléatoire ou du clavier, va à la note
+de la gamme la plus proche. Off, Major, Minor, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Harmonic et Melodic
+minor, Major et Minor pentatonic, Blues, Whole tone, Hirajoshi.
+
+**Le clavier** relance la note à chaque touche, même jouée legato, et une touche tapée très vite sonne quand même.
+
+Un projet sauvegardé avec la 0.1 se recharge tel quel (ses réglages, ses modèles, ses câbles) ; le séquenceur pas à
+pas y arrive avec les patterns de démo, sur Marbles par défaut.
 
 ## Le dépôt
 
 - `firmware/` : le firmware (fm1-base `tools/build.py ../firmware`)
-  - `app.c` : l'écran et les contrôles ; `mi/engine.cc` : le son (les pistes, Marbles, Tides, la matrice, le
-    mixer ; les pistes 3 et 4 sur le second cœur) ; `mi/mi_*.cc` : un pont C par module Mutable
+  - `app.c` : l'écran et les contrôles ; `mi/engine.cc` : le son (les pistes, Marbles ou les pas, les trigs, Tides,
+    la matrice, le quantiseur, le mixer ; les pistes 3 et 4 sur le second cœur) ; `mi/mi_*.cc` : un pont C par module
+    Mutable ; `mi/mi_reverb.h` : la réverbe de Clouds, ses lignes de retard en flottants
   - `third_party/` : le code Mutable Instruments utilisé, copié tel quel ; les retouches sont dans `PATCHES.md`
   - `res/mi_tables.bin` : la zone de ressources (les plus grosses tables, écrites par l'installeur après le
     firmware), `mi/res_abs.cc` leurs adresses

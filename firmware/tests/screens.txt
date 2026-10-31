@@ -1,7 +1,8 @@
 # MIFM1 in fm1-base's host simulator: the default patch playing, the pages, a knob turned, a cable made in MOD mode
-# (hold a source key, turn a knob), the matrix, the global page, a save kept across a power-off and in a backup, a
-# new project (INIT: GLO, REC held) and the saved one back, an FM-1 without the module tables, then the tables
-# arriving. Screenshots in the output folder.
+# (hold a source key, turn a knob), the matrix, the global page, the step sequencer (REC, a step held and locked, the
+# RANDOM page, ENV held, GLO held: ALL), a save kept across a power-off and in a backup, a new project (INIT: GLO,
+# SELECT, REC held) and the saved one back, an FM-1 without the module tables, then the tables arriving.
+# Screenshots in the output folder.
 wait 1500
 shot 01_plaits_t1.png
 tap PLAY
@@ -71,6 +72,58 @@ wait 300
 tap GLO
 wait 600
 shot 16_global.png
+turn SELECT 1
+wait 600
+shot 16b_project.png
+turn SELECT 1
+turn K1 1
+wait 400
+shot 16c_steps_on.png
+tap SEQ
+wait 1500
+shot 16d_steps_t1.png
+wav steps.wav
+wait 4000
+wavstop
+tap REC
+wait 300
+shot 16e_rec.png
+key 0 down
+wait 200
+turn K1 7
+wait 300
+shot 16f_step_lock.png
+key 0 up
+key 4 down
+key 4 up
+wait 300
+shot 16g_step_added.png
+tap REC
+turn SELECT 1
+wait 300
+turn K1 10
+turn K3 -12
+wait 300
+shot 16h_random.png
+tap EDIT
+tap EDIT
+wait 300
+press ENV
+wait 200
+turn K1 -8
+wait 300
+shot 16i_env_rnd.png
+release ENV
+wait 300
+press GLO
+turn K1 -6
+wait 300
+shot 16j_all.png
+release GLO
+wait 300
+shot 16k_all_after.png
+tap GLO
+turn K1 -1
 tap GLO
 tap PLAY
 wait 500
@@ -86,6 +139,7 @@ turn PRESET 1
 wait 300
 shot 18_after_reboot.png
 tap GLO
+turn SELECT 1
 wait 300
 press REC
 wait 900
@@ -101,6 +155,7 @@ tap EDIT
 wait 300
 shot 18c_init_plaits2.png
 tap GLO
+turn SELECT 1
 wait 300
 turn K1 2
 wait 300

@@ -26,8 +26,9 @@ td:first-child {{ white-space: nowrap; font-weight: 700; color: #ffb22e; }}
 </style>
 <h1>MIFM1 {version}</h1>
 <p>Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient du code open source de Mutable Instruments :
-Plaits sur chaque piste (ses 24 modèles), Marbles comme seul séquenceur, deux Tides pour moduler, et une matrice de
-câbles, un mixer simple et un départ vers la réverbe de Clouds.</p>
+Plaits sur chaque piste (ses 24 modèles), Marbles ou un séquenceur pas à pas avec P-locks, probabilités, ratchets et
+aléatoire, un quantiseur global, deux Tides pour moduler, une matrice de câbles, un mixer avec pans et un départ vers
+la réverbe de Clouds.</p>
 <div class="card"><b>Installer</b><br><a href="install/">Installer MIFM1 {version}</a>
 <p>Dans Chrome ou Edge, le FM-1 branché en USB et à l'arrêt. Laisser la page aller jusqu'au bout : le firmware, puis
 les tables des modules.</p></div>
@@ -41,12 +42,16 @@ les tables des modules.</p></div>
 <tr><td>HOME · FX</td><td>le mixer (les niveaux) · la réverbe (les envois, puis ses réglages)</td></tr>
 <tr><td>PLAY</td><td>l'horloge de Marbles tourne ou s'arrête</td></tr>
 <tr><td>clavier</td><td>joue la piste active, même à l'arrêt (OCT− OCT+ pour l'octave)</td></tr>
+<tr><td>SEQ (STEPS)</td><td>les pas de la piste : NOTE, PROB, RATCHET, LENGTH ; SELECT : RANDOM (PAN, DECAY, TUNE, RATCHET)</td></tr>
 <tr><td>SEL</td><td>mode MOD : tenir une touche-source et tourner un potard pose un câble (touches 1-4 Tides A,
 5-8 Tides B, 9-11 X1-X3, 12 Y, 13-15 T1-T3, 17-18 Tides A ou B en éventail sur les 4 potards)</td></tr>
 <tr><td>SEL tenu</td><td>la matrice de la piste : K1 le câble, K2 la source, K3 la cible, K4 la dose</td></tr>
 <tr><td>SAVE tenu</td><td>sauvegarde le projet (à l'arrêt)</td></tr>
-<tr><td>GLO</td><td>la charge des deux cœurs, les tables</td></tr>
-<tr><td>GLO, K1, REC tenu</td><td>INIT : un projet neuf (4 Plaits sur VIRTUAL ANALOG, rien de câblé), le patch de démo
+<tr><td>GLO</td><td>SEQUENCER (Marbles ou Steps), TEMPO, SCALE, ROOT ; SELECT : le projet et la machine</td></tr>
+<tr><td>GLO tenu + potard</td><td>ALL : le même réglage sur les 4 pistes</td></tr>
+<tr><td>ENV tenu + potard</td><td>l'aléatoire de ce réglage : à droite nouveau à chaque trig, à gauche en boucle</td></tr>
+<tr><td>REC</td><td>avec STEPS : les touches blanches sont les 16 pas ; tenir un pas + un potard = P-lock</td></tr>
+<tr><td>GLO, SELECT, K1, REC tenu</td><td>INIT : un projet neuf (4 Plaits sur VIRTUAL ANALOG, rien de câblé), le patch de démo
 ou le projet sauvegardé ; rien n'est sauvegardé avant SAVE tenu</td></tr>
 </table>
 <p><a href="backup/">Sauvegarder ou restaurer le projet dans un fichier</a></p>

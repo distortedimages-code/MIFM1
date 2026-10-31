@@ -17,17 +17,32 @@ extern "C" {
 
 #define ENG_TRACKS 4
 #define ENG_CABLES 8                     /* per track, and as many global */
-#define ENG_NPAGES 23
+#define ENG_NPAGES 29
 #define ENG_NPARAMS (ENG_NPAGES * 4)
+#define ENG_STEPS 64                     /* the step sequencer: steps a track, four pages of 16 */
+#define ENG_PLOCKS 384                   /* parameter locks, for all the tracks' steps */
 
-/* the pages: 3 per track, 2 per Tides, 4 for Marbles, the mixer's levels, the reverb's sends and its own knobs */
+/* the pages: 3 per track, 2 per Tides, 4 for Marbles, the mixer's levels, the reverb's sends and its own knobs, the
+ * tracks' pans, each track's step sequencer, the global settings */
 #define PG_TRACK(t, p) ((t) * 3 + (p))
 #define PG_TIDES(i, p) (12 + (i) * 2 + (p))
 #define PG_MARBLES(p) (16 + (p))
 #define PG_MIX 20
 #define PG_FX(p) (21 + (p))
+#define PG_PAN 23
+#define PG_STEP(t) (24 + (t))
+#define PG_GLOBAL 28
 enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_TIDES1, PT_TIDES2, PT_MARB_T1, PT_MARB_T2, PT_MARB_X1, PT_MARB_X2,
-       PT_MIX, PT_FX1, PT_FX2, NPT };
+       PT_MIX, PT_FX1, PT_FX2, PT_PAN, PT_STEP, PT_GLOBAL, NPT };
+enum { SEQ_MARBLES, SEQ_STEPS };         /* PG_GLOBAL's first knob */
+
+/* a track's parameters as a trig sees them (a lock, a random): its Plaits' 12, its level, send and pan, its step
+ * page's note, probability and ratchets */
+enum { TP_DECAY = 4, TP_TRANSPOSE = 10, TP_OCTAVE = 11, TP_LEVEL = 12, TP_SEND, TP_PAN, TP_NOTE, TP_PROB, TP_RATCHET,
+       ENG_NTP };
+int eng_track_param(int t, int tp);      /* its parameter */
+int eng_param_tp(int param, int *t);     /* a parameter's tp and track, -1 if none */
+int eng_tp_lockable(int tp);             /* 1: a lock or a random may move it */
 int eng_page_type(int page);
 int eng_page_track(int page);            /* the track a page belongs to, -1: global */
 
@@ -58,17 +73,28 @@ typedef struct {
     uint8_t rsv;
 } cable_t;
 
+typedef struct {
+    uint8_t ts;                          /* track << 6 | step */
+    uint8_t tp;                          /* the track parameter, 0xFF: a free slot */
+    uint8_t v;                           /* its value, 0..255 over its travel */
+    uint8_t rsv;
+} plock_t;
+
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 2u               /* (1: v0.1's, with the mixer's pans and no reverb) */
+#define PROJECT_VERSION 3u               /* (2: v0.1's, without the step sequencer: eng_upgrade reads it) */
 typedef struct {
     uint32_t magic;
     uint16_t version, size;
     float val[ENG_NPARAMS];
     uint8_t algo[ENG_NPAGES];            /* the page's ALGORITHM choice: Plaits' model, Tides' ramp, Marbles' T model
                                           * and scale */
-    uint8_t rsv[2];
+    uint8_t rsv[3];
     cable_t cable[ENG_TRACKS + 1][ENG_CABLES];   /* the tracks' cables, then the global ones */
+    uint8_t trig[ENG_TRACKS][ENG_STEPS / 8];     /* the steps with a trig, a bit each */
+    int8_t rnd[ENG_TRACKS][ENG_NTP];     /* each track parameter's random: > 0 new at each trig, < 0 looped, 0 none */
+    uint16_t seed[ENG_TRACKS];           /* the looped randoms' */
+    plock_t lock[ENG_PLOCKS];
 } project_t;
 int eng_algo_count(int page);            /* 0: the page has no ALGORITHM choice */
 const char *eng_algo_name(int page, int a);
@@ -79,6 +105,19 @@ project_t *eng_project(void);            /* the live project: the screen writes 
 void eng_defaults(project_t *p);         /* the patch a new project plays (the demo) */
 void eng_blank(project_t *p);            /* INIT: four Plaits at noon, nothing patched */
 int eng_check(const project_t *p);       /* 1: a project this version can load */
+int eng_upgrade(project_t *p, int bytes);   /* a project read whole or an older one, made this version's: 1 ok */
+
+/* the step sequencer (PG_GLOBAL's SEQUENCER on STEPS); the screen edits, the render reads */
+int eng_steps_mode(void);
+int eng_trig(int t, int step);
+void eng_trig_set(int t, int step, int on);
+int eng_lock(int t, int step, int tp, float *v);   /* 1: that step locks tp (its value in v) */
+int eng_lock_set(int t, int step, int tp, float v);   /* 0 ok, -1 no room */
+void eng_lock_clear(int t, int step);    /* all its locks */
+int eng_step_locked(int t, int step);    /* how many locks it has */
+int eng_step_now(int t);                 /* the step playing, -1 stopped (or Marbles) */
+int eng_quantize(int note);              /* a note in the global scale */
+uint32_t eng_rises(int t);               /* the trigs track t played (a ratchet's each), since power-on */
 void eng_render(float *l, float *r, uint32_t n);   /* audio interrupt */
 void eng_play(int on);                   /* the transport: Marbles' clock runs or stops (from its start) */
 int eng_playing(void);

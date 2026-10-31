@@ -12,11 +12,15 @@
  *   KNOB 1..4   the page's four parameters        SELECT   the module's other face (1/3, 2/3...)
  *   ALGORITHM   the page's model or mode          PRESETS  the active track, 1 to 4
  *   EDIT        Plaits, the active track          LFO      Tides A, then B
- *   SEQ         Marbles, rhythm (t)               ARP      Marbles, notes (X, Y)
- *   HOME        the mixer (the levels)            FX       the reverb (the sends, then its own knobs)
- *   GLO         the load of both cores, the tables; there K1 picks a project and REC held loads it (INIT: four
- *               Plaits, nothing patched; the demo patch; the saved project)
- *   PLAY        Marbles' clock runs or stops      SAVE     held: the project saved (stopped)
+ *   SEQ         the sequencer: Marbles' t, or the track's steps (TRIG, then RANDOM)
+ *   ARP         Marbles' X (with the steps: Marbles' t, then X)
+ *   HOME        the mixer: the levels, the pans   FX       the reverb (the sends, then its own knobs)
+ *   GLO         SEQUENCER, TEMPO, SCALE, ROOT; then the project (K1, REC held: INIT) and the machine. Held with a
+ *               knob: ALL, the same parameter on the four tracks (with ALGORITHM: the same model)
+ *   ENV         held with a knob: that parameter's random (right new at each trig, left looped, 0 none)
+ *   REC         with the steps: the white keys are a page's 16 steps, the first black keys the pages; a step held
+ *               and a knob turned: a lock; a step held and SEL: its locks cleared
+ *   PLAY        the clock runs or stops           SAVE     held: the project saved (stopped)
  *   SEL         MOD mode: hold a source key, turn a knob: a cable. Held: the track's cables (MATRIX)
  *   keys        play the active track (MOD mode: the 15 sources, then Tides A and B fanned over the 4 knobs)
  *   OCT- OCT+   the keyboard's octave
@@ -64,10 +68,22 @@ static int cpu2_ok;
 static int save_hold, dirty;
 static project_t scratch;                /* a project read or made before it replaces the live one */
 
+/* the screen's own pages, after the engine's: a track's RANDOM page (its steps' second face), the project and the
+ * machine (GLO's second face) */
+#define VP_RND(t) (ENG_NPAGES + (t))
+#define VP_SYS (ENG_NPAGES + ENG_TRACKS)
+enum { PT_RND = NPT, PT_SYS };
+static const uint8_t RND_TP[4] = {TP_PAN, TP_DECAY, TP_NOTE, TP_RATCHET};   /* the RANDOM page's knobs */
+
 static struct {
-    int page;                            /* the page shown (engine.h: 23 of them) */
-    int matrix, global;                  /* the MATRIX page, the GLO page, over the page */
+    int page;                            /* the page shown: the engine's (engine.h), or VP_RND, VP_SYS */
+    int prev_page;                       /* the page before GLO */
+    int matrix;                          /* the MATRIX page, over the page */
     int track;                           /* the active track */
+    int grid;                            /* REC, the steps on: the white keys are the steps */
+    int spage;                           /* the steps' page on the keys (16 each) */
+    int held_step, step_new, step_edit;  /* a step held (-1: none), made by this press, locked meanwhile */
+    int used[NB];                        /* a knob turned while that button was held: no tap when it is let go */
     int mod;                             /* MOD mode */
     int msel;                            /* MATRIX: the cable chosen (0..7 the track's, 8..15 the global ones) */
     int init_sel;                        /* GLO: the project REC held loads (0 new, 1 the demo, 2 the saved one) */
@@ -87,29 +103,88 @@ static struct {
 } ui;
 
 /* ------------------------------------------------------------ the pages --- */
-static int page_face(int page)           /* which face of its module */
+static int ptype(int page) { return page >= VP_SYS ? PT_SYS : page >= VP_RND(0) ? PT_RND : eng_page_type(page); }
+static int ptrack(int page)              /* the track a page belongs to, -1: none */
 {
-    switch (eng_page_type(page)) {
-    case PT_PLAITS2: case PT_TIDES2: case PT_MARB_T2: case PT_MARB_X2: case PT_FX2: return 1;
-    case PT_PLAITS3: return 2;
-    default: return 0;
+    return page >= VP_SYS ? -1 : page >= VP_RND(0) ? page - VP_RND(0) : eng_page_track(page);
+}
+
+static int module_pages(int page, int *f)   /* its module's pages (its faces), in order; how many */
+{
+    int t = ptrack(page);
+    switch (ptype(page)) {
+    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3:
+        f[0] = PG_TRACK(t, 0);
+        f[1] = PG_TRACK(t, 1);
+        f[2] = PG_TRACK(t, 2);
+        return 3;
+    case PT_TIDES1: case PT_TIDES2:
+        f[0] = page >= PG_TIDES(1, 0) ? PG_TIDES(1, 0) : PG_TIDES(0, 0);
+        f[1] = f[0] + 1;
+        return 2;
+    case PT_MARB_T1: case PT_MARB_T2: f[0] = PG_MARBLES(0); f[1] = PG_MARBLES(1); return 2;
+    case PT_MARB_X1: case PT_MARB_X2: f[0] = PG_MARBLES(2); f[1] = PG_MARBLES(3); return 2;
+    case PT_MIX: case PT_PAN: f[0] = PG_MIX; f[1] = PG_PAN; return 2;
+    case PT_FX1: case PT_FX2: f[0] = PG_FX(0); f[1] = PG_FX(1); return 2;
+    case PT_STEP: case PT_RND: f[0] = PG_STEP(t); f[1] = VP_RND(t); return 2;
+    default: f[0] = PG_GLOBAL; f[1] = VP_SYS; return 2;
     }
 }
-static int page_count(int page)          /* its module's faces */
+static int page_count(int page)
 {
-    int pt = eng_page_type(page);
-    return pt <= PT_PLAITS3 ? 3 : pt == PT_MIX ? 1 : 2;
+    int f[3];
+    return module_pages(page, f);
 }
-static int page_first(int page) { return page - page_face(page); }
+static int page_face(int page)           /* which face of its module */
+{
+    int f[3], n = module_pages(page, f);
+    for (int i = 0; i < n; i++)
+        if (f[i] == page)
+            return i;
+    return 0;
+}
+static int page_first(int page)
+{
+    int f[3];
+    module_pages(page, f);
+    return f[0];
+}
+static int page_at(int page, int face)   /* its module's page at face (wrapping) */
+{
+    int f[3], n = module_pages(page, f);
+    return f[((face % n) + n) % n];
+}
+static int track_page(int page, int t)   /* the same page on track t */
+{
+    switch (ptype(page)) {
+    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: return PG_TRACK(t, page_face(page));
+    case PT_STEP: return PG_STEP(t);
+    case PT_RND: return VP_RND(t);
+    default: return page;
+    }
+}
+
+/* the parameter a knob turns: its page's, the GLOBAL page's TEMPO is Marbles' RATE, the RANDOM page's are its track's
+ * PAN, DECAY, NOTE and RATCHET (their randoms) */
+static int knob_param(int page, int k)
+{
+    if (page == PG_GLOBAL && k == 1)
+        return PG_MARBLES(0) * 4;
+    if (ptype(page) == PT_RND)
+        return eng_track_param(ptrack(page), RND_TP[k]);
+    return page * 4 + k;
+}
 
 static const char *module_name(int page)
 {
-    switch (eng_page_type(page)) {
+    switch (ptype(page)) {
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: return "Plaits";
     case PT_TIDES1: case PT_TIDES2: return page >= PG_TIDES(1, 0) ? "Tides B" : "Tides A";
     case PT_MARB_T1: case PT_MARB_T2: return "Marbles t";
     case PT_MARB_X1: case PT_MARB_X2: return "Marbles X";
-    case PT_MIX: return "Mixer";
+    case PT_MIX: case PT_PAN: return "Mixer";
+    case PT_STEP: case PT_RND: return "Steps";
+    case PT_GLOBAL: case PT_SYS: return "Global";
     default: return "Reverb";
     }
 }
@@ -127,7 +202,9 @@ static uint16_t track_accent(int t) { return model_accent(eng_project()->algo[PG
 static uint16_t page_accent(int page)
 {
     project_t *p = eng_project();
-    switch (eng_page_type(page)) {
+    switch (ptype(page)) {
+    case PT_STEP: case PT_RND: return track_accent(ptrack(page));
+    case PT_PAN: case PT_GLOBAL: case PT_SYS: return TEAL;
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: return model_accent(p->algo[page_first(page)]);
     case PT_TIDES1: case PT_TIDES2: return accent3(p->algo[page_first(page)]);
     case PT_MARB_T1: case PT_MARB_T2: {
@@ -149,6 +226,7 @@ static const char *const BANK[3] = {"PLAITS 1.2", "PITCHED", "NOISE & DRUMS"};
 
 /* ------------------------------------------------------------------ text --- */
 static int iabs(int v) { return v < 0 ? -v : v; }
+static int held(int b) { return (int)((ui.btn >> b) & 1u); }   /* a button held now */
 
 static void text_cat(char *d, const char *s, uint32_t max)
 {
@@ -210,14 +288,15 @@ static void label_text(const char *s, char *b, uint32_t max)
     b[n] = 0;
 }
 
-/* a parameter's short name, for the matrix: its module, then its own */
+/* a parameter's short name, for the matrix: its track or its module, then its own */
 static void param_name(int param, char *b, uint32_t max)
 {
-    int page = param / 4, t = eng_page_track(page);
+    int page = param / 4, t = -1;
     char n[4];
     b[0] = 0;
+    eng_param_tp(param, &t);
     if (t >= 0) {
-        text_cat(b, "P", max);
+        text_cat(b, "T", max);
         int_text(t + 1, n);
         text_cat(b, n, max);
     } else if (page < PG_MARBLES(0)) {
@@ -248,10 +327,11 @@ static int data_check(void)
 }
 
 /* ---------------------------------------------------------------- store --- */
-static void project_load(void)
+static void project_load(void)            /* the saved project (v0.1's read into this version's), else the demo */
 {
     project_t *p = eng_project();
-    if (plat_store_load(OBJ_PROJECT, &scratch, sizeof scratch) == (int)sizeof scratch && eng_check(&scratch))
+    int got = plat_store_load(OBJ_PROJECT, &scratch, sizeof scratch);
+    if (got > 0 && eng_upgrade(&scratch, got))
         *p = scratch;
     else
         eng_defaults(p);
@@ -314,8 +394,9 @@ void app_init(void)
     project_load();
     engine_ok = data_ok && eng_init() == 0;   /* (not before the tables: the modules' set-up may read them) */
     ui.track = 0;
-    ui.page = PG_TRACK(0, 0);
+    ui.page = ui.prev_page = PG_TRACK(0, 0);
     ui.touched_k = -1;
+    ui.held_step = -1;
 }
 
 /* ---------------------------------------------------------- drawing kit --- */
@@ -486,7 +567,7 @@ typedef struct {
     int8_t a, b, c, d;
 } vop_t;
 enum { IC_MODEL = 0, IC_RAMP = 24, IC_TMODEL = 27, IC_XMODE = 34, IC_MIX = 37, IC_REV, IC_GLO, IC_NEW, IC_DEMO,
-       IC_SAVED, NICON };
+       IC_SAVED, IC_STEPS, IC_DICE, NICON };
 #define IOPS 10
 static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 4, 24, 12, 8}, {'L', 12, 8, 12, 24}, {'L', 12, 24, 20, 8}, {'L', 20, 8, 20, 24}, {'L', 20, 24, 28, 16}},
@@ -544,6 +625,9 @@ static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 16, 6, 16, 26}, {'L', 6, 16, 26, 16}},                                                   /* new */
     {{'L', 10, 6, 10, 26}, {'L', 10, 6, 26, 16}, {'L', 26, 16, 10, 26}},                            /* the demo */
     {{'L', 16, 4, 16, 20}, {'L', 9, 13, 16, 20}, {'L', 16, 20, 23, 13}, {'L', 6, 27, 26, 27}},      /* the saved one */
+    {{'R', 3, 10, 5, 12}, {'R', 10, 10, 5, 12}, {'R', 17, 10, 5, 12}, {'R', 24, 10, 5, 12}, {'D', 5, 16, 1, 0},
+     {'D', 19, 16, 1, 0}},                                                                           /* the steps */
+    {{'R', 5, 5, 22, 22}, {'D', 11, 11, 2, 0}, {'D', 16, 16, 2, 0}, {'D', 21, 21, 2, 0}},           /* random */
 };
 
 static void vicon(float cx, float cy, float s, float w, uint16_t c, int which, int glow)
@@ -592,27 +676,36 @@ static void draw_header(void)
     static int load = -1;
     static uint32_t load_at;
     char t[32], v[12];
-    int tr = eng_page_track(ui.page), x;
+    int tr = ptrack(ui.page), x, mode = ui.held_step >= 0 ? 5 : held(B_ENV) ? 4 : held(B_GLO) ? 3 : ui.grid ? 2
+                                                                                                          : ui.mod;
     uint16_t ac = page_accent(ui.page);
     if (load < 0 || plat_ms() - load_at >= 250u) {
         load = load_now();
         load_at = plat_ms();
     }
-    int32_t s[5] = {ui.page | ui.matrix << 8 | ui.global << 9 | ui.mod << 10, load, eng_playing() | dirty << 1,
-                    ui.track | track_accent(ui.track) << 4, ac};
+    int32_t s[5] = {ui.page | ui.matrix << 8 | mode << 10 | (ui.held_step & 127) << 13, load,
+                    eng_playing() | dirty << 1, ui.track | track_accent(ui.track) << 4, ac};
     if (!ui.full && !memcmp(s, ui.head_shown, sizeof s))
         return;
     memcpy(ui.head_shown, s, sizeof s);
     cv_begin(240, HEAD_H, BG);
-    label_text(ui.global ? "Global" : ui.matrix ? "Matrix" : module_name(ui.page), t, sizeof t);
+    label_text(ui.matrix ? "Matrix" : module_name(ui.page), t, sizeof t);
     x = cv_text(10, 6, &FONT_B, t, TXT);
-    if (!ui.global && !ui.matrix && page_count(ui.page) > 1) {   /* the faces: an LED each, the one shown lit */
+    if (!ui.matrix && page_count(ui.page) > 1) {   /* the faces: an LED each, the one shown lit */
         for (int f = 0; f < page_count(ui.page); f++)
             led((float)(x + 8 + f * 11), 14.0f, 3.0f, ac, f == page_face(ui.page) ? 8 : 0);
         x += 8 + page_count(ui.page) * 11;
     }
-    if (ui.mod)
-        text_pill(x + 20, 7, &FONT_T, "MOD", PINK, C_WHITE);
+    if (mode == 5) {                     /* what the knobs do now: a step's locks, randoms, all the tracks, ... */
+        int_text(ui.held_step + 1, v);
+        t[0] = 0;
+        text_cat(t, "STEP ", sizeof t);
+        text_cat(t, v, sizeof t);
+        text_pill(x + 26, 7, &FONT_T, t, C_WHITE, BG);
+    } else if (mode) {
+        static const char *const M[5] = {"", "MOD", "REC", "ALL", "RND"};
+        text_pill(x + 20, 7, &FONT_T, M[mode], mode == 3 ? TEAL : mode == 4 ? ORANGE : PINK, mode == 4 ? BG : C_WHITE);
+    }
     t[0] = 0;
     int_text(load, v);
     text_cat(t, v, sizeof t);
@@ -804,10 +897,10 @@ static void panel_marbles(int x)
 
 static int meter_lit(int t) { return (int)(fm_clampf(eng_meter(t) * 1.25f, 0.0f, 1.0f) * 7.0f + 0.5f); }
 
-static void panel_mixer(void)
+static void panel_mixer(int pan)
 {
     hero_icon(IC_MIX, TEAL);
-    hero_line(hero_title("MIXER"), "4 TRACKS");
+    hero_line(hero_title(pan ? "PAN" : "MIXER"), pan ? "4 TRACKS|ON A TRIG: ITS LOCK, ITS RANDOM" : "4 TRACKS");
     for (int t = 0; t < ENG_TRACKS; t++) {   /* a column of LEDs a track, in its colour */
         int lit = meter_lit(t), x = 180 + t * 15;
         char n[2] = {(char)('1' + t), 0};
@@ -817,6 +910,63 @@ static void panel_mixer(void)
         }
         cv_text(x + 4 - text_w(&FONT_T, n) / 2, 63, &FONT_T, n, DIM);
     }
+}
+
+static void panel_steps(int t)            /* a track's steps: how many, how many trigs, the page on the keys */
+{
+    char s[48], n[8];
+    int len = (int)(eng_project()->val[PG_STEP(t) * 4 + 3] + 0.5f), trigs = 0;
+    for (int i = 0; i < len; i++)
+        trigs += eng_trig(t, i);
+    hero_icon(IC_STEPS, track_accent(t));
+    s[0] = 0;
+    text_cat(s, "TRACK ", sizeof s);
+    int_text(t + 1, n);
+    text_cat(s, n, sizeof s);
+    int y = hero_title(s);
+    s[0] = 0;
+    if (!eng_steps_mode()) {
+        text_cat(s, "PLAYED BY MARBLES|GLO: STEPS", sizeof s);
+    } else {
+        int_text(len, n);
+        text_cat(s, n, sizeof s);
+        text_cat(s, " STEPS|", sizeof s);
+        int_text(trigs, n);
+        text_cat(s, n, sizeof s);
+        text_cat(s, " TRIGS|PAGE ", sizeof s);
+        int_text(ui.spage + 1, n);
+        text_cat(s, n, sizeof s);
+    }
+    hero_line(y, s);
+}
+
+static void panel_random(int t)
+{
+    hero_icon(IC_DICE, track_accent(t));
+    hero_line(hero_title("RANDOM"), "RIGHT: NEW|LEFT: LOOPED|0: NONE");
+}
+
+static void panel_global(void)           /* the sequencer, the scale */
+{
+    project_t *p = eng_project();
+    char s[40], v[16];
+    hero_icon(IC_GLO, TEAL);
+    int y = hero_title(eng_steps_mode() ? "STEPS" : "MARBLES");
+    s[0] = 0;
+    if ((int)(p->val[PG_GLOBAL * 4 + 2] + 0.5f) == 0) {
+        text_cat(s, "NO SCALE", sizeof s);
+    } else {
+        eng_param_text(PG_GLOBAL * 4 + 3, p->val[PG_GLOBAL * 4 + 3], v, sizeof v);
+        text_cat(s, v, sizeof s);
+        text_cat(s, " ", sizeof s);
+        eng_param_text(PG_GLOBAL * 4 + 2, p->val[PG_GLOBAL * 4 + 2], v, sizeof v);
+        label_text(v, v, sizeof v);
+        text_cat(s, v, sizeof s);
+    }
+    text_cat(s, "|", sizeof s);
+    eng_param_text(PG_MARBLES(0) * 4, eng_final(PG_MARBLES(0) * 4), v, sizeof v);
+    text_cat(s, v, sizeof s);
+    hero_line(y, s);
 }
 
 static void panel_reverb(void)
@@ -840,8 +990,8 @@ static void reverb_meter(int force)      /* the return's meter, alone: the rest 
 static void draw_panel(void)
 {
     project_t *p = eng_project();
-    int pt = eng_page_type(ui.page), tr = eng_page_track(ui.page);
-    int32_t s[3] = {ui.page, eng_algo_count(page_first(ui.page)) ? p->algo[page_first(ui.page)] : -1, 0};
+    int pt = ptype(ui.page), tr = ptrack(ui.page);
+    int32_t s[3] = {ui.page, pt <= PT_FX2 && eng_algo_count(page_first(ui.page)) ? p->algo[page_first(ui.page)] : -1, 0};
     switch (pt) {                        /* what the display shows, to draw it again only when it changes */
     case PT_PLAITS2: s[2] = (int)(eng_final(ui.page * 4) * 200.0f) | (int)(eng_final(ui.page * 4 + 1) * 8.0f) << 8; break;
     case PT_PLAITS3: s[2] = eng_note(tr) | (int)((eng_gates() >> tr) & 1u) << 8 | (int)p->val[ui.page * 4] << 9 |
@@ -858,7 +1008,16 @@ static void draw_panel(void)
     case PT_MARB_X1: case PT_MARB_X2:
         s[2] = (int)(p->val[PG_MARBLES(2) * 4 + 3] + 0.5f) | (int)p->val[PG_MARBLES(3) * 4] << 4;
         break;
-    case PT_MIX:
+    case PT_STEP:
+        for (int i = 0; i < ENG_STEPS / 8; i++)
+            s[2] = s[2] * 31 + p->trig[tr][i];
+        s[2] = s[2] * 7 + ui.spage + 5 * eng_steps_mode() + 11 * (int)p->val[PG_STEP(tr) * 4 + 3];
+        break;
+    case PT_GLOBAL:
+        s[2] = (int)p->val[PG_GLOBAL * 4] | (int)p->val[PG_GLOBAL * 4 + 2] << 2 | (int)p->val[PG_GLOBAL * 4 + 3] << 6 |
+               (int)(eng_final(PG_MARBLES(0) * 4) * 1000.0f) << 10;
+        break;
+    case PT_MIX: case PT_PAN:
         for (int t = 0; t < ENG_TRACKS; t++)
             s[2] |= meter_lit(t) << (t * 3) | (int)(p->algo[PG_TRACK(t, 0)] / 8) << (12 + t * 2);
         break;
@@ -876,7 +1035,10 @@ static void draw_panel(void)
     case PT_TIDES1: case PT_TIDES2: panel_tides(ui.page >= PG_TIDES(1, 0)); break;
     case PT_MARB_T1: case PT_MARB_T2: panel_marbles(0); break;
     case PT_MARB_X1: case PT_MARB_X2: panel_marbles(1); break;
-    case PT_MIX: panel_mixer(); break;
+    case PT_MIX: case PT_PAN: panel_mixer(pt == PT_PAN); break;
+    case PT_STEP: panel_steps(tr); break;
+    case PT_RND: panel_random(tr); break;
+    case PT_GLOBAL: panel_global(); break;
     default: panel_reverb(); break;
     }
     cv_blit(0, PANEL_Y);
@@ -971,36 +1133,74 @@ static void ring_text(const char *t, uint16_t c, char *under, uint32_t max)
     cv_text(30 - text_w(f, a) / 2, (int)RY - f->h / 2 - 1, f, a, c);
 }
 
+/* what a knob shows: its value (and where the cables take it), or a held step's lock, or a random's depth */
+enum { KV_VALUE, KV_LOCK, KV_RND };
+static int knob_view(int param, int *t, int *tp)
+{
+    *tp = eng_param_tp(param, t);
+    if (ptype(ui.page) == PT_RND)
+        return KV_RND;
+    if (*tp < 0 || !eng_tp_lockable(*tp))
+        return KV_VALUE;
+    if (held(B_ENV))
+        return KV_RND;
+    if (ui.held_step >= 0 && *t == ui.track)
+        return KV_LOCK;
+    return KV_VALUE;
+}
+
 static void draw_knob(int k)
 {
+    static const char *const RND_NAME[4] = {"Pan", "Decay", "Tune", "Ratchet"};
     project_t *p = eng_project();
-    int param = ui.page * 4 + k;
+    int param = knob_param(ui.page, k), t, tp, view = knob_view(param, &t, &tp), locked = 0, rnd = 0;
     const eng_pdef_t *d = eng_pdef(param);
     float v = p->val[param], f = eng_final(param), u, uf;
-    char t[32], c[32], lab[24], under[32];
-    int hash = 0, hot = ui.touched_k == k && plat_ms() - ui.touched_at[k] < 1200u;
-    int ncab = cables_on(param, c, sizeof c, &hash);
+    char txt[32], c[32], lab[24], under[32];
+    int hash = 0, hot = ui.touched_k == k && plat_ms() - ui.touched_at[k] < 1200u, ncab = 0;
     int bip = d->kind == K_BIP || (d->kind == K_INT && d->lo < 0);
-    uint16_t ac = page_accent(ui.page), mc = mod_colour(ac);
-    eng_param_text(param, ncab ? f : v, t, sizeof t);
-    int32_t s[4] = {(int32_t)(knob_u(param, v) * 270.0f) | (int32_t)(knob_u(param, f) * 270.0f) << 10,
-                    text_hash(t), hash, hot | ui.mod << 1 | (int32_t)ac << 2};
+    uint16_t ac = page_accent(ui.page), mc = mod_colour(ac), vc;
+    under[0] = 0;
+    if (view == KV_RND) {                /* the random's depth: right new at each trig, left a loop */
+        rnd = p->rnd[t][tp];
+        v = f = (float)rnd * 0.01f;
+        bip = 1;
+        txt[0] = 0;
+        if (!rnd) {
+            text_cat(txt, "OFF", sizeof txt);
+        } else {
+            int_text(rnd < 0 ? -rnd : rnd, txt);
+            text_cat(under, rnd > 0 ? "RANDOM" : "LOOP", sizeof under);
+        }
+    } else if (view == KV_LOCK) {        /* the held step: its lock, else the track's value */
+        locked = eng_lock(t, ui.held_step, tp, &v);
+        f = v;
+        eng_param_text(param, v, txt, sizeof txt);
+        if (locked)
+            text_cat(under, "LOCK", sizeof under);
+    } else {
+        ncab = cables_on(param, c, sizeof c, &hash);
+        eng_param_text(param, ncab ? f : v, txt, sizeof txt);
+    }
+    vc = view == KV_RND ? (rnd < 0 ? mc : ac) : locked ? mc : ac;
+    int32_t s[4] = {(int32_t)(view == KV_RND ? (float)(rnd + 100) : knob_u(param, v) * 270.0f) |
+                    (int32_t)(knob_u(param, f) * 270.0f) << 10 | view << 20 | locked << 22,
+                    text_hash(txt), hash, hot | ui.mod << 1 | (int32_t)ac << 2};
     if (!ui.full && !memcmp(s, ui.knob_shown[k], sizeof s))
         return;
     memcpy(ui.knob_shown[k], s, sizeof s);
     cv_begin(KNOB_W, KNOB_H, BG);
-    label_text(d->name, lab, sizeof lab);  /* its name (touched: white, underlined in the module's colour) */
+    label_text(ptype(ui.page) == PT_RND ? RND_NAME[k] : d->name, lab, sizeof lab);   /* touched: white, underlined */
     {
         const felucca_font_t *lf = text_w(&FONT_XS, lab) <= 58 ? &FONT_XS : &FONT_T;
         int w = text_w(lf, lab);
-        cv_text(30 - w / 2, lf == &FONT_XS ? 0 : 2, lf, lab, hot ? C_WHITE : MUTED);
+        cv_text(30 - w / 2, lf == &FONT_XS ? 0 : 2, lf, lab, hot ? C_WHITE : view != KV_VALUE ? vc : MUTED);
         if (hot)
             cv_rect(30 - w / 2, 15, w, 2, ac);
     }
-    under[0] = 0;
-    u = fm_clampf(knob_u(param, v), 0.0f, 1.0f);
-    uf = fm_clampf(knob_u(param, f), 0.0f, 1.0f);
-    if (d->kind == K_ENUM) {             /* a choice: the ring in as many parts, the chosen one lit */
+    u = view == KV_RND ? ((float)rnd + 100.0f) / 200.0f : fm_clampf(knob_u(param, v), 0.0f, 1.0f);
+    uf = view == KV_RND ? u : fm_clampf(knob_u(param, f), 0.0f, 1.0f);
+    if (d->kind == K_ENUM && view == KV_VALUE) {   /* a choice: the ring in as many parts, the chosen one lit */
         int n = d->hi - d->lo + 1, i = (int)(v + 0.5f) - d->lo;
         float gap = n > 6 ? 0.008f : 0.014f;
         char nm[24];
@@ -1011,7 +1211,7 @@ static void draw_knob(int k)
             else
                 arc(RX, RY, R0, R1, a, b, TRACK);
         }
-        label_text(t, nm, sizeof nm);
+        label_text(txt, nm, sizeof nm);
         ring_text(nm, C_WHITE, under, sizeof under);
     } else {
         float lo = bip ? fm_minf(u, 0.5f) : 0.0f, hi = bip ? fm_maxf(u, 0.5f) : u;
@@ -1019,13 +1219,13 @@ static void draw_knob(int k)
         ring_end(0.0f, TRACK, 0);
         ring_end(1.0f, TRACK, 0);
         if (hi - lo > 0.004f) {
-            glow_arc(RX, RY, R0, R1, lo, hi, ac);
-            ring_end(lo, ac, 1);
-            ring_end(hi, ac, 1);
+            glow_arc(RX, RY, R0, R1, lo, hi, vc);
+            ring_end(lo, vc, 1);
+            ring_end(hi, vc, 1);
         } else {
-            ring_end(u, ac, 1);
+            ring_end(u, view == KV_RND ? DIM : vc, view != KV_RND);
         }
-        if (bip) {                       /* an attenuverter's - + */
+        if (bip) {                       /* an attenuverter's - + (a random's: LOOP - + RANDOM) */
             seg(3.0f, 67.0f, 8.0f, 67.0f, 1.4f, DIM);
             seg(52.0f, 67.0f, 57.0f, 67.0f, 1.4f, DIM);
             seg(54.5f, 64.5f, 54.5f, 69.5f, 1.4f, DIM);
@@ -1038,12 +1238,12 @@ static void draw_knob(int k)
             travel_xy(RX, RY, uf, (R0 + R1) * 0.5f, &x, &y);
             glow_disc(x, y, 3.0f, mc);
         }
-        ring_text(t, ncab ? mc : C_WHITE, under, sizeof under);
+        ring_text(txt, ncab ? mc : view == KV_RND && !rnd ? DIM : C_WHITE, under, sizeof under);
     }
-    if (ncab)                            /* under the ring: the cables, else a unit, else MOD's free socket */
+    if (ncab)                            /* under the ring: the cables, a lock, a random, else a unit, MOD's socket */
         cv_text(30 - text_w(&FONT_XS, c) / 2, 78, text_w(&FONT_XS, c) <= 58 ? &FONT_XS : &FONT_T, c, mc);
     else if (under[0])
-        cv_text(30 - text_w(&FONT_XS, under) / 2, 78, &FONT_XS, under, MUTED);
+        cv_text(30 - text_w(&FONT_XS, under) / 2, 78, &FONT_XS, under, view != KV_VALUE ? vc : MUTED);
     else if (ui.mod && eng_param_mod(param))
         ring(30.0f, 85.0f, 4.5f, 1.4f, DIM);
     cv_blit((uint32_t)(k * KNOB_W), KNOB_Y);
@@ -1199,18 +1399,61 @@ static void draw_missing(void)
     draw_lines(PANEL_Y + 4, 19, L, col, 8, -1);
 }
 
-/* the row at the bottom: the four tracks (an LED lit by its gate, in its model's colour), or on Tides' and Marbles'
- * pages their outputs, lit as much as they are high */
+/* the row at the bottom: the four tracks (an LED lit by its gate or its trig, in its model's colour); on Tides' and
+ * Marbles' pages their outputs, lit as much as they are high; the steps of the active track when they play it and
+ * REC is on (or on their pages) */
 static int foot_mode(void)
 {
-    if (ui.global || ui.matrix)
+    if (ui.matrix || ui.page == VP_SYS)
         return 0;
-    switch (eng_page_type(ui.page)) {
+    if (eng_steps_mode() && (ui.grid || ptype(ui.page) == PT_STEP || ptype(ui.page) == PT_RND))
+        return 5;
+    switch (ptype(ui.page)) {
     case PT_TIDES1: case PT_TIDES2: return ui.page >= PG_TIDES(1, 0) ? 2 : 1;
     case PT_MARB_T1: case PT_MARB_T2: return 3;
     case PT_MARB_X1: case PT_MARB_X2: return 4;
     default: return 0;
     }
+}
+
+static int track_lit(int t)              /* a track's LED: its gate, or a trig in the last 60 ms (a ratchet's too) */
+{
+    static uint32_t seen[ENG_TRACKS], until[ENG_TRACKS];
+    uint32_t r = eng_rises(t), now = plat_ms();
+    if (r != seen[t]) {
+        seen[t] = r;
+        until[t] = now + 60u;
+    }
+    return (int)((eng_gates() >> t) & 1u) || (int32_t)(until[t] - now) > 0;
+}
+
+static void foot_steps(int t)            /* the steps of a page: a trig lit, a lock dotted, the playing one ringed */
+{
+    project_t *p = eng_project();
+    int len = (int)(p->val[PG_STEP(t) * 4 + 3] + 0.5f), now = eng_step_now(t);
+    uint16_t ac = track_accent(t);
+    for (int i = 0; i < 16; i++) {
+        int st = ui.spage * 16 + i, x = 9 + i * 13;
+        if (st >= len) {
+            cv_rect(x + 4, 16, 3, 3, RULE);
+            continue;
+        }
+        if (st == ui.held_step)
+            cv_rect(x, 8, 11, 18, C_WHITE);
+        else if (eng_trig(t, st))
+            cv_rect(x, 8, 11, 18, st == now ? C_WHITE : ac);
+        else
+            cv_rect(x, 8, 11, 18, st == now ? MUTED : TRACK);
+        if (eng_trig(t, st) && st == now)
+            cv_rect(x + 2, 10, 7, 14, ac);
+        if (eng_step_locked(t, st))
+            disc((float)x + 5.0f, 22.0f, 1.6f, BG);
+        if (!(i & 3))
+            cv_rect(x, 28, 11, 1, DIM);  /* the beats */
+    }
+    for (int j = 0; j < 4; j++)          /* the pages */
+        if (j * 16 < len)
+            cv_rect(222, 9 + j * 5, 6, 3, j == ui.spage ? TXT : DIM);
 }
 
 static void draw_footer(void)
@@ -1219,17 +1462,23 @@ static void draw_footer(void)
                                           {"t1", "t2", "t3", "Y"}, {"X1", "X2", "X3", "Y"}};
     project_t *p = eng_project();
     char t[40], n[8];
-    uint32_t now = plat_ms(), g = eng_gates();
+    uint32_t now = plat_ms();
     int msg = now < ui.msg_until, mode = foot_mode(), lv[4], lh = 0;
     uint16_t ac = page_accent(ui.page);
     for (int i = 0; i < 4; i++) {        /* each LED's level, 0..8 */
         int src = mode == 1 ? SRC_A1 + i : mode == 2 ? SRC_B1 + i : mode == 3 ? (i < 3 ? SRC_T1 + i : SRC_Y)
-                : SRC_X1 + i, v = mode ? eng_hist(src, ENG_HIST - 1) : 0;
-        lv[i] = mode ? (iabs(v) * 8 + 63) / 127 : (int)((g >> i) & 1u) * 8;
+                : SRC_X1 + i, v = mode && mode < 5 ? eng_hist(src, ENG_HIST - 1) : 0;
+        lv[i] = mode && mode < 5 ? (iabs(v) * 8 + 63) / 127 : track_lit(i) * 8;
         lh = lh * 9 + lv[i];
     }
-    int32_t s[6] = {lh | mode << 16 | ui.mod << 20 | msg << 21, (int32_t)(track_accent(0) ^ track_accent(1) << 1 ^
-                    track_accent(2) << 2 ^ track_accent(3) << 3), ui.track | (int32_t)ac << 4,
+    if (mode == 5) {                     /* the steps shown: their trigs, locks, the one playing, the one held */
+        lh = eng_step_now(ui.track) | ui.held_step << 7 | ui.spage << 14;
+        for (int i = 0; i < 16; i++)
+            lh = lh * 3 + eng_trig(ui.track, ui.spage * 16 + i) + (eng_step_locked(ui.track, ui.spage * 16 + i) ? 2 : 0);
+        lh = lh * 67 + (int)p->val[PG_STEP(ui.track) * 4 + 3];
+    }
+    int32_t s[6] = {lh, mode | ui.mod << 4 | msg << 5, (int32_t)(track_accent(0) ^ track_accent(1) << 1 ^
+                    track_accent(2) << 2 ^ track_accent(3) << 3) ^ ui.track << 20 ^ (int32_t)ac << 4,
                     eng_note(0) | eng_note(1) << 8 | eng_note(2) << 16,
                     p->algo[PG_TRACK(0, 0)] | p->algo[PG_TRACK(1, 0)] << 5 | p->algo[PG_TRACK(2, 0)] << 10 |
                     p->algo[PG_TRACK(3, 0)] << 15, msg ? text_hash(ui.msg[0]) : 0};
@@ -1247,6 +1496,8 @@ static void draw_footer(void)
     } else if (ui.mod) {
         cv_text(10, 6, &FONT_XS, "MOD: HOLD A SOURCE KEY, TURN A KNOB", C_WHITE);
         cv_text(10, 21, &FONT_T, "KEYS 1-4 A  5-8 B  9-11 X  12 Y  13-15 T", MUTED);
+    } else if (mode == 5) {
+        foot_steps(ui.track);
     } else {
         for (int i = 0; i < 4; i++) {
             int x = 10 + i * 57, act = mode ? lv[i] > 0 : i == ui.track;
@@ -1268,22 +1519,28 @@ static void draw_footer(void)
     cv_blit(0, FOOT_Y);
 }
 
+static void poll_keys(void);             /* (input, below): the keys read between the screen's parts too */
+
 static void draw(void)
 {
     if (ui.full)
         lcd_fill(0, 0, 240, 240, BG);
     draw_header();
+    poll_keys();
     if (!data_ok || !engine_ok) {
         draw_missing();
-    } else if (ui.global) {
+    } else if (ui.page == VP_SYS) {
         draw_global();
     } else if (ui.matrix) {
         draw_matrix();
     } else {
         draw_panel();
-        for (int k = 0; k < 4; k++)
+        for (int k = 0; k < 4; k++) {
+            poll_keys();
             draw_knob(k);
+        }
     }
+    poll_keys();
     draw_footer();
     ui.full = 0;
 }
@@ -1291,9 +1548,12 @@ static void draw(void)
 /* ---------------------------------------------------------------- input --- */
 static void go_page(int page)
 {
+    int g = ptype(page) == PT_GLOBAL || ptype(page) == PT_SYS;
+    if (g && ptype(ui.page) != PT_GLOBAL && ptype(ui.page) != PT_SYS)
+        ui.prev_page = ui.page;          /* GLO again goes back there */
     ui.page = page;
     ui.touched_k = -1;
-    ui.matrix = ui.global = 0;
+    ui.matrix = 0;
     ui.full = 1;
 }
 
@@ -1318,31 +1578,77 @@ static void project_init(int which)
     go_page(PG_TRACK(0, 0));
 }
 
+/* a value moved e detents: 1 % a detent (3 fast) over 0..1, 2 % over -1..1, one for an integer or a choice */
+static float step_value(int param, float v, int32_t e)
+{
+    const eng_pdef_t *d = eng_pdef(param);
+    int32_t a = e > 1 || e < -1 ? e * 3 : e;
+    if (d->kind == K_UNI)
+        return fm_clampf(v + 0.01f * (float)a, 0.0f, 1.0f);
+    if (d->kind == K_BIP)
+        return fm_clampf(v + 0.02f * (float)a, -1.0f, 1.0f);
+    return (float)clamp((int32_t)(v + (v < 0 ? -0.5f : 0.5f)) + e, d->lo, d->hi);
+}
+
 static void edit_param(int param, int32_t e)
 {
     project_t *p = eng_project();
-    const eng_pdef_t *d = eng_pdef(param);
-    float v = p->val[param];
-    int32_t a = e > 1 || e < -1 ? e * 3 : e;    /* a fast turn goes further */
-    if (d->kind == K_UNI)
-        v = fm_clampf(v + 0.01f * (float)a, 0.0f, 1.0f);
-    else if (d->kind == K_BIP)
-        v = fm_clampf(v + 0.02f * (float)a, -1.0f, 1.0f);
-    else
-        v = (float)clamp((int32_t)(v + (v < 0 ? -0.5f : 0.5f)) + e, d->lo, d->hi);
-    p->val[param] = v;
+    p->val[param] = step_value(param, p->val[param], e);
+    dirty = 1;
+}
+
+static int edit_all(int param, int32_t e)   /* GLO held: a track's parameter moved on the four tracks */
+{
+    int t, tp = eng_param_tp(param, &t);
+    if (tp < 0)
+        return 0;
+    for (int i = 0; i < ENG_TRACKS; i++)
+        edit_param(eng_track_param(i, tp), e);
+    return 1;
+}
+
+/* ENV held (or the RANDOM page): a track parameter's random, -100 (a loop) .. 100 (new at each trig), 0 none: the
+ * knob's own value again. GLO held too: the four tracks' */
+static void edit_rnd(int param, int32_t e)
+{
+    project_t *p = eng_project();
+    int t, tp = eng_param_tp(param, &t);
+    if (tp < 0 || !eng_tp_lockable(tp)) {
+        app_say("RANDOM:", "A TRACK'S KNOBS");
+        return;
+    }
+    for (int i = 0; i < ENG_TRACKS; i++)
+        if (i == t || held(B_GLO)) {
+            int r = p->rnd[i][tp], n = clamp(r + e * (e > 1 || e < -1 ? 5 : 2), -100, 100);
+            if ((r > 0 && n < 0) || (r < 0 && n > 0))
+                n = 0;                   /* a stop at 0 on the way through */
+            p->rnd[i][tp] = (int8_t)n;
+        }
+    dirty = 1;
+}
+
+static void edit_lock(int param, int32_t e)   /* a held step: its lock on the active track's parameter */
+{
+    project_t *p = eng_project();
+    int t, tp = eng_param_tp(param, &t);
+    float v;
+    if (tp < 0 || !eng_tp_lockable(tp) || t != ui.track) {
+        app_say("LOCK:", "THIS TRACK'S KNOBS");
+        return;
+    }
+    if (!eng_lock(t, ui.held_step, tp, &v))
+        v = p->val[param];
+    if (eng_lock_set(t, ui.held_step, tp, step_value(param, v, e)) != 0)
+        app_say("LOCKS", "ALL USED");
+    ui.step_edit = 1;
     dirty = 1;
 }
 
 /* the group a parameter's cables live in: its track's, or the global one */
 static int cable_group(int param)
 {
-    int t = eng_page_track(param / 4);
-    if (t >= 0)
-        return t;
-    if (param / 4 == PG_MIX || param / 4 == PG_FX(0))
-        return param % 4;                /* a track's level and send: that track's cables */
-    return ENG_TRACKS;
+    int t, tp = eng_param_tp(param, &t);
+    return tp >= 0 ? t : ENG_TRACKS;
 }
 
 /* MOD mode: source s on parameter param, its depth moved by e */
@@ -1398,13 +1704,10 @@ static int key_source(int key)           /* the spec's row: 1-4 A1-A4, 5-8 B1-B4
 /* the module buttons: their first page, and where a second press goes */
 static void module_button(int b)
 {
-    int pt = eng_page_type(ui.page), here = !ui.matrix && !ui.global;
+    int pt = ptype(ui.page), here = !ui.matrix, next = page_at(ui.page, page_face(ui.page) + 1);
     switch (b) {
     case B_EDIT:
-        if (here && pt <= PT_PLAITS3)
-            go_page(PG_TRACK(ui.track, (page_face(ui.page) + 1) % 3));
-        else
-            go_page(PG_TRACK(ui.track, 0));
+        go_page(here && pt <= PT_PLAITS3 ? next : PG_TRACK(ui.track, 0));
         break;
     case B_LFO:
         if (here && (pt == PT_TIDES1 || pt == PT_TIDES2))
@@ -1412,25 +1715,23 @@ static void module_button(int b)
         else
             go_page(PG_TIDES(0, 0));
         break;
-    case B_SEQ:
-        go_page(here && pt == PT_MARB_T1 ? PG_MARBLES(1) : PG_MARBLES(0));
+    case B_SEQ:                          /* the sequencer: the track's steps, or Marbles' t */
+        if (eng_steps_mode())
+            go_page(here && (pt == PT_STEP || pt == PT_RND) ? next : PG_STEP(ui.track));
+        else
+            go_page(here && pt == PT_MARB_T1 ? PG_MARBLES(1) : PG_MARBLES(0));
         break;
-    case B_ARP:
-        go_page(here && pt == PT_MARB_X1 ? PG_MARBLES(3) : PG_MARBLES(2));
+    case B_ARP:                          /* Marbles' X (with the steps, Marbles still runs: its t, then its X) */
+        if (eng_steps_mode())
+            go_page(here && (pt == PT_MARB_T1 || pt == PT_MARB_T2) ? PG_MARBLES(2) : PG_MARBLES(0));
+        else
+            go_page(here && pt == PT_MARB_X1 ? PG_MARBLES(3) : PG_MARBLES(2));
         break;
     case B_HOME:
-        go_page(PG_MIX);
+        go_page(here && pt == PT_MIX ? PG_PAN : PG_MIX);
         break;
     case B_FX:
         go_page(here && pt == PT_FX1 ? PG_FX(1) : PG_FX(0));
-        break;
-    case B_GLO:
-        ui.global = !ui.global;
-        ui.matrix = 0;
-        ui.full = 1;
-        break;
-    case B_ENV:
-        app_say("SCENES", "IN V0.3");
         break;
     default:
         break;
@@ -1439,6 +1740,7 @@ static void module_button(int b)
 
 static void button_down(int b)
 {
+    ui.used[b] = 0;
     switch (b) {
     case B_PLAY:
         eng_play(!eng_playing());
@@ -1449,10 +1751,9 @@ static void button_down(int b)
     case B_OCTUP:
         ui.octave = clamp(ui.octave + 1, -3, 3);
         break;
-    case B_SEL:
-    case B_SAVE:
-    case B_REC:
-        break;                           /* on release (short) or held (long) */
+    case B_SEL: case B_SAVE: case B_REC: case B_GLO: case B_ENV:
+        ui.full = 1;                     /* on release (a tap), held long, or held with a knob */
+        break;
     default:
         module_button(b);
         break;
@@ -1461,10 +1762,10 @@ static void button_down(int b)
 
 static void button_long(int b)
 {
-    if (b == B_SEL) {
+    if (b == B_SEL && ui.held_step < 0) {
         ui.matrix = 1;
-        ui.global = 0;
         ui.mod = 0;
+        ui.grid = 0;
         ui.msel = 0;
         ui.full = 1;
     } else if (b == B_SAVE) {
@@ -1475,21 +1776,57 @@ static void button_long(int b)
         else
             app_say("COULD NOT", "SAVE");
     } else if (b == B_REC) {
-        if (ui.global)
+        if (ui.page == VP_SYS)
             project_init(ui.init_sel);
-        else
-            app_say("INIT:", "GLO, THEN REC HELD");
+        else if (!ui.grid)
+            app_say("INIT:", "GLO, SELECT, REC HELD");
     }
 }
 
 static void button_up(int b)
 {
-    if (b == B_SEL && !ui.long_done[b]) {
-        if (ui.matrix)
+    int pt = ptype(ui.page);
+    switch (b) {
+    case B_SEL:
+        if (ui.long_done[b])
+            break;
+        if (ui.held_step >= 0) {         /* a step held: its locks cleared */
+            eng_lock_clear(ui.track, ui.held_step);
+            ui.step_edit = 1;
+            dirty = 1;
+            app_say("STEP", "LOCKS CLEARED");
+        } else if (ui.matrix) {
             ui.matrix = 0;
-        else
+        } else {
             ui.mod = !ui.mod;
+            ui.grid = 0;
+        }
         ui.full = 1;
+        break;
+    case B_REC:                          /* the steps on the white keys */
+        if (ui.long_done[b])
+            break;
+        if (!eng_steps_mode()) {
+            app_say("REC:", "SEQUENCER ON STEPS (GLO)");
+            break;
+        }
+        ui.grid = !ui.grid;
+        ui.mod = 0;
+        ui.held_step = -1;
+        ui.full = 1;
+        break;
+    case B_GLO:                          /* a tap: the global page, and back; held with a knob: ALL */
+        if (!ui.used[b])
+            go_page(pt == PT_GLOBAL || pt == PT_SYS ? ui.prev_page : PG_GLOBAL);
+        ui.full = 1;
+        break;
+    case B_ENV:                          /* held with a knob: its random */
+        if (!ui.used[b])
+            app_say("ENV HELD + A KNOB:", "ITS RANDOM");
+        ui.full = 1;
+        break;
+    default:
+        break;
     }
 }
 
@@ -1523,13 +1860,70 @@ static void matrix_turn(int k, int32_t e)
     dirty = 1;
 }
 
+/* the keys: the active track's notes; MOD's sources; with REC on, the white keys are the 16 steps of a page (held: its
+ * locks on the knobs), the first four black keys the pages */
+static void grid_key(int k, int down)
+{
+    static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
+    int w = -1, bl = -1, len = (int)(eng_project()->val[PG_STEP(ui.track) * 4 + 3] + 0.5f);
+    for (int i = 0; i < 16; i++)
+        if (W[i] == k)
+            w = i;
+    for (int i = 0; i < 11; i++)
+        if (Bk[i] == k)
+            bl = i;
+    if (w >= 0) {
+        int st = ui.spage * 16 + w;
+        if (st >= len)
+            return;
+        if (down) {
+            ui.held_step = st;
+            ui.step_edit = 0;
+            ui.step_new = !eng_trig(ui.track, st);
+            if (ui.step_new) {
+                eng_trig_set(ui.track, st, 1);
+                dirty = 1;
+            }
+        } else if (st == ui.held_step) { /* let go: a trig that was there, not locked meanwhile, goes (its locks too) */
+            if (!ui.step_new && !ui.step_edit) {
+                eng_trig_set(ui.track, st, 0);
+                eng_lock_clear(ui.track, st);
+                dirty = 1;
+            }
+            ui.held_step = -1;
+        }
+    } else if (bl >= 0 && bl < 4 && down && bl * 16 < len) {
+        ui.spage = bl;
+    }
+}
+
+static void poll_keys(void)
+{
+    uint32_t keys = plat_keys(), k;
+    if (keys == ui.keys)
+        return;
+    for (k = 0; k < NKEYS; k++) {
+        uint32_t bit = 1u << k;
+        int down = (keys & bit) && !(ui.keys & bit), up = !(keys & bit) && (ui.keys & bit);
+        if ((!down && !up) || ui.mod)    /* MOD: the keys are the sources (held_source) */
+            continue;
+        if (ui.grid)
+            grid_key((int)k, down);
+        else
+            eng_key(ui.track, 53 + (int)k + 12 * ui.octave, down);
+    }
+    ui.keys = keys;
+}
+
 static void input(void)
 {
-    uint32_t now = plat_ms(), btn = plat_buttons(), keys = plat_keys(), k;
+    uint32_t now = plat_ms(), btn = plat_buttons(), k;
+    int32_t e;
     /* buttons: down, held long, up */
     for (k = 0; k < NB; k++) {
         uint32_t bit = 1u << k;
         if ((btn & bit) && !(ui.btn & bit)) {
+            ui.btn |= bit;
             ui.down_at[k] = now;
             ui.long_done[k] = 0;
             button_down((int)k);
@@ -1537,94 +1931,108 @@ static void input(void)
             ui.long_done[k] = 1;
             button_long((int)k);
         } else if (!(btn & bit) && (ui.btn & bit)) {
+            ui.btn &= ~bit;
             button_up((int)k);
         }
     }
     ui.btn = btn;
-    /* keys: the active track, or the sources in MOD mode */
-    if (keys != ui.keys) {
-        for (k = 0; k < NKEYS; k++) {
-            uint32_t bit = 1u << k;
-            int note = 53 + (int)k + 12 * ui.octave;
-            if (ui.mod)
-                continue;
-            if ((keys & bit) && !(ui.keys & bit))
-                eng_key(ui.track, note, 1);
-            else if (!(keys & bit) && (ui.keys & bit))
-                eng_key(ui.track, note, 0);
-        }
-        ui.keys = keys;
-    }
+    poll_keys();
     /* encoders */
-    {
-        int32_t e = plat_enc(EN_PRESET);
-        if (e) {
-            int t = clamp(ui.track + e, 0, ENG_TRACKS - 1);
-            if (t != ui.track) {
-                for (k = 0; k < NKEYS; k++)      /* the keyboard's notes stop on the old track */
-                    if (ui.keys & (1u << k))
-                        eng_key(ui.track, 53 + (int)k + 12 * ui.octave, 0);
-                ui.track = t;
-                if (eng_page_track(ui.page) >= 0)
-                    ui.page = PG_TRACK(t, page_face(ui.page));
-                ui.full = 1;
-            }
-        }
-        e = plat_enc(EN_SELECT);
-        if (e && !ui.matrix && !ui.global && page_count(ui.page) > 1) {
-            int first = page_first(ui.page), n = page_count(ui.page);
-            go_page(first + (page_face(ui.page) + (e > 0 ? 1 : n - 1)) % n);
-        }
-        e = plat_enc(EN_ALGO);
-        if (e && !ui.matrix && !ui.global) {
-            project_t *p = eng_project();
-            int first = page_first(ui.page), n = eng_algo_count(first);
-            if (n) {
-                p->algo[first] = (uint8_t)clamp((int32_t)p->algo[first] + e, 0, n - 1);
-                dirty = 1;
-            }
-        }
-        for (int i = 0; i < 4; i++) {
-            e = plat_enc(EN_K1 + i);
-            if (!e || !data_ok)
-                continue;
-            if (ui.global) {             /* GLO: K1 picks the project REC held loads */
-                if (i == 0)
-                    ui.init_sel = clamp(ui.init_sel + (e > 0 ? 1 : -1), 0, 2);
-                continue;
-            }
-            if (ui.matrix) {
-                matrix_turn(i, e);
-                continue;
-            }
-            int param = ui.page * 4 + i, h = ui.mod ? held_source() : 0;
-            if (h >= 1 && h <= 15)
-                cable_turn(key_source(h), param, e);
-            else if (h == 17 || h == 18)         /* the fans: A n (or B n) on knob n */
-                cable_turn((h == 17 ? SRC_A1 : SRC_B1) + i, param, e);
-            else
-                edit_param(param, e);
-            ui.touched_at[i] = now;
-            ui.touched_k = i;
+    e = plat_enc(EN_PRESET);
+    if (e) {
+        int t = clamp(ui.track + e, 0, ENG_TRACKS - 1);
+        if (t != ui.track) {
+            for (k = 0; k < NKEYS; k++)  /* the keyboard's notes stop on the old track */
+                if (ui.keys & (1u << k) && !ui.grid && !ui.mod)
+                    eng_key(ui.track, 53 + (int)k + 12 * ui.octave, 0);
+            ui.track = t;
+            ui.held_step = -1;
+            ui.page = track_page(ui.page, t);
+            ui.full = 1;
         }
     }
-    /* lights: the page's button, PLAY, SEL in MOD mode, REC on GLO; the keys: held, or the sources on this page */
+    e = plat_enc(EN_SELECT);
+    if (e && !ui.matrix && page_count(ui.page) > 1)
+        go_page(page_at(ui.page, page_face(ui.page) + (e > 0 ? 1 : -1)));
+    e = plat_enc(EN_ALGO);
+    if (e && !ui.matrix && ptype(ui.page) <= PT_FX2) {
+        project_t *p = eng_project();
+        int first = page_first(ui.page), n = eng_algo_count(first);
+        if (n) {
+            int a = clamp((int32_t)p->algo[first] + e, 0, n - 1);
+            if (held(B_GLO) && ptype(ui.page) <= PT_PLAITS3) {   /* GLO held: the four tracks on that model */
+                for (int t = 0; t < ENG_TRACKS; t++)
+                    p->algo[PG_TRACK(t, 0)] = (uint8_t)a;
+                ui.used[B_GLO] = 1;
+            } else {
+                p->algo[first] = (uint8_t)a;
+            }
+            dirty = 1;
+        }
+    }
+    for (int i = 0; i < 4; i++) {
+        e = plat_enc(EN_K1 + i);
+        if (!e || !data_ok)
+            continue;
+        if (ui.page == VP_SYS) {         /* the project REC held loads */
+            if (i == 0)
+                ui.init_sel = clamp(ui.init_sel + (e > 0 ? 1 : -1), 0, 2);
+            continue;
+        }
+        if (ui.matrix) {
+            matrix_turn(i, e);
+            continue;
+        }
+        int param = knob_param(ui.page, i), h = ui.mod ? held_source() : 0;
+        if (held(B_GLO))
+            ui.used[B_GLO] = 1;
+        if (ptype(ui.page) == PT_RND) {
+            edit_rnd(param, e);
+        } else if (held(B_ENV)) {
+            ui.used[B_ENV] = 1;
+            edit_rnd(param, e);
+        } else if (ui.held_step >= 0) {
+            edit_lock(param, e);
+        } else if (h >= 1 && h <= 15) {
+            cable_turn(key_source(h), param, e);
+        } else if (h == 17 || h == 18) { /* the fans: A n (or B n) on knob n */
+            cable_turn((h == 17 ? SRC_A1 : SRC_B1) + i, param, e);
+        } else if (!held(B_GLO) || !edit_all(param, e)) {
+            edit_param(param, e);
+        }
+        ui.touched_at[i] = now;
+        ui.touched_k = i;
+    }
+    /* lights: the page's button, PLAY, SEL in MOD mode, REC with the steps; the keys: the steps (the one playing
+     * blinks), or held, or the sources on this page */
     {
+        static const uint8_t PAGE_BTN[PT_SYS + 1] = {B_EDIT, B_EDIT, B_EDIT, B_LFO, B_LFO, B_SEQ, B_SEQ, B_ARP, B_ARP,
+                                                    B_HOME, B_FX, B_FX, B_HOME, B_SEQ, B_GLO, B_SEQ, B_GLO};
+        static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
         uint32_t bb = 0, kk = ui.keys;
-        int pt = eng_page_type(ui.page);
-        static const uint8_t PAGE_BTN[NPT] = {B_EDIT, B_EDIT, B_EDIT, B_LFO, B_LFO, B_SEQ, B_SEQ, B_ARP, B_ARP,
-                                             B_HOME, B_FX, B_FX};
-        if (!ui.global && !ui.matrix)
-            bb |= 1u << PAGE_BTN[pt];
-        if (ui.global)
-            bb |= 1u << B_GLO | 1u << B_REC;
+        int pt = ptype(ui.page);
+        if (!ui.matrix)
+            bb |= 1u << (eng_steps_mode() && (pt == PT_MARB_T1 || pt == PT_MARB_T2) ? B_ARP : PAGE_BTN[pt]);
         if (ui.mod || ui.matrix)
             bb |= 1u << B_SEL;
+        if (ui.grid || ui.page == VP_SYS)
+            bb |= 1u << B_REC;
         if (eng_playing())
             bb |= LED_PLAY_GREEN;
         if (dirty)
             bb |= 1u << B_SAVE;
-        if (ui.mod) {
+        if (ui.grid) {
+            int len = (int)(eng_project()->val[PG_STEP(ui.track) * 4 + 3] + 0.5f), st = eng_step_now(ui.track);
+            kk = 0;
+            for (int i = 0; i < 16; i++)
+                if (eng_trig(ui.track, ui.spage * 16 + i))
+                    kk |= 1u << W[i];
+            if (st >= ui.spage * 16 && st < ui.spage * 16 + 16)
+                kk ^= 1u << W[st - ui.spage * 16];
+            for (int j = 0; j < 4 && j * 16 < len; j++)
+                if (j == ui.spage)
+                    kk |= 1u << Bk[j];
+        } else if (ui.mod) {
             project_t *p = eng_project();
             for (int g = 0; g <= ENG_TRACKS; g++)
                 for (int c = 0; c < ENG_CABLES; c++) {
@@ -1654,6 +2062,8 @@ void app_host_reboot(void)
 {
     memset(&ui, 0, sizeof ui);
     ui.touched_k = -1;
+    ui.held_step = -1;
+    ui.prev_page = PG_TRACK(0, 0);
     halted = save_hold = dirty = 0;
     eng_play(0);
 }

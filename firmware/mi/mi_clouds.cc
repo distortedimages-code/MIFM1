@@ -7,6 +7,7 @@
 #include <new>
 #include "bridge.h"
 #include "clouds/dsp/granular_processor.h"
+#include "mi_reverb.h"
 
 namespace {
 
@@ -112,9 +113,9 @@ namespace {
 
 const uint32_t kRvChunk = 32;
 
-struct ReverbFx {
-  clouds::Reverb reverb;
-  uint16_t buffer[16384];
+struct ReverbFx {                       // mi/mi_reverb.h: Clouds' reverb, its delay lines in floats
+  mifm1::Reverb reverb;
+  float buffer[16384];
   clouds::FloatFrame frames[kRvChunk];
 };
 
@@ -126,8 +127,8 @@ uint32_t mrv_size(void) { return sizeof(ReverbFx); }
 
 void mrv_init(void* mem) {
   ReverbFx* r = new (mem) ReverbFx();
-  for (uint32_t i = 0; i < 16384; ++i) r->buffer[i] = 0;
-  r->reverb.Init(r->buffer);
+  for (uint32_t i = 0; i < 16384; ++i) r->buffer[i] = 0.0f;
+  r->reverb.Init(r->buffer, 44100.0f);
   r->reverb.set_amount(1.0f);
   r->reverb.set_input_gain(0.2f);
   r->reverb.set_time(0.7f);
