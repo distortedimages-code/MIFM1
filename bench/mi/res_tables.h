@@ -4,5 +4,5 @@
 #define MIFM1_RES_BASE 0x97000u             /* app.h APP_RES_BASE */
 #define MIFM1_RES_SECTORS 36u
 #define MIFM1_RES_LEN 144948u               /* the payload: bench/res/mi_tables.bin */
-#define MIFM1_RES_ADDR 0x02093020u      /* where the payload reads in place (FM1_XIP) */
+/* the payload reads in place at 0x02093020 (FM1_XIP): the moved symbols' base (mi/res_symbols.cc) */
 #define MIFM1_RES_TABLES 47

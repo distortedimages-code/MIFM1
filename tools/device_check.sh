@@ -73,4 +73,19 @@ done
 if llvm-nm -S "$OUT/check.elf" | grep -E " [rR] _ZN(7marbles13dist_icdf|6plaits20wav_integrated|5tides13lut_wavetable)"; then
     echo "a moved table is in the image too"; exit 1
 fi
-echo "device check: ok (no libm, no C++ library, no double)"
+# fm1-base's rules for an app's C sources, as its firmware build applies them (tools/build.py mmio_check: no register
+# or XIP window address, no inline asm, no volatile cast outside the BSP)
+python3 - "$ROOT" "$BASE" <<'PY'
+import sys
+from pathlib import Path
+root, base = Path(sys.argv[1]), Path(sys.argv[2])
+sys.path.insert(0, str(base / "tools"))
+import build
+build.APP, build.ROOT = root / "bench", root
+build.CONF = build.read_conf(build.APP / "fm1.toml")
+errors = build.mmio_check()
+for e in errors:
+    print(e)
+sys.exit(1 if errors else 0)
+PY
+echo "device check: ok (no libm, no C++ library, no double; fm1-base's rules for the app's C)"

@@ -88,7 +88,7 @@ def main():
         f"#define MIFM1_RES_BASE {RES_BASE:#x}u             /* app.h APP_RES_BASE */",
         f"#define MIFM1_RES_SECTORS {sectors}u",
         f"#define MIFM1_RES_LEN {len(payload)}u               /* the payload: bench/res/mi_tables.bin */",
-        f"#define MIFM1_RES_ADDR {base:#010x}u      /* where the payload reads in place (FM1_XIP) */",
+        f"/* the payload reads in place at {base:#010x} (FM1_XIP): the moved symbols' base (mi/res_symbols.cc) */",
         f"#define MIFM1_RES_TABLES {len(entries)}",
         "",
     ]
@@ -109,14 +109,22 @@ def main():
     for ns, name, ctype, off, count in entries:
         sym = mangle(ns, name)
         syms.append(f'    ".globl {sym}\\n.set {sym}, {base + off:#010x}\\n"')
-    syms += [");", "#else"]
+    syms += [");", "#endif", ""]
     for module_ns in sorted({e[0] for e in entries}):
         syms.append(f"namespace {module_ns} {{")
         for ns, name, ctype, off, count in entries:
             if ns == module_ns:
                 syms.append(f"extern const {ctype} {name}[];")
         syms.append("}")
-    syms += ["", "namespace {", "struct Moved { const void* data; uint32_t offset, bytes; };", "const Moved kMoved[] = {"]
+    first = entries[0]
+    assert first[3] == 0, "the first moved table starts the payload"
+    syms += [
+        "",
+        "// the first moved table (offset 0): on the FM-1 the region's payload, where plat_res must point (app.c)",
+        f'extern "C" const void* mi_res_where(void) {{ return {first[0]}::{first[1]}; }}',
+        "",
+        "#ifdef PLAT_HOST",
+        "namespace {", "struct Moved { const void* data; uint32_t offset, bytes; };", "const Moved kMoved[] = {"]
     for ns, name, ctype, off, count in entries:
         syms.append(f"  {{ {ns}::{name}, {off}u, {count * TYPES[ctype][1]}u }},")
     syms += [

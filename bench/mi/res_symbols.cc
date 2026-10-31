@@ -56,7 +56,8 @@ __asm__(
     ".globl _ZN6plaits20wav_integrated_wavesE\n.set _ZN6plaits20wav_integrated_wavesE, 0x020a403c\n"
     ".globl _ZN5tides13lut_wavetableE\n.set _ZN5tides13lut_wavetableE, 0x020b063c\n"
 );
-#else
+#endif
+
 namespace marbles {
 extern const float dist_icdf_0_0[];
 extern const float dist_icdf_0_1[];
@@ -111,6 +112,10 @@ namespace tides {
 extern const int16_t lut_wavetable[];
 }
 
+// the first moved table (offset 0): on the FM-1 the region's payload, where plat_res must point (app.c)
+extern "C" const void* mi_res_where(void) { return marbles::dist_icdf_0_0; }
+
+#ifdef PLAT_HOST
 namespace {
 struct Moved { const void* data; uint32_t offset, bytes; };
 const Moved kMoved[] = {

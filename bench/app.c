@@ -14,6 +14,7 @@
  * it holds this build's, no scene plays (they would read erased flash) and the screen says to install again. */
 #include "fastmath.h"
 #include "mi/scenes.h"
+const void *mi_res_where(void);          /* mi/res_symbols.cc: where the moved tables are (FM-1: the region) */
 #ifdef PLAT_HOST
 int mi_res_check(const uint8_t *payload, uint32_t len);   /* mi/res_symbols.cc: the region's file against the arrays */
 #endif
@@ -75,7 +76,7 @@ static int data_check(void)
 #ifdef PLAT_HOST
     return mi_res_check(p, len) == -1;
 #else
-    return p == (const uint8_t *)MIFM1_RES_ADDR;
+    return p == (const uint8_t *)mi_res_where();
 #endif
 }
 

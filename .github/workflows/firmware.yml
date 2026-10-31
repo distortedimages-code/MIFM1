@@ -85,7 +85,8 @@ jobs:
           set -o pipefail
           annotate() { python3 -c "import sys; t = sys.stdin.read().replace('%', '%25').replace('\r', '').replace('\n', '%0A'); print('::$1 title=$2::' + t)"; }
           (cd base && python3 tools/build.py ../bench --release "$VERSION") 2>&1 | tee build.log || {
-            tail -n 120 build.log | annotate error "build"; exit 1; }
+            { grep -nE "error|build:|undefined|outside the BSP|overflow|too (big|large)" build.log | grep -v "warning:" | tail -n 60
+              echo ...; tail -n 25 build.log; } | annotate error "build"; exit 1; }
           # what the build says about sizes and RAM
           tail -n 40 build.log | annotate notice "build"
           ls -la bench/build/*.fwsc bench/build/*-res.bin

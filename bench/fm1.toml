@@ -19,7 +19,8 @@ o2 = ["mi/*.cc",
       "third_party/tides2/*.cc",
       "third_party/marbles/*.cc", "third_party/marbles/random/*.cc", "third_party/marbles/ramp/*.cc"]
 o2_cflags = ["-std=gnu++11", "-fno-exceptions", "-fno-rtti", "-fno-threadsafe-statics", "-fno-use-cxa-atexit",
-             "-fdata-sections", "-DTEST"]
+             "-fdata-sections", "-DTEST",
+             "-Wno-unused-local-typedef"]   # (stmlib's STATIC_ASSERT: a typedef per use)
 include = ["third_party"]
 device_include = ["shim"]      # the C and C++ headers the FM-1's toolchain has not (no libm, no C++ library)
 vendored = ["third_party/"]
