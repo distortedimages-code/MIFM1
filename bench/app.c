@@ -168,6 +168,55 @@ static void int_text(int32_t v, char *b)
     *b = 0;
 }
 
+static void hex_text(uint32_t v, char *b)     /* 8 hex digits */
+{
+    int i;
+    for (i = 7; i >= 0; i--, v >>= 4)
+        b[i] = "0123456789ABCDEF"[v & 15u];
+    b[8] = 0;
+}
+
+static uint32_t rd32(const uint8_t *p) { return p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
+
+/* why the tables are missing, in two lines: the region's header as the flash holds it (device/res.c: "RES1", the
+ * payload's length, its CRC-32), what the platform made of it (plat_res), where the moved symbols point */
+static void data_why(char *a, char *b)
+{
+    uint32_t len = 0, magic, hlen, hcrc;
+    const uint8_t *h = plat_data(MIFM1_RES_BASE), *p = plat_res(&len);
+    char v[12];
+    a[0] = b[0] = 0;
+    if (!h) {
+        text_cat(a, "ZONE HORS DONNEES", 40);
+        return;
+    }
+    magic = rd32(h), hlen = rd32(h + 4), hcrc = rd32(h + 8);
+    if (magic != 0x31534552u) {          /* "RES1" */
+        text_cat(a, magic == 0xFFFFFFFFu ? "ZONE VIDE (NON ECRITE)" : "ZONE: AUTRE CONTENU ", 40);
+        if (magic != 0xFFFFFFFFu) {
+            hex_text(magic, v);
+            text_cat(a, v, 40);
+        }
+        return;
+    }
+    text_cat(a, "ZONE ECRITE ", 40);
+    int_text((int32_t)hlen, v);
+    text_cat(a, v, 40);
+    text_cat(a, " O CRC ", 40);
+    hex_text(hcrc, v);
+    text_cat(a, v, 40);
+    if (!p) {
+        text_cat(b, hlen == MIFM1_RES_LEN ? "REFUSEE: CONTENU DIFFERENT" : "REFUSEE: AUTRE TAILLE", 40);
+        return;
+    }
+    text_cat(b, "LUE ", 40);
+    hex_text((uint32_t)(uintptr_t)p, v);
+    text_cat(b, v, 40);
+    text_cat(b, " SYMB ", 40);
+    hex_text((uint32_t)(uintptr_t)mi_res_where(), v);
+    text_cat(b, v, 40);
+}
+
 static void tenths_text(uint32_t v, char *b)   /* 123 -> "12.3" */
 {
     char t[12];
@@ -421,8 +470,12 @@ static void page_live(void)
         line(5, "L'INSTALLEUR LES ECRIT APRES", C_GRAY);
         line(6, "LE FIRMWARE: REINSTALLER DEPUIS", C_GRAY);
         line(7, "LA PAGE, FM-1 A L'ARRET", C_GRAY);
-        for (int i = 8; i < 10; i++)
-            line(i, "", C_GRAY);
+        {
+            char a[40], b[40];
+            data_why(a, b);
+            line(8, a, C_HI);
+            line(9, b, C_HI);
+        }
     } else if (sc_need(cur) > sc_arena()) {
         line(4, "PAS ASSEZ DE RAM", C_WHITE);
         t[0] = 0;
