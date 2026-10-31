@@ -107,7 +107,8 @@ jobs:
             echo "== symbols"
             "$T/objdump" -t "$elf" | grep -E "dist_icdf_0_0E|wav_integrated_wavesE|lut_wavetableE|mi_res_where|plat_res|plat_data|data_check"
             echo "== mi_res_where (linked)"
-            awk '/<mi_res_where>:/{p=1} p{print} p&&/^$/{exit}' "$dis" | head -30
+            grep -n -A4 "mi_res_where>:" "$dis" | head -12
+            grep -n "34156576\|807404041" "$dis" | head -10
             echo "== data_check / app_init (linked)"
             awk '/<data_check>:|<app_init>:/{p=1} p{print} p&&/^$/{p=0}' "$dis" | head -60
             echo "== mi_res_where (object, relocations)"
@@ -118,6 +119,8 @@ jobs:
           } > diag.txt 2>&1
           cat diag.txt
           python3 -c "import sys; t = open('diag.txt').read()[-60000:].replace('%', '%25').replace('\r', '').replace('\n', '%0A'); print('::notice title=diag::' + t)"
+      - name: The moved tables' references, as linked (their addresses, none with its halfwords swapped)
+        run: python3 tools/check_res_links.py bench/build/mifm1.elf bench/res/symbols.txt
       - name: No static initializer in the modules as JieLi's compiler built them (the FM-1 never runs one)
         run: python3 tools/no_static_init.py bench/build/o2/*.o
       - name: The installer and the backup page
