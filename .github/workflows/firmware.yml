@@ -92,33 +92,6 @@ jobs:
           # what the build says about sizes and RAM
           tail -n 40 build.log | annotate notice "build"
           ls -la bench/build/*.fwsc bench/build/*-res.bin
-      - name: Where the moved tables link (diagnostic)
-        shell: bash
-        run: |
-          set +e
-          T="$JIELI_TOOLCHAIN/common/bin"
-          {
-            echo "== files"; find bench/build base/build -maxdepth 3 \( -name "*.elf" -o -name "*.dis" -o -name "*res_symbols*" -o -name "*output_channel*.o" -o -name "*marbles_resources*.o" \) 2>/dev/null
-            elf=$(find bench/build -maxdepth 3 -name "*.elf" | grep -v loader | head -1)
-            dis=$(find bench/build -maxdepth 3 -name "*.dis" | grep -v loader | head -1)
-            rso=$(find bench/build -name "*res_symbols*.o" | head -1)
-            och=$(find bench/build -name "*marbles*output_channel*.o" | head -1)
-            echo "elf=$elf dis=$dis rso=$rso och=$och"
-            echo "== symbols"
-            "$T/objdump" -t "$elf" | grep -E "dist_icdf_0_0E|wav_integrated_wavesE|lut_wavetableE|mi_res_where|plat_res|plat_data|data_check"
-            echo "== mi_res_where (linked)"
-            grep -n -A4 "mi_res_where>:" "$dis" | head -12
-            grep -n "34156576\|807404041" "$dis" | head -10
-            echo "== data_check / app_init (linked)"
-            awk '/<data_check>:|<app_init>:/{p=1} p{print} p&&/^$/{p=0}' "$dis" | head -60
-            echo "== mi_res_where (object, relocations)"
-            "$T/objdump" -d -r -mcpu=r3 "$rso" | head -40
-            "$T/objdump" -t "$rso" | grep -E "dist_icdf_0_0E|mi_res_where|ABS"
-            echo "== a user of the tables, relocations"
-            "$T/objdump" -r "$och" | grep -E "dist|distrib" | head -10
-          } > diag.txt 2>&1
-          cat diag.txt
-          python3 -c "import sys; t = open('diag.txt').read()[-60000:].replace('%', '%25').replace('\r', '').replace('\n', '%0A'); print('::notice title=diag::' + t)"
       - name: The moved tables' references, as linked (their addresses, none with its halfwords swapped)
         run: python3 tools/check_res_links.py bench/build/mifm1.elf bench/res/symbols.txt
       - name: No static initializer in the modules as JieLi's compiler built them (the FM-1 never runs one)
