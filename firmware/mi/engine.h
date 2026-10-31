@@ -17,10 +17,12 @@ extern "C" {
 
 #define ENG_TRACKS 4
 #define ENG_CABLES 8                     /* per track, and as many global */
-#define ENG_NPAGES 29
+#define ENG_NPAGES 33
 #define ENG_NPARAMS (ENG_NPAGES * 4)
 #define ENG_STEPS 64                     /* the step sequencer: steps a track, four pages of 16 */
 #define ENG_PLOCKS 384                   /* parameter locks, for all the tracks' steps */
+#define ENG_ENDLESS 64                   /* an Endless sequence's notes (and rests), a track */
+#define ENDLESS_REST 0xFF
 
 /* the pages: 3 per track, 2 per Tides, 4 for Marbles, the mixer's levels, the reverb's sends and its own knobs, the
  * tracks' pans, each track's step sequencer, the global settings */
@@ -32,8 +34,9 @@ extern "C" {
 #define PG_PAN 23
 #define PG_STEP(t) (24 + (t))
 #define PG_GLOBAL 28
+#define PG_ARP(t) (29 + (t))             /* each track's Endless: its rate, gate, direction, transposition */
 enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_TIDES1, PT_TIDES2, PT_MARB_T1, PT_MARB_T2, PT_MARB_X1, PT_MARB_X2,
-       PT_MIX, PT_FX1, PT_FX2, PT_PAN, PT_STEP, PT_GLOBAL, NPT };
+       PT_MIX, PT_FX1, PT_FX2, PT_PAN, PT_STEP, PT_GLOBAL, PT_ARP, NPT };
 enum { SEQ_MARBLES, SEQ_STEPS };         /* PG_GLOBAL's first knob */
 
 /* a track's parameters as a trig sees them (a lock, a random): its Plaits' 12, its level, send and pan, its step
@@ -82,7 +85,7 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 3u               /* (2: v0.1's, without the step sequencer: eng_upgrade reads it) */
+#define PROJECT_VERSION 4u               /* (3: 0.1.3's, without Endless; 2: 0.1's: eng_upgrade reads them) */
 typedef struct {
     uint32_t magic;
     uint16_t version, size;
@@ -95,6 +98,9 @@ typedef struct {
     int8_t rnd[ENG_TRACKS][ENG_NTP];     /* each track parameter's random: > 0 new at each trig, < 0 looped, 0 none */
     uint16_t seed[ENG_TRACKS];           /* the looped randoms' */
     plock_t lock[ENG_PLOCKS];
+    uint8_t endless[ENG_TRACKS][ENG_ENDLESS];   /* Endless: the notes recorded (MIDI), ENDLESS_REST a rest */
+    uint8_t endless_len[ENG_TRACKS];     /* 0: none (the track plays its steps or Marbles) */
+    int8_t endless_key[ENG_TRACKS];      /* the transposition the last key set */
 } project_t;
 int eng_algo_count(int page);            /* 0: the page has no ALGORITHM choice */
 const char *eng_algo_name(int page, int a);
@@ -118,6 +124,15 @@ int eng_step_locked(int t, int step);    /* how many locks it has */
 int eng_step_now(int t);                 /* the step playing, -1 stopped (or Marbles) */
 int eng_quantize(int note);              /* a note in the global scale */
 uint32_t eng_rises(int t);               /* the trigs track t played (a ratchet's each), since power-on */
+
+/* Endless (after the OP-1's): a track records notes and rests one by one, then loops them on the tempo, over its
+ * steps or Marbles; a key transposes it from its first note */
+void eng_endless_rec(int t, int on);     /* recording: the track's sequencers silent, the keys play */
+int eng_endless_add(int t, int note);    /* a note, or ENDLESS_REST; -1 full */
+void eng_endless_clear(int t);
+int eng_endless_on(int t);               /* 1: it plays the track */
+void eng_endless_key(int t, int note);   /* a key: its transposition */
+int eng_endless_pos(int t);              /* the note playing, -1 none */
 void eng_render(float *l, float *r, uint32_t n);   /* audio interrupt */
 void eng_play(int on);                   /* the transport: Marbles' clock runs or stops (from its start) */
 int eng_playing(void);

@@ -1,6 +1,6 @@
 # MIFM1 in fm1-base's host simulator: the default patch playing, the pages, a knob turned, a cable made in MOD mode
 # (hold a source key, turn a knob), the matrix, the global page, the step sequencer (REC, a step held and locked, the
-# RANDOM page, ENV held, GLO held: ALL), a save kept across a power-off and in a backup, a new project (INIT: GLO,
+# RANDOM page, ENV held, GLO held: ALL), Endless (recorded, played, transposed by a key), a save kept across a power-off and in a backup, a new project (INIT: GLO,
 # SELECT, REC held) and the saved one back, an FM-1 without the module tables, then the tables arriving.
 # Screenshots in the output folder.
 wait 1500
@@ -122,6 +122,38 @@ shot 16j_all.png
 release GLO
 wait 300
 shot 16k_all_after.png
+tap ARP
+wait 300
+shot 16l_endless_empty.png
+tap REC
+wait 100
+key 0 down
+wait 100
+key 0 up
+wait 100
+key 3 down
+wait 100
+key 3 up
+wait 100
+tap SEL
+wait 100
+key 7 down
+wait 100
+key 7 up
+wait 100
+key 12 down
+wait 100
+key 12 up
+wait 300
+shot 16m_endless_rec.png
+tap REC
+wait 1500
+shot 16n_endless_plays.png
+key 5 down
+wait 100
+key 5 up
+wait 1500
+shot 16o_endless_key.png
 tap GLO
 turn K1 -1
 tap GLO

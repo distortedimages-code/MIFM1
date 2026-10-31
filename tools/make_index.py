@@ -26,7 +26,7 @@ td:first-child {{ white-space: nowrap; font-weight: 700; color: #ffb22e; }}
 </style>
 <h1>MIFM1 {version}</h1>
 <p>Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient du code open source de Mutable Instruments :
-Plaits sur chaque piste (ses 24 modèles), Marbles ou un séquenceur pas à pas avec P-locks, probabilités, ratchets et
+Plaits sur chaque piste (ses 24 modèles), Marbles ou un séquenceur pas à pas avec P-locks, un Endless par piste, probabilités, ratchets et
 aléatoire, un quantiseur global, deux Tides pour moduler, une matrice de câbles, un mixer avec pans et un départ vers
 la réverbe de Clouds.</p>
 <div class="card"><b>Installer</b><br><a href="install/">Installer MIFM1 {version}</a>
@@ -38,7 +38,10 @@ les tables des modules.</p></div>
 <tr><td>SELECT</td><td>l'autre face du module (1/3, 2/3…)</td></tr>
 <tr><td>ALGORITHM</td><td>le modèle de Plaits, le mode de Tides, le modèle de T, la gamme</td></tr>
 <tr><td>PRESETS</td><td>la piste active, de 1 à 4</td></tr>
-<tr><td>EDIT · LFO · SEQ · ARP</td><td>Plaits · Tides A puis B · Marbles t · Marbles X</td></tr>
+<tr><td>EDIT · LFO</td><td>Plaits · Tides A puis B</td></tr>
+<tr><td>SEQ</td><td>les séquenceurs : les pas de la piste, Marbles t, Marbles X</td></tr>
+<tr><td>ARP</td><td>Endless : REC enregistre (une touche = une note, SEL = un silence), REC à nouveau le joue, une touche le
+transpose, REC tenu l'efface</td></tr>
 <tr><td>HOME · FX</td><td>le mixer (les niveaux) · la réverbe (les envois, puis ses réglages)</td></tr>
 <tr><td>PLAY</td><td>l'horloge de Marbles tourne ou s'arrête</td></tr>
 <tr><td>clavier</td><td>joue la piste active, même à l'arrêt (OCT− OCT+ pour l'octave)</td></tr>

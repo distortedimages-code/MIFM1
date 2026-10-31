@@ -41,6 +41,9 @@ const char* const kScaleNames[15] = {"Off", "Major", "Minor", "Dorian", "Phrygia
 const uint16_t kScaleMasks[15] = {0xFFF, 0xAB5, 0x5AD, 0x6AD, 0x5AB, 0xAD5, 0x6B5, 0x56B, 0x9AD, 0xAAD, 0x295, 0x4A9,
                                   0x4E9, 0x555, 0x18D};   // bit i: i semitones over the root
 const char* const kNoteName[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+const char* const kArpRates[6] = {"1/32", "1/16T", "1/16", "1/8T", "1/8", "1/4"};
+const float kArpMult[6] = {0.5f, 2.0f / 3.0f, 1.0f, 4.0f / 3.0f, 2.0f, 4.0f};   // in sixteenths
+const char* const kArpDir[4] = {"Forward", "Backward", "Ping-pong", "Random"};
 
 // the names are the modules' own, as their panels print them (sentence case: Mutable's)
 const eng_pdef_t kPages[NPT][4] = {
@@ -65,6 +68,8 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Note", K_INT, -24, 24, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Ratchet", K_INT, 1, 8, 0}, {"Length", K_INT, 1, 64, 0}},
   {{"Sequencer", K_ENUM, 0, 1, kSeqNames}, {"Tempo", K_UNI, 0, 0, 0}, {"Scale", K_ENUM, 0, 14, kScaleNames},
    {"Root", K_ENUM, 0, 11, kNoteName}},
+  {{"Rate", K_ENUM, 0, 5, kArpRates}, {"Gate", K_UNI, 0, 0, 0}, {"Direction", K_ENUM, 0, 3, kArpDir},
+   {"Transpose", K_INT, -24, 24, 0}},
 };
 
 const char* const kModels[24] = {
@@ -89,7 +94,8 @@ int page_type(int page) {
   if (page < 20) return PT_MARB_T1 + (page - 16);
   if (page < PG_PAN) return PT_MIX + (page - 20);
   if (page == PG_PAN) return PT_PAN;
-  return page < PG_GLOBAL ? PT_STEP : PT_GLOBAL;
+  if (page < PG_GLOBAL) return PT_STEP;
+  return page == PG_GLOBAL ? PT_GLOBAL : PT_ARP;
 }
 
 inline float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -148,6 +154,10 @@ float tnote[ENG_TRACKS];                // its note
 uint8_t fg[ENG_TRACKS][kFrames];        // the gates the voices play, frame by frame
 float fnote[ENG_TRACKS][kFrames];       // the note a rise in that frame takes
 uint32_t rng = 0x9E3779B9u;
+// Endless: its clock, the note playing, ping-pong's way, recording
+float e_clk[ENG_TRACKS];
+int e_pos[ENG_TRACKS], e_dir[ENG_TRACKS], e_note[ENG_TRACKS];
+volatile int e_rec[ENG_TRACKS];
 
 float vbuf[ENG_TRACKS][kN];
 float vaux[ENG_TRACKS][kN];
@@ -367,7 +377,19 @@ void sequence(uint32_t n) {
     restart = 0;
     step_clk = step_len;
     tick = -1;
-    for (int t = 0; t < ENG_TRACKS; ++t) trig_count[t] = 0;
+    for (int t = 0; t < ENG_TRACKS; ++t) {
+      trig_count[t] = 0;
+      e_clk[t] = 1e9f;
+      e_pos[t] = -1;
+      e_dir[t] = 1;
+    }
+  }
+  int endless[ENG_TRACKS];
+  float el[ENG_TRACKS];
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    endless[t] = proj.endless_len[t] > 0 && proj.endless_len[t] <= ENG_ENDLESS && !e_rec[t];
+    int r = Pi(PG_ARP(t), 0);
+    el[t] = step_len * kArpMult[r < 0 ? 0 : r > 5 ? 5 : r];
   }
   if (loop < 1) loop = 1;
   for (uint32_t k = 0; k < kFrames; ++k) {
@@ -378,12 +400,34 @@ void sequence(uint32_t n) {
       for (int t = 0; t < ENG_TRACKS; ++t) {
         int len = Pi(PG_STEP(t), 3);
         cur_step[t] = static_cast<int>(tick % (len < 1 ? 1 : len));
-        if (eng_trig(t, cur_step[t])) raw_left[t] = step_len * 0.5f;
+        if (eng_trig(t, cur_step[t]) && !endless[t] && !e_rec[t]) raw_left[t] = step_len * 0.5f;
       }
     }
     for (int t = 0; t < ENG_TRACKS; ++t) {
       int raw, g;
-      if (steps) {
+      if (endless[t] && playing && (e_clk[t] += fl) >= el[t]) {   // Endless: its next note (or rest)
+        int len = proj.endless_len[t], d = Pi(PG_ARP(t), 2);
+        e_clk[t] = e_clk[t] >= 2.0f * el[t] ? 0.0f : e_clk[t] - el[t];
+        if (d == 1) {
+          e_pos[t] = e_pos[t] <= 0 ? len - 1 : e_pos[t] - 1;
+        } else if (d == 2) {
+          e_pos[t] += e_dir[t];
+          if (e_pos[t] >= len) e_dir[t] = -1, e_pos[t] = len > 1 ? len - 2 : 0;
+          if (e_pos[t] < 0) e_dir[t] = 1, e_pos[t] = len > 1 ? 1 : 0;
+        } else if (d == 3) {
+          e_pos[t] = static_cast<int>(rand_u32() % static_cast<uint32_t>(len));
+        } else {
+          e_pos[t] = (e_pos[t] + 1) % len;
+        }
+        int nt = proj.endless[t][e_pos[t]];
+        if (nt != ENDLESS_REST) {
+          raw_left[t] = fm_maxf(fl * 2.0f, el[t] * clampf(P(PG_ARP(t), 1), 0.05f, 1.0f) * 0.98f);
+          e_note[t] = nt;
+        }
+      }
+      if (e_rec[t]) {
+        raw = 0;
+      } else if (steps || endless[t]) {
         raw = playing && raw_left[t] > 0.0f;
         raw_left[t] -= fl;
       } else {
@@ -393,12 +437,17 @@ void sequence(uint32_t n) {
       if (raw && !raw_prev[t]) {        // a trig
         if (since_rise[t] > 4.0f * fl && since_rise[t] < 4.0f * kSr) interval[t] = since_rise[t];
         since_rise[t] = 0.0f;
-        int step = steps ? cur_step[t] : static_cast<int>(trig_count[t] % static_cast<uint32_t>(loop));
+        int step = endless[t] ? e_pos[t] : steps ? cur_step[t]
+                 : static_cast<int>(trig_count[t] % static_cast<uint32_t>(loop));
         ++trig_count[t];
-        new_trig(t, step, steps);
-        rat_period[t] = (steps ? step_len : (interval[t] > 0.0f ? interval[t] : kSr * 0.25f)) /
+        new_trig(t, step, steps && !endless[t]);
+        rat_period[t] = (endless[t] ? el[t] : steps ? step_len : (interval[t] > 0.0f ? interval[t] : kSr * 0.25f)) /
                         static_cast<float>(rat_n[t]);
-        tnote[t] = trig_note(t, static_cast<int>(k), steps);
+        if (endless[t])                 // its note, the key's transposition, the page's, the track's
+          tnote[t] = static_cast<float>(quantize(e_note[t] + proj.endless_key[t] + Pi(PG_ARP(t), 3) +
+                                                 iround(E(t, TP_TRANSPOSE)) + iround(tdelta[t][TP_NOTE])));
+        else
+          tnote[t] = trig_note(t, static_cast<int>(k), steps);
       }
       raw_prev[t] = raw;
       if (!rat_on[t]) {
@@ -471,6 +520,7 @@ extern "C" {
 int eng_page_type(int page) { return page_type(page); }
 int eng_page_track(int page) {
   if (page < 12) return page / 3;
+  if (page >= PG_ARP(0) && page < ENG_NPAGES) return page - PG_ARP(0);
   return page >= PG_STEP(0) && page < PG_GLOBAL ? page - PG_STEP(0) : -1;
 }
 
@@ -564,7 +614,7 @@ void eng_param_text(int param, float v, char* b, int n) {
       put(b, n, q < 0 ? "L" : "R");
       put_num(b + 1, n - 1, q < 0 ? -q : q, 0, 0);
     }
-  } else if (pt == PT_STEP && k == 1) {
+  } else if ((pt == PT_STEP && k == 1) || (pt == PT_ARP && k == 1)) {
     put_num(b, n, static_cast<int32_t>(v * 100.0f + 0.5f), 0, 0);
     int l = 0;
     while (b[l]) ++l;
@@ -686,6 +736,8 @@ void eng_defaults(project_t* p) {
     p->val[PG_STEP(t) * 4 + 1] = 1.0f;
     p->val[PG_STEP(t) * 4 + 2] = 1.0f;
     p->val[PG_STEP(t) * 4 + 3] = 16.0f;
+    p->val[PG_ARP(t) * 4 + 0] = 2.0f;                   // Endless: sixteenths, half gates, forward
+    p->val[PG_ARP(t) * 4 + 1] = 0.5f;
     p->seed[t] = static_cast<uint16_t>(0x2A5 + 977 * t);
   }
   for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i].tp = 0xFF;
@@ -752,9 +804,42 @@ struct project_v2 {
   cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
 };
 
+// 0.1.3's (version 3): all of it kept, Endless empty
+struct project_v3 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[29 * 4];
+  uint8_t algo[29];
+  uint8_t rsv[3];
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_TRACKS][ENG_STEPS / 8];
+  int8_t rnd[ENG_TRACKS][ENG_NTP];
+  uint16_t seed[ENG_TRACKS];
+  plock_t lock[ENG_PLOCKS];
+};
+
 int eng_upgrade(project_t* p, int bytes) {
   static project_v2 old;
+  static project_v3 v3;
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
+  if (bytes == static_cast<int>(sizeof(project_v3)) && p->magic == PROJECT_MAGIC && p->version == 3 &&
+      p->size == sizeof(project_v3)) {
+    const uint8_t* from = reinterpret_cast<const uint8_t*>(p);
+    uint8_t* to = reinterpret_cast<uint8_t*>(&v3);
+    for (uint32_t i = 0; i < sizeof v3; ++i) to[i] = from[i];
+    eng_defaults(p);
+    for (int i = 0; i < 29 * 4; ++i) p->val[i] = v3.val[i];
+    for (int i = 0; i < 29; ++i) p->algo[i] = v3.algo[i];
+    for (int g = 0; g <= ENG_TRACKS; ++g)
+      for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c] = v3.cable[g][c];
+    for (int t = 0; t < ENG_TRACKS; ++t) {
+      for (int i = 0; i < ENG_STEPS / 8; ++i) p->trig[t][i] = v3.trig[t][i];
+      for (int i = 0; i < ENG_NTP; ++i) p->rnd[t][i] = v3.rnd[t][i];
+      p->seed[t] = v3.seed[t];
+    }
+    for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i] = v3.lock[i];
+    return 1;
+  }
   if (bytes != static_cast<int>(sizeof(project_v2)) || p->magic != PROJECT_MAGIC || p->version != 2 ||
       p->size != sizeof(project_v2))
     return 0;
@@ -980,5 +1065,40 @@ int eng_step_locked(int t, int step) {
 int eng_step_now(int t) { return playing && eng_steps_mode() && t >= 0 && t < ENG_TRACKS && tick >= 0 ? cur_step[t] : -1; }
 int eng_quantize(int note) { return quantize(note); }
 uint32_t eng_rises(int t) { return t >= 0 && t < ENG_TRACKS ? vrises[t] : 0u; }
+
+void eng_endless_rec(int t, int on) {
+  if (t < 0 || t >= ENG_TRACKS) return;
+  e_rec[t] = on != 0;
+  if (!on) {
+    raw_left[t] = 0.0f;
+    e_clk[t] = 1e9f;                    // the first note at the next frame
+    e_pos[t] = -1;
+    e_dir[t] = 1;
+  }
+}
+int eng_endless_add(int t, int note) {
+  if (t < 0 || t >= ENG_TRACKS || proj.endless_len[t] >= ENG_ENDLESS) return -1;
+  proj.endless[t][proj.endless_len[t]] = static_cast<uint8_t>(note == ENDLESS_REST ? ENDLESS_REST : note & 127);
+  ++proj.endless_len[t];
+  return 0;
+}
+void eng_endless_clear(int t) {
+  if (t < 0 || t >= ENG_TRACKS) return;
+  proj.endless_len[t] = 0;
+  proj.endless_key[t] = 0;
+}
+int eng_endless_on(int t) {
+  return t >= 0 && t < ENG_TRACKS && proj.endless_len[t] > 0 && !e_rec[t];
+}
+void eng_endless_key(int t, int note) {   // from its first note
+  if (!eng_endless_on(t)) return;
+  for (int i = 0; i < proj.endless_len[t]; ++i)
+    if (proj.endless[t][i] != ENDLESS_REST) {
+      int k = note - proj.endless[t][i];
+      proj.endless_key[t] = static_cast<int8_t>(k < -48 ? -48 : k > 48 ? 48 : k);
+      return;
+    }
+}
+int eng_endless_pos(int t) { return eng_endless_on(t) && playing ? e_pos[t] : -1; }
 
 }  // extern "C"

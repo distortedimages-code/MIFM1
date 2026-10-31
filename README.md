@@ -6,6 +6,8 @@ la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
 - **Plaits** sur chaque piste, ses 24 modèles au complet ;
 - **deux séquenceurs au choix** (GLO) : **Marbles** (ses sorties T déclenchent les pistes, X et Y donnent les notes,
   DÉJÀ VU fige ou libère la boucle) ou un **séquenceur pas à pas** à la Elektron, 64 pas par piste, avec P-locks ;
+- **Endless** sur chaque piste, comme sur l'OP-1 : on enregistre des notes et des silences un par un, ils tournent
+  en boucle, une touche les transpose ;
 - sur chaque trig : **probabilité**, **ratchets**, et un **aléatoire** sur n'importe quel réglage de la piste (à
   droite nouveau à chaque trig, à gauche en boucle) ;
 - un **quantiseur global** (15 gammes et la tonique) : aucune fausse note, sur toutes les pistes et au clavier ;
@@ -35,7 +37,7 @@ Plaits sur VIRTUAL ANALOG, tous les potards à midi, jouées par t1, t2, t3 et t
 rien vers la réverbe, Marbles en do majeur), *The demo patch* (le patch ci-dessus) ou *The saved project* (le dernier
 sauvegardé, pour annuler). Le transport s'arrête ; rien n'est sauvegardé tant que SAVE n'est pas tenu.
 
-L'écran est sombre, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
+L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
 icônes). En haut, l'icône du module dans un anneau lumineux, son nom en grand et une ligne sur son état : sur Plaits,
 le seul logo du modèle et son nom (KICK, VIRTUAL ANALOG…), sur Tides la rampe, sur Marbles le modèle de *t* ou la
 gamme. Puis les quatre potards côte à côte, dans l'ordre des KNOB 1 à 4 : un anneau allumé de son début (ou de son
@@ -52,7 +54,8 @@ les 16 pas de la piste (allumés : un trig ; un point : des locks ; cerclé : ce
 | **PRESETS** | la piste active, de 1 à 4 |
 | **EDIT** | Plaits de la piste active (appuis suivants : 1/3, 2/3, 3/3) |
 | **LFO** | Tides A, puis Tides B |
-| **SEQ / ARP** | Marbles, rythme (T) / notes (X, Y) ; avec STEPS : SEQ les pas de la piste (TRIG, puis RANDOM), ARP Marbles |
+| **SEQ** | les séquenceurs, celui qui joue d'abord : les pas de la piste (TRIG, RANDOM), Marbles t, Marbles X |
+| **ARP** | Endless, celui de la piste (voir plus bas) |
 | **HOME** | le mixer : les niveaux des 4 pistes, puis leurs pans |
 | **FX** | la réverbe : les envois des 4 pistes, puis ses réglages (Time, Damping, Diffusion, Return) |
 | **PLAY** | l'horloge de Marbles tourne ou s'arrête |
@@ -96,9 +99,17 @@ marchent aussi avec Marbles (la boucle suit alors la LENGTH de Marbles).
 de la gamme la plus proche. Off, Major, Minor, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Harmonic et Melodic
 minor, Major et Minor pentatonic, Blues, Whole tone, Hirajoshi.
 
+**Endless** (ARP, comme sur l'OP-1) : sur sa page, **REC** lance l'enregistrement (la frise passe en REC, le bouton
+clignote) ; chaque touche ajoute une note (on l'entend), **SEL** ajoute un silence, jusqu'à 64 pas. **REC** à
+nouveau : la piste joue ces notes en boucle sur le tempo, par-dessus ses pas ou Marbles. Pendant qu'elle joue, **une
+touche transpose** la boucle depuis sa première note (la transposition reste). Ses potards : RATE (1/32 à 1/4, avec
+les triolets), GATE (la longueur des notes), DIRECTION (avant, arrière, aller-retour, au hasard), TRANSPOSE. **REC
+tenu** efface la boucle (la piste retrouve ses pas ou Marbles). Probabilité, ratchets, aléatoire et quantiseur
+s'appliquent aussi à ses notes. En bas, ses notes en barres, la note jouée en blanc.
+
 **Le clavier** relance la note à chaque touche, même jouée legato, et une touche tapée très vite sonne quand même.
 
-Un projet sauvegardé avec la 0.1 se recharge tel quel (ses réglages, ses modèles, ses câbles) ; le séquenceur pas à
+Un projet sauvegardé avec la 0.1 ou la 0.1.3 se recharge tel quel (ses réglages, ses modèles, ses câbles) ; le séquenceur pas à
 pas y arrive avec les patterns de démo, sur Marbles par défaut.
 
 ## Le dépôt

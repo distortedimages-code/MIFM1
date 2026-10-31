@@ -300,6 +300,26 @@ int main(int argc, char** argv) {
     if (kr != 3) ++failures, printf("FAIL: legato keys\n");
   }
 
+  // 10. Endless: track 1 records C3, a rest, D#3, G3, then loops them on sixteenths; a key transposes it
+  eng_defaults(p);
+  p->val[PG_GLOBAL * 4] = SEQ_STEPS;
+  eng_endless_rec(0, 1);
+  eng_endless_add(0, 60);
+  eng_endless_add(0, ENDLESS_REST);
+  eng_endless_add(0, 63);
+  eng_endless_add(0, 67);
+  eng_endless_rec(0, 0);
+  run(4, sr, slo, shi, &ok_scale);
+  int e1lo = slo[0], e1hi = shi[0];
+  uint32_t e1 = sr[0];
+  eng_endless_key(0, 65);                                // up a fourth
+  run(4, sr, slo, shi, &ok_scale);
+  printf("endless: %u notes in 2 bars (24 expected), %d..%d; transposed by a key: %d..%d, %s\n", e1, e1lo, e1hi, slo[0],
+         shi[0], ok_scale ? "in the scale" : "OUT OF THE SCALE");
+  if (e1 + 1 < 24 || e1 > 25 || e1lo != 60 || e1hi != 67 || slo[0] != 65 || shi[0] != 72 || !ok_scale)
+    ++failures, printf("FAIL: Endless\n");
+  eng_endless_clear(0);
+
   // 9. v0.1's project (version 2) read into this version's
   {
     static uint8_t buf[sizeof(project_t)];
