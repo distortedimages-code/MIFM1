@@ -34,7 +34,8 @@ const float kDownSlope = 1.0f - 1.0f / 66.7f, kUpSlope = 1.0f - 1.0f / 4.17f;
 
 struct Master {
   stmlib::Limiter limiter[2];
-  stmlib::Svf split[2][2];               // per side: at 88 Hz, at 2.5 kHz
+  stmlib::Svf split[2][2];               // per side: at 88 Hz, at 2.5 kHz (their coefficients)
+  float ss[2][2][2];                     // their states (state_1, state_2): run in registers, both sides side by side
   int mode;
   // the compressor
   float threshold, ratio, release, makeup;   // dB, x:1, per-chunk coefficient, dB
@@ -75,21 +76,37 @@ void compress(Master* m, float* l, float* r, uint32_t n) {
   }
 }
 
+inline float lp_step(float in, float g, float r, float h, float& s1, float& s2) {   // stmlib's Svf, its low pass
+  float hp = (in - r * s1 - g * s1 - s2) * h;
+  float bp = g * hp + s1;
+  s1 = g * hp + bp;
+  float lp = g * bp + s2;
+  s2 = g * bp + lp;
+  return lp;
+}
+
 void ott(Master* m, float* l, float* r, uint32_t n) {
   float band[3][2][kChunk];
+  const float g0 = m->split[0][0].g(), r0 = m->split[0][0].r(), h0 = m->split[0][0].h();
+  const float g1 = m->split[0][1].g(), r1 = m->split[0][1].r(), h1 = m->split[0][1].h();
+  float a0 = m->ss[0][0][0], a1 = m->ss[0][0][1], a2 = m->ss[0][1][0], a3 = m->ss[0][1][1];   // the left's
+  float b0 = m->ss[1][0][0], b1 = m->ss[1][0][1], b2 = m->ss[1][1][0], b3 = m->ss[1][1][1];   // the right's
   for (uint32_t at = 0; at < n; at += kChunk) {
     uint32_t len = n - at < kChunk ? n - at : kChunk;
     float peak[3] = {1e-9f, 1e-9f, 1e-9f};
-    for (uint32_t i = 0; i < len; ++i) {
-      float in[2] = {l[at + i] * m->drive, r[at + i] * m->drive};
-      for (int c = 0; c < 2; ++c) {
-        float lo = m->split[c][0].Process<stmlib::FILTER_MODE_LOW_PASS>(in[c]), rest = in[c] - lo;
-        float mid = m->split[c][1].Process<stmlib::FILTER_MODE_LOW_PASS>(rest);
-        band[0][c][i] = lo;
-        band[1][c][i] = mid;
-        band[2][c][i] = rest - mid;
+    for (uint32_t i = 0; i < len; ++i) {  // (the two sides' chains side by side: the FPU busy, not waiting on one)
+      float il = l[at + i] * m->drive, ir = r[at + i] * m->drive;
+      float lol = lp_step(il, g0, r0, h0, a0, a1), lor = lp_step(ir, g0, r0, h0, b0, b1);
+      float rsl = il - lol, rsr = ir - lor;
+      float mdl = lp_step(rsl, g1, r1, h1, a2, a3), mdr = lp_step(rsr, g1, r1, h1, b2, b3);
+      band[0][0][i] = lol;
+      band[1][0][i] = mdl;
+      band[2][0][i] = rsl - mdl;
+      band[0][1][i] = lor;
+      band[1][1][i] = mdr;
+      band[2][1][i] = rsr - mdr;
+      for (int c = 0; c < 2; ++c)
         for (int b = 0; b < 3; ++b) peak[b] = fm_maxf(peak[b], fm_fabsf(band[b][c][i]));
-      }
     }
     // the output: the dry (the bands' sum: the split is complementary) and the wet (each band by its gain) mixed by
     // DEPTH, then LEVEL: each band by one weight, k = LEVEL x (1 - DEPTH + DEPTH x gain), glided over the chunk
@@ -118,6 +135,8 @@ void ott(Master* m, float* l, float* r, uint32_t n) {
     }
     for (int b = 0; b < 3; ++b) m->bk[b] = k[b];
   }
+  m->ss[0][0][0] = a0, m->ss[0][0][1] = a1, m->ss[0][1][0] = a2, m->ss[0][1][1] = a3;
+  m->ss[1][0][0] = b0, m->ss[1][0][1] = b1, m->ss[1][1][0] = b2, m->ss[1][1][1] = b3;
 }
 
 }  // namespace
@@ -134,6 +153,7 @@ void mms_init(void* mem) {
     m->split[c][1].Init();
     m->split[c][0].set_f_q<stmlib::FREQUENCY_ACCURATE>(88.3f / MI_SR, 0.7071f);
     m->split[c][1].set_f_q<stmlib::FREQUENCY_ACCURATE>(2500.0f / MI_SR, 0.7071f);
+    for (int k = 0; k < 2; ++k) m->ss[c][k][0] = m->ss[c][k][1] = 0.0f;
   }
   m->mode = 0;
   m->threshold = 0.0f;
