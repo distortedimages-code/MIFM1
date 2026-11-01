@@ -1362,6 +1362,42 @@ int main(int argc, char** argv) {
     eng_defaults(p);
   }
 
+  // 33. the delay never runs away: FEEDBACK at full (a loop), the repeats held as they are (a burst, then 6 s: as loud
+  // as at 1 s); the resonance and the drive up, a low pass on its peak: what would grow is held at its ceiling
+  {
+    static uint8_t dmem[200000] __attribute__((aligned(16)));
+    if (mdl_size() > sizeof dmem) {
+      ++failures, printf("FAIL: the delay's memory\n");
+    } else {
+      static float in[128], ol[128], orr[128];
+      float lv[3][2];
+      for (int c = 0; c < 3; ++c) {
+        mdl_init(dmem);
+        if (c == 0) mdl_set(dmem, 11025.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f);   // the loop, clean
+        else if (c == 1) mdl_set(dmem, 11025.0f, 1.0f, -0.3f, 1.0f, 1.0f, 1, 0.3f);   // all up, ping-pong
+        else mdl_set(dmem, 11025.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0, 0.0f);   // half: dies away
+        for (int b = 0; b < 44100 * 7 / 128; ++b) {
+          for (int i = 0; i < 128; ++i) {
+            int k = b * 128 + i;
+            in[i] = k < 2000 ? 0.3f * std::sin(static_cast<float>(k) * 0.0627f) : 0.0f;   // a 440 Hz burst
+          }
+          mdl_process(dmem, in, ol, orr, 128);
+          float pk = 0.0f;
+          for (int i = 0; i < 128; ++i) pk = std::max(pk, std::max(std::fabs(ol[i]), std::fabs(orr[i])));
+          int sec = (b * 128) / 44100;
+          if (b == 0) lv[c][0] = lv[c][1] = 0.0f;
+          if (sec == 1) lv[c][0] = std::max(lv[c][0], pk);
+          if (sec == 6) lv[c][1] = std::max(lv[c][1], pk);
+        }
+      }
+      printf("the delay: the loop %.3f at 1 s, %.3f at 6 s; all up %.3f, %.3f; half feedback %.3f, %.5f\n", lv[0][0],
+             lv[0][1], lv[1][0], lv[1][1], lv[2][0], lv[2][1]);
+      if (lv[0][1] < lv[0][0] * 0.7f || lv[0][1] > lv[0][0] * 1.3f || lv[1][1] > 0.6f || lv[1][1] < 0.05f ||
+          lv[2][1] > lv[2][0] * 0.05f)
+        ++failures, printf("FAIL: the delay's feedback\n");
+    }
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

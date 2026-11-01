@@ -154,10 +154,12 @@ réverbe…
 
 **Le delay** (FX) : **TIME** en divisions du tempo (1/32 à 1/1, triolets et pointées) ; ou, ALGORITHM tourné vers la
 droite, **FREE** : TIME en millisecondes (1 ms à 1,2 s), détaché de l'horloge (vers la gauche : SYNC, la division la
-plus proche ; le temps est gardé d'un mode à l'autre). **FEEDBACK** (au bout, il peut
-s'emballer, le drive le retient), **FILTER** (à gauche passe-bas, à droite passe-haut, au milieu rien), **DRIVE** ;
+plus proche ; le temps est gardé d'un mode à l'autre). **FEEDBACK** (tout au bout,
+**Loop** : les répétitions tournent indéfiniment, sans monter ni baisser ; la boucle ne gagne jamais : ce que la
+résonance pousserait au-delà de −8 dB est tenu là, les répétitions sonnent en continu au lieu d'exploser), **FILTER** (à gauche passe-bas, à droite passe-haut, au milieu rien), **DRIVE** ;
 puis **RESONANCE**, **MODE** (Mono ou Ping-pong : gauche au temps, droite au double), **MOD** (un pleurage lent) et
-**RETURN**. Le filtre est celui des modules Mutable (le SVF de stmlib) et la saturation sa SoftClip, dans une ligne
+**RETURN**. Le filtre est celui des modules Mutable (le SVF de stmlib) ; la saturation (DRIVE) est propre jusqu'à mi-niveau
+puis arrondie, et son gain ne s'ajoute pas au feedback (elle colore, elle ne pousse pas), dans une ligne
 de 1,2 s. Quand le temps change, la lecture glisse jusqu'au nouveau, comme une bande.
 
 **L'EQ** (HOME, troisième face) : un potard par piste pour lui faire de la place dans le mix. Au milieu, rien

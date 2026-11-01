@@ -2,10 +2,13 @@
 // Copyright (C) 2026 Yoann
 // MIFM1's delay, after the knobs of Erica Synths' Zen Delay (its sound is its own): a line of 16-bit samples, and in
 // its loop Mutable's state-variable filter (stmlib's Svf: low pass to the left of FILTER, high pass to the right,
-// nothing in the middle) and soft saturation (stmlib's SoftLimit, as DRIVE). Its time follows the tempo; when it
+// nothing in the middle) and a saturation (DRIVE: clean up to half the scale, then a soft knee to it; 0.4.6 had
+// stmlib's SoftClip, which also squeezed the quiet repeats a little at each pass). Its time follows the tempo; when it
 // changes, the read glides to it (a tape's pitch bend). MOD is a slow wow on the time. Mono: one echo every TIME;
 // ping-pong: left at TIME, right at twice, back and forth (one line read at TIME and 2 x TIME, fed back from the
-// second).
+// second). Its loop never gains: FEEDBACK at full is a loop (the repeats held as they are, for good), DRIVE's gain is
+// taken back on what is fed back (it colours, it does not push), and what the resonance would push past a ceiling
+// (-8 dB) is held there: the repeats sustain at that level instead of running away.
 #ifndef MIFM1_MI_DELAY_H_
 #define MIFM1_MI_DELAY_H_
 
@@ -28,6 +31,7 @@ class Delay {
     write_ = 0;
     time_ = target_ = static_cast<float>(size) * 0.25f;
     feedback_ = 0.0f;
+    env_ = 0.0f;
     drive_ = 0.0f;
     mod_ = 0.0f;
     phase_ = 0.0f;
@@ -36,13 +40,13 @@ class Delay {
     set_filter(0.0f, 0.0f);
   }
 
-  // time in samples (clipped to the line: a ping-pong's twice), feedback 0..1 (1.1 at the end: it can run away, the
-  // drive holding it), filter -1..1, resonance 0..1, drive 0..1, mod 0..1
+  // time in samples (clipped to the line: a ping-pong's twice), feedback 0..1 (at the end, 1: the loop), filter -1..1,
+  // resonance 0..1, drive 0..1, mod 0..1
   void set(float time, float feedback, float filter, float resonance, float drive, int ping_pong, float mod) {
     float max = static_cast<float>(size_ - 4u) * (ping_pong ? 0.5f : 1.0f);
     while (time > max) time *= 0.5f;   // the same division, an octave of time shorter
     target_ = time < 16.0f ? 16.0f : time;
-    feedback_ = feedback * 1.1f;
+    feedback_ = feedback >= 0.99f ? 1.0f : feedback < 0.0f ? 0.0f : feedback;
     ping_pong_ = ping_pong;
     drive_ = drive;
     mod_ = mod;
@@ -52,7 +56,12 @@ class Delay {
   void Process(const float* in, float* out_l, float* out_r, uint32_t n) {
     const float kGlide = 0.0004f;       // ~60 ms to a new time
     const float lfo_inc = 0.45f / sr_;  // the wow: under a hertz
+    const float kCeil = 0.4f;           // the line's level the loop holds (what would grow is held there)
+    const float kAttack = 0.02f;        // the level: up in ~1 ms, down in ~0.5 s
+    const float kRelease = 1.0f - 1.0f / (0.5f * 44100.0f);
     float gain = 1.0f + drive_ * 5.0f, makeup = 1.0f / (1.0f + drive_ * 1.5f);
+    float fb = feedback_ / (gain * makeup);   // (DRIVE's gain taken back on the loop: FEEDBACK is the loop's gain)
+    float env = env_;
     for (uint32_t i = 0; i < n; ++i) {
       time_ += (target_ - time_) * kGlide;
       phase_ += lfo_inc;
@@ -60,16 +69,19 @@ class Delay {
       float tri = phase_ < 0.5f ? 4.0f * phase_ - 1.0f : 3.0f - 4.0f * phase_;
       float t = time_ * (1.0f + mod_ * 0.006f * tri);
       float a = Read(t), b = ping_pong_ ? Read(2.0f * t) : a;
-      float w = in[i] + feedback_ * (ping_pong_ ? b : a);
+      float x = ping_pong_ ? b : a, m = x < 0.0f ? -x : x;
+      env = m > env ? env + (m - env) * kAttack : env * kRelease;
+      float w = in[i] + fb * (env > kCeil ? kCeil / env : 1.0f) * x;
       if (mode_ == 1) w = Crossfade(w, svf_.Process<stmlib::FILTER_MODE_LOW_PASS>(w), blend_);
       else if (mode_ == 2) w = Crossfade(w, svf_.Process<stmlib::FILTER_MODE_HIGH_PASS>(w), blend_);
-      w = stmlib::SoftClip(w * gain) * makeup;
+      w = Knee(w * gain) * makeup;
       int32_t s = static_cast<int32_t>(w * 32767.0f);
       line_[write_] = static_cast<int16_t>(s > 32767 ? 32767 : s < -32767 ? -32767 : s);
       if (++write_ >= size_) write_ = 0;
       out_l[i] = a;
       out_r[i] = b;
     }
+    env_ = env;
   }
 
  private:
@@ -85,6 +97,13 @@ class Delay {
   }
 
   inline float Crossfade(float a, float b, float f) { return a + (b - a) * f; }
+
+  static inline float Knee(float x) {   // as it is up to 0.5, then softly to 1 (its slope 1 at the knee: no corner)
+    float a = x < 0.0f ? -x : x;
+    if (a <= 0.5f) return x;
+    float e = a - 0.5f, y = 0.5f + e / (1.0f + 2.0f * e);
+    return x < 0.0f ? -y : y;
+  }
 
   void set_filter(float filter, float resonance) {
     float q = 0.6f + 9.0f * resonance * resonance;
@@ -116,7 +135,7 @@ class Delay {
 
   int16_t* line_;
   uint32_t size_, write_;
-  float sr_, time_, target_, feedback_, drive_, mod_, phase_, blend_;
+  float sr_, time_, target_, feedback_, env_, drive_, mod_, phase_, blend_;
   int ping_pong_, mode_;
   stmlib::Svf svf_;
 

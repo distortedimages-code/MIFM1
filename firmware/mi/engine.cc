@@ -1398,6 +1398,8 @@ void eng_param_text(int param, float v, char* b, int n) {
         put_end(b, n, " s");
       }
     }
+  } else if (pt == PT_DELAY1 && k == 1 && v >= 0.99f) {   // FEEDBACK at the end: the loop (held for good)
+    put(b, n, "Loop");
   } else if (pt == PT_DELAY1 && k == 0) {   // the delay's TIME, FREE: ms
     float ms = delay_ms(v);
     if (ms < 1000.0f) {
@@ -1557,7 +1559,7 @@ void eng_defaults(project_t* p) {
   p->rnd[3][TP_NOTE] = -60;                              // the resonator too, its decay new at each trig
   p->rnd[3][TP_DECAY] = 25;
   // the delay: a dotted eighth, ping-pong, a little dark and driven, a slow wow
-  static const float kDelay[8] = {7.0f, 0.45f, -0.2f, 0.2f, 0.3f, 1.0f, 0.15f, 0.6f};
+  static const float kDelay[8] = {7.0f, 0.6f, -0.2f, 0.2f, 0.3f, 1.0f, 0.15f, 0.6f};   // (0.4.7: FEEDBACK the loop's gain)
   for (int k = 0; k < 8; ++k) p->val[PG_DELAY(k / 4) * 4 + k % 4] = kDelay[k];
   p->val[PG_STEP(LANE_DELAY) * 4 + 0] = 0.45f;           // its lane: open on two of the line's notes, ~170 ms to
   set_trigs(p, LANE_DELAY, 0x1010);                      // close
