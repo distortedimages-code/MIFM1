@@ -275,8 +275,9 @@ uint32_t hist_at, hist_div;
 
 volatile uint32_t load0, load1, peak, peak_hold_blocks;
 // the worst block of the last second, its own figures (what made the peak): each task's ticks (0: not played), core
-// 0's preparation, core 0's and core 1's totals, the whole render; its frames
-volatile uint32_t peak_of[ENG_TRACKS + 2 + 4], peak_n = 128u;
+// 0's preparation, core 0's and core 1's totals, the whole render; the preparation's parts (the start and the LFOs,
+// the cables, the sequencer, the effects' lanes, the voices' knobs); its frames
+volatile uint32_t peak_of[ENG_TRACKS + 2 + 4 + 5], peak_n = 128u;
 volatile uint32_t c1_job_ticks[2];      // core 1's time on the block's first and second job (written by it alone)
 float prep_cost = 1.0f;                 // core 0's preparation of a block (ticks, averaged): the sequencer, the cables
 volatile int on_core1_last;
@@ -384,8 +385,30 @@ float from_u(int param, float u) {
   return static_cast<float>(d->lo + iround(u * static_cast<float>(d->hi - d->lo)));
 }
 
+float from_u_fast(int param, float u) { // from_u on the bounds in RAM (the render's: make_bounds done)
+  float c = p_cab[param];
+  if (c == 2.0f) return u * 2.0f - 1.0f;
+  if (c == 1.0f) return u;
+  return p_lo[param] + static_cast<float>(iround(u * (p_hi[param] - p_lo[param])));
+}
+
 // a lane parameter as the trig plays it: its knob and cables, then the trig's lock and random
 int16_t lane_param[ENG_LANES][ENG_NTP];  // eng_track_param's answers, made once (E is asked ~150 times a block)
+uint32_t lane_lockable[ENG_LANES];       // its parameters a trig's lock or random moves (bit tp), made once
+// the steps with a lock (bit s), each lane's: a trig looks for its locks (all 384 slots) only on those. Made again
+// when the locks change (lock_gen: eng_lock_set, eng_lock_clear, eng_steps_clear, a project made or loaded)
+uint32_t lock_steps[ENG_LANES][ENG_STEPS / 32];
+volatile uint32_t lock_gen = 1u;
+uint32_t lock_gen_seen;
+void make_lock_steps() {
+  lock_gen_seen = lock_gen;
+  for (int l = 0; l < ENG_LANES; ++l)
+    for (int w = 0; w < ENG_STEPS / 32; ++w) lock_steps[l][w] = 0u;
+  for (int i = 0; i < ENG_PLOCKS; ++i) {
+    const plock_t& k = proj.lock[i];
+    if (k.lane < ENG_LANES && k.step < ENG_STEPS) lock_steps[k.lane][k.step / 32] |= 1u << (k.step % 32);
+  }
+}
 float E(int lane, int tp) {
   int param = lane_param[lane][tp];
   return clamp_fast(param, fin[param] + tdelta[lane][tp]);
@@ -409,8 +432,7 @@ float loop01(int lane, int step, int tp) {   // the looped random: the same for 
   return static_cast<float>(h & 0xFFFFu) * (1.0f / 65535.0f);
 }
 
-int quantize(int n) {                   // the nearest note of the global scale (a tie: the lower)
-  int sc = Pi(PG_GLOBAL, 1), root = Pi(PG_GLOBAL, 2);
+int quantize_slow(int n, int sc, int root) {   // the nearest note of the scale (a tie: the lower)
   if (sc <= 0 || sc >= 15) return n;
   uint32_t m = kScaleMasks[sc];
   int rel = ((n - root) % 12 + 12) % 12;
@@ -419,6 +441,22 @@ int quantize(int n) {                   // the nearest note of the global scale 
     if ((m >> ((rel + d) % 12)) & 1u) return n + d;
   }
   return n;
+}
+// the render's: a table of the notes -32..159, made again when the scale or its root changes (the screen's,
+// eng_quantize, works it out: the table is the render's alone)
+const int kQLo = -32, kQN = 192;
+int16_t qmap[kQN];
+int q_sc = -1, q_root = -1;
+int quantize(int n) {
+  int sc = Pi(PG_GLOBAL, 1), root = Pi(PG_GLOBAL, 2);
+  if (sc <= 0 || sc >= 15) return n;
+  if (sc != q_sc || root != q_root) {
+    for (int i = 0; i < kQN; ++i) qmap[i] = static_cast<int16_t>(quantize_slow(i + kQLo, sc, root));
+    q_sc = sc;
+    q_root = root;
+  }
+  int i = n - kQLo;
+  return i >= 0 && i < kQN ? qmap[i] : quantize_slow(n, sc, root);
 }
 
 int scale_on() {                        // SCALE not Off: every pitch in it
@@ -511,28 +549,29 @@ void run_lfos(uint32_t n) {
 
 // a trig: its locks and randoms over the knobs, whether it plays (its probability); a track's ratchets. The locks are
 // found in one pass over the slots (not one a parameter: a sixteenth's trigs on seven lanes took 50,000 compares)
-void new_trig(int lane, int step, int locks) {
-  int np = eng_lane_params(lane);
+void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_param, lane_lockable, the bounds)
   int16_t at[ENG_NTP];
   for (int tp = 0; tp < ENG_NTP; ++tp) at[tp] = -1;
-  if (locks)
+  if (lock_gen_seen != lock_gen) make_lock_steps();
+  if (locks && step >= 0 && step < ENG_STEPS && ((lock_steps[lane][step / 32] >> (step % 32)) & 1u))
     for (int i = 0; i < ENG_PLOCKS; ++i)
       if (proj.lock[i].lane == lane && proj.lock[i].step == step && proj.lock[i].tp < ENG_NTP)
         at[proj.lock[i].tp] = static_cast<int16_t>(i);
+  uint32_t lockable = lane_lockable[lane];
   for (int tp = 0; tp < ENG_NTP; ++tp) {
     tdelta[lane][tp] = 0.0f;
-    if (tp >= np || !eng_tp_lockable(lane, tp)) continue;
-    int param = eng_track_param(lane, tp);
-    const eng_pdef_t* d = eng_pdef(param);
-    float base = proj.val[param], v = base;
-    if (at[tp] >= 0) v = from_u(param, static_cast<float>(proj.lock[at[tp]].v) / 255.0f);
+    if (!((lockable >> tp) & 1u)) continue;
     int r = proj.rnd[lane][tp];
+    if (at[tp] < 0 && !r) continue;     // (neither a lock nor a random: the knob)
+    int param = lane_param[lane][tp];
+    float base = proj.val[param], v = base;
+    if (at[tp] >= 0) v = from_u_fast(param, static_cast<float>(proj.lock[at[tp]].v) / 255.0f);
     if (r) {                            // > 0: a new random at each trig; < 0: the same at each pass (a loop)
       float a = static_cast<float>(r < 0 ? -r : r) * 0.01f, x = r > 0 ? rand01() : loop01(lane, step, tp);
+      float c = p_cab[param];
       if (lane < ENG_TRACKS && tp == TP_RATCHET) v += a * x * 7.0f;               // only more
       else if (lane < ENG_TRACKS && tp == TP_NOTE) v += a * (x * 2.0f - 1.0f) * 12.0f;   // an octave either way
-      else v += a * (x * 2.0f - 1.0f) * (d->kind == K_BIP ? 2.0f : d->kind == K_UNI ? 1.0f
-                                                                  : static_cast<float>(d->hi - d->lo));
+      else v += a * (x * 2.0f - 1.0f) * (c != 0.0f ? c : p_hi[param] - p_lo[param]);
     }
     tdelta[lane][tp] = v - base;
   }
@@ -1473,6 +1512,7 @@ static void lfo_blank(project_t* p) {
 }
 
 void eng_blank(project_t* p) {
+  ++lock_gen;                           // (the live project's locks, maybe: the lock map made again)
   uint8_t* raw = reinterpret_cast<uint8_t*>(p);
   for (uint32_t i = 0; i < sizeof(project_t); ++i) raw[i] = 0;
   p->magic = PROJECT_MAGIC;
@@ -1575,6 +1615,7 @@ void eng_defaults(project_t* p) {
   set_lock(p, 1, 14, TP_NOTE, 12.0f);
   set_lock(p, 2, 7, TP_NOTE, 3.0f);
   set_lock(p, 3, 9, TP_DECAY, 0.95f);
+  ++lock_gen;
 }
 
 // the stress test (GLO, SELECT: PROJECT, K1, REC held): a fixed patch that keeps everything busy, to read the
@@ -1659,6 +1700,7 @@ void eng_stress(project_t* p) {
   p->rnd[2][TP_PAN] = 40;
   p->rnd[3][TP_NOTE] = -50;                              // the resonator: a looped tune, its decay new each trig
   p->rnd[3][TP_DECAY] = 30;
+  ++lock_gen;
 }
 
 int eng_check(const project_t* p) {
@@ -1979,7 +2021,10 @@ int eng_init(void) {
   a += (mms_size() + 7u) & ~7u;
   mms_init(master);
   for (int l = 0; l < ENG_LANES; ++l)
-    for (int tp = 0; tp < ENG_NTP; ++tp) lane_param[l][tp] = static_cast<int16_t>(eng_track_param(l, tp));
+    for (int tp = 0; tp < ENG_NTP; ++tp) {
+      lane_param[l][tp] = static_cast<int16_t>(eng_track_param(l, tp));
+      if (eng_tp_lockable(l, tp)) lane_lockable[l] |= 1u << tp;
+    }
   for (int t = 0; t < ENG_TRACKS; ++t) {
     eq_p[t] = new (eq_mem[t]) EqPair();
     eq_p[t]->f[0].Init();
@@ -2105,13 +2150,18 @@ void eng_render(float* l, float* r, uint32_t n) {
     }
   }
   // 1. the LFOs, with the knobs and cables of the last block
+  uint32_t pp[6];                       // (the preparation's parts, timed: the machine page's worst block)
   run_lfos(n);
+  pp[0] = plat_ticks24();
   // 2. every parameter, the cables over the knobs
   apply_cables();
+  pp[1] = plat_ticks24();
   // 3. the trigs
   sequence(n);
+  pp[2] = plat_ticks24();
   float open[kFx];
   fx_lanes(n, open);
+  pp[3] = plat_ticks24();
   for (int t = 0; t < ENG_TRACKS; ++t) {
     set_voice(t);
     set_grit(t);
@@ -2126,7 +2176,8 @@ void eng_render(float* l, float* r, uint32_t n) {
   for (int t = 0; t < ENG_TRACKS; ++t)
     if ((rest >> t) & 1u) render_voice(t, n);   // (silence: nothing to share)
   last_voices = v;
-  uint32_t prep_t = plat_ticks24() - t0;
+  pp[4] = plat_ticks24();
+  uint32_t prep_t = pp[4] - t0;
   prep_cost += (static_cast<float>(prep_t) - prep_cost) * 0.125f;
 #ifdef ENG_PROFILE
   eng_prof[0] += plat_ticks24() - t0;
@@ -2326,6 +2377,8 @@ void eng_render(float* l, float* r, uint32_t n) {
     peak_of[kTasks + 1] = c0;
     peak_of[kTasks + 2] = c1;
     peak_of[kTasks + 3] = tot;
+    peak_of[kTasks + 4] = pp[0] - t0;
+    for (int i = 1; i < 5; ++i) peak_of[kTasks + 4 + i] = pp[i] - pp[i - 1];
     peak_n = n;
   }
 }
@@ -2359,8 +2412,8 @@ void eng_delay_mode(int mode) {
   proj.algo[PG_DELAY(0)] = static_cast<uint8_t>(mode);
 }
 uint32_t eng_peak_part(int i) {         // the worst block's: 0..3 the voices, 4 Warps, 5 the effects, 6 the
-  return i >= 0 && i < kTasks + 4 ? pct10(peak_of[i], peak_n) : 0u;   // preparation, 7 core 0, 8 core 1, 9 all
-}
+  return i >= 0 && i < kTasks + 9 ? pct10(peak_of[i], peak_n) : 0u;   // preparation, 7 core 0, 8 core 1, 9 all,
+}                                                                      // 10..14 the preparation's parts
 uint32_t eng_prep_load(void) { return ready ? pct10(static_cast<uint32_t>(prep_cost), kN) : 0u; }
 uint32_t eng_peak(void) { return peak; }
 float eng_meter(int t) { return t >= 0 && t < ENG_TRACKS + 2 ? meter[t] : 0.0f; }
@@ -2423,21 +2476,25 @@ int eng_lock_set(int lane, int step, int tp, float v) {   // the value first, th
   proj.lock[i].step = static_cast<uint8_t>(step);
   proj.lock[i].tp = static_cast<uint8_t>(tp);
   proj.lock[i].lane = static_cast<uint8_t>(lane);
+  ++lock_gen;
   return 0;
 }
 void eng_lock_clear(int lane, int step) {
   for (int i = 0; i < ENG_PLOCKS; ++i)
     if (proj.lock[i].lane == lane && proj.lock[i].step == step) proj.lock[i].lane = 0xFF;
+  ++lock_gen;
 }
 void eng_steps_clear(int lane) {        // a lane's pattern: its trigs and its locks (its knobs and randoms stay)
   if (lane < 0 || lane >= ENG_LANES) return;
   for (int b = 0; b < ENG_STEPS / 8; ++b) proj.trig[lane][b] = 0;
   for (int i = 0; i < ENG_PLOCKS; ++i)
     if (proj.lock[i].lane == lane) proj.lock[i].lane = 0xFF;
+  ++lock_gen;
   lane_fresh(lane);                     // (the last trig's locks and randoms go with them)
 }
 void eng_fresh(void) {                   // another project: no trig's lock or random left from the last one
   for (int l = 0; l < ENG_LANES; ++l) lane_fresh(l);
+  ++lock_gen;
 }
 int eng_step_locked(int lane, int step) {
   int n = 0;
@@ -2450,7 +2507,7 @@ int eng_step_now(int lane) {
 float eng_lane_open(int lane) {
   return lane >= ENG_TRACKS && lane < ENG_LANES ? fx_open[lane - ENG_TRACKS] : 1.0f;
 }
-int eng_quantize(int note) { return quantize(note); }
+int eng_quantize(int note) { return quantize_slow(note, Pi(PG_GLOBAL, 1), Pi(PG_GLOBAL, 2)); }
 uint32_t eng_rises(int t) { return t >= 0 && t < ENG_TRACKS ? vrises[t] : 0u; }
 
 void eng_endless_rec(int t, int on) {

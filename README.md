@@ -118,8 +118,9 @@ cinq carrés qui se vident un à un : lâcher avant le dernier annule. Ceux qui 
 La charge de calcul est toujours affichée en haut à droite (le cœur le plus chargé, en %) ; GLO puis SELECT
 détaille ce que coûte chaque piste, Warps et les effets (FX : le mixer, le delay, la réverbe et le bus master). En
 bas de cette page, le pire bloc de la dernière seconde (celui du pic) : ce qu'y ont pris les deux cœurs et le rendu
-entier, puis chaque piste, Warps, les effets et la préparation du cœur 0 dans ce bloc-là (pour savoir ce qui fait
-monter le pic). Les
+entier, puis chaque piste, Warps et les effets dans ce bloc-là, et la préparation du cœur 0 en détail (le début et les
+LFO, les câbles, le séquenceur et ses trigs, les pistes des effets, les réglages des voix) : pour savoir ce qui
+fait monter le pic. Les
 quatre voix, Warps et les effets se répartissent entre les deux cœurs selon ce que chacun coûte, mesuré bloc après
 bloc (une voix MODAL ou STRING coûte dix fois une VIRTUAL ANALOG) : le mixer, les effets et le bus master jouent pour
 cela un bloc derrière les voix (2,9 ms de latence en sortie), pendant que les voix jouent le bloc suivant : le cœur 1

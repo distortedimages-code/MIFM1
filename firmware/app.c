@@ -2472,8 +2472,8 @@ static void draw_footer(void)
     int fl = foot_lane(), sys = ui.page == VP_SYS && !ui.matrix;
     if (sys) {                           /* the machine: the worst block of the last second, what made it */
         lh = 0;
-        for (int i = 0; i < 10; i++)
-            lh = lh * 31 + (int)((eng_peak_part(i) + 5u) / 10u);
+        for (int i = 0; i < 15; i++)
+            lh = lh * 31 + (int)eng_peak_part(i);
     }
     if (mode == 5) {                     /* the steps shown: their trigs, locks, the one playing, the one held */
         lh = eng_step_now(fl) | ui.held_step << 7 | ui.spage << 14 | fl << 17;
@@ -2514,25 +2514,25 @@ static void draw_footer(void)
         } else {
             cv_text(120 - text_w(&FONT_B, "UNDONE AT THE BAR") / 2, 8, &FONT_B, "UNDONE AT THE BAR", KNOCK);
         }
-    } else if (sys) {                    /* the worst block of the last second: core 0, core 1, the whole render; then
-                                          * each task in it (- a voice resting, Warps off), core 0's preparation */
-        static const char *const N[7] = {"T1 ", "  T2 ", "  T3 ", "  T4 ", "  WP ", "  FX ", "  PREP "};
+    } else if (sys) {                    /* the worst block of the last second: core 0, core 1, the whole render; each
+                                          * task in it (- a voice resting, Warps off); core 0's preparation, its parts */
+        static const char *const N[6] = {"T1 ", "  T2 ", "  T3 ", "  T4 ", "  WP ", "  FX "};
+        static const char *const PN[5] = {" LFO ", "  CAB ", "  SEQ ", "  LANES ", "  KNOBS "};
         char v[8];
         int all = (int)((eng_peak_part(9) + 5u) / 10u);
         t[0] = 0;
-        text_cat(t, "AT THE PEAK: CORES ", sizeof t);
+        text_cat(t, "AT THE PEAK ", sizeof t);
+        int_text(all, v);
+        text_cat(t, v, sizeof t);
+        text_cat(t, "%: CORES ", sizeof t);
         int_text((int32_t)((eng_peak_part(7) + 5u) / 10u), v);
         text_cat(t, v, sizeof t);
         text_cat(t, " / ", sizeof t);
         int_text((int32_t)((eng_peak_part(8) + 5u) / 10u), v);
         text_cat(t, v, sizeof t);
-        text_cat(t, ", ALL ", sizeof t);
-        int_text(all, v);
-        text_cat(t, v, sizeof t);
-        text_cat(t, "%", sizeof t);
-        cv_text(10, 6, &FONT_XS, t, all >= 90 ? AC3 : HI);
+        cv_text(10, 3, &FONT_T, t, all >= 90 ? AC3 : HI);
         t[0] = 0;
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 6; i++) {
             uint32_t q = eng_peak_part(i);
             text_cat(t, N[i], sizeof t);
             if (!q && i < 5) {
@@ -2542,7 +2542,23 @@ static void draw_footer(void)
                 text_cat(t, v, sizeof t);
             }
         }
-        cv_text(10, 21, &FONT_T, t, MUTED);
+        cv_text(10, 13, &FONT_T, t, MUTED);
+        t[0] = 0;
+        text_cat(t, "PREP ", sizeof t);
+        int_text((int32_t)((eng_peak_part(6) + 5u) / 10u), v);
+        text_cat(t, v, sizeof t);
+        text_cat(t, ":", sizeof t);
+        for (int i = 0; i < 5; i++) {    /* (tenths: they are small) */
+            uint32_t q = eng_peak_part(10 + i);
+            text_cat(t, PN[i], sizeof t);
+            int_text((int32_t)(q / 10u), v);
+            text_cat(t, v, sizeof t);
+            text_cat(t, ".", sizeof t);
+            v[0] = (char)('0' + q % 10u);
+            v[1] = 0;
+            text_cat(t, v, sizeof t);
+        }
+        cv_text(10, 23, &FONT_T, t, MUTED);
     } else if (ui.mod) {
         cv_text(10, 6, &FONT_XS, "MOD: HOLD AN LFO'S KEY, TURN A KNOB", HI);
         cv_text(10, 21, &FONT_T, "THE FIRST 3 WHITE KEYS: LFO 1, 2, 3 (BLINKING)", MUTED);
