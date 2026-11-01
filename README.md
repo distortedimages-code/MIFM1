@@ -56,6 +56,15 @@ modèles MODAL et STRING de Plaits en reprennent le code, en plus léger).
 <https://distortedimages-code.github.io/MIFM1/>. Dans Chrome ou Edge, FM-1 branché en USB et à l'arrêt : installer,
 laisser la page écrire les tables des modules après le firmware. Le firmware d'origine se remet de la même façon.
 
+## Enregistrer dans un DAW (USB)
+
+Branché en USB, le FM-1 est aussi une **carte son** (class compliant : aucun pilote, sur Mac, Windows, Linux, iPad) :
+une entrée stéréo 16 bits à 44,1 kHz, nommée « MIFM1 FM-1 », qui reçoit la sortie master (après le compresseur ou
+l'OTT et le limiteur). Dans le DAW : choisir cette entrée, armer une piste stéréo, enregistrer ; le MIDI passe par le
+même câble. Le niveau USB est **plein**, quel que soit MASTER : le potard ne règle que le haut-parleur et le casque
+(on peut couper le FM-1 et écouter par le DAW). Projet du DAW en 44,1 kHz (le FM-1 ne propose que ce taux). Latence
+de l'entrée : environ 7 ms. Le sens inverse (l'ordinateur qui joue dans le FM-1) n'est pas activé.
+
 ## Jouer
 
 **À l'allumage**, l'écran reste noir pendant que la machine démarre, puis le nom MIFM1 s'écrit en Syne (ses lettres

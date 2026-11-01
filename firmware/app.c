@@ -532,6 +532,8 @@ void app_panic(void)                     /* an update, a restore or the tables' 
 void app_init(void)
 {
     cpu2_ok = plat_cpu2_set(1) == 0;     /* the one time it may start: here, at power-on */
+    plat_usb_audio_full(1);              /* the USB audio input at full level (the limiter's), MASTER for the speaker
+                                          * and headphones only: a recording's level whatever MASTER says */
     data_ok = data_check();
     project_load();
     engine_ok = data_ok && eng_init() == 0;   /* (not before the tables: the modules' set-up may read them) */
