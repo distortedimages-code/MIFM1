@@ -92,7 +92,7 @@ typedef struct {
     float val[ENG_NPARAMS];
     uint8_t algo[ENG_NPAGES];            /* the page's ALGORITHM choice: Plaits' model, Tides' ramp, Marbles' T model
                                           * and scale */
-    uint8_t out_mode;                    /* the output: 0 stereo, 1 the right channel inverted, 2 mono */
+    uint8_t out_mode;                    /* the output: 0 stereo, 1 a headset with a mic (the right inverted), 2 mono */
     uint8_t rsv[2];
     cable_t cable[ENG_TRACKS + 1][ENG_CABLES];   /* the tracks' cables, then the global ones */
     uint8_t trig[ENG_TRACKS][ENG_STEPS / 8];     /* the steps with a trig, a bit each */

@@ -992,7 +992,9 @@ void eng_render(float* l, float* r, uint32_t n) {
     float a = fm_fabsf(wl) > fm_fabsf(wr) ? fm_fabsf(wl) : fm_fabsf(wr);
     if (a > pk[ENG_TRACKS]) pk[ENG_TRACKS] = a;
     float ol = sat(dl + wl), orr = sat(dr + wr);
-    if (proj.out_mode == 1) {           // the right inverted: for an output whose right channel comes out inverted
+    if (proj.out_mode == 1) {           // the right inverted: a headset with a mic (a 4-pole plug in the 3-pole jack)
+                                        // has its earpieces in series between left and right, they get left minus
+                                        // right: the centre vanishes. Left plus right then reaches them: the whole mix
       orr = -orr;
     } else if (proj.out_mode == 2) {    // mono
       ol = orr = 0.5f * (ol + orr);

@@ -108,9 +108,12 @@ les triolets), GATE (la longueur des notes), DIRECTION (avant, arrière, aller-r
 tenu** efface la boucle (la piste retrouve ses pas ou Marbles). Probabilité, ratchets, aléatoire et quantiseur
 s'appliquent aussi à ses notes. En bas, ses notes en barres, la note jouée en blanc.
 
-**La sortie** (GLO, SELECT, K2) : Stereo, Right inverted (le canal droit inversé, pour une sortie dont un canal
-arrive en opposition de phase : au casque, un son au centre paraît creux et plus faible que sur un côté) ou Mono.
-Le réglage reste quand on charge un autre projet.
+**La sortie** (GLO, SELECT, K2) : Stereo, Mic headset ou Mono. **Mic headset** est pour un casque à micro (fiche à
+4 contacts) branché à fond dans la prise du FM-1 (3 contacts) : ses écouteurs se retrouvent en série entre la
+gauche et la droite et ne reçoivent que leur différence (le centre disparaît, ce qui est panoramiqué ressort). Le
+canal droit inversé, ils reçoivent tout le mix, en mono (une oreille en opposition de phase : le son paraît un peu
+« dans la tête »). Pour la stéréo, un casque sans micro ou un adaptateur casque/micro. Le réglage reste quand on
+charge un autre projet.
 
 **Le clavier** relance la note à chaque touche, même jouée legato, et une touche tapée très vite sonne quand même.
 

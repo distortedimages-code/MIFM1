@@ -1409,8 +1409,10 @@ static void draw_global(void)
             int_text((int32_t)plat_cpu_pct(), v);
             text_cat(v, "%", sizeof v);
             break;
-        case 4: {                        /* the output (K2): stereo, the right inverted, mono */
-            static const char *const O[3] = {"Stereo", "Right inverted", "Mono"};
+        case 4: {                        /* the output (K2): stereo; a headset with a mic (its 4-pole plug in the
+                                          * 3-pole jack: its earpieces in series between left and right, they get
+                                          * left minus right, so the right inverted gives them the whole mix); mono */
+            static const char *const O[3] = {"Stereo", "Mic headset", "Mono"};
             l = "Output (K2)";
             text_cat(v, O[eng_project()->out_mode % 3], sizeof v);
             c = eng_project()->out_mode ? ORANGE : TXT;
