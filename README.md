@@ -53,7 +53,7 @@ icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en g
 les quatre potards côte à côte, dans l'ordre des KNOB 1 à 4 : un anneau fin allumé de son début (ou de son milieu,
 avec « − + ») jusqu'à la valeur, la valeur dedans, un câble en pointillé et son point d'arrivée dans l'autre couleur,
 la source écrite dessous. En bas les quatre pistes, une LED chacune allumée par sa gate dans la couleur de son modèle,
-celle qu'on joue en défonce ; sur les pages de Tides, ses sorties ; en mode STEP, sur les pages des pas et sur celles
+celle qu'on joue en défonce (chaque case sous son potard, le modèle en 4 lettres : KICK, VA, 6OP1, WTBL…) ; sur les pages de Tides, ses sorties ; en mode STEP, sur les pages des pas et sur celles
 des effets, les 16 pas de la piste (allumés : un trig ; un point : des locks ; cerclé : celui qui joue ; pour un effet,
 à droite, à quel point il est ouvert). Quand on change de face dans un même module (SELECT), la nouvelle page glisse
 depuis le côté vers lequel on tourne : les potards de la page suivante poussent les autres, l'icône du module
@@ -107,7 +107,8 @@ montre les pas du delay. **REC** à nouveau : retour au mode KEY.
 note (5 à 95 % du pas, lockable : des notes courtes et longues dans le même pattern), la transposition et l'octave.
 
 **Les pas d'un effet** (SEQ sur un effet, ou sa dernière face) : **DECAY** (10 ms à 5 s), **PROB**, **DEPTH** et
-**LENGTH**. Sans aucun trig, l'effet est toujours là (mode hold) ; dès qu'il y a des trigs, chaque trig ouvre l'effet
+**LENGTH**. Sans aucun trig, l'effet est toujours là (mode hold : en bas, la rangée des pas est pleine, de la
+couleur de l'effet, HOLD écrit dedans) ; dès qu'il y a des trigs, chaque trig ouvre l'effet
 et il se referme avec DECAY jusqu'à 1 − DEPTH (DEPTH 100 % : fermé entre les trigs). Pour le delay et la réverbe,
 c'est l'entrée qui s'ouvre (les répétitions et la queue continuent) : des échos jetés sur certaines notes seulement ;
 pour Warps, c'est un fondu entre la piste telle quelle et la sortie de Warps. Ses P-locks changent ses réglages pas par

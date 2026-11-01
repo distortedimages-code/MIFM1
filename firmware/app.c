@@ -271,9 +271,9 @@ static uint16_t page_accent(int page)
 static uint16_t mod_colour(uint16_t ac) { return ac == TEAL ? PINK : TEAL; }   /* where the cables take a knob */
 
 /* Plaits' models in four letters or so (the tracks' row), its banks */
-static const char *const SHORT[24] = {"VCF", "PHASE", "6-OP 1", "6-OP 2", "6-OP 3", "TERRAIN", "STRINGS", "CHIP",
-                                      "VA", "SHAPER", "FM", "FORMANT", "HARMO", "TABLE", "CHORDS", "SPEECH",
-                                      "SWARM", "NOISE", "PARTICL", "STRING", "MODAL", "KICK", "SNARE", "HI-HAT"};
+static const char *const SHORT[24] = {"VCF", "PD", "6OP1", "6OP2", "6OP3", "TERR", "SMCH", "CHIP",
+                                      "VA", "SHPR", "FM", "FRMT", "HARM", "WTBL", "CHRD", "SPCH",
+                                      "SWRM", "NOIS", "PART", "STRG", "MODL", "KICK", "SNAR", "HHAT"};
 static const char *const BANK[3] = {"PLAITS 1.2", "PITCHED", "NOISE & DRUMS"};
 
 /* ------------------------------------------------------------------ text --- */
@@ -1004,7 +1004,7 @@ static int meter_lit(int t) { return (int)(fm_clampf(eng_meter(t) * 1.25f, 0.0f,
 static void panel_mixer(int pan)
 {
     hero_icon(IC_MIX, TEAL);
-    hero_line(hero_title(pan ? "PAN" : "MIXER"), pan ? "4 TRACKS|ON A TRIG: ITS LOCK, ITS RANDOM" : "4 TRACKS");
+    hero_line(hero_title(pan ? "PAN" : "MIXER"), "4 TRACKS");
     for (int t = 0; t < ENG_TRACKS; t++) {   /* a column of LEDs a track, in its colour */
         int lit = meter_lit(t), x = 180 + t * 15;
         char n[2] = {(char)('1' + t), 0};
@@ -1435,9 +1435,14 @@ static void draw_knob_at(int page, int k, int force)
     if (idle)
         ac = mc = DIM;
     vc = view == KV_RND ? (rnd < 0 ? mc : ac) : locked ? mc : ac;
+    int tk = track_knobs(page) && view == KV_VALUE;
+    if (tk)
+        lab[0] = 0, text_cat(lab, LANE_SHORT[k], sizeof lab);
+    else
+        label_text(ptype(page) == PT_RND ? RND_NAME[k] : eng_param_name(param), lab, sizeof lab);
     int32_t s[4] = {(int32_t)(view == KV_RND ? (float)(rnd + 100) : knob_u(param, v) * 270.0f) |
                     (int32_t)(knob_u(param, f) * 270.0f) << 10 | view << 20 | locked << 22,
-                    text_hash(txt), hash, hot | ui.mod << 1 | (int32_t)ac << 2};
+                    text_hash(txt) * 31 + text_hash(lab), hash, hot | ui.mod << 1 | (int32_t)ac << 2};
     if (!force && !ui.full && !ui.body_knobs && !memcmp(s, ui.knob_shown[k], sizeof s))
         return;
     if (page == ui.page)
@@ -1446,12 +1451,7 @@ static void draw_knob_at(int page, int k, int force)
         return;                          /* sliding, not on the screen */
     cv_begin(KNOB_W, KNOB_H, BG);
     {                                    /* its name (touched: white, underlined) */
-        int tk = track_knobs(page) && view == KV_VALUE;
         uint16_t lc = hot ? C_WHITE : view != KV_VALUE ? vc : tk ? track_accent(k) : MUTED;
-        if (tk)
-            lab[0] = 0, text_cat(lab, LANE_SHORT[k], sizeof lab);
-        else
-            label_text(ptype(page) == PT_RND ? RND_NAME[k] : eng_param_name(param), lab, sizeof lab);
         const felucca_font_t *lf = text_w(&FONT_S, lab) <= 58 ? &FONT_S : &FONT_XS;
         int w = text_w(lf, lab);
         cv_text(30 - w / 2, 0, lf, lab, lc);
@@ -1720,6 +1720,15 @@ static void foot_steps(int t)            /* the steps of a page: a trig lit, a l
     project_t *p = eng_project();
     int len = (int)(p->val[PG_STEP(t) * 4 + 3] + 0.5f), now = eng_step_now(t);
     uint16_t ac = lane_accent(t);
+    if (t >= ENG_TRACKS && !eng_lane_has_trigs(t) && ui.held_step < 0) {
+        /* an effect without a trig: held open, always on. The row in its colour, HOLD knocked out of it */
+        cv_rect(9, 8, 15 * 13 + 11, 18, ac);
+        cv_text(9 + (15 * 13 + 11 - text_w(&FONT_B, "HOLD")) / 2, 9, &FONT_B, "HOLD", BG);
+        for (int i = 0; i < 16; i += 4)
+            cv_rect(9 + i * 13, 28, 11, 1, DIM);   /* the beats */
+        cv_rect(231, 8, 3, 18, C_WHITE);
+        return;
+    }
     for (int i = 0; i < 16; i++) {
         int st = ui.spage * 16 + i, x = 9 + i * 13;
         if (st >= len) {
@@ -1996,12 +2005,12 @@ static void draw_footer(void)
     } else if (mode == 5) {
         foot_steps(fl);
     } else {
-        for (int i = 0; i < 4; i++) {
-            int x = 12 + i * 57, act = mode ? lv[i] > 0 : i == ui.track;
+        for (int i = 0; i < 4; i++) {    /* a cell under each knob (60 px), the LED and the name from its left */
+            int x = i * 60 + 8, act = mode ? lv[i] > 0 : i == ui.track;
             t[0] = 0;
             if (mode) {
                 text_cat(t, OUT[mode - 1][i], sizeof t);
-                led((float)(x + 4), 19.0f, 3.6f, ac, lv[i]);
+                led((float)(x + 5), 19.0f, 3.6f, ac, lv[i]);
             } else {
                 n[0] = (char)('1' + i);
                 n[1] = ' ';
@@ -2010,14 +2019,14 @@ static void draw_footer(void)
                 text_cat(t, SHORT[p->algo[PG_TRACK(i, 0)] % 24], sizeof t);
                 if (act) {               /* the track played: knocked out of a block of its colour */
                     uint16_t tc = track_accent(i);
-                    cv_rect(x - 4, 7, 53, 25, tc);   /* the rule's width over the four */
-                    disc((float)(x + 4), 19.0f, 3.6f, lv[i] ? BG : tint(BG, tc, 3));
-                    cv_text(x + 12, 11, text_w(&FONT_XS, t) <= 42 ? &FONT_XS : &FONT_T, t, BG);
+                    cv_rect(x - 4, 7, 52, 25, tc);
+                    disc((float)(x + 5), 19.0f, 3.6f, lv[i] ? BG : tint(BG, tc, 3));
+                    cv_text(x + 13, 11, &FONT_XS, t, BG);
                     continue;
                 }
-                led((float)(x + 4), 19.0f, 3.6f, track_accent(i), lv[i]);
+                led((float)(x + 5), 19.0f, 3.6f, track_accent(i), lv[i]);
             }
-            cv_text(x + 12, 11, text_w(&FONT_XS, t) <= 42 ? &FONT_XS : &FONT_T, t, act ? C_WHITE : DIM);
+            cv_text(x + 13, 11, &FONT_XS, t, act ? C_WHITE : DIM);
         }
     }
     blit(0, FOOT_Y);
