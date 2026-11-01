@@ -94,8 +94,11 @@ Les appuis tenus (SAVE, REC pour effacer ou charger, SEL pour la matrice) affich
 cinq carrés qui se vident un à un : lâcher avant le dernier annule. Ceux qui effacent ou écrasent durent une seconde.
 
 La charge de calcul est toujours affichée en haut à droite (le cœur le plus chargé, en %) ; GLO puis SELECT
-détaille ce que coûte chaque piste et Warps. Les quatre voix et Warps se répartissent entre les deux cœurs selon ce
-que chacun coûte, mesuré bloc après bloc (une voix MODAL ou STRING coûte dix fois une VIRTUAL ANALOG).
+détaille ce que coûte chaque piste, Warps et les effets (FX : le delay, la réverbe et le bus master). Les quatre
+voix, Warps et les effets se répartissent entre les deux cœurs selon ce que chacun coûte, mesuré bloc après bloc (une
+voix MODAL ou STRING coûte dix fois une VIRTUAL ANALOG) : les effets et le bus master jouent pour cela un bloc derrière
+les voix (2,9 ms de latence en sortie). Une voix silencieuse depuis un moment, sa note finie, se repose jusqu'à son
+trig suivant (elle ne coûte plus rien).
 
 **Le mode STEP** (REC) : les 16 touches blanches sont les pas de la page (allumés : un trig, celui qui joue
 clignote), les **7 premières touches noires choisissent la piste de pas** : 1 à 4 les pistes, 5 le delay, 6 la

@@ -164,7 +164,8 @@ void eng_endless_clear(int t);
 int eng_endless_on(int t);               /* 1: it plays the track */
 void eng_endless_key(int t, int note);   /* a key: its transposition */
 int eng_endless_pos(int t);              /* the note playing, -1 none */
-void eng_render(float *l, float *r, uint32_t n);   /* audio interrupt */
+void eng_render(float *l, float *r, uint32_t n);   /* audio interrupt: the last block out (the effects and the master
+                                          * bus play a block behind the voices: 2.9 ms) */
 void eng_play(int on);                   /* the transport: the steps run or stop (from their start) */
 int eng_playing(void);
 /* ALL undone in time: these knobs, models and randoms put back as the next bar starts (16 sixteenths of the tempo from
@@ -182,7 +183,8 @@ uint32_t eng_gates(void);                /* bit t: track t's gate now */
 int eng_note(int track);                 /* its note now (MIDI number) */
 uint32_t eng_load(int core);             /* the render's time on core 0 or 1, in tenths of % of the block (smoothed) */
 uint32_t eng_peak(void);                 /* the worst total of the last second, same unit */
-uint32_t eng_task_load(int task);        /* a voice's (0..3) or Warps' (4) time, averaged, same unit */
+uint32_t eng_task_load(int task);        /* a voice's (0..3, while it plays), Warps' (4) or the effects' and the
+                                          * master bus's (5) time, averaged, same unit */
 float eng_meter(int t);                  /* track t's output (4: the reverb's return, 5: the delay's), its peak,
                                           * falling slowly */
 float eng_duck(void);                    /* the duck now, 0..1 (1: T1's trig, as deep as each track's knob) */

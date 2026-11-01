@@ -561,11 +561,59 @@ static void travel_xy(float cx, float cy, float u, float r, float *x, float *y)
     *y = cy - r * fm_sinf(a);
 }
 
+/* the knobs' rings, their pixels known once (where they are on the travel, how far out): a ring's arcs then cost a
+ * pass over a table instead of a square root and an arctangent for each pixel around (the knobs are most of what the
+ * screen draws) */
+#define KNOB_CX 30.0f                    /* (RX, RY below) */
+#define KNOB_CY 45.0f
+#define LUT_R0 18.5f
+#define LUT_R1 26.0f
+#define LUT_MAX 1400
+static struct {
+    uint8_t x, y;
+    uint16_t d;                          /* the distance, 1/256 px */
+    int16_t u;                           /* the place on the travel, 1/8192 */
+} ring_lut[LUT_MAX];
+static int ring_lut_n = -1;
+
+static void ring_lut_init(void)
+{
+    ring_lut_n = 0;
+    for (int y = 0; y < 100; y++)
+        for (int x = 0; x < 60; x++) {
+            float dx = (float)x - KNOB_CX, dy = KNOB_CY - (float)y, d = fm_sqrtf(dx * dx + dy * dy);
+            if (d < LUT_R0 - 0.6f || d > LUT_R1 + 0.6f || ring_lut_n >= LUT_MAX)
+                continue;
+            ring_lut[ring_lut_n].x = (uint8_t)x;
+            ring_lut[ring_lut_n].y = (uint8_t)y;
+            ring_lut[ring_lut_n].d = (uint16_t)(d * 256.0f + 0.5f);
+            ring_lut[ring_lut_n].u = (int16_t)(travel_u(dx, dy) * 8192.0f);
+            ring_lut_n++;
+        }
+}
+
 static void arc(float cx, float cy, float r0, float r1, float u0, float u1, uint16_t c)   /* u0..u1, r0..r1 */
 {
     BOX_OF(cx, cy, r1);
     if (u1 <= u0)
         return;
+    if (cx == KNOB_CX && cy == KNOB_CY && r0 >= LUT_R0 && r1 <= LUT_R1) {   /* a knob's: from the table */
+        if (ring_lut_n < 0)
+            ring_lut_init();
+        int32_t ua = (int32_t)((u0 - 0.02f) * 8192.0f), ub = (int32_t)((u1 + 0.02f) * 8192.0f);
+        for (int i = 0; i < ring_lut_n; i++) {
+            if (ring_lut[i].u < ua || ring_lut[i].u > ub)
+                continue;
+            float d = (float)ring_lut[i].d * (1.0f / 256.0f), u = (float)ring_lut[i].u * (1.0f / 8192.0f);
+            float cov = fm_minf(r1 + 0.5f - d, d - r0 + 0.5f), e;
+            if (cov <= 0.0f)
+                continue;
+            e = fm_minf(u - u0, u1 - u) * 4.712389f * d + 0.5f;
+            if (e > 0.0f)
+                blend_px(ring_lut[i].x, ring_lut[i].y, c, fm_minf(cov, 1.0f) * fm_minf(e, 1.0f));
+        }
+        return;
+    }
     for (int y = ya; y <= yb; y++)
         for (int x = xa; x <= xb; x++) {
             float dx = (float)x - cx, dy = cy - (float)y, d = fm_sqrtf(dx * dx + dy * dy);
@@ -1710,17 +1758,18 @@ static void draw_machine(int force)      /* the machine, where the knobs are */
             if (eng_peak() >= 900u)
                 c = PINK;
             break;
-        case 3: {                        /* what each costs: the four tracks, Warps (the cores share them by it) */
+        case 3: {                        /* what each costs: the four tracks (while they play), Warps, the effects
+                                          * and the master bus (the cores share them by it) */
             char n[8];
             n[0] = 0;
-            l = "T1 T2 T3 T4 Warps";
-            for (int t = 0; t <= ENG_TRACKS; t++) {
+            l = "T1 T2 T3 T4 Warps FX";
+            for (int t = 0; t <= ENG_TRACKS + 1; t++) {
                 if (t == ENG_TRACKS && !eng_task_load(t))
                     n[0] = '-', n[1] = 0;         /* Warps off */
                 else
                     int_text((int32_t)((eng_task_load(t) + 5u) / 10u), n);
                 text_cat(v, n, sizeof v);
-                text_cat(v, t < ENG_TRACKS ? "  " : t == ENG_TRACKS && n[0] == '-' ? "" : "%", sizeof v);
+                text_cat(v, t <= ENG_TRACKS ? " " : "%", sizeof v);
             }
             break;
         }

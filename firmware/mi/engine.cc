@@ -237,7 +237,7 @@ volatile int w_job;                     // Warps runs in this block's job
 int w_last = -1;                        // the routing w_car and w_mod were taken with: carrier | modulator << 4, -1
 int w_dst = -1, w_mute = -1;            // the track its output replaces; the modulator's track, silenced (-1: none)
 float vaux[ENG_TRACKS][kN];
-float send[kN], dsend[kN], wet_l[kN], wet_r[kN], echo_l[kN], echo_r[kN];
+float wet_l[kN], wet_r[kN], echo_l[kN], echo_r[kN];
 float meter[ENG_TRACKS + 2];
 int8_t hist[NSRC][ENG_HIST];
 uint32_t hist_at, hist_div;
@@ -536,7 +536,22 @@ void set_voice(int t) {
   mp_amounts(voice[t], E(t, TP_PITCHENV), E(t, 6), E(t, 7));   // the envelope on the pitch (Plaits' FM attenuverter)
 }
 
+// a voice silent a while, its gate low (its note over, its LPG or its own envelope down under -90 dB): it rests,
+// rendered again at its next gate (its oscillators where they were: a new note starts from its trigger anyway)
+const int kQuiet = 4;                   // the silent blocks before it rests
+int quiet[ENG_TRACKS];
+int voice_rests(int t) {
+  if (vgate[t] || quiet[t] < kQuiet) return 0;
+  for (uint32_t k = 0; k < kFrames; ++k)
+    if (fg[t][k]) return 0;
+  return 1;
+}
+
 void render_voice(int t, uint32_t n) {
+  if (voice_rests(t)) {
+    for (uint32_t i = 0; i < n; ++i) vbuf[t][i] = 0.0f;
+    return;
+  }
   uint32_t step = n / kFrames, pos = 0;
   for (uint32_t k = 0; k < kFrames; ++k) {
     int g = fg[t][k];
@@ -555,22 +570,66 @@ void render_voice(int t, uint32_t n) {
     vgate[t] = g;
   }
   if (n > pos) mp_render(voice[t], &vbuf[t][pos], &vaux[t][pos], n - pos);
+  float pk = 0.0f;
+  for (uint32_t i = 0; i < n; ++i) pk = fm_maxf(pk, fm_fabsf(vbuf[t][i]));
+  quiet[t] = !vgate[t] && pk < 3e-5f ? quiet[t] + 1 : 0;
+}
+
+// the effects and the master bus, a block behind (the output 2.9 ms later): they take the last block's mix (its dry
+// sum, its sends, its returns' gains) while the voices play this one, on either core: the mixer left to core 0 alone
+// is only the sums
+float fx_dry_l[kN], fx_dry_r[kN], fx_rsend[kN], fx_dsend[kN], fx_out_l[kN], fx_out_r[kN];
+float fx_ret0, fx_ret1, fx_dret0, fx_dret1, fx_pk[2];
+uint32_t fx_n;                           // its frames (0: none yet)
+int fx_mode;                             // the output's mode, as the mix was taken
+
+void fx_job(uint32_t n) {
+  float inv = 1.0f / static_cast<float>(n), ret = fx_ret0, dret = (fx_ret1 - fx_ret0) * inv, eret = fx_dret0;
+  float deret = (fx_dret1 - fx_dret0) * inv, pr = 0.0f, pd = 0.0f;
+  mrv_process(reverb, fx_rsend, wet_l, wet_r, n);
+  mdl_process(delay, fx_dsend, echo_l, echo_r, n);
+  for (uint32_t i = 0; i < n; ++i) {
+    ret += dret;
+    eret += deret;
+    float wl = ret * wet_l[i], wr = ret * wet_r[i], el = eret * echo_l[i], er = eret * echo_r[i];
+    pr = fm_maxf(pr, fm_maxf(fm_fabsf(wl), fm_fabsf(wr)));
+    pd = fm_maxf(pd, fm_maxf(fm_fabsf(el), fm_fabsf(er)));
+    fx_out_l[i] = fx_dry_l[i] + wl + el;
+    fx_out_r[i] = fx_dry_r[i] + wr + er;
+  }
+  fx_pk[0] = pr;
+  fx_pk[1] = pd;
+  mms_process(master, fx_out_l, fx_out_r, n);   // the master bus: the compressor or OTT, the limiter
+  for (uint32_t i = 0; i < n; ++i) {     // then a soft limit, the output's mode
+    float ol = sat(fx_out_l[i]), orr = sat(fx_out_r[i]);
+    if (fx_mode == 1) {                 // the right inverted: a headset with a mic (a 4-pole plug in the 3-pole jack)
+                                        // has its earpieces in series between left and right, they get left minus
+                                        // right: the centre vanishes. Left plus right then reaches them: the whole mix
+      orr = -orr;
+    } else if (fx_mode == 2) {          // mono
+      ol = orr = 0.5f * (ol + orr);
+    }
+    fx_out_l[i] = ol;
+    fx_out_r[i] = orr;
+  }
 }
 
 volatile uint32_t job_n;
-// the render's five tasks (the four voices, Warps), shared between the cores: each one timed where it ran, its cost
-// averaged, and each block they are split so that the busier core has the least to do (a modal voice costs ten times
-// a virtual analog one)
-const int kTasks = ENG_TRACKS + 1;
+// the render's six tasks (the four voices, Warps, the effects and the master bus), shared between the cores: each one
+// timed where it ran, its cost averaged (a voice's while it plays), and each block they are split so that the busier
+// core has the least to do (a modal voice costs ten times a virtual analog one)
+const int kTasks = ENG_TRACKS + 2;
+const int kTaskWarps = ENG_TRACKS, kTaskFx = ENG_TRACKS + 1;
 volatile uint32_t task_ticks[kTasks];
-float task_cost[kTasks] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+float task_cost[kTasks] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 float warps_chunk_cost = 1.0f;           // Warps' cost a Process call: a block makes 2 or 3 of them (mw_calls)
 uint32_t warps_calls;
 
 void run_task(int i, uint32_t n) {
   uint32_t q = plat_ticks24();
   if (i < ENG_TRACKS) render_voice(i, n);
-  else mw_render(warps, w_car, w_mod, w_din, w_out, w_dry, n);
+  else if (i == kTaskWarps) mw_render(warps, w_car, w_mod, w_din, w_out, w_dry, n);
+  else fx_job(fx_n);
   task_ticks[i] = plat_ticks24() - q;
 }
 
@@ -584,6 +643,7 @@ void core1_job(uint32_t mask) {         // the second core's tasks (bit i: task 
 uint32_t split_tasks(uint32_t todo) {   // the second core's share of todo: the busier core's least
   float cost[kTasks], best = 1e30f;
   uint32_t pick = 0;
+  // (64 ways at most)
   for (int i = 0; i < kTasks; ++i) cost[i] = (todo >> i) & 1u ? task_cost[i] : 0.0f;
   for (uint32_t m = 0; m < (1u << kTasks); ++m) {
     if (m & ~todo) continue;
@@ -1297,13 +1357,31 @@ void eng_render(float* l, float* r, uint32_t n) {
   fx_lanes(n, open);
   for (int t = 0; t < ENG_TRACKS; ++t) set_voice(t);
   set_warps();
-  // 4. the voices and Warps (the last block's), split between the cores
+  // the effects' and the master bus's knobs (they play the last block's mix)
+  mrv_set(reverb, E(LANE_REVERB, 0), E(LANE_REVERB, 1), E(LANE_REVERB, 2));
+  int div = iround(E(LANE_DELAY, 0));
+  mdl_set(delay, step_len_now() * kDivMult[div < 0 ? 0 : div >= kDivs ? kDivs - 1 : div], E(LANE_DELAY, 1),
+          E(LANE_DELAY, 2), E(LANE_DELAY, 4), E(LANE_DELAY, 3), iround(E(LANE_DELAY, 5)), E(LANE_DELAY, 6));
+  mms_mode(master, proj.algo[PG_COMP] > MB_OTT ? static_cast<int>(MB_COMP) : proj.algo[PG_COMP]);
+  mms_comp(master, comp_threshold(P(PG_COMP, 0)), comp_ratio(P(PG_COMP, 1)), comp_release(P(PG_COMP, 2)),
+           P(PG_COMP, 3) * 12.0f);
+  mms_ott(master, P(PG_OTT, 0), ott_time(P(PG_OTT, 1)), P(PG_OTT, 2) * 12.0f, P(PG_OTT, 3) * 12.0f);
+  // 4. the voices (those not resting), Warps (the last block's), the effects (the last block's mix), split between
+  // the cores
   job_n = n;
-  uint32_t todo = w_job ? (1u << kTasks) - 1u : (1u << ENG_TRACKS) - 1u;
-  if (w_job) {
-    warps_calls = mw_calls(warps, n);
-    task_cost[ENG_TRACKS] = warps_chunk_cost * static_cast<float>(warps_calls);
+  uint32_t todo = 0, rest = 0;
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    if (voice_rests(t)) rest |= 1u << t;
+    else todo |= 1u << t;
   }
+  if (w_job) {
+    todo |= 1u << kTaskWarps;
+    warps_calls = mw_calls(warps, n);
+    task_cost[kTaskWarps] = warps_chunk_cost * static_cast<float>(warps_calls);
+  }
+  if (fx_n) todo |= 1u << kTaskFx;
+  for (int t = 0; t < ENG_TRACKS; ++t)
+    if ((rest >> t) & 1u) render_voice(t, n);   // (silence: nothing to share)
   uint32_t mask = split_tasks(todo);
   int on_core1 = use_core1 && plat_cpu2_on() ? plat_cpu2_run(core1_job, mask) : 0;
   for (int i = 0; i < kTasks; ++i)
@@ -1320,15 +1398,21 @@ void eng_render(float* l, float* r, uint32_t n) {
     c0 = plat_ticks24() - t0;
   }
   on_core1_last = on_core1;
-  for (int i = 0; i < ENG_TRACKS; ++i)  // the costs: averaged over ~8 blocks
-    task_cost[i] += (static_cast<float>(task_ticks[i]) - task_cost[i]) * 0.125f;
+  for (int i = 0; i < ENG_TRACKS; ++i)  // the costs: averaged over ~8 blocks (a voice's while it plays)
+    if ((todo >> i) & 1u) task_cost[i] += (static_cast<float>(task_ticks[i]) - task_cost[i]) * 0.125f;
   if (w_job && warps_calls)
-    warps_chunk_cost += (static_cast<float>(task_ticks[ENG_TRACKS]) / static_cast<float>(warps_calls) -
+    warps_chunk_cost += (static_cast<float>(task_ticks[kTaskWarps]) / static_cast<float>(warps_calls) -
                          warps_chunk_cost) * 0.125f;
+  if (fx_n) task_cost[kTaskFx] += (static_cast<float>(task_ticks[kTaskFx]) - task_cost[kTaskFx]) * 0.125f;
+  // the output: the last block's, through its effects and the master bus (none yet, or another size: silence)
+  for (uint32_t i = 0; i < n; ++i) {
+    l[i] = fx_n == n ? fx_out_l[i] : 0.0f;
+    r[i] = fx_n == n ? fx_out_r[i] : 0.0f;
+  }
   const int fd = LANE_DELAY - ENG_TRACKS, fr = LANE_REVERB - ENG_TRACKS, fw = LANE_WARPS - ENG_TRACKS;
   route_warps(n, fx_open[fw], open[fw]);
-  // 5. the mixer: the levels, the sends into the delay and Clouds' reverb (core 0, once the voices are done), their
-  // returns
+  // 5. this block's mix, for the next block's effects: the levels, the sums, the sends into the delay and Clouds'
+  // reverb
   uint32_t g = 0;
   for (int t = 0; t < ENG_TRACKS; ++t) g |= vgate[t] ? 1u << t : 0u;
   gates_now = g;
@@ -1361,10 +1445,6 @@ void eng_render(float* l, float* r, uint32_t n) {
     mix_dsend[t] = td;
   }
   for (int f = 0; f < kFx; ++f) fx_open[f] = open[f];
-  mrv_set(reverb, E(LANE_REVERB, 0), E(LANE_REVERB, 1), E(LANE_REVERB, 2));
-  int div = iround(E(LANE_DELAY, 0));
-  mdl_set(delay, step_len_now() * kDivMult[div < 0 ? 0 : div >= kDivs ? kDivs - 1 : div], E(LANE_DELAY, 1),
-          E(LANE_DELAY, 2), E(LANE_DELAY, 4), E(LANE_DELAY, 3), iround(E(LANE_DELAY, 5)), E(LANE_DELAY, 6));
   {                                     // the duck: T1's rises (their frames), DECAY, each track's depth
     float rel = fm_exp2f(-1.442695f / (kSr * duck_tau(P(PG_DUCK, 0)))), step = static_cast<float>(n / kFrames);
     for (uint32_t i = 0; i < n; ++i) {
@@ -1386,8 +1466,11 @@ void eng_render(float* l, float* r, uint32_t n) {
     }
   }
   float rv = E(LANE_REVERB, 3) * 1.6f, dv = E(LANE_DELAY, 7) * 1.2f;
-  float ret = mix_ret, dret = (rv - mix_ret) * inv, eret = mix_dret, deret = (dv - mix_dret) * inv;
   float pk[ENG_TRACKS + 2] = {0, 0, 0, 0, 0, 0};
+  fx_ret0 = mix_ret;                    // the returns' gains, from the last block's to this one's
+  fx_ret1 = rv;
+  fx_dret0 = mix_dret;
+  fx_dret1 = dv;
   mix_ret = rv;
   mix_dret = dv;
   for (uint32_t i = 0; i < n; ++i) {
@@ -1400,11 +1483,9 @@ void eng_render(float* l, float* r, uint32_t n) {
       float a = fm_fabsf(vbuf[t][i] * gain[t]);
       if (a > pk[t]) pk[t] = a;
     }
-    send[i] = s;
-    dsend[i] = ds;
+    fx_rsend[i] = s;
+    fx_dsend[i] = ds;
   }
-  mrv_process(reverb, send, wet_l, wet_r, n);
-  mdl_process(delay, dsend, echo_l, echo_r, n);
   for (uint32_t i = 0; i < n; ++i) {
     float dl = 0.0f, dr = 0.0f;
     for (int t = 0; t < ENG_TRACKS; ++t) {
@@ -1413,35 +1494,13 @@ void eng_render(float* l, float* r, uint32_t n) {
       dl += gl[t] * vbuf[t][i];
       dr += gr[t] * vbuf[t][i];
     }
-    ret += dret;
-    eret += deret;
-    float wl = ret * wet_l[i], wr = ret * wet_r[i], el = eret * echo_l[i], er = eret * echo_r[i];
-    float a = fm_fabsf(wl) > fm_fabsf(wr) ? fm_fabsf(wl) : fm_fabsf(wr);
-    if (a > pk[ENG_TRACKS]) pk[ENG_TRACKS] = a;
-    a = fm_fabsf(el) > fm_fabsf(er) ? fm_fabsf(el) : fm_fabsf(er);
-    if (a > pk[ENG_TRACKS + 1]) pk[ENG_TRACKS + 1] = a;
-    l[i] = dl + wl + el;
-    r[i] = dr + wr + er;
+    fx_dry_l[i] = dl;
+    fx_dry_r[i] = dr;
   }
-  // the master bus: the compressor or OTT, the limiter; then a soft limit, the output's mode
-  int mb = proj.algo[PG_COMP] > MB_OTT ? MB_COMP : proj.algo[PG_COMP];
-  mms_mode(master, mb);
-  mms_comp(master, comp_threshold(P(PG_COMP, 0)), comp_ratio(P(PG_COMP, 1)), comp_release(P(PG_COMP, 2)),
-           P(PG_COMP, 3) * 12.0f);
-  mms_ott(master, P(PG_OTT, 0), ott_time(P(PG_OTT, 1)), P(PG_OTT, 2) * 12.0f, P(PG_OTT, 3) * 12.0f);
-  mms_process(master, l, r, n);
-  for (uint32_t i = 0; i < n; ++i) {
-    float ol = sat(l[i]), orr = sat(r[i]);
-    if (proj.out_mode == 1) {           // the right inverted: a headset with a mic (a 4-pole plug in the 3-pole jack)
-                                        // has its earpieces in series between left and right, they get left minus
-                                        // right: the centre vanishes. Left plus right then reaches them: the whole mix
-      orr = -orr;
-    } else if (proj.out_mode == 2) {    // mono
-      ol = orr = 0.5f * (ol + orr);
-    }
-    l[i] = ol;
-    r[i] = orr;
-  }
+  pk[ENG_TRACKS] = fx_pk[0];            // (the returns' peaks: the last block's, measured by its task)
+  pk[ENG_TRACKS + 1] = fx_pk[1];
+  fx_mode = proj.out_mode;
+  fx_n = n;
   for (int t = 0; t < ENG_TRACKS + 2; ++t)   // the meters: up at once, down slowly
     meter[t] = pk[t] > meter[t] ? pk[t] : meter[t] * 0.985f;
   if (++hist_div >= 4u) {                 // the sources' past, for the screen
@@ -1479,7 +1538,7 @@ int eng_hist(int s, int i) {
 int eng_core1_running(void) { return on_core1_last; }
 uint32_t eng_task_load(int task) {
   if (task < 0 || task >= kTasks) return 0;
-  return task == ENG_TRACKS && !w_job ? 0 : pct10(static_cast<uint32_t>(task_cost[task]), kN);
+  return task == kTaskWarps && !w_job ? 0 : pct10(static_cast<uint32_t>(task_cost[task]), kN);
 }
 
 int eng_warps_algo(void) {
