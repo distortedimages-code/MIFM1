@@ -173,11 +173,12 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
 {
     int t = ptrack(page);
     switch (ptype(page)) {
-    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3:
+    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_GRIT:   /* Plaits' three, then the grit */
         f[0] = PG_TRACK(t, 0);
         f[1] = PG_TRACK(t, 1);
         f[2] = PG_TRACK(t, 2);
-        return 3;
+        f[3] = PG_GRIT(t);
+        return 4;
     case PT_TIDES1: case PT_TIDES2:
         f[0] = page >= PG_TIDES(1, 0) ? PG_TIDES(1, 0) : PG_TIDES(0, 0);
         f[1] = f[0] + 1;
@@ -187,21 +188,30 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
                                                                           * (its two modes) */
         f[0] = PG_MIX, f[1] = PG_PAN, f[2] = PG_EQ, f[3] = PG_DUCK, f[4] = PG_COMP, f[5] = PG_OTT;
         return 6;
-    case PT_STEP: case PT_RND: f[0] = PG_STEP(t); f[1] = VP_RND(t); return 2;
+    case PT_STEP: case PT_RND: case PT_EUC:
+        if (t < 0) {                     /* an effect's Euclidean face: its module's */
+            int l = eng_page_lane(page);
+            return module_pages(l == LANE_DELAY ? PG_DELAY(0) : l == LANE_REVERB ? PG_REVERB : PG_WARPS(0), f);
+        }
+        f[0] = PG_STEP(t);
+        f[1] = VP_RND(t);
+        f[2] = PG_EUC(t);
+        return 3;
     case PT_ARP: f[0] = PG_ARP(t); return 1;
     case PT_DELAY1: case PT_DELAY2: case PT_DSEND: case PT_LANE: case PT_REVERB: case PT_RSEND:
     case PT_WARPS1: case PT_WARPS2: {    /* an effect: its knobs, the tracks' sends, its steps */
         int l = eng_page_lane(page);
         if (l == LANE_DELAY) {
             f[0] = PG_DELAY(0), f[1] = PG_DELAY(1), f[2] = PG_DSEND, f[3] = PG_STEP(LANE_DELAY);
-            return 4;
+            f[4] = PG_EUC(LANE_DELAY);
+            return 5;
         }
         if (l == LANE_REVERB) {
-            f[0] = PG_REVERB, f[1] = PG_RSEND, f[2] = PG_STEP(LANE_REVERB);
-            return 3;
+            f[0] = PG_REVERB, f[1] = PG_RSEND, f[2] = PG_STEP(LANE_REVERB), f[3] = PG_EUC(LANE_REVERB);
+            return 4;
         }
-        f[0] = PG_WARPS(0), f[1] = PG_WARPS(1), f[2] = PG_STEP(LANE_WARPS);
-        return 3;
+        f[0] = PG_WARPS(0), f[1] = PG_WARPS(1), f[2] = PG_STEP(LANE_WARPS), f[3] = PG_EUC(LANE_WARPS);
+        return 4;
     }
     default: f[0] = PG_GLOBAL; f[1] = VP_SYS; return 2;
     }
@@ -234,6 +244,8 @@ static int track_page(int page, int t)   /* the same page on track t */
 {
     switch (ptype(page)) {
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: return PG_TRACK(t, page_face(page));
+    case PT_GRIT: return PG_GRIT(t);
+    case PT_EUC: return ptrack(page) >= 0 ? PG_EUC(t) : page;
     case PT_STEP: return PG_STEP(t);
     case PT_ARP: return PG_ARP(t);
     case PT_RND: return VP_RND(t);
@@ -259,16 +271,22 @@ static int knob_param(int page, int k)
 {
     if (ptype(page) == PT_RND)
         return eng_track_param(ptrack(page), RND_TP[k]);
+    if (ptype(page) == PT_EUC && k >= 2)  /* the Euclidean face: then the lane's LENGTH and PROB */
+        return PG_STEP(eng_page_lane(page)) * 4 + (k == 2 ? 3 : 1);
     return page * 4 + k;
 }
 
 static const char *module_name(int page)
 {
     switch (ptype(page)) {
-    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: return "Plaits";
+    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_GRIT: return "Plaits";
     case PT_TIDES1: case PT_TIDES2: return page >= PG_TIDES(1, 0) ? "Tides B" : "Tides A";
     case PT_MIX: case PT_PAN: case PT_EQ: case PT_DUCK: case PT_COMP: case PT_OTT: return "Mixer";
     case PT_STEP: case PT_RND: return "Steps";
+    case PT_EUC: {
+        int l = eng_page_lane(page);
+        return l < ENG_TRACKS ? "Steps" : l == LANE_DELAY ? "Delay" : l == LANE_REVERB ? "Reverb" : "Warps";
+    }
     case PT_ARP: return "Endless";
     case PT_GLOBAL: case PT_SYS: return "Global";
     default: {
@@ -311,7 +329,8 @@ static uint16_t page_accent(int page)
     case PT_DUCK: return track_accent(0);    /* T1's: it ducks the others */
     case PT_COMP: return AC2;
     case PT_OTT: return AC3;
-    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: return model_accent(p->algo[page_first(page)]);
+    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_GRIT: return model_accent(p->algo[page_first(page)]);
+    case PT_EUC: return lane_accent(eng_page_lane(page));
     case PT_TIDES1: case PT_TIDES2: return accent3(p->algo[page_first(page)]);
     default: return lane_accent(eng_page_lane(page));
     }
@@ -711,7 +730,7 @@ typedef struct {
     int8_t a, b, c, d;
 } vop_t;
 enum { IC_MODEL = 0, IC_RAMP = 24, IC_MIX = 27, IC_REV, IC_GLO, IC_NEW, IC_DEMO, IC_SAVED, IC_STEPS, IC_DICE,
-       IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, IC_EQ, NICON };
+       IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, IC_EQ, IC_GRIT, IC_EUC, NICON };
 #define IOPS 10
 static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 4, 24, 12, 8}, {'L', 12, 8, 12, 24}, {'L', 12, 24, 20, 8}, {'L', 20, 8, 20, 24}, {'L', 20, 24, 28, 16}},
@@ -776,6 +795,9 @@ static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 5, 27, 27, 27}, {'L', 5, 27, 5, 5}, {'L', 5, 27, 16, 14}, {'L', 16, 14, 27, 10}},        /* a knee */
     {{'R', 4, 14, 6, 12}, {'R', 13, 8, 6, 18}, {'R', 22, 12, 6, 14}, {'L', 4, 6, 28, 6}},            /* OTT: 3 bands */
     {{'L', 4, 26, 9, 11}, {'L', 9, 11, 23, 11}, {'L', 23, 11, 28, 26}, {'L', 16, 5, 16, 8}},         /* the filters */
+    {{'L', 4, 22, 10, 22}, {'L', 10, 22, 10, 10}, {'L', 10, 10, 16, 10}, {'L', 16, 10, 16, 6},
+     {'L', 16, 6, 22, 6}, {'L', 22, 6, 22, 24}, {'L', 22, 24, 28, 24}},                              /* the grit */
+    {{'C', 16, 16, 10, 0}, {'D', 16, 6, 3, 0}, {'D', 25, 21, 3, 0}, {'D', 7, 21, 3, 0}},           /* Euclid */
 };
 
 static void vicon(float cx, float cy, float s, float w, uint16_t c, int which, int glow)
@@ -1181,6 +1203,97 @@ static void panel_eq(void)
     }
 }
 
+/* the grit: its settings, and what they make of a sine (a cycle, 200 samples, over 84 px) */
+static void panel_grit(int t)
+{
+    char s[48], v[16];
+    float d = eng_final(PG_GRIT(t) * 4), r = eng_final(PG_GRIT(t) * 4 + 2), b = eng_final(PG_GRIT(t) * 4 + 3);
+    int shape = (int)(eng_final(PG_GRIT(t) * 4 + 1) + 0.5f);
+    hero_icon(IC_GRIT, track_accent(t));
+    int y = hero_title("GRIT");
+    s[0] = 0;
+    if (d < 0.005f && r < 0.005f && b < 0.005f) {
+        text_cat(s, "OFF", sizeof s);
+    } else {
+        eng_param_text(PG_GRIT(t) * 4 + 1, (float)shape, v, sizeof v);
+        text_cat(s, d < 0.005f ? "CLEAN" : v, sizeof s);
+        eng_param_text(PG_GRIT(t) * 4 + 2, r, v, sizeof v);
+        text_cat(s, "|", sizeof s);
+        text_cat(s, v, sizeof s);
+        eng_param_text(PG_GRIT(t) * 4 + 3, b, v, sizeof v);
+        text_cat(s, "|", sizeof s);
+        text_cat(s, v, sizeof s);
+    }
+    char u[48];
+    label_text(s, u, sizeof u);          /* (the knobs' words: in capitals here) */
+    hero_line(y, u);
+    const int x0 = 150, w = 84, yc = 22;  /* (over the line under the name: it runs long) */
+    uint16_t c = track_accent(t);
+    cv_rect(x0, yc, w + 1, 1, RULE);
+    float k = 24.0f * d * d, rate = r < 0.005f ? 1.0f : fm_exp2f(-6.0f * r), q = b < 0.005f ? 0.0f : fm_exp2f(15.0f - 14.0f * b);
+    float hold = 0.0f, cnt = 1.0f;
+    int py = yc;
+    for (int i = 0; i <= w; i++) {
+        float x = 0.8f * fm_sinf(6.2831853f * (float)i / (float)w);
+        if (k > 0.0f) {
+            if (shape == GS_HARD) {
+                x = fm_clampf((1.0f + k) * x, -1.0f, 1.0f);
+            } else if (shape == GS_FOLD) {
+                float u = ((1.0f + k) * x + 1.0f) * 0.25f;
+                u -= fm_floorf(u);
+                x = 1.0f - 4.0f * fm_fabsf(u - 0.5f);
+            } else {
+                x = (1.0f + k) * x / (1.0f + k * fm_fabsf(x));
+            }
+        }
+        cnt += rate * 2.38f;             /* (200 samples over 84 px) */
+        if (cnt >= 1.0f) {
+            cnt -= fm_floorf(cnt);
+            hold = x;
+        }
+        x = hold;
+        if (q > 0.0f)
+            x = fm_floorf(x * q + 0.5f) / q;
+        int yy = yc - (int)(x * 17.0f + (x < 0.0f ? -0.5f : 0.5f));
+        if (i) {
+            cv_line(x0 + i - 1, py, x0 + i, yy, c);
+            cv_line(x0 + i - 1, py + 1, x0 + i, yy + 1, c);
+        }
+        py = yy;
+    }
+}
+
+/* the Euclidean rhythm: FILLS over LENGTH, ROTATE; a ring of the lane's steps, its trigs lit, the one playing ringed */
+static void panel_euclid(int l)
+{
+    project_t *p = eng_project();
+    char s[48], n[8];
+    int len = (int)(p->val[PG_STEP(l) * 4 + 3] + 0.5f), fills = (int)(p->val[PG_EUC(l) * 4] + 0.5f);
+    int rot = (int)(p->val[PG_EUC(l) * 4 + 1] + 0.5f), now = eng_step_now(l);
+    uint16_t c = lane_accent(l);
+    hero_icon(IC_EUC, c);
+    int y = hero_title("EUCLID");
+    s[0] = 0;
+    int_text(fills > len ? len : fills, n);
+    text_cat(s, n, sizeof s);
+    text_cat(s, " IN ", sizeof s);
+    int_text(len, n);
+    text_cat(s, n, sizeof s);
+    text_cat(s, "|TURNED ", sizeof s);
+    int_text(len ? rot % len : 0, n);
+    text_cat(s, n, sizeof s);
+    hero_line(y, s);
+    float cx = 208.0f, cy = 36.0f, rr = 23.0f, dr = len > 32 ? 1.3f : len > 16 ? 1.9f : 2.8f;
+    for (int i = 0; i < len; i++) {      /* the first step at the top, clockwise */
+        float a = 6.2831853f * (float)i / (float)len;
+        float x = cx + rr * fm_sinf(a), yy = cy - rr * fm_cosf(a);
+        int on = eng_trig(l, i);
+        disc(x, yy, dr, on ? c : OFF);
+        if (i == now)
+            ring(x, yy, dr + 2.2f, 1.2f, HI);
+    }
+}
+
 static void panel_bus(int ott)           /* the master bus: this face's mode, on or not */
 {
     static const char *const M[3] = {"MASTER BUS OFF", "COMP ON", "OTT ON"};
@@ -1456,6 +1569,18 @@ static void draw_panel(void)
         s[2] = (int)p->val[PG_GLOBAL * 4 + 1] | (int)p->val[PG_GLOBAL * 4 + 2] << 4 |
                (int)(p->val[PG_GLOBAL * 4 + 3] * 100.0f) << 8 | (int)(p->val[PG_GLOBAL * 4] * 1000.0f) << 16;
         break;
+    case PT_GRIT:
+        for (int k = 0; k < 4; k++)
+            s[2] = s[2] * 131 + (int)(eng_final(ui.page * 4 + k) * 100.0f);
+        break;
+    case PT_EUC: {
+        int l = eng_page_lane(ui.page);
+        for (int i = 0; i < ENG_STEPS / 8; i++)
+            s[2] = s[2] * 31 + p->trig[l][i];
+        s[2] = s[2] * 7 + 11 * (int)p->val[PG_STEP(l) * 4 + 3] + 1001 * (int)p->val[PG_EUC(l) * 4] +
+               37 * (int)p->val[PG_EUC(l) * 4 + 1] + 100003 * (eng_playing() ? eng_step_now(l) : -1);
+        break;
+    }
     case PT_EQ:
         for (int t = 0; t < ENG_TRACKS; t++)
             s[2] = s[2] * 131 + (int)(eng_final(PG_EQ * 4 + t) * 200.0f) + (int)track_accent(t);
@@ -1483,6 +1608,8 @@ static void draw_panel(void)
     case PT_TIDES1: case PT_TIDES2: panel_tides(ui.page >= PG_TIDES(1, 0)); break;
     case PT_MIX: case PT_PAN: panel_mixer(pt == PT_PAN); break;
     case PT_EQ: panel_eq(); break;
+    case PT_GRIT: panel_grit(tr); break;
+    case PT_EUC: panel_euclid(eng_page_lane(ui.page)); break;
     case PT_DUCK: panel_duck(); break;
     case PT_COMP: case PT_OTT: panel_bus(pt == PT_OTT); break;
     case PT_STEP: case PT_LANE: panel_steps(eng_page_lane(ui.page)); break;
@@ -1943,8 +2070,8 @@ static int foot_lane(void)               /* the lane whose steps the row shows, 
     int pt = ptype(ui.page);
     if (ui.grid)
         return ui.lane;
-    if (pt == PT_STEP || pt == PT_RND)
-        return ptrack(ui.page);
+    if (pt == PT_STEP || pt == PT_RND || pt == PT_EUC)
+        return eng_page_lane(ui.page) >= 0 ? eng_page_lane(ui.page) : ptrack(ui.page);
     if (ui.page < ENG_NPAGES && eng_page_lane(ui.page) >= ENG_TRACKS)
         return eng_page_lane(ui.page);
     return -1;
@@ -2070,7 +2197,8 @@ static uint32_t hold_ms(int b, char *label, uint32_t max)
     } else if (b == B_REC && pt == PT_ARP && ui.erec < 0 && !ui.grid) {
         text_cat(l, "ERASE ENDLESS", sizeof l);
         ms = 1000u;
-    } else if (b == B_REC && ui.erec < 0 && (ui.grid || pt == PT_STEP || pt == PT_RND || pt == PT_LANE)) {
+    } else if (b == B_REC && ui.erec < 0 && (ui.grid || pt == PT_STEP || pt == PT_RND || pt == PT_LANE ||
+                                             pt == PT_EUC)) {
         int e = erase_lane();             /* the lane erased: its steps, locks, randoms (a track: its cables); GLO
                                            * held: all of them */
         if (held(B_GLO)) {
@@ -2460,6 +2588,17 @@ static void edit_param(int param, int32_t e)
     dirty = 1;
 }
 
+/* the Euclidean face turned: the lane's trigs written again over its LENGTH (FILLS spread as evenly as they go, then
+ * turned by ROTATE); its locks stay */
+static void euclid_write(int l)
+{
+    project_t *p = eng_project();
+    int len = lane_len(l), fills = (int)(p->val[PG_EUC(l) * 4] + 0.5f), rot = (int)(p->val[PG_EUC(l) * 4 + 1] + 0.5f);
+    for (int st = 0; st < len; st++)
+        eng_trig_set(l, st, eng_euclid(len, fills, rot, st));
+    dirty = 1;
+}
+
 static int edit_all(int param, int32_t e)   /* GLO held: a track's parameter moved on the four tracks */
 {
     int t, tp = eng_param_tp(param, &t);
@@ -2570,7 +2709,7 @@ static void module_button(int b)
     int pt = ptype(ui.page), here = !ui.matrix, next = page_at(ui.page, page_face(ui.page) + 1);
     switch (b) {
     case B_EDIT:
-        go_page(here && pt <= PT_PLAITS3 ? next : PG_TRACK(ui.track, 0));
+        go_page(here && (pt <= PT_PLAITS3 || pt == PT_GRIT) ? next : PG_TRACK(ui.track, 0));
         break;
     case B_LFO:
         if (here && (pt == PT_TIDES1 || pt == PT_TIDES2))
@@ -2578,8 +2717,8 @@ static void module_button(int b)
         else
             go_page(PG_TIDES(0, 0));
         break;
-    case B_SEQ:                          /* the lane's steps (a track's: then its RANDOM face) */
-        if (here && (pt == PT_STEP || pt == PT_RND))
+    case B_SEQ:                          /* the lane's steps (a track's: then its RANDOM face, its Euclidean one) */
+        if (here && (pt == PT_STEP || pt == PT_RND || (pt == PT_EUC && ptrack(ui.page) >= 0)))
             go_page(next);
         else
             go_page(PG_STEP(ui.lane));
@@ -2671,7 +2810,7 @@ static void button_long(int b)
             dirty = 1;
             app_say("ENDLESS", "CLEARED");
         } else if (ui.erec < 0 && (ui.grid || ptype(ui.page) == PT_STEP || ptype(ui.page) == PT_RND ||
-                                   ptype(ui.page) == PT_LANE)) {
+                                   ptype(ui.page) == PT_LANE || ptype(ui.page) == PT_EUC)) {
             /* the steps: the lane erased (its trigs, locks, randoms; a track's cables), with GLO held all of them
              * and the global cables (the effects' knobs stay) */
             static const char *const FX[3] = {"DELAY STEPS", "REVERB STEPS", "WARPS STEPS"};
@@ -2826,7 +2965,12 @@ static void select_lane(int l)
 {
     int pl = page_lane(ui.page), pt = ptype(ui.page), steps = pt == PT_STEP || pt == PT_RND || pt == PT_LANE;
     ui.held_step = -1;
-    if (l < ENG_TRACKS) {
+    if (pt == PT_EUC) {                  /* the Euclidean face: the other lane's */
+        if (l < ENG_TRACKS)
+            set_track(l);
+        if (pl != l)
+            go_page(PG_EUC(l));
+    } else if (l < ENG_TRACKS) {
         set_track(l);
         if (steps)
             go_page(PG_STEP(l));
@@ -3016,6 +3160,9 @@ static void input(void)
             ui.used[B_GLO] = 1;
         if (ptype(ui.page) == PT_RND) {
             edit_rnd(param, e);
+        } else if (ptype(ui.page) == PT_EUC && i < 2) {   /* FILLS, ROTATE: the lane's trigs written again */
+            edit_param(param, e);
+            euclid_write(eng_page_lane(ui.page));
         } else if (held(B_ENV)) {
             ui.used[B_ENV] = 1;
             edit_rnd(param, e);
@@ -3028,6 +3175,8 @@ static void input(void)
         } else if (!held(B_GLO) || !edit_all(param, e)) {
             edit_param(param, e);
         }
+        if (ptype(ui.page) == PT_EUC && i == 2)   /* LENGTH on the Euclidean face: the rhythm over the new length */
+            euclid_write(eng_page_lane(ui.page));
         ui.touched_at[i] = now;
         ui.touched_k = i;
     }
@@ -3039,12 +3188,13 @@ static void input(void)
             [PT_MIX] = B_HOME, [PT_PAN] = B_HOME, [PT_REVERB] = B_FX, [PT_RSEND] = B_FX, [PT_DELAY1] = B_FX,
             [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
             [PT_ARP] = B_ARP, [PT_WARPS1] = B_FX, [PT_WARPS2] = B_FX, [PT_DUCK] = B_HOME, [PT_COMP] = B_HOME,
-            [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_RND] = B_SEQ, [PT_SYS] = B_GLO};
+            [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_GRIT] = B_EDIT, [PT_EUC] = B_SEQ, [PT_RND] = B_SEQ,
+            [PT_SYS] = B_GLO};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
         uint32_t bb = 0, kk = ui.keys;
         int pt = ptype(ui.page);
         if (!ui.matrix)
-            bb |= 1u << PAGE_BTN[pt];
+            bb |= 1u << (pt == PT_EUC && ptrack(ui.page) < 0 ? B_FX : PAGE_BTN[pt]);
         if (ui.mod || ui.matrix)
             bb |= 1u << B_SEL;
         if (ui.grid || ui.page == VP_SYS || (ui.erec >= 0 && (now / 250u) & 1u))   /* recording Endless: it blinks */

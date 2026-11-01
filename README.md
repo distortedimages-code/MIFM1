@@ -3,13 +3,15 @@
 Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient du code open source de Mutable Instruments, sur
 la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
 
-- **Plaits** sur chaque piste, ses 24 modèles au complet ;
+- **Plaits** sur chaque piste, ses 24 modèles au complet, et un **grit** par piste (drive doux, dur ou replié,
+  réduction de fréquence d'échantillonnage et de bits) ;
 - un **séquenceur pas à pas** à la Elektron, 64 pas par piste, avec P-locks, et deux modes de jeu : **KEY** (le
   clavier joue la piste) et **STEP** (le clavier est la grille, les touches noires choisissent la piste ou l'effet) ;
 - **Endless** sur chaque piste, comme sur l'OP-1 : on enregistre des notes et des silences un par un, ils tournent
   en boucle, une touche les transpose ;
 - sur chaque trig : **probabilité**, **ratchets**, **longueur**, et un **aléatoire** sur n'importe quel réglage de la
-  piste (à droite nouveau à chaque trig, à gauche en boucle) ; un **swing** global ;
+  piste (à droite nouveau à chaque trig, à gauche en boucle) ; un **swing** global ; des **rythmes euclidiens** sur
+  chaque piste de pas ;
 - un **quantiseur global** (15 gammes et la tonique) : aucune fausse note, sur toutes les pistes et au clavier ;
 - **deux Tides 2** comme modulateurs (8 sorties), déclenchables par les trigs d'une piste ou calés sur le tempo ;
 - une **matrice de câbles** : les 8 sorties de Tides vers presque tous les paramètres, 8 câbles par piste et 8 globaux ;
@@ -77,9 +79,9 @@ porte le numéro de sa piste dans sa couleur.
 | **SELECT** | l'autre face du module (PLAITS 1/3, 2/3, 3/3…), en glissant |
 | **ALGORITHM** | le modèle de Plaits, le mode de rampe de Tides ; sur Warps, d'un repère au suivant ; sur le delay, son temps |
 | **PRESETS** | la piste active, de 1 à 4 |
-| **EDIT** | Plaits de la piste active (appuis suivants : 1/3, 2/3, 3/3) |
+| **EDIT** | Plaits de la piste active (appuis suivants : ses trois faces, puis GRIT) |
 | **LFO** | Tides A, puis Tides B |
-| **SEQ** | les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) |
+| **SEQ** | les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) |
 | **ARP** | Endless, celui de la piste (voir plus bas) |
 | **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leurs filtres (EQ), le DUCK, puis le bus master (COMP, OTT) ; ALGORITHM sur COMP ou OTT : le mode du bus (OFF, COMP, OTT) |
 | **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps ; SELECT parcourt leurs faces (leurs potards, les envois des pistes, leurs pas) |
@@ -175,6 +177,19 @@ COLUMN…). **PLAITS 2/3** (ENV) : l'enveloppe. Les modèles qui ont la leur (ST
 batteries, DECAY s'ajoute à leur decay (leur MORPH) : il marche sur toutes les pistes, avec ses locks et son
 aléatoire. Un potard grisé tourne toujours, mais ne change rien au son dans l'état présent.
 
+**Le grit** (EDIT, quatrième face de Plaits) : ce qui salit la voix de la piste, avant Warps et le mixer.
+**DRIVE** monte le gain des petits signaux jusqu'à ×25 (la pleine échelle reste la pleine échelle) à travers une
+**SHAPE** : Soft (une saturation douce), Hard (écrêtée) ou Fold (ce qui dépasse repart dans l'autre sens, comme un
+wavefolder). **RATE** garde chaque échantillon un moment (un sample & hold : de 44,1 kHz jusqu'à 689 Hz, le repliement
+voulu) et **BITS** arrondit les échantillons (de 16 bits à 2 : à fond, une voix discrète disparaît dans le premier
+pas). Chacun n'agit que relevé ; le tout se locke pas par pas, a son aléatoire et Tides peut le moduler. L'écran
+montre ce que les réglages font d'une sinusoïde.
+
+**Les rythmes euclidiens** (SEQ, troisième face ; sur les effets, la dernière face) : **FILLS** coups répartis aussi
+régulièrement que possible sur la longueur de la piste, **ROTATE** les décale ; LENGTH et PROB sont ceux de la piste
+de pas. Tourner FILLS, ROTATE ou LENGTH **réécrit les trigs** de la piste (ses locks restent) ; on peut ensuite les
+retoucher à la main. L'écran montre les pas en cercle, les trigs allumés, celui qui joue entouré.
+
 **L'aléatoire** : la page RANDOM (SEQ, puis SELECT) a quatre potards, PAN, DECAY, TUNE et RATCHET. Tourné à droite,
 une nouvelle valeur au hasard à chaque trig ; à gauche, des valeurs au hasard mais qui reviennent les mêmes à chaque
 tour (une boucle) ; plus on tourne, plus l'écart est grand (100 : toute la course ; TUNE : une octave de part et
@@ -226,7 +241,8 @@ qualité de Warps, le thème reste quand on charge un autre projet ; il est gard
 
 Un projet sauvegardé avec les 0.1.4 à 0.2.6 se recharge : ses réglages, ses modèles, ses câbles (sauf ceux qui
 partaient de Marbles), ses pas, ses locks et Endless ; le tempo de Marbles devient le tempo, et les effets nouveaux
-démarrent neutres (rien vers le delay, aucune piste de pas d'effet). Ceux des 0.3 aussi (l'EQ y est à plat).
+démarrent neutres (rien vers le delay, aucune piste de pas d'effet). Ceux des 0.3 aussi (l'EQ y est à plat, le grit
+coupé).
 
 ## Le dépôt
 

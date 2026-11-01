@@ -55,6 +55,7 @@ const char* const kDivNames[kDivs] = {"1/32", "1/16T", "1/16", "1/8T", "1/16D", 
 const float kDivMult[kDivs] = {0.5f, 2.0f / 3.0f, 1.0f, 4.0f / 3.0f, 1.5f, 2.0f, 8.0f / 3.0f, 3.0f, 4.0f, 6.0f, 8.0f,
                                12.0f, 16.0f};   // in sixteenths
 const char* const kDelayMode[2] = {"Mono", "Ping-pong"};
+const char* const kGritShape[3] = {"Soft", "Hard", "Fold"};
 
 // the knobs' names: the modules' own, short (a word, 52 px at most on the screen: the knobs apart)
 const eng_pdef_t kPages[NPT][4] = {
@@ -85,6 +86,8 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Thresh", K_UNI, 0, 0, 0}, {"Ratio", K_UNI, 0, 0, 0}, {"Release", K_UNI, 0, 0, 0}, {"Gain", K_BIP, 0, 0, 0}},
   {{"Depth", K_UNI, 0, 0, 0}, {"Time", K_UNI, 0, 0, 0}, {"Drive", K_BIP, 0, 0, 0}, {"Level", K_BIP, 0, 0, 0}},
   {{"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}},
+  {{"Drive", K_UNI, 0, 0, 0}, {"Shape", K_ENUM, 0, 2, kGritShape}, {"Rate", K_UNI, 0, 0, 0}, {"Bits", K_UNI, 0, 0, 0}},
+  {{"Fills", K_INT, 0, 64, 0}, {"Rotate", K_INT, 0, 63, 0}, {"Length", K_INT, 1, 64, 0}, {"Prob", K_UNI, 0, 0, 0}},
 };
 const char* const kBusModes[3] = {"OFF", "COMP", "OTT"};
 
@@ -136,8 +139,14 @@ int page_type(int page) {
   if (page == PG_GLOBAL) return PT_GLOBAL;
   if (page < PG_WARPS(0)) return PT_ARP;
   if (page < PG_DUCK) return page == PG_WARPS(0) ? PT_WARPS1 : PT_WARPS2;
-  return page == PG_DUCK ? PT_DUCK : page == PG_COMP ? PT_COMP : page == PG_OTT ? PT_OTT : PT_EQ;
+  if (page < PG_EQ) return page == PG_DUCK ? PT_DUCK : page == PG_COMP ? PT_COMP : PT_OTT;
+  return page == PG_EQ ? PT_EQ : page < PG_EUC(0) ? PT_GRIT : PT_EUC;
 }
+
+// the grit's RATE: the sample and hold's share of the samples (1: all, the rate as it is; 1/64 at the end: 689 Hz);
+// its BITS: the steps a unit (2^15: 16 bits; 2 at the end: 2 bits)
+inline float grit_rate(float v) { return fm_exp2f(-6.0f * v); }
+inline float grit_steps(float v) { return fm_exp2f(15.0f - 14.0f * v); }
 
 // the mixer's filter (PG_EQ, a knob a track): its cutoff, to the left a low pass from 18 kHz down to 125 Hz, to the
 // right a high pass from 20 Hz up to 8 kHz, an octave a step of the knob's travel the same all along; in the middle
@@ -571,9 +580,74 @@ int voice_rests(int t) {
   return 1;
 }
 
+// a track's grit (PG_GRIT), on its voice (Warps and the mixer get it gritty): DRIVE (a gain up to x25 on the small
+// signals, full scale kept) through its SHAPE, soft (x (1 + k) / (1 + k |x|)), hard (clipped) or folded (a triangle:
+// what goes over comes back down); then RATE, a sample and hold (a sample kept until the next is due); then BITS, the
+// samples rounded to their steps. Each only when its knob is up
+struct Grit {
+  float k0, k1;                         // DRIVE's k, the last block's and this one's (glided over the block)
+  int shape;
+  float rate, steps;                    // a sample's share of a hold (1: none), the steps a unit (0: none)
+  float hold, cnt;                      // the sample held, the count to the next
+};
+Grit grit[ENG_TRACKS];
+
+void set_grit(int t) {
+  Grit& g = grit[t];
+  float d = E(t, TP_DRIVE), r = E(t, TP_RATE), b = E(t, TP_BITS);
+  g.k0 = g.k1;
+  g.k1 = 24.0f * d * d;
+  g.shape = iround(E(t, TP_SHAPE));
+  g.rate = r < 0.005f ? 1.0f : grit_rate(r);
+  g.steps = b < 0.005f ? 0.0f : grit_steps(b);
+}
+
+void apply_grit(int t, float* x, uint32_t n) {
+  Grit& g = grit[t];
+  if (g.k0 > 0.0f || g.k1 > 0.0f) {
+    float k = g.k0, dk = (g.k1 - g.k0) / static_cast<float>(n);
+    if (g.shape == GS_HARD) {
+      for (uint32_t i = 0; i < n; ++i) {
+        k += dk;
+        x[i] = clampf((1.0f + k) * x[i], -1.0f, 1.0f);
+      }
+    } else if (g.shape == GS_FOLD) {
+      for (uint32_t i = 0; i < n; ++i) {
+        k += dk;
+        float u = ((1.0f + k) * x[i] + 1.0f) * 0.25f;   // (a period of 4: up from -1 to 1, then back down)
+        u -= fm_floorf(u);
+        x[i] = 1.0f - 4.0f * fm_fabsf(u - 0.5f);
+      }
+    } else {
+      for (uint32_t i = 0; i < n; ++i) {
+        k += dk;
+        x[i] = (1.0f + k) * x[i] / (1.0f + k * fm_fabsf(x[i]));
+      }
+    }
+  }
+  if (g.rate < 1.0f) {
+    float hold = g.hold, cnt = g.cnt, r = g.rate;
+    for (uint32_t i = 0; i < n; ++i) {
+      cnt += r;
+      if (cnt >= 1.0f) {
+        cnt -= 1.0f;
+        hold = x[i];
+      }
+      x[i] = hold;
+    }
+    g.hold = hold;
+    g.cnt = cnt;
+  }
+  if (g.steps > 0.0f) {
+    float q = g.steps, iq = 1.0f / q;
+    for (uint32_t i = 0; i < n; ++i) x[i] = fm_floorf(x[i] * q + 0.5f) * iq;
+  }
+}
+
 void render_voice(int t, uint32_t n) {
   if (voice_rests(t)) {
     for (uint32_t i = 0; i < n; ++i) vbuf[t][i] = 0.0f;
+    grit[t].hold = grit[t].cnt = 0.0f;
     return;
   }
   uint32_t step = n / kFrames, pos = 0;
@@ -594,6 +668,7 @@ void render_voice(int t, uint32_t n) {
     vgate[t] = g;
   }
   if (n > pos) mp_render(voice[t], &vbuf[t][pos], &vaux[t][pos], n - pos);
+  apply_grit(t, vbuf[t], n);
   float pk = 0.0f;
   for (uint32_t i = 0; i < n; ++i) pk = fm_maxf(pk, fm_fabsf(vbuf[t][i]));
   quiet[t] = !vgate[t] && pk < 3e-5f ? quiet[t] + 1 : 0;
@@ -853,6 +928,8 @@ uint32_t eng_prof[3];                    // (a computer's measure: the preparati
 int eng_page_type(int page) { return page_type(page); }
 int eng_page_track(int page) {
   if (page < 12) return page / 3;
+  if (page >= PG_GRIT(0) && page < PG_GRIT(ENG_TRACKS)) return page - PG_GRIT(0);
+  if (page >= PG_EUC(0) && page < PG_EUC(ENG_TRACKS)) return page - PG_EUC(0);
   if (page >= PG_ARP(0) && page < PG_ARP(0) + ENG_TRACKS) return page - PG_ARP(0);
   return page >= PG_STEP(0) && page < PG_STEP(ENG_TRACKS) ? page - PG_STEP(0) : -1;
 }
@@ -863,7 +940,17 @@ int eng_page_lane(int page) {
   if (page == PG_REVERB || page == PG_RSEND) return LANE_REVERB;
   if (page == PG_WARPS(0) || page == PG_WARPS(1)) return LANE_WARPS;
   if (page >= PG_STEP(ENG_TRACKS) && page < PG_STEP(ENG_LANES)) return page - PG_STEP(0);
+  if (page >= PG_EUC(ENG_TRACKS) && page < PG_EUC(ENG_LANES)) return page - PG_EUC(0);
   return -1;
+}
+
+// the Euclidean rhythm: fills spread over len steps as evenly as they go (step i has one when i * fills, modulo len,
+// is under fills: the first step always), then turned rot steps later
+int eng_euclid(int len, int fills, int rot, int step) {
+  if (len < 1 || fills < 1 || step < 0 || step >= len) return 0;
+  if (fills >= len) return 1;
+  int i = ((step - rot) % len + len) % len;
+  return (i * fills) % len < fills;
 }
 
 int eng_lane_params(int lane) {
@@ -885,6 +972,7 @@ int eng_track_param(int lane, int tp) {
   if (tp == TP_DSEND) return PG_DSEND * 4 + lane;
   if (tp == TP_DUCK) return PG_DUCK * 4 + lane;   // (T1's: the duck's DECAY, not a parameter of T1's: not lockable)
   if (tp == TP_EQ) return PG_EQ * 4 + lane;
+  if (tp >= TP_DRIVE) return PG_GRIT(lane) * 4 + (tp - TP_DRIVE);
   return PG_STEP(lane) * 4 + (tp - TP_NOTE);
 }
 
@@ -916,6 +1004,9 @@ int eng_param_tp(int param, int* lane) {
   } else if (page == PG_EQ) {
     l = k;
     tp = TP_EQ;
+  } else if (page >= PG_GRIT(0) && page < PG_GRIT(ENG_TRACKS)) {
+    l = page - PG_GRIT(0);
+    tp = TP_DRIVE + k;
   }
   if (lane) *lane = l;
   return tp;
@@ -1057,6 +1148,22 @@ void eng_param_text(int param, float v, char* b, int n) {
       }
       put_end(b, n, v < 0.0f ? " LP" : " HP");
     }
+  } else if (pt == PT_GRIT && k >= 2) {  // RATE: the rate it holds at; BITS: how many
+    if (v < 0.005f) {
+      put(b, n, "Off");
+    } else if (k == 2) {
+      float hz = kSr * grit_rate(v);
+      if (hz >= 1000.0f) {
+        put_num(b, n, static_cast<int32_t>(hz * 0.01f + 0.5f), 1, 0);
+        put_end(b, n, "k");
+      } else {
+        put_num(b, n, static_cast<int32_t>(hz + 0.5f), 0, 0);
+        put_end(b, n, " Hz");
+      }
+    } else {
+      put_num(b, n, static_cast<int32_t>(16.0f - 14.0f * v + 0.5f), 0, 0);
+      put_end(b, n, " bit");
+    }
   } else if (pt == PT_LANE && k == 0) {  // an effect's DECAY: its time
     float s = lane_tau(v);
     if (s < 1.0f) {
@@ -1096,7 +1203,7 @@ void eng_param_text(int param, float v, char* b, int n) {
     put_num(b, n, static_cast<int32_t>(50.0f + 25.0f * v + 0.5f), 0, 0);
     put_end(b, n, "%");
   } else if ((pt == PT_STEP && k == 1) || (pt == PT_ARP && k == 1) || (pt == PT_LANE && (k == 1 || k == 2)) ||
-             (pt == PT_DUCK && k > 0) || (pt == PT_OTT && k == 0)) {
+             (pt == PT_DUCK && k > 0) || (pt == PT_OTT && k == 0) || (pt == PT_GRIT && k == 0)) {
     put_num(b, n, static_cast<int32_t>(v * 100.0f + 0.5f), 0, 0);
     put_end(b, n, "%");
   } else if (pt == PT_GLOBAL && k == 0) {
@@ -1319,6 +1426,23 @@ struct project_v6 {
   int8_t endless_key[ENG_TRACKS];
 };
 
+// 0.3.8's (version 8): all of it, without the grit and the Euclidean rhythms
+struct project_v8 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[41 * 4];
+  uint8_t algo[41];
+  uint8_t out_mode, warps_hq, theme;
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+  int8_t rnd[ENG_LANES][21];
+  uint16_t seed[ENG_LANES];
+  plock_t lock[ENG_PLOCKS];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+};
+
 // 0.3.3's to 0.3.7's (version 7): all of it, without the filter (its knobs flat)
 struct project_v7 {
   uint32_t magic;
@@ -1336,10 +1460,12 @@ struct project_v7 {
   int8_t endless_key[ENG_TRACKS];
 };
 
-void upgrade_v7(project_t* p, const project_v7& o) {
+// versions 7 and 8: their pages first, their lane parameters first (what came after is new)
+template <class P, int NP, int NTP>
+void upgrade_78(project_t* p, const P& o) {
   eng_blank(p);
-  for (int i = 0; i < 40 * 4; ++i) p->val[i] = o.val[i];
-  for (int i = 0; i < 40; ++i) p->algo[i] = o.algo[i];
+  for (int i = 0; i < NP * 4; ++i) p->val[i] = o.val[i];
+  for (int i = 0; i < NP; ++i) p->algo[i] = o.algo[i];
   p->out_mode = o.out_mode;
   p->warps_hq = o.warps_hq;
   p->theme = o.theme;
@@ -1347,7 +1473,7 @@ void upgrade_v7(project_t* p, const project_v7& o) {
     for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c] = o.cable[g][c];
   for (int l = 0; l < ENG_LANES; ++l) {
     for (int i = 0; i < ENG_STEPS / 8; ++i) p->trig[l][i] = o.trig[l][i];
-    for (int i = 0; i < 20; ++i) p->rnd[l][i] = o.rnd[l][i];
+    for (int i = 0; i < NTP; ++i) p->rnd[l][i] = o.rnd[l][i];
     p->seed[l] = o.seed[l];
   }
   for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i] = o.lock[i];
@@ -1444,15 +1570,18 @@ int eng_upgrade(project_t* p, int bytes) {
     project_old<35> v5;
     project_v6 v6;
     project_v7 v7;
+    project_v8 v8;
   } u;
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
-  uint32_t size = v == 7 ? sizeof u.v7 : v == 6 ? sizeof u.v6 : v == 5 ? sizeof u.v5 : v == 4 ? sizeof u.v4 : 0;
+  uint32_t size = v == 8 ? sizeof u.v8 : v == 7 ? sizeof u.v7 : v == 6 ? sizeof u.v6 : v == 5 ? sizeof u.v5
+                : v == 4 ? sizeof u.v4 : 0;
   if (!size || bytes != static_cast<int>(size) || p->size != size) return 0;
   const uint8_t* from = reinterpret_cast<const uint8_t*>(p);
   uint8_t* to = reinterpret_cast<uint8_t*>(&u);
   for (uint32_t i = 0; i < size; ++i) to[i] = from[i];
-  if (v == 7) upgrade_v7(p, u.v7);
+  if (v == 8) upgrade_78<project_v8, 41, 21>(p, u.v8);
+  else if (v == 7) upgrade_78<project_v7, 40, 20>(p, u.v7);
   else if (v == 6) upgrade_v6(p, u.v6);
   else if (v == 5) upgrade_from(p, u.v5);
   else upgrade_from(p, u.v4);
@@ -1563,7 +1692,10 @@ void eng_render(float* l, float* r, uint32_t n) {
   sequence(n);
   float open[kFx];
   fx_lanes(n, open);
-  for (int t = 0; t < ENG_TRACKS; ++t) set_voice(t);
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    set_voice(t);
+    set_grit(t);
+  }
   set_warps();
   // the effects' and the master bus's knobs (they play the last block's mix)
   mrv_set(reverb, E(LANE_REVERB, 0), E(LANE_REVERB, 1), E(LANE_REVERB, 2));

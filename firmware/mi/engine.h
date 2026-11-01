@@ -26,7 +26,7 @@ extern "C" {
 #define LANE_REVERB 5
 #define LANE_WARPS 6
 #define ENG_CABLES 8                     /* per track, and as many global */
-#define ENG_NPAGES 41
+#define ENG_NPAGES 52
 #define ENG_NPARAMS (ENG_NPAGES * 4)
 #define ENG_STEPS 64                     /* the steps a lane: four pages of 16 */
 #define ENG_PLOCKS 384                   /* parameter locks, for all the lanes' steps */
@@ -53,9 +53,15 @@ extern "C" {
 #define PG_OTT 39                        /* OTT (three bands squashed up and down): DEPTH, TIME, DRIVE, LEVEL */
 #define PG_EQ 40                         /* the mixer's filter, a knob a track: to the left a low pass coming down
                                           * (the highs cut), to the right a high pass going up (the lows), 24 dB/oct */
+#define PG_GRIT(t) (41 + (t))            /* a track's grit (Plaits' fourth face): DRIVE through a SHAPE (soft, hard,
+                                          * folded), RATE (a sample and hold: the rate down to 689 Hz), BITS */
+#define PG_EUC(l) (45 + (l))             /* a lane's Euclidean rhythm (its steps' last face): FILLS spread as evenly
+                                          * as they go over the lane's LENGTH, ROTATE; turning them writes its trigs
+                                          * (the screen: its third and fourth knobs are the lane's LENGTH and PROB) */
 enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_TIDES1, PT_TIDES2, PT_MIX, PT_PAN, PT_REVERB, PT_RSEND, PT_DELAY1,
        PT_DELAY2, PT_DSEND, PT_STEP, PT_LANE, PT_GLOBAL, PT_ARP, PT_WARPS1, PT_WARPS2, PT_DUCK, PT_COMP, PT_OTT, PT_EQ,
-       NPT };
+       PT_GRIT, PT_EUC, NPT };
+enum { GS_SOFT, GS_HARD, GS_FOLD };    /* the grit's shapes */
 enum { MB_OFF, MB_COMP, MB_OTT };       /* the master bus's mode (PG_COMP's ALGORITHM) */
 /* Warps' carrier (PG_WARPS(1)'s first knob): none (Warps off), a track, or the module's internal oscillator, its three
  * shapes (sine, triangle, saw) */
@@ -65,7 +71,8 @@ enum { WC_OFF, WC_T1, WC_T2, WC_T3, WC_T4, WC_OSC1, WC_OSC2, WC_OSC3 };
  * page's note, probability and ratchets, its duck, its filter. An effect lane's are its effect's knobs
  * (eng_lane_params) */
 enum { TP_DECAY = 4, TP_PITCHENV = 8, TP_LENGTH, TP_TRANSPOSE, TP_OCTAVE, TP_LEVEL, TP_SEND, TP_PAN, TP_NOTE, TP_PROB,
-       TP_RATCHET, TP_DSEND, TP_DUCK, TP_EQ, ENG_NTP };   /* (T1 has no TP_DUCK: it ducks the others) */
+       TP_RATCHET, TP_DSEND, TP_DUCK, TP_EQ, TP_DRIVE, TP_SHAPE, TP_RATE, TP_BITS, ENG_NTP };
+                                         /* (T1 has no TP_DUCK: it ducks the others) */
 int eng_track_param(int lane, int tp);   /* its parameter (an effect lane: its effect's knob tp) */
 int eng_param_tp(int param, int *lane);  /* a parameter's tp and lane, -1 if none */
 int eng_tp_lockable(int lane, int tp);   /* 1: a lock or a random may move it */
@@ -75,6 +82,7 @@ int eng_page_type(int page);
 int eng_page_track(int page);            /* the track a page belongs to, -1: none */
 int eng_page_lane(int page);             /* the lane its steps are (a track's pages: the track; an effect's: its
                                           * lane), -1 none */
+int eng_euclid(int len, int fills, int rot, int step);   /* 1: a trig on that step of the Euclidean rhythm */
 
 /* the parameters' kinds */
 enum { K_UNI, K_BIP, K_INT, K_ENUM };    /* 0..1, -1..1, an integer lo..hi, a choice among names */
@@ -111,7 +119,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 8u               /* (7: 0.3.3's to 0.3.7's, without the filter; 6: 0.3.0's to 0.3.2's, without
+#define PROJECT_VERSION 9u               /* (8: 0.3.8's, without the grit and the Euclidean rhythms; 7: 0.3.3's to
+                                          * 0.3.7's, without the filter either; 6: 0.3.0's to 0.3.2's, without
                                           * the duck and the master bus; 5: 0.2's, with Marbles; 4: 0.1.4's to 0.1.9's:
                                           * eng_upgrade reads them) */
 typedef struct {

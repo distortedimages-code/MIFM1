@@ -6,6 +6,7 @@
 // WAVs in the folder given.
 //   build/native build/wav [seconds]
 #include <cmath>
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -915,6 +916,98 @@ int main(int argc, char** argv) {
     if (bright[0] <= 0 || !(bright[1] < bright[0] * 0.6) || !(bright[2] > bright[0] * 1.5))
       ++failures, printf("FAIL: the filter\n");
     eng_play(0);
+    eng_defaults(p);
+  }
+
+  // 27. the Euclidean rhythms (3 in 8: x..x..x., 5 in 16, turned), 0.3.8's project (version 8, 2888 bytes: all of it,
+  // no grit), then the grit on a held note of track 1 (a virtual analog voice, alone): BITS at the end (2 bits: a few
+  // values left), RATE at the end (689 Hz: a sample held 64), DRIVE through each shape (finite, within full scale)
+  {
+    char e38[9], e516r[17];
+    int n516 = 0;
+    for (int i = 0; i < 8; ++i) e38[i] = eng_euclid(8, 3, 0, i) ? 'x' : '.';
+    for (int i = 0; i < 16; ++i) {
+      e516r[i] = eng_euclid(16, 5, 2, i) ? 'x' : '.';
+      n516 += eng_euclid(16, 5, 0, i);
+    }
+    e38[8] = e516r[16] = 0;
+    printf("euclid: 3 in 8 %s, 5 in 16 turned 2 %s\n", e38, e516r);
+    if (strcmp(e38, "x..x..x.") != 0 || n516 != 5 || !eng_euclid(16, 5, 2, 2) || eng_euclid(16, 5, 2, 0) ||
+        eng_euclid(8, 0, 0, 0) || !eng_euclid(4, 9, 0, 3))
+      ++failures, printf("FAIL: the Euclidean rhythms\n");
+
+    static uint8_t buf[sizeof(project_t)];
+    project_t* q = reinterpret_cast<project_t*>(buf);
+    for (uint32_t i = 0; i < sizeof buf; ++i) buf[i] = 0;
+    q->magic = PROJECT_MAGIC;
+    q->version = 8;
+    q->size = 2888;
+    float* val = reinterpret_cast<float*>(buf + 8);
+    for (int i = 0; i < 164; ++i) val[i] = 0.25f;
+    uint8_t* algo = buf + 8 + 164 * 4;
+    algo[43] = 4;                                         // (after the 41 pages' choices: out_mode, warps_hq, theme)
+    int8_t* rnd = reinterpret_cast<int8_t*>(algo + 44 + 160 + 56);
+    rnd[3 * 21 + TP_EQ] = 25;
+    int ok = eng_upgrade(q, 2888);
+    printf("a version 8 project: %s, theme %d, the filter %.2f, its random %d, drive %.2f, fills %.0f\n",
+           ok ? "read" : "REFUSED", q->theme, q->val[PG_EQ * 4 + 2], q->rnd[3][TP_EQ], q->val[PG_GRIT(1) * 4],
+           q->val[PG_EUC(2) * 4]);
+    if (!ok || !eng_check(q) || q->theme != 4 || q->val[PG_EQ * 4 + 2] != 0.25f || q->rnd[3][TP_EQ] != 25 ||
+        q->val[PG_GRIT(1) * 4] != 0.0f || q->val[PG_EUC(2) * 4] != 0.0f)
+      ++failures, printf("FAIL: the version 8 project\n");
+
+    eng_play(0);
+    eng_blank(p);
+    for (int t = 1; t < ENG_TRACKS; ++t) p->val[PG_MIX * 4 + t] = 0.0f;
+    p->val[PG_TRACK(0, 1) * 4 + 0] = 1.0f;               // a long decay: the note held
+    p->algo[PG_COMP] = MB_OFF;                           // (the compressor's gain moves sample by sample, the
+    p->val[PG_REVERB * 4 + 3] = 0.0f;                    // effects' tails of the tests before go on)
+    p->val[PG_DELAY(1) * 4 + 3] = 0.0f;
+    auto measure = [&](int* distinct, int* changes, float* peak) {
+      for (int b = 0; b < 300; ++b) eng_render(l, r, n);
+      int d = 0, c = 0, seen[128];
+      float pk = 0.0f;
+      for (int b = 0; b < 20; ++b) {     // (values to 1e-4: what the other tracks' silence leaves is under it)
+        eng_render(l, r, n);
+        int nd = 0;
+        for (uint32_t i = 0; i < n; ++i) {
+          if (!std::isfinite(l[i])) pk = 1e9f;
+          pk = std::max(pk, std::fabs(l[i]));
+          if (i && std::fabs(l[i] - l[i - 1]) > 1e-4f) ++c;
+          int v = static_cast<int>(std::floor(l[i] * 1e4f + 0.5f)), k = 0;
+          while (k < nd && seen[k] != v) ++k;
+          if (k == nd && nd < 128) seen[nd++] = v;
+        }
+        d = std::max(d, nd);
+      }
+      *distinct = d;
+      *changes = c / 20;
+      *peak = pk;
+    };
+    eng_key(0, 48, 1);
+    int d0, c0, d1, c1, d2, c2, dd, cd;
+    float k0, k1, k2, kd[3];
+    measure(&d0, &c0, &k0);
+    p->val[PG_GRIT(0) * 4 + 3] = 0.85f;                  // BITS: 4
+    measure(&d1, &c1, &k1);
+    float k3;
+    p->val[PG_GRIT(0) * 4 + 3] = 1.0f;                   // BITS: 2 (this quiet a voice: none left)
+    measure(&dd, &cd, &k3);
+    p->val[PG_GRIT(0) * 4 + 3] = 0.0f;
+    p->val[PG_GRIT(0) * 4 + 2] = 1.0f;                   // RATE: 689 Hz
+    measure(&d2, &c2, &k2);
+    p->val[PG_GRIT(0) * 4 + 2] = 0.0f;
+    p->val[PG_GRIT(0) * 4 + 0] = 1.0f;                   // DRIVE, each shape
+    for (int sh = 0; sh < 3; ++sh) {
+      p->val[PG_GRIT(0) * 4 + 1] = static_cast<float>(sh);
+      measure(&dd, &cd, &kd[sh]);
+    }
+    eng_key(0, 48, 0);
+    printf("grit: plain %d values a block, %d changes, peak %.2f; 4 bits %d values; 2 bits peak %.4f; 689 Hz %d changes;"
+           " drive peaks %.2f %.2f %.2f\n", d0, c0, k0, d1, k3, c2, kd[0], kd[1], kd[2]);
+    if (d0 < 64 || d1 > 16 || k3 > 1e-3f || c2 > 4 || k0 <= 0.01f || kd[0] > 1.0f || kd[1] > 1.0f || kd[2] > 1.0f ||
+        kd[0] < k0)
+      ++failures, printf("FAIL: the grit\n");
     eng_defaults(p);
   }
 

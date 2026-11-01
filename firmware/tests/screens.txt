@@ -1,5 +1,5 @@
-# MIFM1 in fm1-base's host simulator: the default patch playing, the pages (a face sliding in), a knob turned, the
-# mixer's filters, the effects (the delay, the reverb, Warps, their steps), a cable made in MOD mode (hold a source key, turn a knob), the
+# MIFM1 in fm1-base's host simulator: the default patch playing, the pages (a face sliding in), a knob turned, a
+# track's grit, a Euclidean rhythm, the mixer's filters, the effects (the delay, the reverb, Warps, their steps), a cable made in MOD mode (hold a source key, turn a knob), the
 # matrix, the global page (the machine: Warps HQ, another theme), STEP mode (REC: a step held and locked, the lanes on
 # the black keys, the delay's lane and a lock on its time, the pages on OCT- OCT+), the RANDOM page, ENV held, GLO
 # held: ALL, Endless (recorded, played,
@@ -27,6 +27,16 @@ shot 04_plaits2.png
 turn SELECT 1
 wait 400
 shot 05_plaits3.png
+turn SELECT 1
+wait 400
+turn K1 25
+turn K3 20
+turn K4 20
+wait 400
+shot 05b_grit.png
+turn K1 -25
+turn K3 -20
+turn K4 -20
 tap LFO
 wait 300
 shot 06_tides_a.png
@@ -42,6 +52,12 @@ shot 09_steps_t2.png
 turn SELECT 1
 wait 400
 shot 10_random.png
+turn SELECT 1
+wait 400
+turn K1 5
+turn K2 2
+wait 600
+shot 10b_euclid.png
 tap HOME
 wait 300
 shot 11_mixer.png
