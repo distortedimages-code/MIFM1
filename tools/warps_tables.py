@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
 # Warps' tables that depend on its sample rate, made again for the FM-1's 44.1 kHz: Emilie Gillet's own scripts
-# (eurorack/warps/resources/filter_bank.py and lookup_tables.py, MIT), in Python 3, SAMPLE_RATE given. Three tables:
+# (eurorack/warps/resources/filter_bank.py and lookup_tables.py, MIT), in Python 3, SAMPLE_RATE given; and the filters
+# of the cross-modulations' 6x oversampling, by the recipe written above them. Four tables:
 #   - the vocoder's filter bank: 20 bands a third of an octave apart (87 Hz to 7 kHz), two Chamberlin passes each, at
 #     the sample rate decimated by 12, by 3 or not at all. At 96 kHz the groups hold 13, 6 and 1 bands, each band at
 #     most 0.35 of its group's Nyquist; at 44.1 kHz the same rule makes them 9, 6 and 5 bands;
 #   - the oscillators' MIDI-note-to-frequency table;
-#   - the frequency shifter's allpass poles (its 90-degree pairs, 10 Hz to 20 kHz).
+#   - the frequency shifter's allpass poles (its 90-degree pairs, 10 Hz to 20 kHz);
+#   - the 6x oversampling filters (sample_rate_conversion_filters.h: remez(48, [0, 0.06 / 6, 0.5 / 6, 0.5]): flat to
+#     5.8 kHz at 96 kHz, -1 dB at 16 kHz, the images, from the input's Nyquist (48 kHz), at -68 dB). The same recipe
+#     at 44.1 kHz would pass 2.6 kHz and lose 17 dB at 16 kHz; the 44.1 kHz pair is 72 taps, flat to 12 kHz (-0.0 dB),
+#     -3.5 dB at 16 kHz, its images (from 22.05 kHz) at -52 dB, and the modulator takes it (modulator.h: 48 -> 72).
 # Run with --check: the 96 kHz tables made by this port, against the vendored resources.cc (the port is the script).
-#   tools/warps_tables.py [--check] [resources.cc]   (default: firmware/third_party/warps/resources.cc, rewritten)
+#   tools/warps_tables.py [--check] [warps/]   (default: firmware/third_party/warps/: resources.cc,
+#   dsp/sample_rate_conversion_filters.h and dsp/modulator.h rewritten)
 import os
 import re
 import sys
@@ -157,6 +163,30 @@ def ap_poles(sample_rate):
     return warped_lp_to_ap(iir_lpf_poles(0.495, 17) + [0.0], np.array([10.0, 20000.0]) / sample_rate)
 
 
+def src6(taps, passband, sample_rate):   # the 6x oversampling pair: (up, down), each its first half (they mirror)
+    h = scipy.signal.remez(taps, [0, passband / (6.0 * sample_rate), 0.5 / 6, 0.5], [1, 0], fs=1.0)
+    return 6 * h[:taps // 2], h[:taps // 2]
+
+
+def src6_code(taps, passband, sample_rate):
+    up, down = src6(taps, passband, sample_rate)
+    out = []
+    for kind, h, gain in (('SRC_UP', up, 6), ('SRC_DOWN', down, 1)):
+        out.append('''// MIFM1: for 44.1 kHz (tools/warps_tables.py), with:
+// %d * scipy.signal.remez(%d, [0, %.0f / (6 * %d), 0.5 / 6, 0.5], [1, 0], fs=1.0)
+template<>
+struct SRC_FIR<%s, 6, %d> {
+  template<int32_t i> inline float Read() const {
+    const float h[] = {
+%s
+    };
+    return h[i];
+  }
+};
+''' % (gain, taps, passband, sample_rate, kind, taps, '\n'.join('    ' + l for l in c_floats(h).split('\n'))))
+    return '\n'.join(out)
+
+
 def c_floats(values, per_line=4):
     s = ['%16.9e' % v for v in values]
     lines = [', '.join(s[i:i + per_line]) for i in range(0, len(s), per_line)]
@@ -166,6 +196,17 @@ def c_floats(values, per_line=4):
 def read_array(text, name):
     m = re.search(r'const float ' + re.escape(name) + r'\[\] = \{([^}]*)\}', text)
     return np.array([float(x.strip().rstrip('f')) for x in m.group(1).split(',') if x.strip()])
+
+
+def check_src(filters):
+    worst = 0.0
+    for kind, gain in (('SRC_UP', 6), ('SRC_DOWN', 1)):
+        m = re.search(r'struct SRC_FIR<' + kind + r', 6, 48> \{.*?const float h\[\] = \{([^}]*)\}', filters, re.S)
+        theirs = np.array([float(x) for x in m.group(1).split(',') if x.strip()])
+        mine = src6(48, 0.06 * 96000, 96000)[0 if kind == 'SRC_UP' else 1]
+        worst = max(worst, np.max(np.abs(mine - theirs)))
+    print('96 kHz 6x oversampling from the recipe against sample_rate_conversion_filters.h: %.2g' % worst)
+    return worst < 1e-3                  # (remez converges a little differently from 2014's scipy)
 
 
 def check(text):
@@ -199,22 +240,46 @@ def rewrite(text, sample_rate):
     return text
 
 
+SRC_TAPS, SRC_PASS = 72, 12000.0
+
+
 if __name__ == '__main__':
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
-    path = args[0] if args else os.path.join(os.path.dirname(__file__), '..', 'firmware', 'third_party', 'warps',
-                                             'resources.cc')
-    text = open(path).read()
-    if np is None and ('--check' in sys.argv or 'MIFM1: at 44100 Hz' not in text):
+    root = args[0] if args else os.path.join(os.path.dirname(__file__), '..', 'firmware', 'third_party', 'warps')
+    paths = [os.path.join(root, p) for p in ('resources.cc', 'dsp/sample_rate_conversion_filters.h',
+                                              'dsp/modulator.h')]
+    text, filters, modulator = (open(p).read() for p in paths)
+    done = ['MIFM1: at 44100 Hz' in text, 'MIFM1: for 44.1 kHz' in filters, 'MIFM1: 72' in modulator]
+    if np is None and ('--check' in sys.argv or not all(done)):
         print('warps_tables: needs numpy and scipy')
         sys.exit(1)
-    if '--check' in sys.argv:
-        sys.exit(0 if check(text) else 1)
-    if 'MIFM1: at 44100 Hz' in text:
-        print('warps_tables: %s already at 44.1 kHz' % path)
+    if '--check' in sys.argv:            # (on the vendored files: resources.cc once rewritten holds 44.1 kHz's)
+        ok = check(text) if not done[0] else print('resources.cc already at 44.1 kHz: not checked') or True
+        sys.exit(0 if ok and check_src(filters) else 1)
+    if all(done):
+        print('warps_tables: %s already at 44.1 kHz' % root)
         sys.exit(0)
-    if not check(text):
-        print('warps_tables: the port does not make the vendored tables at 96 kHz: stopped')
-        sys.exit(1)
-    open(path, 'w').write(rewrite(text, 44100))
-    for name, c in filter_bank(44100):
-        print('  band %s: decimated by %d' % (name, c[0]))
+    if not done[0]:
+        if not check(text):
+            print('warps_tables: the port does not make the vendored tables at 96 kHz: stopped')
+            sys.exit(1)
+        open(paths[0], 'w').write(rewrite(text, 44100))
+        for name, c in filter_bank(44100):
+            print('  band %s: decimated by %d' % (name, c[0]))
+    if not done[1]:
+        if not check_src(filters):
+            print('warps_tables: the recipe does not make the vendored 6x filters at 96 kHz: stopped')
+            sys.exit(1)
+        end = filters.rindex('}  // namespace warps')
+        open(paths[1], 'w').write(filters[:end] + src6_code(SRC_TAPS, SRC_PASS, 44100) + '\n' + filters[end:])
+    if not done[2]:
+        for kind in ('UP', 'DOWN'):
+            line = 'SampleRateConverter<SRC_%s, kOversampling, 48>' % kind
+            if line not in modulator:
+                print('warps_tables: modulator.h: %s not found' % line)
+                sys.exit(1)
+            modulator = modulator.replace(line, 'SampleRateConverter<SRC_%s, kOversampling, %d>' % (kind, SRC_TAPS))
+        modulator = modulator.replace('  SampleRateConverter<SRC_DOWN, kOversampling, %d> src_down_;' % SRC_TAPS,
+                                      '  SampleRateConverter<SRC_DOWN, kOversampling, %d> src_down_;  '
+                                      '// MIFM1: 72 taps (were 48), the 44.1 kHz pair' % SRC_TAPS)
+        open(paths[2], 'w').write(modulator)

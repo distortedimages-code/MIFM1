@@ -216,8 +216,8 @@ class Modulator {
   Oscillator vocoder_oscillator_;
   QuadratureOscillator quadrature_oscillator_;
   
-  SampleRateConverter<SRC_UP, kOversampling, 48> src_up_[2];
-  SampleRateConverter<SRC_DOWN, kOversampling, 48> src_down_;
+  SampleRateConverter<SRC_UP, kOversampling, 72> src_up_[2];
+  SampleRateConverter<SRC_DOWN, kOversampling, 72> src_down_;  // MIFM1: 72 taps (were 48), the 44.1 kHz pair
 
   Vocoder vocoder_;
   QuadratureTransform quadrature_transform_[2];

@@ -15,12 +15,12 @@
  *   SEQ         the sequencers, the one playing first: the track's steps (TRIG, RANDOM), Marbles' t, Marbles' X
  *   ARP         Endless, the track's: REC records (a key a note, SEL a rest), REC again plays it, a key transposes
  *               it; REC held clears it
- *   HOME        the mixer: the levels, the pans   FX       the reverb (the sends, then its own knobs)
+ *   HOME        the mixer: the levels, the pans   FX       the sends, the reverb, then Warps (ALGORITHM, TIMBRE,
+ *               LEVEL 1 and 2; its carrier, modulator, MOD DRY, the frequency shifter)
  *   GLO         SEQUENCER, TEMPO, SCALE, ROOT; then the project (K1, REC held: INIT) and the machine. Held with a
  *               knob: ALL, the same parameter on the four tracks (with ALGORITHM: the same model)
- *   ENV         Warps (ALGORITHM, TIMBRE, LEVEL 1, LEVEL 2; then the carrier, the modulator, the modulator heard dry,
- *               the frequency shifter). Held with a knob: that parameter's random (right new at each trig, left
- *               looped, 0 none)
+ *   ENV         the track's envelope (PLAITS 2/3: DECAY, LPG COLOUR, the internal envelope's TIMBRE and MORPH).
+ *               Held with a knob: that parameter's random (right new at each trig, left looped, 0 none)
  *   REC         with the steps: the white keys are a page's 16 steps, the first black keys the pages; a step held
  *               and a knob turned: a lock; a step held and SEL: its locks cleared
  *   PLAY        the clock runs or stops           SAVE     held: the project saved (stopped)
@@ -325,8 +325,10 @@ static void param_name(int param, char *b, uint32_t max)
     } else {
         text_cat(b, "Rv", max);
     }
+    if (page >= PG_WARPS(0) && page < ENG_NPAGES)
+        b[0] = 0, text_cat(b, "Wp", max);
     text_cat(b, " ", max);
-    text_cat(b, eng_pdef(param)->name, max);
+    text_cat(b, eng_param_name(param), max);
 }
 
 /* --------------------------------------------------------------- tables --- */
@@ -824,6 +826,12 @@ static void panel_plaits(int t, int face, uint16_t ac)
         float k = (0.002f + 0.12f * (1.0f - decay) * (1.0f - decay) * (1.0f - decay)) * 1.4f;
         float px = 0.0f, py = (float)y0;
         uint16_t fill = tint(ac, BG, 1 + (int)(colour * 2.0f));
+        int m = p->algo[PG_TRACK(t, 0)];
+        if (eng_model_enveloped(m)) {    /* its own envelope: the LPG is out of its way */
+            int y = hero_title("ENVELOPE");
+            hero_line(y, m >= 19 ? "NO LPG|DECAY: ITS DECAY" : "NO LPG|IN ITS PRESET");
+            return;
+        }
         cv_text(84, 0, &FONT_XS, "LOW-PASS GATE", MUTED);
         cv_text(232 - text_w(&FONT_XS, colour < 0.5f ? "VCFA" : "VCA"), 0, &FONT_XS,
                 colour < 0.5f ? "VCFA" : "VCA", DIM);
@@ -888,6 +896,10 @@ static void panel_marbles(int x)
         int m = p->algo[PG_MARBLES(0)];
         hero_icon(IC_TMODEL + m, m < 3 ? accent3(m) : TEAL);
         int y = hero_title(eng_algo_name(PG_MARBLES(0), m));
+        if (eng_steps_mode()) {          /* the steps play the tracks: t is only a source (cables, Tides' trigger) */
+            hero_line(y, "STEPS PLAY|RATE: TEMPO");
+            return;
+        }
         s[0] = 0;
         text_cat(s, "LENGTH ", sizeof s);
         int_text((int32_t)(p->val[PG_MARBLES(1) * 4] + 0.5f), n);
@@ -1240,6 +1252,20 @@ static int knob_view(int param, int *t, int *tp)
     return KV_VALUE;
 }
 
+/* a knob that does nothing now, drawn grey (it still turns): the LPG's colour on a model with its own envelope; with
+ * the steps playing the tracks, a track's gate and note sources and Marbles' t settings (its outputs stay sources) */
+static int knob_idle(int param)
+{
+    int page = param / 4, k = param % 4;
+    if (page < 12 && page % 3 == 1 && k == 1)
+        return eng_model_enveloped(eng_project()->algo[page - 1]);
+    if (!eng_steps_mode())
+        return 0;
+    if (page < 12 && page % 3 == 2)
+        return k <= 1;
+    return (page == PG_MARBLES(0) && (k == 1 || k == 2)) || (page == PG_MARBLES(1) && (k == 1 || k == 2));
+}
+
 static void draw_knob(int k)
 {
     static const char *const RND_NAME[4] = {"Pan", "Decay", "Tune", "Ratchet"};
@@ -1273,6 +1299,9 @@ static void draw_knob(int k)
         ncab = cables_on(param, c, sizeof c, &hash);
         eng_param_text(param, ncab ? f : v, txt, sizeof txt);
     }
+    int idle = view == KV_VALUE && knob_idle(param);
+    if (idle)
+        ac = mc = DIM;
     vc = view == KV_RND ? (rnd < 0 ? mc : ac) : locked ? mc : ac;
     int32_t s[4] = {(int32_t)(view == KV_RND ? (float)(rnd + 100) : knob_u(param, v) * 270.0f) |
                     (int32_t)(knob_u(param, f) * 270.0f) << 10 | view << 20 | locked << 22,
@@ -1281,7 +1310,8 @@ static void draw_knob(int k)
         return;
     memcpy(ui.knob_shown[k], s, sizeof s);
     cv_begin(KNOB_W, KNOB_H, BG);
-    label_text(ptype(ui.page) == PT_RND ? RND_NAME[k] : d->name, lab, sizeof lab);   /* touched: white, underlined */
+    label_text(ptype(ui.page) == PT_RND ? RND_NAME[k] : eng_param_name(param), lab, sizeof lab);   /* touched: white,
+                                                                                                * underlined */
     {
         const felucca_font_t *lf = text_w(&FONT_XS, lab) <= 58 ? &FONT_XS : &FONT_T;
         int w = text_w(lf, lab);
@@ -1303,7 +1333,7 @@ static void draw_knob(int k)
                 arc(RX, RY, R0 + 0.5f, R1 - 0.5f, a, b, TRACK);
         }
         label_text(txt, nm, sizeof nm);
-        ring_text(nm, C_WHITE, under, sizeof under);
+        ring_text(nm, idle ? DIM : C_WHITE, under, sizeof under);
     } else {
         float lo = bip ? fm_minf(u, 0.5f) : 0.0f, hi = bip ? fm_maxf(u, 0.5f) : u;
         arc(RX, RY, R0 + 0.5f, R1 - 0.5f, 0.0f, 1.0f, TRACK);
@@ -1327,7 +1357,7 @@ static void draw_knob(int k)
             travel_xy(RX, RY, uf, (R0 + R1) * 0.5f, &x, &y);
             lit_disc(x, y, 2.0f, mc);
         }
-        ring_text(txt, ncab ? mc : view == KV_RND && !rnd ? DIM : C_WHITE, under, sizeof under);
+        ring_text(txt, ncab ? mc : (view == KV_RND && !rnd) || idle ? DIM : C_WHITE, under, sizeof under);
     }
     if (ncab)                            /* under the ring: the cables, a lock, a random, else a unit, MOD's socket */
         cv_text(30 - text_w(&FONT_XS, c) / 2, 78, text_w(&FONT_XS, c) <= 58 ? &FONT_XS : &FONT_T, c, mc);
@@ -1431,12 +1461,12 @@ static void draw_global(void)
         v[0] = 0;
         switch (i) {
         case 0:
-            l = "Core 0: tracks 1-2, Marbles, Tides";
+            l = "Core 0";
             int_text((int32_t)((eng_load(0) + 5u) / 10u), v);
             text_cat(v, "%", sizeof v);
             break;
         case 1:
-            l = "Core 1: tracks 3-4";
+            l = "Core 1";
             if (eng_core1_running()) {
                 int_text((int32_t)((eng_load(1) + 5u) / 10u), v);
                 text_cat(v, "%", sizeof v);
@@ -1452,11 +1482,20 @@ static void draw_global(void)
             if (eng_peak() >= 900u)
                 c = PINK;
             break;
-        case 3:
-            l = "Platform (audio)";
-            int_text((int32_t)plat_cpu_pct(), v);
-            text_cat(v, "%", sizeof v);
+        case 3: {                        /* what each costs: the four tracks, Warps (the cores share them by it) */
+            char n[8];
+            n[0] = 0;
+            l = "T1 T2 T3 T4 Warps";
+            for (int t = 0; t <= ENG_TRACKS; t++) {
+                if (t == ENG_TRACKS && !eng_task_load(t))
+                    n[0] = '-', n[1] = 0;         /* Warps off */
+                else
+                    int_text((int32_t)((eng_task_load(t) + 5u) / 10u), n);
+                text_cat(v, n, sizeof v);
+                text_cat(v, t < ENG_TRACKS ? "  " : t == ENG_TRACKS && n[0] == '-' ? "" : "%", sizeof v);
+            }
             break;
+        }
         case 4: {                        /* the output (K2): stereo; a headset with a mic (its 4-pole plug in the
                                           * 3-pole jack: its earpieces in series between left and right, they get
                                           * left minus right, so the right inverted gives them the whole mix); mono */
@@ -1869,8 +1908,9 @@ static void module_button(int b)
     case B_HOME:
         go_page(here && pt == PT_MIX ? PG_PAN : PG_MIX);
         break;
-    case B_FX:
-        go_page(here && pt == PT_FX1 ? PG_FX(1) : PG_FX(0));
+    case B_FX:                           /* the sends, the reverb, Warps' two pages, round */
+        go_page(!here ? PG_FX(0) : pt == PT_FX1 ? PG_FX(1) : pt == PT_FX2 ? PG_WARPS(0) : pt == PT_WARPS1 ? PG_WARPS(1)
+                : PG_FX(0));
         break;
     default:
         break;
@@ -1987,10 +2027,9 @@ static void button_up(int b)
             go_page(pt == PT_GLOBAL || pt == PT_SYS ? ui.prev_page : PG_GLOBAL);
         ui.full = 1;
         break;
-    case B_ENV:                          /* a tap: Warps, its first page then its second; held with a knob: its
-                                          * random */
+    case B_ENV:                          /* a tap: the track's envelope (PLAITS 2/3); held with a knob: its random */
         if (!ui.used[b])
-            go_page(ui.page == PG_WARPS(0) && !ui.matrix ? PG_WARPS(1) : PG_WARPS(0));
+            go_page(PG_TRACK(ui.track, 1));
         ui.full = 1;
         break;
     default:
@@ -2208,8 +2247,8 @@ static void input(void)
     /* lights: the page's button, PLAY, SEL in MOD mode, REC with the steps; the keys: the steps (the one playing
      * blinks), or held, or the sources on this page */
     {
-        static const uint8_t PAGE_BTN[PT_SYS + 1] = {B_EDIT, B_EDIT, B_EDIT, B_LFO, B_LFO, B_SEQ, B_SEQ, B_SEQ, B_SEQ,
-                                                    B_HOME, B_FX, B_FX, B_HOME, B_SEQ, B_GLO, B_ARP, B_ENV, B_ENV,
+        static const uint8_t PAGE_BTN[PT_SYS + 1] = {B_EDIT, B_ENV, B_EDIT, B_LFO, B_LFO, B_SEQ, B_SEQ, B_SEQ, B_SEQ,
+                                                    B_HOME, B_FX, B_FX, B_HOME, B_SEQ, B_GLO, B_ARP, B_FX, B_FX,
                                                     B_SEQ, B_GLO};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
         uint32_t bb = 0, kk = ui.keys;

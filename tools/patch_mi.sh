@@ -25,6 +25,8 @@ sub warps/dsp/vocoder.h 's/^const float kFollowerGain = sqrtf(kNumBands);/const 
 # 5. Warps at the FM-1's 44.1 kHz instead of 96: the three tables that depend on the rate (the vocoder's filter bank,
 #    the oscillators' note-to-increment table, the frequency shifter's allpass poles) made again by the module's own
 #    scripts, ported (tools/warps_tables.py: it first checks that the port makes the vendored 96 kHz tables)
-python3 -I "$(dirname "$0")/warps_tables.py" "$T/warps/resources.cc"
+#    and the cross-modulations' 6x oversampling filters, by the recipe written above them, flat to 12 kHz (72 taps)
+python3 -I "$(dirname "$0")/warps_tables.py" "$T/warps"
 grep -q "MIFM1: at 44100 Hz" "$T/warps/resources.cc" || { echo "patch_mi: warps/resources.cc not at 44.1 kHz"; exit 1; }
+grep -q "MIFM1: 72 taps" "$T/warps/dsp/modulator.h" || { echo "patch_mi: warps/dsp/modulator.h: 72 taps"; exit 1; }
 echo "patched $T"

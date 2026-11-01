@@ -42,7 +42,8 @@ les tables des modules.</p></div>
 <tr><td>SEQ</td><td>les séquenceurs : les pas de la piste, Marbles t, Marbles X</td></tr>
 <tr><td>ARP</td><td>Endless : REC enregistre (une touche = une note, SEL = un silence), REC à nouveau le joue, une touche le
 transpose, REC tenu l'efface</td></tr>
-<tr><td>HOME · FX</td><td>le mixer (les niveaux) · la réverbe (les envois, puis ses réglages)</td></tr>
+<tr><td>HOME · FX</td><td>le mixer (les niveaux, les pans) · les envois, la réverbe, puis Warps : ALGORITHM, TIMBRE,
+LEVEL 1, LEVEL 2, puis CARRIER (une piste ou l'oscillateur), MODULATOR, MOD DRY, MODE (Warps ou Freq shift)</td></tr>
 <tr><td>PLAY</td><td>l'horloge de Marbles tourne ou s'arrête</td></tr>
 <tr><td>clavier</td><td>joue la piste active, même à l'arrêt (OCT− OCT+ pour l'octave)</td></tr>
 <tr><td>SEQ (STEPS)</td><td>les pas de la piste : NOTE, PROB, RATCHET, LENGTH ; SELECT : RANDOM (PAN, DECAY, TUNE, RATCHET)</td></tr>
@@ -52,8 +53,7 @@ transpose, REC tenu l'efface</td></tr>
 <tr><td>SAVE tenu</td><td>sauvegarde le projet (à l'arrêt)</td></tr>
 <tr><td>GLO</td><td>SEQUENCER (Marbles ou Steps), TEMPO, SCALE, ROOT ; SELECT : le projet et la machine</td></tr>
 <tr><td>GLO tenu + potard</td><td>ALL : le même réglage sur les 4 pistes</td></tr>
-<tr><td>ENV</td><td>Warps : ALGORITHM, TIMBRE, LEVEL 1, LEVEL 2 ; ENV à nouveau : CARRIER (une piste ou l'oscillateur),
-MODULATOR, MOD DRY, MODE (Warps ou Freq shift)</td></tr>
+<tr><td>ENV</td><td>l'enveloppe de la piste : DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV</td></tr>
 <tr><td>ENV tenu + potard</td><td>l'aléatoire de ce réglage : à droite nouveau à chaque trig, à gauche en boucle</td></tr>
 <tr><td>REC</td><td>avec STEPS : les touches blanches sont les 16 pas ; tenir un pas + un potard = P-lock</td></tr>
 <tr><td>GLO, SELECT, K1, REC tenu</td><td>INIT : un projet neuf (4 Plaits sur VIRTUAL ANALOG, rien de câblé), le patch de démo

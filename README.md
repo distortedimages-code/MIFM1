@@ -15,9 +15,10 @@ la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
 - une **matrice de câbles** : 15 sources (Tides A1-A4, B1-B4, Marbles X1-X3, Y, T1-T3) vers presque tous les
   paramètres, 8 câbles par piste et 8 globaux ;
 - **Warps** entre deux pistes (ou une piste et son oscillateur interne) : ses 6 modulations croisées, son vocodeur
-  et son easter egg, le décaleur de fréquence. Le module tourne à 96 kHz : ses tables (les bandes du vocodeur, les
-  filtres du décaleur, l'oscillateur) sont refaites pour 44,1 kHz par ses propres scripts, et ses modulations croisées
-  tournent à 88,2 kHz (leurs filtres de suréchantillonnage couperaient à 8 kHz sinon) ;
+  et son easter egg, le décaleur de fréquence. Le module tourne à 96 kHz : ce qui en dépend (les bandes du vocodeur,
+  les filtres du décaleur, l'oscillateur) est refait pour les 44,1 kHz du FM-1 par ses propres scripts, et les filtres
+  du suréchantillonnage de ses modulations croisées par la recette écrite au-dessus d'eux (plus longs, pour rester
+  plats jusqu'à 12 kHz) ;
 - un **mixer simple** (un niveau et un pan par piste, à puissance constante : une piste garde le même volume où
   qu'elle soit dans l'image ; ses gains glissent échantillon par échantillon, un pan ou un niveau aléatoire ou locké
   ne claque pas) et un **départ réverbe** par piste vers la réverbe de Clouds
@@ -63,18 +64,19 @@ les 16 pas de la piste (allumés : un trig ; un point : des locks ; cerclé : ce
 | **SEQ** | les séquenceurs, celui qui joue d'abord : les pas de la piste (TRIG, RANDOM), Marbles t, Marbles X |
 | **ARP** | Endless, celui de la piste (voir plus bas) |
 | **HOME** | le mixer : les niveaux des 4 pistes, puis leurs pans |
-| **FX** | la réverbe : les envois des 4 pistes, puis ses réglages (Time, Damping, Diffusion, Return) |
+| **FX** | les envois des 4 pistes, la réverbe (Time, Damping, Diffusion, Return), puis Warps (ses deux pages) |
+| **ENV** | l'enveloppe de la piste (PLAITS 2/3 : DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV) |
 | **PLAY** | l'horloge de Marbles tourne ou s'arrête |
 | **clavier** | joue la piste active, même à l'arrêt ; **OCT− / OCT+** pour l'octave |
 | **SEL** | le mode MOD (voir plus bas) ; **tenu** : la matrice de la piste |
 | **SAVE tenu** | sauvegarde le projet (à l'arrêt) |
 | **GLO** | SEQUENCER (Marbles ou Steps), TEMPO, SCALE, ROOT ; SELECT : le projet (INIT) et la machine ; GLO encore : retour |
 | **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle |
-| **ENV** | Warps : ALGORITHM, TIMBRE, LEVEL 1, LEVEL 2 ; ENV à nouveau : CARRIER, MODULATOR, MOD DRY, MODE |
 | **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage sur la piste (avec GLO tenu aussi : sur les 4) |
 | **REC** | avec STEPS : les touches blanches deviennent les 16 pas, les 4 premières noires les pages |
 
-La charge de calcul est toujours affichée en haut à droite (le cœur le plus chargé, en %). Les quatre voix et Warps
+La charge de calcul est toujours affichée en haut à droite (le cœur le plus chargé, en %) ; GLO puis SELECT
+détaille ce que coûte chaque piste et Warps. Les quatre voix et Warps
 se répartissent entre les deux cœurs selon ce que chacun coûte, mesuré bloc après bloc (une voix MODAL ou STRING coûte
 dix fois une VIRTUAL ANALOG).
 
@@ -86,8 +88,19 @@ Tides A1-A4 ; 5-8 : Tides B1-B4 ; 9-11 : Marbles X1-X3 ; 12 : Y ; 13-15 : T1-T3 
 **La matrice** (SEL tenu) : les 8 câbles de la piste puis les 8 globaux. K1 choisit le câble, K2 sa source, K3 sa
 cible, K4 sa profondeur.
 
+**PLAITS 1/3** : FREQUENCY, puis HARMONICS, TIMBRE et MORPH sous le nom que leur donne le manuel de Plaits pour le
+modèle choisi (le KICK : ATTACK, BRIGHTNESS, DECAY ; le FM 2-OP : RATIO, INDEX, FEEDBACK ; le WAVETABLE : BANK, ROW,
+COLUMN…). **PLAITS 2/3** (ENV) : l'enveloppe. Les modèles qui ont la leur (STRING, MODAL, KICK, SNARE, HI-HAT, et les
+6-OP FM dans leur preset) contournent le LPG de Plaits : LPG COLOUR est alors grisé, et pour STRING, MODAL et les trois
+batteries, DECAY s'ajoute à leur decay (leur MORPH) : il marche sur toutes les pistes, avec ses locks et son
+aléatoire.
+
 **PLAITS 3/3** choisit pour chaque piste sa source de gate (T1-T3, une sortie de Tides, ou le clavier seul) et de
-note (X1-X3, Y ou fixe), la transposition et l'octave (avec Marbles ; avec STEPS, les pas jouent la piste).
+note (X1-X3, Y ou fixe), la transposition et l'octave (avec Marbles ; avec STEPS, les pas jouent la piste : GATE et
+NOTE sont alors grisés, comme BIAS, JITTER, T RANGE et DEJA VU t de Marbles, dont les sorties T ne servent plus que de
+sources de modulation ; RATE reste le tempo).
+
+Un potard grisé tourne toujours, mais ne change rien au son dans l'état présent.
 
 **Le séquenceur pas à pas** (GLO, K1 sur STEPS ; le tempo est celui de Marbles, K2 sur GLO) : chaque piste a son
 pattern, jusqu'à 64 pas (LENGTH). **REC** : les 16 touches blanches sont les pas de la page (allumés : un trig, celui
@@ -116,7 +129,7 @@ les triolets), GATE (la longueur des notes), DIRECTION (avant, arrière, aller-r
 tenu** efface la boucle (la piste retrouve ses pas ou Marbles). Probabilité, ratchets, aléatoire et quantiseur
 s'appliquent aussi à ses notes. En bas, ses notes en barres, la note jouée en blanc.
 
-**Warps** (ENV) : le module de modulation croisée de Mutable, entre deux pistes. Sa deuxième page (ENV à nouveau)
+**Warps** (FX, troisième appui) : le module de modulation croisée de Mutable, entre deux pistes. Sa deuxième page (FX à nouveau, ou SELECT)
 le branche : **CARRIER**, la porteuse (Off : Warps éteint ; une piste T1-T4 ; ou son oscillateur interne, trois formes),
 **MODULATOR**, la piste modulante, **MOD DRY** (On : on entend aussi la piste modulante telle quelle ; Off, elle ne
 passe que par Warps) et **MODE** (Warps, ou Freq shift : l'easter egg du module, un décaleur de fréquence). La sortie
@@ -128,8 +141,8 @@ repère au suivant. **TIMBRE**, **LEVEL 1** et **LEVEL 2** comme sur le module :
 règle sa note (C0 à C5), comme le potard du module. En Freq shift : ALGORITHM fixe le décalage (au centre, rien ;
 jusqu'à ±2 kHz), TIMBRE la bande (vers le haut, vers le bas), LEVEL 1 la réinjection, LEVEL 2 le mélange. Les câbles
 de la matrice vont aussi sur ses potards (Tides sur ALGORITHM…). Warps joue un bloc derrière les voix (~4 ms de
-latence sur la piste qu'il remplace) ; en passant le repère du vocodeur, il redémarre à l'autre fréquence (un fondu de
-1,5 ms).
+latence sur la piste qu'il remplace). Le vocodeur est son algorithme le plus lourd (le premier
+à surveiller dans la charge).
 
 **La sortie** (GLO, SELECT, K2) : Stereo, Mic headset ou Mono. **Mic headset** est pour un casque à micro (fiche à
 4 contacts) branché à fond dans la prise du FM-1 (3 contacts) : ses écouteurs se retrouvent en série entre la
@@ -147,7 +160,7 @@ pas y arrive avec les patterns de démo, sur Marbles par défaut.
 
 - `firmware/` : le firmware (fm1-base `tools/build.py ../firmware`)
   - `app.c` : l'écran et les contrôles ; `mi/engine.cc` : le son (les pistes, Marbles ou les pas, les trigs, Tides,
-    la matrice, le quantiseur, le mixer ; les pistes 3 et 4 sur le second cœur) ; `mi/mi_*.cc` : un pont C par module
+    la matrice, le quantiseur, Warps, le mixer ; les voix et Warps partagés entre les deux cœurs) ; `mi/mi_*.cc` : un pont C par module
     Mutable ; `mi/mi_reverb.h` : la réverbe de Clouds, ses lignes de retard en flottants
   - `third_party/` : le code Mutable Instruments utilisé, copié tel quel ; les retouches sont dans `PATCHES.md`
   - `res/mi_tables.bin` : la zone de ressources (les plus grosses tables, écrites par l'installeur après le

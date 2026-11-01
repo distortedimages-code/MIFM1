@@ -62,6 +62,10 @@ typedef struct {
     const char *const *names;            /* K_ENUM */
 } eng_pdef_t;
 const eng_pdef_t *eng_pdef(int param);
+const char *eng_param_name(int param);   /* its name as the module prints it: Plaits' HARMONICS, TIMBRE and MORPH by
+                                          * model (the kick's MORPH is its Decay) */
+int eng_model_enveloped(int model);      /* 1: a Plaits model with its own envelope, the LPG bypassed (6-op FM,
+                                          * string, modal, the drums) */
 int eng_param_mod(int param);            /* 1: a cable may move it */
 void eng_param_text(int param, float v, char *b, int n);   /* its value as the screen writes it */
 
@@ -158,6 +162,7 @@ uint32_t eng_gates(void);                /* bit t: track t's gate now */
 int eng_note(int track);                 /* its note now (MIDI number) */
 uint32_t eng_load(int core);             /* the render's time on core 0 or 1, in tenths of % of the block (smoothed) */
 uint32_t eng_peak(void);                 /* the worst total of the last second, same unit */
+uint32_t eng_task_load(int task);        /* a voice's (0..3) or Warps' (4) time, averaged, same unit */
 float eng_meter(int t);                  /* track t's output (4: the reverb's return), its peak, falling slowly */
 #define ENG_HIST 120                     /* the sources' recent past: one value every 4 blocks (1.4 s) */
 int eng_hist(int src, int i);            /* -127..127, i 0 the oldest .. ENG_HIST - 1 the newest */

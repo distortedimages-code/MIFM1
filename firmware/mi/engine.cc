@@ -511,7 +511,12 @@ void sequence(uint32_t n) {
 }
 
 void set_voice(int t) {
-  mp_set(voice[t], proj.algo[PG_TRACK(t, 0)], vnote[t] + 24.0f * E(t, 0), E(t, 1), E(t, 2), E(t, 3), E(t, 4), E(t, 5));
+  // the models whose MORPH is their decay (string, modal, the drums: their own envelope, no LPG) take DECAY too, around
+  // its middle: the envelope page's DECAY, its locks and its random move every model's decay
+  int m = proj.algo[PG_TRACK(t, 0)];
+  float morph = E(t, 3);
+  if (m >= 19) morph = clampf(morph + E(t, 4) - 0.5f, 0.0f, 1.0f);
+  mp_set(voice[t], m, vnote[t] + 24.0f * E(t, 0), E(t, 1), E(t, 2), morph, E(t, 4), E(t, 5));
   mp_amounts(voice[t], 0.0f, E(t, 6), E(t, 7));
 }
 
@@ -658,6 +663,29 @@ int eng_param_tp(int param, int* t) {
 
 int eng_tp_lockable(int tp) { return tp >= 0 && tp < ENG_NTP && tp != 8 && tp != 9; }   // not the gate's and note's
                                                                                          // sources
+
+// Plaits' HARMONICS, TIMBRE and MORPH by model, as its manual names them (1.2's eight from its release notes)
+const char* const kModelKnobs[24][3] = {
+  {"Resonance", "Cutoff", "Waveform"}, {"Dist freq", "Distortion", "Asymmetry"}, {"Preset", "Mod level", "Stretch"},
+  {"Preset", "Mod level", "Stretch"}, {"Preset", "Mod level", "Stretch"}, {"Terrain", "Radius", "Offset"},
+  {"Chord", "Chorus", "Waveform"}, {"Chord", "Arpeggio", "PW / sync"},
+  {"Detune", "Square", "Saw"}, {"Waveshape", "Fold", "Asymmetry"}, {"Ratio", "Index", "Feedback"},
+  {"Ratio", "Formant", "Width"}, {"Bumps", "Harmonic", "Shape"}, {"Bank", "Row", "Column"},
+  {"Chord", "Inversion", "Waveform"}, {"Synthesis", "Species", "Phoneme"},
+  {"Detune", "Density", "Grain"}, {"Filter", "Clock", "Resonance"}, {"Random", "Density", "Filter"},
+  {"Material", "Brightness", "Decay"}, {"Material", "Brightness", "Decay"}, {"Attack", "Brightness", "Decay"},
+  {"Noise", "Modes", "Decay"}, {"Metal", "High-pass", "Decay"},
+};
+
+const char* eng_param_name(int param) {
+  if (param >= 0 && param < 12 * 4 && (param / 4) % 3 == 0 && param % 4 >= 1) {
+    int m = proj.algo[param / 4];
+    return kModelKnobs[m < 0 || m > 23 ? 0 : m][param % 4 - 1];
+  }
+  return eng_pdef(param)->name;
+}
+
+int eng_model_enveloped(int m) { return (m >= 2 && m <= 4) || m >= 19; }
 
 const eng_pdef_t* eng_pdef(int param) {
   if (param < 0 || param >= ENG_NPARAMS) param = 0;
@@ -1252,6 +1280,10 @@ int eng_hist(int s, int i) {
   return hist[s][(hist_at + static_cast<uint32_t>(i)) % ENG_HIST];
 }
 int eng_core1_running(void) { return on_core1_last; }
+uint32_t eng_task_load(int task) {
+  if (task < 0 || task >= kTasks) return 0;
+  return task == ENG_TRACKS && !w_job ? 0 : pct10(static_cast<uint32_t>(task_cost[task]), kN);
+}
 
 int eng_warps_algo(void) {
   int car = Pi(PG_WARPS(1), 0);

@@ -26,10 +26,15 @@
      script fitted at 96 kHz are kept as what they do: the high pass's gain (its pass band, measured against the
      96 kHz design: 4.97 instead of 21 x its frequency) and the last band's 4 extra samples of delay (as a time);
    - `lut_midi_to_f_high`: the oscillators' note to frequency;
-   - `lut_ap_poles`: the frequency shifter's allpass pairs (90 degrees from 10 Hz to 20 kHz).
-   The vocoder and the frequency shifter run at 44.1 kHz on them; the cross-modulations at 88.2 kHz (their 6x
-   oversampling filters are cut at a fixed part of the rate: at 44.1 kHz they would pass only ~8 kHz), the
-   oscillators an octave down there (`firmware/mi/mi_warps.cc`).
+   - `lut_ap_poles`: the frequency shifter's allpass pairs (90 degrees from 10 Hz to 20 kHz);
+   - `dsp/sample_rate_conversion_filters.h`, `dsp/modulator.h`: the cross-modulations oversample by 6 through a pair
+     of filters made by the recipe written above them, `remez(48, [0, 0.06 / 6, 0.5 / 6, 0.5])`: at 96 kHz flat to
+     5.8 kHz, -1 dB at 16 kHz, the images (from 48 kHz) at -68 dB. The same filters at 44.1 kHz would lose 17 dB at
+     16 kHz. A pair for 44.1 kHz is added, `remez(72, [0, 12000 / (6 x 44100), 0.5 / 6, 0.5])`: flat to 12 kHz,
+     -3.5 dB at 16 kHz, its images (from 22.05 kHz) at -52 dB; the modulator's two converters take it (48 -> 72
+     taps). The 48-tap pair stays in the file, unused.
+   Warps then runs whole at 44.1 kHz (`firmware/mi/mi_warps.cc`). 0.2.0 and 0.2.1 ran it at 88.2 kHz on the 96 kHz
+   tables: twice the cost, too much for the FM-1.
 
 Not changed, but used differently from the modules: Marbles and Tides 2 run at the control rate (Marbles 8 frames
 per audio block, Tides one), their time constants given that rate; Clouds' granular processor (written for 32 kHz)
