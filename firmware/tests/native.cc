@@ -857,6 +857,67 @@ int main(int argc, char** argv) {
       ++failures, printf("FAIL: the version 6 project\n");
   }
 
+  // 26. 0.3.7's project (version 7, 2864 bytes): all of it, the filter flat. Then the filter: the demo playing, every
+  // track's low pass down (the highs gone: the mix darker), then its high pass up (brighter); the knob's text
+  {
+    static uint8_t buf[sizeof(project_t)];
+    project_t* q = reinterpret_cast<project_t*>(buf);
+    for (uint32_t i = 0; i < sizeof buf; ++i) buf[i] = 0;
+    q->magic = PROJECT_MAGIC;
+    q->version = 7;
+    q->size = 2864;
+    float* val = reinterpret_cast<float*>(buf + 8);
+    for (int i = 0; i < 160; ++i) val[i] = 0.25f;
+    uint8_t* algo = buf + 8 + 160 * 4;
+    algo[PG_COMP] = MB_OTT;
+    algo[41] = 1;                                         // (after the 40 pages' choices: out_mode, warps_hq,
+    algo[42] = 3;                                         // theme)
+    uint8_t* trig = algo + 43 + 160;
+    trig[LANE_REVERB * 8] = 0x11;
+    int8_t* rnd = reinterpret_cast<int8_t*>(trig + 56);
+    rnd[1 * 20 + TP_DUCK] = -30;
+    int ok = eng_upgrade(q, 2864);
+    printf("a version 7 project: %s, OTT %d, HQ %d, theme %d, the reverb's lane %02x, a random %d, the filter %.2f\n",
+           ok ? "read" : "REFUSED", q->algo[PG_COMP], q->warps_hq, q->theme, q->trig[LANE_REVERB][0],
+           q->rnd[1][TP_DUCK], q->val[PG_EQ * 4 + 1]);
+    if (!ok || !eng_check(q) || q->algo[PG_COMP] != MB_OTT || q->warps_hq != 1 || q->theme != 3 ||
+        q->trig[LANE_REVERB][0] != 0x11 || q->rnd[1][TP_DUCK] != -30 || q->val[PG_EQ * 4 + 1] != 0.0f ||
+        q->val[PG_OTT * 4 + 3] != 0.25f)
+      ++failures, printf("FAIL: the version 7 project\n");
+
+    char a[16], b[16], c[16];
+    eng_param_text(PG_EQ * 4, -1.0f, a, sizeof a);
+    eng_param_text(PG_EQ * 4 + 1, 1.0f, b, sizeof b);
+    eng_param_text(PG_EQ * 4 + 2, 0.0f, c, sizeof c);
+    eng_play(0);
+    eng_defaults(p);
+    double bright[3];
+    for (int m = 0; m < 3; ++m) {
+      for (int t = 0; t < ENG_TRACKS; ++t) p->val[PG_EQ * 4 + t] = m == 0 ? 0.0f : m == 1 ? -0.8f : 0.6f;
+      eng_play(0);
+      eng_play(1);
+      double e = 0, d = 0;
+      float prev = 0;
+      int nan = 0;
+      for (int k = 0; k < 44100 * 4 / static_cast<int>(n); ++k) {
+        eng_render(l, r, n);
+        for (uint32_t i = 0; i < n; ++i) {
+          if (!std::isfinite(l[i])) nan = 1;
+          e += static_cast<double>(l[i]) * l[i];
+          d += static_cast<double>(l[i] - prev) * (l[i] - prev);
+          prev = l[i];
+        }
+      }
+      bright[m] = nan ? -1.0 : std::sqrt(d / (e + 1e-20));
+    }
+    printf("the filter: %s, %s, %s; the mix's brightness flat %.3f, low passes %.3f, high passes %.3f\n", a, b, c,
+           bright[0], bright[1], bright[2]);
+    if (bright[0] <= 0 || !(bright[1] < bright[0] * 0.6) || !(bright[2] > bright[0] * 1.5))
+      ++failures, printf("FAIL: the filter\n");
+    eng_play(0);
+    eng_defaults(p);
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

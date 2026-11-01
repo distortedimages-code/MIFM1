@@ -158,7 +158,7 @@ static struct {
     int full;                            /* everything again */
     /* what each part of the screen showed, to draw only what changed */
     int32_t knob_shown[4][4];
-    int32_t head_shown[5], foot_shown[6], panel_shown[3];
+    int32_t head_shown[6], foot_shown[6], panel_shown[3];
 } ui;
 
 /* ------------------------------------------------------------ the pages --- */
@@ -168,7 +168,7 @@ static int ptrack(int page)              /* the track a page belongs to, -1: non
     return page >= VP_SYS ? -1 : page >= VP_RND(0) ? page - VP_RND(0) : eng_page_track(page);
 }
 
-#define MAXFACES 5
+#define MAXFACES 6
 static int module_pages(int page, int *f)   /* its module's pages (its faces), in order; how many */
 {
     int t = ptrack(page);
@@ -182,10 +182,11 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
         f[0] = page >= PG_TIDES(1, 0) ? PG_TIDES(1, 0) : PG_TIDES(0, 0);
         f[1] = f[0] + 1;
         return 2;
-    case PT_MIX: case PT_PAN: case PT_DUCK: case PT_COMP: case PT_OTT:   /* the mixer: the levels, the pans, the
-                                                                          * duck, the master bus (its two modes) */
-        f[0] = PG_MIX, f[1] = PG_PAN, f[2] = PG_DUCK, f[3] = PG_COMP, f[4] = PG_OTT;
-        return 5;
+    case PT_MIX: case PT_PAN: case PT_EQ: case PT_DUCK: case PT_COMP: case PT_OTT:   /* the mixer: the levels, the
+                                                                          * pans, the filters, the duck, the master bus
+                                                                          * (its two modes) */
+        f[0] = PG_MIX, f[1] = PG_PAN, f[2] = PG_EQ, f[3] = PG_DUCK, f[4] = PG_COMP, f[5] = PG_OTT;
+        return 6;
     case PT_STEP: case PT_RND: f[0] = PG_STEP(t); f[1] = VP_RND(t); return 2;
     case PT_ARP: f[0] = PG_ARP(t); return 1;
     case PT_DELAY1: case PT_DELAY2: case PT_DSEND: case PT_LANE: case PT_REVERB: case PT_RSEND:
@@ -266,7 +267,7 @@ static const char *module_name(int page)
     switch (ptype(page)) {
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: return "Plaits";
     case PT_TIDES1: case PT_TIDES2: return page >= PG_TIDES(1, 0) ? "Tides B" : "Tides A";
-    case PT_MIX: case PT_PAN: case PT_DUCK: case PT_COMP: case PT_OTT: return "Mixer";
+    case PT_MIX: case PT_PAN: case PT_EQ: case PT_DUCK: case PT_COMP: case PT_OTT: return "Mixer";
     case PT_STEP: case PT_RND: return "Steps";
     case PT_ARP: return "Endless";
     case PT_GLOBAL: case PT_SYS: return "Global";
@@ -306,7 +307,7 @@ static uint16_t page_accent(int page)
     project_t *p = eng_project();
     switch (ptype(page)) {
     case PT_STEP: case PT_RND: case PT_ARP: return track_accent(ptrack(page));
-    case PT_PAN: case PT_GLOBAL: case PT_SYS: case PT_MIX: return AC1;
+    case PT_PAN: case PT_GLOBAL: case PT_SYS: case PT_MIX: case PT_EQ: return AC1;
     case PT_DUCK: return track_accent(0);    /* T1's: it ducks the others */
     case PT_COMP: return AC2;
     case PT_OTT: return AC3;
@@ -710,7 +711,7 @@ typedef struct {
     int8_t a, b, c, d;
 } vop_t;
 enum { IC_MODEL = 0, IC_RAMP = 24, IC_MIX = 27, IC_REV, IC_GLO, IC_NEW, IC_DEMO, IC_SAVED, IC_STEPS, IC_DICE,
-       IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, NICON };
+       IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, IC_EQ, NICON };
 #define IOPS 10
 static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 4, 24, 12, 8}, {'L', 12, 8, 12, 24}, {'L', 12, 24, 20, 8}, {'L', 20, 8, 20, 24}, {'L', 20, 24, 28, 16}},
@@ -774,6 +775,7 @@ static const vop_t ICONS[NICON][IOPS] = {
                                                                                                      /* the duck */
     {{'L', 5, 27, 27, 27}, {'L', 5, 27, 5, 5}, {'L', 5, 27, 16, 14}, {'L', 16, 14, 27, 10}},        /* a knee */
     {{'R', 4, 14, 6, 12}, {'R', 13, 8, 6, 18}, {'R', 22, 12, 6, 14}, {'L', 4, 6, 28, 6}},            /* OTT: 3 bands */
+    {{'L', 4, 26, 9, 11}, {'L', 9, 11, 23, 11}, {'L', 23, 11, 28, 26}, {'L', 16, 5, 16, 8}},         /* the filters */
 };
 
 static void vicon(float cx, float cy, float s, float w, uint16_t c, int which, int glow)
@@ -893,45 +895,79 @@ static int load_now(void)                /* the busier core, in % */
     return (int)(((a > b ? a : b) + 5u) / 10u);
 }
 
+/* the header: the module's name, an LED a face (the one shown lit), what the knobs do now (MOD, REC, ALL, RND, a
+ * held step); on the right, always in the same place, the keyboard's track: four squares, its own filled in its
+ * colour (STEP mode on an effect's lane: that effect), then the clock, the load */
+#define SQ_X 135                         /* the squares: 11 px, 3 apart (135..188) */
 static void draw_header(void)
 {
     static int load = -1;
     static uint32_t load_at;
     char t[32], v[12];
-    int tr = ptrack(ui.page), x, mode = ui.held_step >= 0 ? 5 : held(B_ENV) ? 4 : held(B_GLO) ? 3
-                                       : ui.grid ? 6 : ui.erec >= 0 ? 2 : ui.mod;
+    int x, mode = ui.held_step >= 0 ? 5 : held(B_ENV) ? 4 : held(B_GLO) ? 3 : ui.grid ? 6 : ui.erec >= 0 ? 2 : ui.mod;
+    int key = ui.grid ? ui.lane : ui.track; /* what the keyboard plays: a track, or (STEP mode) a lane's steps */
     uint16_t ac = page_accent(ui.page);
     if (load < 0 || plat_ms() - load_at >= 250u) {
         load = load_now();
         load_at = plat_ms();
     }
-    int32_t s[5] = {ui.page | ui.matrix << 8 | mode << 10 | (ui.held_step & 127) << 13 | ui.lane << 20, load,
-                    eng_playing() | dirty << 1, ui.track | lane_accent(ui.grid ? ui.lane : ui.track) << 4, ac};
+    int32_t s[6] = {ui.page | ui.matrix << 8 | mode << 10 | (ui.held_step & 127) << 13 | key << 20, load,
+                    eng_playing() | dirty << 1, (int32_t)lane_accent(key) | ui.track << 16 | ui.grid << 19, ac, 0};
+    for (int i = 0; i < ENG_TRACKS; i++)
+        s[5] = s[5] * 31 + (int32_t)track_accent(i);
     if (!ui.full && !ui.anim && !memcmp(s, ui.head_shown, sizeof s))
         return;
     memcpy(ui.head_shown, s, sizeof s);
     cv_begin(240, HEAD_H, BG);
     label_text(ui.matrix ? "Matrix" : module_name(ui.page), t, sizeof t);
-    x = cv_text(10, 6, &FONT_B, dec(t, 0), TXT);
+    cv_text(10, 6, &FONT_B, dec(t, 0), TXT);
     x = 10 + text_w(&FONT_B, t);         /* (its place: the name's, not the letters' on the way) */
-    if (!ui.matrix && page_count(ui.page) > 1) {   /* the faces: an LED each, the one shown lit */
-        for (int f = 0; f < page_count(ui.page); f++)
-            led((float)(x + 8 + f * 11), 14.0f, 3.0f, ac, f == page_face(ui.page) ? 8 : 0);
-        x += 8 + page_count(ui.page) * 11;
-    }
-    if (mode == 5) {                     /* what the knobs do now: a step's locks, randoms, all the tracks, ... */
-        int_text(ui.held_step + 1, v);
-        t[0] = 0;
-        text_cat(t, "STEP ", sizeof t);
-        text_cat(t, v, sizeof t);
-        text_pill(x + 26, 7, &FONT_T, t, HI, BG);
-    } else if (mode) {
+    {
         static const char *const M[7] = {"", "MOD", "REC", "ALL", "RND", "", "STEP"};
+        char m[16];
+        m[0] = 0;
+        if (mode == 5) {                 /* what the knobs do now: a step's locks, randoms, all the tracks, ... */
+            int_text(ui.held_step + 1, v);
+            text_cat(m, "STEP ", sizeof m);
+            text_cat(m, v, sizeof m);
+        } else if (mode) {
+            text_cat(m, M[mode], sizeof m);
+        }
+        int faces = !ui.matrix && page_count(ui.page) > 1 ? page_count(ui.page) : 0;
+        int pw = mode ? text_w(&FONT_T, m) + 10 : 0, lx = x + (faces ? 6 + faces * 9 : 0);
+        if (mode && lx + 8 + pw > SQ_X - 4) {   /* no room for both: the faces' LEDs give way to the mode */
+            faces = 0;
+            lx = x;
+        }
+        for (int f = 0; f < faces; f++)  /* the faces: an LED each, the one shown lit */
+            led((float)(x + 9 + f * 9), 14.0f, 3.0f, ac, f == page_face(ui.page) ? 8 : 0);
         if (mode == 3 && knock)          /* ALL in yellow and black: white on black here, black on yellow there */
-            text_pill(x + 20, 7, &FONT_T, M[mode], HI, BG);
-        else
-            text_pill(x + 20, 7, &FONT_T, M[mode], mode == 3 ? AC1 : mode == 4 ? AC2 : AC3,
-                      mode == 4 ? BG : HI);
+            text_pill(lx + 8 + pw / 2, 7, &FONT_T, m, HI, BG);
+        else if (mode == 5)
+            text_pill(lx + 8 + pw / 2, 7, &FONT_T, m, HI, BG);
+        else if (mode)
+            text_pill(lx + 8 + pw / 2, 7, &FONT_T, m, mode == 3 ? AC1 : mode == 4 ? AC2 : AC3, mode == 4 ? BG : HI);
+    }
+    if (key >= ENG_TRACKS) {             /* STEP mode on an effect's lane: that effect, in its colour */
+        static const char *const FXN[3] = {"DELAY", "REVERB", "WARPS"};
+        pill(SQ_X, 8, 53, 13, lane_accent(key));
+        cv_text(SQ_X + 27 - text_w(&FONT_T, FXN[key - ENG_TRACKS]) / 2, 8, &FONT_T, FXN[key - ENG_TRACKS], BG);
+    } else {
+        for (int i = 0; i < ENG_TRACKS; i++) {   /* the four tracks: the keyboard's filled in its colour, the others
+                                                  * outlined in theirs, dimmed */
+            int sx = SQ_X + i * 14;
+            uint16_t c = track_accent(i), d = tint(c, BG, 4);
+            char n[2] = {(char)('1' + i), 0};
+            if (i == key) {
+                cv_rect(sx, 8, 11, 12, c);
+            } else {
+                cv_rect(sx, 8, 11, 1, d);
+                cv_rect(sx, 19, 11, 1, d);
+                cv_rect(sx, 8, 1, 12, d);
+                cv_rect(sx + 10, 8, 1, 12, d);
+            }
+            cv_text(sx + 6 - (text_w(&FONT_T, n) + 1) / 2, 8, &FONT_T, n, i == key ? BG : d);
+        }
     }
     t[0] = 0;
     int_text(load, v);
@@ -940,19 +976,9 @@ static void draw_header(void)
     x = 232 - text_w(&FONT_XS, t);
     cv_text(x, 6, &FONT_XS, t, load >= 80 ? AC3 : load >= 60 ? AC2 : DIM);
     if (dirty)                           /* not saved */
-        disc((float)(x - 6), 14.0f, 2.2f, AC3);
-    x -= 26;
-    for (int y = -6; y <= 6; y++)
-        cv_rect(x, 14 + y, 11 - (iabs(y) * 11 + 3) / 6, 1, eng_playing() ? AC1 : DIM);
-    if (tr >= 0 || ui.matrix || ui.grid) {   /* the track (STEP mode: the lane), ringed in its colour */
-        int l = ui.grid ? ui.lane : ui.track;
-        uint16_t tc = lane_accent(l);
-        t[0] = 0;
-        text_cat(t, LANE_SHORT[l], sizeof t);
-        pill(x - 34, 6, 26, 16, tc);
-        pill(x - 32, 8, 22, 12, BG);
-        cv_text(x - 21 - text_w(&FONT_XS, t) / 2, 7, &FONT_XS, t, tc);
-    }
+        disc((float)(x - 5), 14.0f, 2.2f, AC3);
+    for (int y = -6; y <= 6; y++)        /* the clock: playing or not */
+        cv_rect(195, 14 + y, 11 - (iabs(y) * 11 + 3) / 6, 1, eng_playing() ? AC1 : DIM);
     blit(0, 0);
 }
 
@@ -1114,6 +1140,45 @@ static void panel_duck(void)             /* the duck: T1's trigs, its decay */
     eng_param_text(PG_DUCK * 4, eng_final(PG_DUCK * 4), v, sizeof v);
     text_cat(s, v, sizeof s);
     hero_line(y, s);
+}
+
+/* the filters: a knob a track, a low pass to the left, a high pass to the right. Their four responses drawn over
+ * 20 Hz..20 kHz (an octave 9.8 px) and 0..-48 dB (a dB a pixel), each in its track's colour, the active one last */
+static float eq_db(float v, float hz)
+{
+    if (v > -0.01f && v < 0.01f)
+        return 0.0f;
+    float fc = v < 0.0f ? 18000.0f * fm_exp2f(7.17f * v) : 20.0f * fm_exp2f(8.64f * v);
+    float r = v < 0.0f ? hz / fc : fc / hz, r8 = r * r * r * r;   /* 24 dB/oct (Butterworth): 1 / (1 + r^8) */
+    r8 *= r8;
+    return -10.0f * 0.30103f * fm_log2f(1.0f + r8);
+}
+static void panel_eq(void)
+{
+    hero_icon(IC_EQ, AC1);
+    hero_line(hero_title("EQ"), "LP|HP|24 DB");
+    const int x0 = 136, w = 98, y0 = 10, h = 52;
+    for (int o = 0; o <= 3; o++) {       /* 20 Hz, 200 Hz, 2 kHz, 20 kHz */
+        int x = x0 + (int)((float)w * (float)o * 3.3219f / 9.9658f + 0.5f);
+        cv_rect(x, y0, 1, h, RULE);
+    }
+    cv_rect(x0, y0, w + 1, 1, RULE);
+    int act = ui.track;
+    for (int k = 0; k < ENG_TRACKS; k++) {
+        int t = (act + 1 + k) % ENG_TRACKS;   /* the active track last: on top */
+        float v = eng_final(PG_EQ * 4 + t);
+        uint16_t c = t == act ? track_accent(t) : tint(track_accent(t), BG, 4);
+        int py = 0;
+        for (int i = 0; i <= w; i++) {
+            float hz = 20.0f * fm_exp2f(9.9658f * (float)i / (float)w);
+            int y = y0 + (int)(fm_clampf(-eq_db(v, hz), 0.0f, (float)h) + 0.5f);
+            if (i)
+                cv_line(x0 + i - 1, py, x0 + i, y, c);
+            if (t == act && i)
+                cv_line(x0 + i - 1, py + 1, x0 + i, y + 1, c);
+            py = y;
+        }
+    }
 }
 
 static void panel_bus(int ott)           /* the master bus: this face's mode, on or not */
@@ -1391,6 +1456,11 @@ static void draw_panel(void)
         s[2] = (int)p->val[PG_GLOBAL * 4 + 1] | (int)p->val[PG_GLOBAL * 4 + 2] << 4 |
                (int)(p->val[PG_GLOBAL * 4 + 3] * 100.0f) << 8 | (int)(p->val[PG_GLOBAL * 4] * 1000.0f) << 16;
         break;
+    case PT_EQ:
+        for (int t = 0; t < ENG_TRACKS; t++)
+            s[2] = s[2] * 131 + (int)(eng_final(PG_EQ * 4 + t) * 200.0f) + (int)track_accent(t);
+        s[2] = s[2] * 7 + ui.track;
+        break;
     case PT_MIX: case PT_PAN:
         for (int t = 0; t < ENG_TRACKS; t++)
             s[2] |= meter_lit(t) << (t * 3) | (int)(p->algo[PG_TRACK(t, 0)] / 8) << (12 + t * 2);
@@ -1412,6 +1482,7 @@ static void draw_panel(void)
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: panel_plaits(tr, page_face(ui.page), page_accent(ui.page)); break;
     case PT_TIDES1: case PT_TIDES2: panel_tides(ui.page >= PG_TIDES(1, 0)); break;
     case PT_MIX: case PT_PAN: panel_mixer(pt == PT_PAN); break;
+    case PT_EQ: panel_eq(); break;
     case PT_DUCK: panel_duck(); break;
     case PT_COMP: case PT_OTT: panel_bus(pt == PT_OTT); break;
     case PT_STEP: case PT_LANE: panel_steps(eng_page_lane(ui.page)); break;
@@ -1565,7 +1636,7 @@ static const char *ring_short(const char *s)
 static int track_knobs(int page)
 {
     int pt = ptype(page);
-    return pt == PT_MIX || pt == PT_PAN || pt == PT_RSEND || pt == PT_DSEND || pt == PT_DUCK;
+    return pt == PT_MIX || pt == PT_PAN || pt == PT_RSEND || pt == PT_DSEND || pt == PT_DUCK || pt == PT_EQ;
 }
 
 static void draw_knob_at(int page, int k, int force)
@@ -2517,7 +2588,8 @@ static void module_button(int b)
         go_page(PG_ARP(ui.track));
         break;
     case B_HOME:
-        go_page(here && (pt == PT_MIX || pt == PT_PAN || pt == PT_DUCK || pt == PT_COMP || pt == PT_OTT) ? next : PG_MIX);
+        go_page(here && (pt == PT_MIX || pt == PT_PAN || pt == PT_EQ || pt == PT_DUCK || pt == PT_COMP || pt == PT_OTT)
+                ? next : PG_MIX);
         break;
     case B_FX: {                         /* the effect shown last; on an effect: the next one (delay, reverb, Warps) */
         int l = ui.page < ENG_NPAGES ? eng_page_lane(ui.page) : -1;
@@ -2967,7 +3039,7 @@ static void input(void)
             [PT_MIX] = B_HOME, [PT_PAN] = B_HOME, [PT_REVERB] = B_FX, [PT_RSEND] = B_FX, [PT_DELAY1] = B_FX,
             [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
             [PT_ARP] = B_ARP, [PT_WARPS1] = B_FX, [PT_WARPS2] = B_FX, [PT_DUCK] = B_HOME, [PT_COMP] = B_HOME,
-            [PT_OTT] = B_HOME, [PT_RND] = B_SEQ, [PT_SYS] = B_GLO};
+            [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_RND] = B_SEQ, [PT_SYS] = B_GLO};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
         uint32_t bb = 0, kk = ui.keys;
         int pt = ptype(ui.page);

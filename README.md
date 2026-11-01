@@ -28,7 +28,8 @@ la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
   module ;
 - un **mixer simple** (un niveau et un pan par piste, à puissance constante : une piste garde le même volume où
   qu'elle soit dans l'image ; ses gains glissent échantillon par échantillon, un pan ou un niveau aléatoire ou locké
-  ne claque pas), un envoi par piste vers le delay et un vers la réverbe (ses lignes de retard en flottants : la
+  ne claque pas), un **EQ** par piste (un passe-bas ou un passe-haut raide sur un seul potard, pour lui faire de la
+  place), un envoi par piste vers le delay et un vers la réverbe (ses lignes de retard en flottants : la
   réverbe du module les stockait sur 12 bits, d'où un grain et un souffle).
 - un **duck** : T2, T3 et T4 baissent à chaque trig de T1 (sa profondeur par piste, un DECAY commun), avant leurs
   envois : ce qu'elles envoient au delay et à la réverbe baisse avec elles ;
@@ -80,7 +81,7 @@ porte le numéro de sa piste dans sa couleur.
 | **LFO** | Tides A, puis Tides B |
 | **SEQ** | les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) |
 | **ARP** | Endless, celui de la piste (voir plus bas) |
-| **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, le DUCK, puis le bus master (COMP, OTT) ; ALGORITHM sur COMP ou OTT : le mode du bus (OFF, COMP, OTT) |
+| **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leurs filtres (EQ), le DUCK, puis le bus master (COMP, OTT) ; ALGORITHM sur COMP ou OTT : le mode du bus (OFF, COMP, OTT) |
 | **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps ; SELECT parcourt leurs faces (leurs potards, les envois des pistes, leurs pas) |
 | **ENV** | l'enveloppe de la piste (PLAITS 2/3 : DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV) |
 | **PLAY** | le séquenceur tourne ou s'arrête |
@@ -132,18 +133,28 @@ puis **RESONANCE**, **MODE** (Mono ou Ping-pong : gauche au temps, droite au dou
 **RETURN**. Le filtre est celui des modules Mutable (le SVF de stmlib) et la saturation sa SoftClip, dans une ligne
 de 1,2 s. Quand le temps change, la lecture glisse jusqu'au nouveau, comme une bande.
 
-**Le duck** (HOME, troisième face) : DECAY (20 ms à 2,6 s), puis la profondeur de T2, T3 et T4. À chaque trig de
+**L'EQ** (HOME, troisième face) : un potard par piste pour lui faire de la place dans le mix. Au milieu, rien
+(Flat) ; à gauche, un passe-bas qui descend de 18 kHz à 125 Hz (on enlève les aigus) ; à droite, un passe-haut qui
+monte de 20 Hz à 8 kHz (on enlève les graves), en 24 dB/octave (deux SVF de stmlib, Butterworth), une octave par
+pas de potard sur toute la course : un peu de potard enlève un peu, au bout c'est un mur. Le filtre est avant le
+duck et les envois (ce qui part au delay et à la réverbe est filtré aussi) ; il se locke pas par pas, il a son
+aléatoire (ENV) et Tides peut le moduler. L'écran trace les quatre courbes, chacune dans la couleur de sa piste, la
+piste active par-dessus.
+
+**Le duck** (HOME, quatrième face) : DECAY (20 ms à 2,6 s), puis la profondeur de T2, T3 et T4. À chaque trig de
 T1 (un pas, un ratchet, une touche), ces pistes baissent d'autant et remontent avec DECAY. Le duck agit sur la piste
 avant ses envois : ses échos et sa réverbe partent baissés avec elle (les queues déjà dans les effets continuent).
 Sa profondeur se locke pas par pas, comme le reste de la piste.
 
-**Le bus master** (HOME, quatrième et cinquième faces) : ALGORITHM choisit le mode, OFF, **COMP** ou **OTT** ; les
+**Le bus master** (HOME, cinquième et sixième faces) : ALGORITHM choisit le mode, OFF, **COMP** ou **OTT** ; les
 potards de la face qui ne joue pas sont grisés. COMP : THRESH (0 à −36 dB), RATIO (1:1 à 20:1), RELEASE (20 ms à 1,3 s),
 GAIN (±12 dB) ; à droite, la réduction de gain. OTT : DEPTH (le mélange avec le son direct), TIME (les temps d'attaque
 et de release, ×1 au milieu, de ×1/4 à ×4), DRIVE (l'entrée) et LEVEL (la sortie) ; à droite, ses trois bandes,
 montées (rose) ou écrasées (bleu). Après les deux, toujours, le limiteur de stmlib.
 
-Sur les pages des quatre pistes (niveaux, pans, envois, duck), le nom de la piste active est en défonce.
+Sur les pages des quatre pistes (niveaux, pans, EQ, envois, duck), le nom de la piste active est en défonce. Et en
+haut à droite, toujours au même endroit, quatre carrés numérotés : celui de la piste que joue le clavier est rempli
+de sa couleur (en mode STEP, la piste de pas éditée ; sur une piste d'effet, son nom à la place des carrés).
 
 **Le mode MOD** (SEL) : le clavier devient une rangée de sources. On tient une touche et on tourne un potard : le
 câble est posé, le sens et la quantité de rotation fixent la profondeur ; revenir à 0 le retire. Touches 1-4 :
@@ -215,7 +226,7 @@ qualité de Warps, le thème reste quand on charge un autre projet ; il est gard
 
 Un projet sauvegardé avec les 0.1.4 à 0.2.6 se recharge : ses réglages, ses modèles, ses câbles (sauf ceux qui
 partaient de Marbles), ses pas, ses locks et Endless ; le tempo de Marbles devient le tempo, et les effets nouveaux
-démarrent neutres (rien vers le delay, aucune piste de pas d'effet).
+démarrent neutres (rien vers le delay, aucune piste de pas d'effet). Ceux des 0.3 aussi (l'EQ y est à plat).
 
 ## Le dépôt
 

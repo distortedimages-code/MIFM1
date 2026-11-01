@@ -25,6 +25,8 @@ extern "C" {
 }
 #include "bridge.h"
 #include "engine.h"
+#include <new>
+#include "stmlib/dsp/filter.h"
 
 namespace {
 
@@ -82,6 +84,7 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Decay", K_UNI, 0, 0, 0}, {"Duck", K_UNI, 0, 0, 0}, {"Duck", K_UNI, 0, 0, 0}, {"Duck", K_UNI, 0, 0, 0}},
   {{"Thresh", K_UNI, 0, 0, 0}, {"Ratio", K_UNI, 0, 0, 0}, {"Release", K_UNI, 0, 0, 0}, {"Gain", K_BIP, 0, 0, 0}},
   {{"Depth", K_UNI, 0, 0, 0}, {"Time", K_UNI, 0, 0, 0}, {"Drive", K_BIP, 0, 0, 0}, {"Level", K_BIP, 0, 0, 0}},
+  {{"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}},
 };
 const char* const kBusModes[3] = {"OFF", "COMP", "OTT"};
 
@@ -133,7 +136,15 @@ int page_type(int page) {
   if (page == PG_GLOBAL) return PT_GLOBAL;
   if (page < PG_WARPS(0)) return PT_ARP;
   if (page < PG_DUCK) return page == PG_WARPS(0) ? PT_WARPS1 : PT_WARPS2;
-  return page == PG_DUCK ? PT_DUCK : page == PG_COMP ? PT_COMP : PT_OTT;
+  return page == PG_DUCK ? PT_DUCK : page == PG_COMP ? PT_COMP : page == PG_OTT ? PT_OTT : PT_EQ;
+}
+
+// the mixer's filter (PG_EQ, a knob a track): its cutoff, to the left a low pass from 18 kHz down to 125 Hz, to the
+// right a high pass from 20 Hz up to 8 kHz, an octave a step of the knob's travel the same all along; in the middle
+// (within 1 %) nothing
+const float kEqDead = 0.01f;
+inline float eq_hz(float v) {
+  return v < 0.0f ? 18000.0f * fm_exp2f(7.17f * v) : 20.0f * fm_exp2f(8.64f * v);
 }
 
 inline float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -603,10 +614,21 @@ struct MixJob {
   float dgl[ENG_TRACKS], dgr[ENG_TRACKS], dsend_d[ENG_TRACKS], ddsend_d[ENG_TRACKS];   // and their steps a sample
   float gain[ENG_TRACKS];                // the level (the meters')
   float duck0[ENG_TRACKS], duck1[ENG_TRACKS], duck_rel;   // the duck: each track's depth from, to; DECAY a sample
+  float eq[ENG_TRACKS];                  // the filter's knob (glided)
   uint8_t hit[kFrames];                  // T1's rises, frame by frame
   float pk[ENG_TRACKS];                  // (out: each track's peak, the meters')
 };
 MixJob mj;
+// the filter (PG_EQ): a track's two of stmlib's state variable filters (24 dB/oct, Butterworth: Q 0.54 and 1.31),
+// made in place by eng_init (no static constructor, no destructor to register), its mode now (0 none, 1 low pass, 2
+// high pass), its knob glided
+struct EqPair {
+  stmlib::Svf f[2];
+};
+alignas(8) uint8_t eq_mem[ENG_TRACKS][sizeof(EqPair)];
+EqPair* eq_p[ENG_TRACKS];
+int eq_mode[ENG_TRACKS];
+float eq_s[ENG_TRACKS];
 
 void mix_job(uint32_t n) {
   float inv = 1.0f / static_cast<float>(n);
@@ -617,6 +639,30 @@ void mix_job(uint32_t n) {
       o += d;
       x[i] = mj.job ? m_dry[i] + o * (m_out[i] - m_dry[i]) : 0.0f;   // (the first block of a new patching: silence,
       if (mj.mute >= 0) mbuf[mj.mute][i] *= 1.0f - o;                // Warps not yet run)
+    }
+  }
+  for (int t = 0; t < ENG_TRACKS; ++t) {   // the filter (before the duck and the sends: what a track sends is
+    float v = mj.eq[t], pk = 0.0f;         // filtered with it)
+    int mode = v <= -kEqDead ? 1 : v >= kEqDead ? 2 : 0;
+    float* x = mbuf[t];
+    if (mode)
+      for (uint32_t i = 0; i < n; ++i) pk = fm_maxf(pk, fm_fabsf(x[i]));
+    stmlib::Svf* ef = eq_p[t]->f;
+    if (mode != eq_mode[t] || pk < 1e-6f) {   // (another mode, or silence: the states from zero, never down into
+      ef[0].Init();                        // the subnormals)
+      ef[1].Init();
+      eq_mode[t] = mode;
+    }
+    if (!mode || pk < 1e-6f) continue;
+    float f = clampf(eq_hz(v) / kSr, 0.0004f, 0.41f);
+    ef[0].set_f_q<stmlib::FREQUENCY_ACCURATE>(f, 0.5412f);
+    ef[1].set_f_q<stmlib::FREQUENCY_ACCURATE>(f, 1.3066f);
+    if (mode == 1) {
+      ef[0].Process<stmlib::FILTER_MODE_LOW_PASS>(x, x, n);
+      ef[1].Process<stmlib::FILTER_MODE_LOW_PASS>(x, x, n);
+    } else {
+      ef[0].Process<stmlib::FILTER_MODE_HIGH_PASS>(x, x, n);
+      ef[1].Process<stmlib::FILTER_MODE_HIGH_PASS>(x, x, n);
     }
   }
   {                                     // the duck: T1's rises (their frames), DECAY, each track's depth
@@ -838,6 +884,7 @@ int eng_track_param(int lane, int tp) {
   if (tp == TP_PAN) return PG_PAN * 4 + lane;
   if (tp == TP_DSEND) return PG_DSEND * 4 + lane;
   if (tp == TP_DUCK) return PG_DUCK * 4 + lane;   // (T1's: the duck's DECAY, not a parameter of T1's: not lockable)
+  if (tp == TP_EQ) return PG_EQ * 4 + lane;
   return PG_STEP(lane) * 4 + (tp - TP_NOTE);
 }
 
@@ -866,6 +913,9 @@ int eng_param_tp(int param, int* lane) {
   } else if (page == PG_DUCK && k > 0) {
     l = k;
     tp = TP_DUCK;
+  } else if (page == PG_EQ) {
+    l = k;
+    tp = TP_EQ;
   }
   if (lane) *lane = l;
   return tp;
@@ -993,6 +1043,19 @@ void eng_param_text(int param, float v, char* b, int n) {
     } else {
       put(b, n, q < 0 ? "LP " : "HP ");
       put_num(b + 3, n - 3, q < 0 ? -q : q, 0, 0);
+    }
+  } else if (pt == PT_EQ) {              // the filter: its cutoff, LP or HP (in a knob: the cutoff in the ring, the
+    if (v > -kEqDead && v < kEqDead) {   // kind under it)
+      put(b, n, "Flat");
+    } else {
+      float hz = eq_hz(v);
+      if (hz >= 1000.0f) {
+        put_num(b, n, static_cast<int32_t>(hz * (hz >= 10000.0f ? 0.001f : 0.01f) + 0.5f), hz >= 10000.0f ? 0 : 1, 0);
+        put_end(b, n, "k");
+      } else {
+        put_num(b, n, static_cast<int32_t>(hz + 0.5f), 0, 0);
+      }
+      put_end(b, n, v < 0.0f ? " LP" : " HP");
     }
   } else if (pt == PT_LANE && k == 0) {  // an effect's DECAY: its time
     float s = lane_tau(v);
@@ -1256,6 +1319,45 @@ struct project_v6 {
   int8_t endless_key[ENG_TRACKS];
 };
 
+// 0.3.3's to 0.3.7's (version 7): all of it, without the filter (its knobs flat)
+struct project_v7 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[40 * 4];
+  uint8_t algo[40];
+  uint8_t out_mode, warps_hq, theme;
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+  int8_t rnd[ENG_LANES][20];
+  uint16_t seed[ENG_LANES];
+  plock_t lock[ENG_PLOCKS];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+};
+
+void upgrade_v7(project_t* p, const project_v7& o) {
+  eng_blank(p);
+  for (int i = 0; i < 40 * 4; ++i) p->val[i] = o.val[i];
+  for (int i = 0; i < 40; ++i) p->algo[i] = o.algo[i];
+  p->out_mode = o.out_mode;
+  p->warps_hq = o.warps_hq;
+  p->theme = o.theme;
+  for (int g = 0; g <= ENG_TRACKS; ++g)
+    for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c] = o.cable[g][c];
+  for (int l = 0; l < ENG_LANES; ++l) {
+    for (int i = 0; i < ENG_STEPS / 8; ++i) p->trig[l][i] = o.trig[l][i];
+    for (int i = 0; i < 20; ++i) p->rnd[l][i] = o.rnd[l][i];
+    p->seed[l] = o.seed[l];
+  }
+  for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i] = o.lock[i];
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    for (int i = 0; i < ENG_ENDLESS; ++i) p->endless[t][i] = o.endless[t][i];
+    p->endless_len[t] = o.endless_len[t];
+    p->endless_key[t] = o.endless_key[t];
+  }
+}
+
 void upgrade_v6(project_t* p, const project_v6& o) {
   eng_blank(p);
   for (int i = 0; i < 37 * 4; ++i) p->val[i] = o.val[i];
@@ -1341,15 +1443,17 @@ int eng_upgrade(project_t* p, int bytes) {
     project_old<33> v4;
     project_old<35> v5;
     project_v6 v6;
+    project_v7 v7;
   } u;
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
-  uint32_t size = v == 6 ? sizeof u.v6 : v == 5 ? sizeof u.v5 : v == 4 ? sizeof u.v4 : 0;
+  uint32_t size = v == 7 ? sizeof u.v7 : v == 6 ? sizeof u.v6 : v == 5 ? sizeof u.v5 : v == 4 ? sizeof u.v4 : 0;
   if (!size || bytes != static_cast<int>(size) || p->size != size) return 0;
   const uint8_t* from = reinterpret_cast<const uint8_t*>(p);
   uint8_t* to = reinterpret_cast<uint8_t*>(&u);
   for (uint32_t i = 0; i < size; ++i) to[i] = from[i];
-  if (v == 6) upgrade_v6(p, u.v6);
+  if (v == 7) upgrade_v7(p, u.v7);
+  else if (v == 6) upgrade_v6(p, u.v6);
   else if (v == 5) upgrade_from(p, u.v5);
   else upgrade_from(p, u.v4);
   return 1;
@@ -1387,6 +1491,12 @@ int eng_init(void) {
   mms_init(master);
   for (int l = 0; l < ENG_LANES; ++l)
     for (int tp = 0; tp < ENG_NTP; ++tp) lane_param[l][tp] = static_cast<int16_t>(eng_track_param(l, tp));
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    eq_p[t] = new (eq_mem[t]) EqPair();
+    eq_p[t]->f[0].Init();
+    eq_p[t]->f[1].Init();
+    eq_mode[t] = 0;
+  }
   if (!eng_check(&proj)) eng_defaults(&proj);
   apply_cables();
   ready = 1;
@@ -1550,6 +1660,8 @@ void eng_render(float* l, float* r, uint32_t n) {
     mix_dsend[t] = td;
     mj.duck0[t] = duck_depth[t];        // the duck's depth (T2..T4)
     mj.duck1[t] = duck_depth[t] = t ? E(t, TP_DUCK) : 0.0f;
+    eq_s[t] += (E(t, TP_EQ) - eq_s[t]) * 0.5f;
+    mj.eq[t] = eq_s[t];
   }
   for (int f = 0; f < kFx; ++f) fx_open[f] = open[f];
   mj.duck_rel = fm_exp2f(-1.442695f / (kSr * duck_tau(P(PG_DUCK, 0))));

@@ -26,7 +26,7 @@ extern "C" {
 #define LANE_REVERB 5
 #define LANE_WARPS 6
 #define ENG_CABLES 8                     /* per track, and as many global */
-#define ENG_NPAGES 40
+#define ENG_NPAGES 41
 #define ENG_NPARAMS (ENG_NPAGES * 4)
 #define ENG_STEPS 64                     /* the steps a lane: four pages of 16 */
 #define ENG_PLOCKS 384                   /* parameter locks, for all the lanes' steps */
@@ -51,17 +51,21 @@ extern "C" {
 #define PG_COMP 38                       /* the master bus: the compressor (THRESHOLD, RATIO, RELEASE, GAIN), its
                                           * ALGORITHM the bus's mode (off, the compressor, OTT) */
 #define PG_OTT 39                        /* OTT (three bands squashed up and down): DEPTH, TIME, DRIVE, LEVEL */
+#define PG_EQ 40                         /* the mixer's filter, a knob a track: to the left a low pass coming down
+                                          * (the highs cut), to the right a high pass going up (the lows), 24 dB/oct */
 enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_TIDES1, PT_TIDES2, PT_MIX, PT_PAN, PT_REVERB, PT_RSEND, PT_DELAY1,
-       PT_DELAY2, PT_DSEND, PT_STEP, PT_LANE, PT_GLOBAL, PT_ARP, PT_WARPS1, PT_WARPS2, PT_DUCK, PT_COMP, PT_OTT, NPT };
+       PT_DELAY2, PT_DSEND, PT_STEP, PT_LANE, PT_GLOBAL, PT_ARP, PT_WARPS1, PT_WARPS2, PT_DUCK, PT_COMP, PT_OTT, PT_EQ,
+       NPT };
 enum { MB_OFF, MB_COMP, MB_OTT };       /* the master bus's mode (PG_COMP's ALGORITHM) */
 /* Warps' carrier (PG_WARPS(1)'s first knob): none (Warps off), a track, or the module's internal oscillator, its three
  * shapes (sine, triangle, saw) */
 enum { WC_OFF, WC_T1, WC_T2, WC_T3, WC_T4, WC_OSC1, WC_OSC2, WC_OSC3 };
 
 /* a track's parameters as a trig sees them (a lock, a random): its Plaits' 12, its level, sends and pan, its step
- * page's note, probability and ratchets. An effect lane's are its effect's knobs (eng_lane_params) */
+ * page's note, probability and ratchets, its duck, its filter. An effect lane's are its effect's knobs
+ * (eng_lane_params) */
 enum { TP_DECAY = 4, TP_PITCHENV = 8, TP_LENGTH, TP_TRANSPOSE, TP_OCTAVE, TP_LEVEL, TP_SEND, TP_PAN, TP_NOTE, TP_PROB,
-       TP_RATCHET, TP_DSEND, TP_DUCK, ENG_NTP };   /* (T1 has no TP_DUCK: it ducks the others) */
+       TP_RATCHET, TP_DSEND, TP_DUCK, TP_EQ, ENG_NTP };   /* (T1 has no TP_DUCK: it ducks the others) */
 int eng_track_param(int lane, int tp);   /* its parameter (an effect lane: its effect's knob tp) */
 int eng_param_tp(int param, int *lane);  /* a parameter's tp and lane, -1 if none */
 int eng_tp_lockable(int lane, int tp);   /* 1: a lock or a random may move it */
@@ -107,8 +111,9 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 7u               /* (6: 0.3.0's to 0.3.2's, without the duck and the master bus; 5: 0.2's, with
-                                          * Marbles; 4: 0.1.4's to 0.1.9's: eng_upgrade reads them) */
+#define PROJECT_VERSION 8u               /* (7: 0.3.3's to 0.3.7's, without the filter; 6: 0.3.0's to 0.3.2's, without
+                                          * the duck and the master bus; 5: 0.2's, with Marbles; 4: 0.1.4's to 0.1.9's:
+                                          * eng_upgrade reads them) */
 typedef struct {
     uint32_t magic;
     uint16_t version, size;
