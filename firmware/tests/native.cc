@@ -515,6 +515,38 @@ int main(int argc, char** argv) {
     eng_defaults(p);
   }
 
+  // 16. ALL undone in time: asked 200 blocks into PLAY (120 BPM, a bar 88200 samples, 689 blocks), the knobs come
+  // back as the second bar starts, 489 blocks later; stopped, at once
+  {
+    eng_play(0);
+    eng_defaults(p);
+    static float was[ENG_NPARAMS];
+    static uint8_t was_algo[ENG_NPAGES];
+    static int8_t was_rnd[ENG_TRACKS * ENG_NTP];
+    for (int i = 0; i < ENG_NPARAMS; ++i) was[i] = p->val[i];
+    for (int i = 0; i < ENG_NPAGES; ++i) was_algo[i] = p->algo[i];
+    for (int i = 0; i < ENG_TRACKS * ENG_NTP; ++i) was_rnd[i] = p->rnd[i / ENG_NTP][i % ENG_NTP];
+    eng_play(1);
+    for (int b = 0; b < 200; ++b) eng_render(l, r, n);
+    for (int t = 0; t < ENG_TRACKS; ++t) p->val[eng_track_param(t, TP_DECAY)] = 0.05f;   // an ALL
+    eng_back_at_bar(was, was_algo, was_rnd);
+    int at = -1;
+    for (int b = 0; b < 1000 && at < 0; ++b) {
+      eng_render(l, r, n);
+      if (!eng_back_pending()) at = b;
+    }
+    int ok = at >= 480 && at <= 495 && p->val[eng_track_param(2, TP_DECAY)] == was[eng_track_param(2, TP_DECAY)];
+    eng_play(0);
+    p->val[eng_track_param(0, TP_DECAY)] = 0.05f;
+    eng_back_at_bar(was, was_algo, was_rnd);
+    eng_render(l, r, n);
+    int stopped = !eng_back_pending() && p->val[eng_track_param(0, TP_DECAY)] == was[eng_track_param(0, TP_DECAY)];
+    printf("ALL undone at the bar: %d blocks after it was asked (489 expected); stopped: %s\n", at,
+           stopped ? "at once" : "NOT DONE");
+    if (!ok || !stopped) ++failures, printf("FAIL: ALL's undo\n");
+    eng_defaults(p);
+  }
+
   // 9. v0.1's project (version 2) read into this version's
   {
     static uint8_t buf[sizeof(project_t)];

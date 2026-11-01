@@ -71,10 +71,13 @@ les 16 pas de la piste (allumés : un trig ; un point : des locks ; cerclé : ce
 | **SEL** | le mode MOD (voir plus bas) ; **tenu** : la matrice de la piste |
 | **SAVE tenu** | sauvegarde le projet (à l'arrêt) |
 | **GLO** | SEQUENCER (Marbles ou Steps), TEMPO, SCALE, ROOT ; SELECT : le projet (INIT) et la machine ; GLO encore : retour |
-| **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en jaune et noir ; en lâchant GLO, tout revient comme avant (SEL tapé pendant ALL : on garde) |
+| **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en jaune et noir. Les réglages restent ; pendant 4 s (le compte à rebours en bas), **GLO** les remet comme avant ALL au début de la mesure suivante (GLO encore avant la mesure : ils restent) |
 | **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage sur la piste (avec GLO tenu aussi : sur les 4) |
 | **REC** | avec STEPS : les touches blanches deviennent les 16 pas, les 4 premières noires les pages |
 | **REC tenu** (pas à pas) | efface le pattern de la piste (ses trigs et ses locks) ; avec **GLO tenu** : celui des 4 pistes |
+
+Les appuis tenus (SAVE, REC pour effacer ou charger, SEL pour la matrice) affichent en bas ce qu'ils vont faire et
+une barre qui se remplit : lâcher avant la fin annule. Ceux qui effacent ou écrasent durent une seconde.
 
 La charge de calcul est toujours affichée en haut à droite (le cœur le plus chargé, en %) ; GLO puis SELECT
 détaille ce que coûte chaque piste et Warps. Les quatre voix et Warps

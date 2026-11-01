@@ -152,6 +152,11 @@ void eng_endless_key(int t, int note);   /* a key: its transposition */
 int eng_endless_pos(int t);              /* the note playing, -1 none */
 void eng_render(float *l, float *r, uint32_t n);   /* audio interrupt */
 void eng_play(int on);                   /* the transport: Marbles' clock runs or stops (from its start) */
+/* ALL undone in time: these knobs, models and randoms put back as the next bar starts (16 sixteenths of the tempo from
+ * PLAY; stopped: at once) */
+void eng_back_at_bar(const float *val, const uint8_t *algo, const int8_t *rnd);
+int eng_back_pending(void);
+void eng_back_cancel(void);
 int eng_playing(void);
 void eng_key(int track, int note, int on);   /* the keyboard plays a track (note: MIDI number) */
 void eng_core1(int on);                  /* the second core takes its share when it runs (1, the default) */

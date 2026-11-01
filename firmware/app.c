@@ -19,7 +19,7 @@
  *               LEVEL 1 and 2; its carrier, modulator, MOD DRY, the frequency shifter)
  *   GLO         SEQUENCER, TEMPO, SCALE, ROOT; then the project (K1, REC held: INIT) and the machine. Held with a
  *               knob: ALL, the same parameter on the four tracks (with ALGORITHM: the same model), the screen
- *               yellow, all of it back as it was when GLO is let go (SEL tapped meanwhile: kept)
+ *               yellow while GLO is held; for 4 s after, GLO undoes it as the next bar starts (again: it stays)
  *   ENV         the track's envelope (PLAITS 2/3: DECAY, LPG COLOUR, the internal envelope's TIMBRE and MORPH).
  *               Held with a knob: that parameter's random (right new at each trig, left looped, 0 none)
  *   REC         with the steps: the white keys are a page's 16 steps, the first black keys the pages; a step held
@@ -1637,6 +1637,136 @@ static void foot_endless(int t)          /* Endless's notes, 16 at a time: a bar
     }
 }
 
+/* the presses held for an action: how long (an action that loses something, a second), what it will do (the
+ * footer counts it down; "": nothing to show) */
+static uint32_t hold_ms(int b, char *label, uint32_t max)
+{
+    static const char *const LOAD[3] = {"LOAD: NEW PROJECT", "LOAD: THE DEMO", "LOAD: THE SAVED ONE"};
+    const char *l = "";
+    uint32_t ms = LONG_MS;
+    int pt = ptype(ui.page), num = 0;
+    if (b == B_SEL && ui.held_step < 0 && !ui.matrix) {
+        l = "MATRIX";
+    } else if (b == B_SAVE) {
+        l = eng_playing() ? "SAVE (STOP FIRST)" : "SAVE THE PROJECT";
+        ms = 1000u;
+    } else if (b == B_REC && ui.page == VP_SYS) {
+        l = LOAD[ui.init_sel % 3];
+        ms = 1000u;
+    } else if (b == B_REC && pt == PT_ARP && ui.erec < 0) {
+        l = "CLEAR ENDLESS";
+        ms = 1000u;
+    } else if (b == B_REC && eng_steps_mode() && ui.erec < 0 && (ui.grid || pt == PT_STEP || pt == PT_RND)) {
+        l = held(B_GLO) ? "CLEAR THE 4 TRACKS" : "CLEAR TRACK ";
+        num = !held(B_GLO);
+        ms = 1000u;
+    }
+    if (label) {
+        label[0] = 0;
+        text_cat(label, l, max);
+        if (num) {                       /* the track's number */
+            char n[2] = {(char)('1' + ui.track), 0};
+            text_cat(label, n, max);
+        }
+    }
+    return ms;
+}
+
+static int hold_now(char *label, uint32_t max, uint32_t *done)   /* a press held for an action: which button, its
+                                                                   * label, how far (0..1000), -1 none */
+{
+    static const uint8_t B[3] = {B_REC, B_SAVE, B_SEL};
+    uint32_t now = plat_ms();
+    for (int i = 0; i < 3; i++) {
+        int b = B[i];
+        if (!held(b) || ui.long_done[b] || ui.used[b])
+            continue;
+        uint32_t ms = hold_ms(b, label, max), t = now - ui.down_at[b];
+        if (!label[0] || t < 120u)       /* a tap shows nothing */
+            continue;
+        *done = t >= ms ? 1000u : t * 1000u / ms;
+        return b;
+    }
+    return -1;
+}
+
+/* ALL keeps what it changed. For a few seconds after GLO is let go, GLO again puts the knobs, models and randoms back
+ * as they were before it, as the next bar starts (the engine does it in time); GLO once more before that bar: it
+ * stays. A pattern cleared with GLO held is not part of it */
+#define ALL_UNDO_MS 4000u
+static struct {
+    float val[ENG_NPARAMS];
+    uint8_t algo[ENG_NPAGES];
+    int8_t rnd[ENG_TRACKS][ENG_NTP];
+    int dirty;
+    uint32_t until;                      /* the time left to undo it (0: none) */
+    int press;                           /* this GLO press undoes (or keeps): no ALL, no page */
+    int waiting;                         /* undone at the next bar */
+} all;
+
+static void all_down(void)               /* GLO pressed */
+{
+    project_t *p = eng_project();
+    all.press = 0;
+    if (all.until && (int32_t)(all.until - plat_ms()) > 0) {   /* in time: back as the next bar starts */
+        eng_back_at_bar(all.val, all.algo, &all.rnd[0][0]);
+        all.until = 0;
+        all.waiting = 1;
+        all.press = 1;
+    } else if (all.waiting && eng_back_pending()) {             /* again before that bar: it stays */
+        eng_back_cancel();
+        all.waiting = 0;
+        all.press = 1;
+        app_say("ALL", "STAYS");
+    } else {                             /* a new ALL, maybe: what it would change */
+        memcpy(all.val, p->val, sizeof all.val);
+        memcpy(all.algo, p->algo, sizeof all.algo);
+        memcpy(all.rnd, p->rnd, sizeof all.rnd);
+        all.dirty = dirty;
+        all.until = 0;
+    }
+    if (all.press)
+        ui.used[B_GLO] = 1;
+}
+
+static void all_up(void)                 /* GLO let go after an ALL: the time to undo it starts */
+{
+    project_t *p = eng_project();
+    if (all.press) {
+        all.press = 0;
+        return;
+    }
+    if (memcmp(all.val, p->val, sizeof all.val) || memcmp(all.algo, p->algo, sizeof all.algo) ||
+        memcmp(all.rnd, p->rnd, sizeof all.rnd))
+        all.until = plat_ms() + ALL_UNDO_MS;
+}
+
+static void all_poll(void)               /* (each frame) the undo done at its bar; the time to undo it run out */
+{
+    if (all.waiting && !eng_back_pending()) {
+        all.waiting = 0;
+        dirty = all.dirty;
+        app_say("ALL", "UNDONE");
+        ui.full = 1;
+    }
+    if (all.until && (int32_t)(all.until - plat_ms()) <= 0)
+        all.until = 0;
+}
+
+static int all_state(uint32_t *left)     /* 1: the time to undo it, left (ms); 2: waiting for the bar; 0 */
+{
+    if (all.waiting)
+        return 2;
+    if (all.until) {
+        int32_t l = (int32_t)(all.until - plat_ms());
+        if (l > 0) {
+            *left = (uint32_t)l;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static void draw_footer(void)
 {
     static const char *const OUT[4][4] = {{"A1", "A2", "A3", "A4"}, {"B1", "B2", "B3", "B4"},
@@ -1645,6 +1775,10 @@ static void draw_footer(void)
     char t[40], n[8];
     uint32_t now = plat_ms();
     int msg = now < ui.msg_until, mode = foot_mode(), lv[4], lh = 0;
+    uint32_t left = 0, hdone = 0;
+    int und = all_state(&left);
+    char hl[32];
+    int hb = hold_now(hl, sizeof hl, &hdone);
     uint16_t ac = page_accent(ui.page);
     for (int i = 0; i < 4; i++) {        /* each LED's level, 0..8 */
         int src = mode == 1 ? SRC_A1 + i : mode == 2 ? SRC_B1 + i : mode == 3 ? (i < 3 ? SRC_T1 + i : SRC_Y)
@@ -1663,7 +1797,9 @@ static void draw_footer(void)
             lh = lh * 3 + eng_trig(ui.track, ui.spage * 16 + i) + (eng_step_locked(ui.track, ui.spage * 16 + i) ? 2 : 0);
         lh = lh * 67 + (int)p->val[PG_STEP(ui.track) * 4 + 3];
     }
-    int32_t s[6] = {lh, mode | ui.mod << 4 | msg << 5, (int32_t)(track_accent(0) ^ track_accent(1) << 1 ^
+    int32_t s[6] = {lh, mode | ui.mod << 4 | msg << 5 | und << 6 | (int32_t)(left * 56u / ALL_UNDO_MS) << 8 |
+                        (hb + 1) << 16 | (int32_t)(hdone * 28u / 1000u) << 20,
+                    (int32_t)(track_accent(0) ^ track_accent(1) << 1 ^
                     track_accent(2) << 2 ^ track_accent(3) << 3) ^ ui.track << 20 ^ (int32_t)ac << 4,
                     eng_note(0) | eng_note(1) << 8 | eng_note(2) << 16,
                     p->algo[PG_TRACK(0, 0)] | p->algo[PG_TRACK(1, 0)] << 5 | p->algo[PG_TRACK(2, 0)] << 10 |
@@ -1673,12 +1809,27 @@ static void draw_footer(void)
     memcpy(ui.foot_shown, s, sizeof s);
     cv_begin(240, FOOT_H, BG);
     cv_rect(8, 2, 224, 1, RULE);
-    if (msg) {
+    if (hb >= 0) {                       /* a press held: what it will do, and the time left, as a filling bar */
+        uint16_t hc = hb == B_SEL ? TEAL : PINK;
+        cv_text(120 - text_w(&FONT_B, hl) / 2, 6, &FONT_B, hl, C_WHITE);
+        cv_rect(8, 27, 224, 3, TRACK);
+        cv_rect(8, 27, (int)(224u * hdone / 1000u), 3, hc);
+    } else if (msg) {
         t[0] = 0;
         text_cat(t, ui.msg[0], sizeof t);
         text_cat(t, "  ", sizeof t);
         text_cat(t, ui.msg[1], sizeof t);
         cv_text(120 - text_w(&FONT_B, t) / 2, 11, &FONT_B, t, C_WHITE);
+    } else if (und) {                    /* ALL: the time to undo it, or waiting for the bar */
+        if (und == 1) {
+            char sec[4];
+            int_text((int32_t)((left + 999u) / 1000u), sec);
+            cv_text(10, 8, &FONT_B, "GLO: UNDO ALL", YELLOW);
+            cv_text(230 - text_w(&FONT_B, sec), 8, &FONT_B, sec, YELLOW);
+            cv_rect(8, 29, (int)(224u * left / ALL_UNDO_MS), 2, YELLOW);
+        } else {
+            cv_text(120 - text_w(&FONT_B, "UNDONE AT THE BAR") / 2, 8, &FONT_B, "UNDONE AT THE BAR", YELLOW);
+        }
     } else if (ui.mod) {
         cv_text(10, 6, &FONT_XS, "MOD: HOLD A SOURCE KEY, TURN A KNOB", C_WHITE);
         cv_text(10, 21, &FONT_T, "KEYS 1-4 A  5-8 B  9-11 X  12 Y  13-15 T", MUTED);
@@ -1718,7 +1869,8 @@ static void poll_keys(void);             /* (input, below): the keys read betwee
 
 static void draw(void)
 {
-    int k = held(B_GLO) && (ui.used[B_GLO] || plat_ms() - ui.down_at[B_GLO] >= 250u);
+    int k = held(B_GLO) && !all.press && (ui.used[B_GLO] || plat_ms() - ui.down_at[B_GLO] >= 250u);
+    all_poll();
     if (k != knock) {                    /* ALL: in yellow and black while GLO is held, then as it was */
         knock = k;
         ui.full = 1;
@@ -1746,36 +1898,6 @@ static void draw(void)
 }
 
 /* ---------------------------------------------------------------- input --- */
-/* ALL is a gesture: the knobs, models and randoms as GLO was pressed, put back when it is let go (unless SEL was
- * tapped meanwhile: kept). A pattern cleared with GLO held stays cleared (not part of it) */
-static struct {
-    float val[ENG_NPARAMS];
-    uint8_t algo[ENG_NPAGES];
-    int8_t rnd[ENG_TRACKS][ENG_NTP];
-    int dirty, keep;
-} all;
-
-static void all_take(void)
-{
-    project_t *p = eng_project();
-    memcpy(all.val, p->val, sizeof all.val);
-    memcpy(all.algo, p->algo, sizeof all.algo);
-    memcpy(all.rnd, p->rnd, sizeof all.rnd);
-    all.dirty = dirty;
-    all.keep = 0;
-}
-
-static void all_back(void)
-{
-    project_t *p = eng_project();
-    if (all.keep)
-        return;
-    memcpy(p->val, all.val, sizeof all.val);
-    memcpy(p->algo, all.algo, sizeof all.algo);
-    memcpy(p->rnd, all.rnd, sizeof all.rnd);
-    dirty = all.dirty;
-}
-
 static void go_page(int page)
 {
     int g = ptype(page) == PT_GLOBAL || ptype(page) == PT_SYS;
@@ -1986,8 +2108,8 @@ static void button_down(int b)
     case B_OCTUP:
         ui.octave = clamp(ui.octave + 1, -3, 3);
         break;
-    case B_GLO:                          /* ALL: what it changes comes back when GLO is let go */
-        all_take();
+    case B_GLO:                          /* ALL, or its undo */
+        all_down();
         ui.full = 1;
         break;
     case B_SEL: case B_SAVE: case B_REC: case B_ENV:
@@ -2054,12 +2176,6 @@ static void button_up(int b)
     case B_SEL:
         if (ui.long_done[b])
             break;
-        if (held(B_GLO)) {               /* GLO held: what ALL changed is kept */
-            all.keep = 1;
-            ui.used[B_GLO] = 1;
-            app_say("ALL", "KEPT");
-            break;
-        }
         if (ui.erec >= 0) {              /* Endless recording: a rest */
             if (eng_endless_add(ui.erec, ENDLESS_REST) != 0)
                 app_say("ENDLESS", "64 STEPS, FULL");
@@ -2112,7 +2228,7 @@ static void button_up(int b)
         if (!ui.used[b])
             go_page(pt == PT_GLOBAL || pt == PT_SYS ? ui.prev_page : PG_GLOBAL);
         else
-            all_back();
+            all_up();
         ui.full = 1;
         break;
     case B_ENV:                          /* a tap: the track's envelope (PLAITS 2/3); held with a knob: its random */
@@ -2234,7 +2350,7 @@ static void input(void)
             ui.down_at[k] = now;
             ui.long_done[k] = 0;
             button_down((int)k);
-        } else if ((btn & bit) && !ui.long_done[k] && now - ui.down_at[k] >= LONG_MS) {
+        } else if ((btn & bit) && !ui.long_done[k] && now - ui.down_at[k] >= hold_ms((int)k, 0, 0)) {
             ui.long_done[k] = 1;
             button_long((int)k);
         } else if (!(btn & bit) && (ui.btn & bit)) {

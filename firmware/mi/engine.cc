@@ -194,6 +194,11 @@ float vbuf[ENG_TRACKS][kN];
 // Warps, one block behind: it plays the last block's carrier and modulator (w_car, w_mod, copied
 // once the voices are done) while the voices play this one; its output takes the place of a track's this block
 float w_car[kN], w_mod[kN], w_out[kN];
+// ALL undone at the next bar (eng_back_at_bar): what to put back, taken in the block the bar starts in
+float back_val[ENG_NPARAMS];
+uint8_t back_algo[ENG_NPAGES];
+int8_t back_rnd[ENG_TRACKS][ENG_NTP];
+volatile int back_pending;
 volatile int w_job;                     // Warps runs in this block's job
 int w_last = -1;                        // the routing w_car and w_mod were taken with: carrier | modulator << 4, -1
 int w_dst = -1, w_mute = -1;            // the track its output replaces; the modulator's track, silenced (-1: none)
@@ -430,11 +435,11 @@ void sequence(uint32_t n) {
   }
   if (loop < 1) loop = 1;
   for (uint32_t k = 0; k < kFrames; ++k) {
-    if (steps && playing && (step_clk += fl) >= step_len) {   // a sixteenth: each track's step, its trig
-      step_clk -= step_len;
+    if (playing && (step_clk += fl) >= step_len) {   // a sixteenth (the bars count them in both modes): with the
+      step_clk -= step_len;                          // steps, each track's step, its trig
       if (step_clk >= step_len) step_clk = 0.0f;
       ++tick;
-      for (int t = 0; t < ENG_TRACKS; ++t) {
+      for (int t = 0; t < ENG_TRACKS && steps; ++t) {
         int len = Pi(PG_STEP(t), 3);
         cur_step[t] = static_cast<int>(tick % (len < 1 ? 1 : len));
         if (eng_trig(t, cur_step[t]) && !endless[t] && !e_rec[t]) raw_left[t] = step_len * 0.5f;
@@ -1119,6 +1124,17 @@ void eng_play(int on) {
 }
 int eng_playing(void) { return playing; }
 
+void eng_back_at_bar(const float* val, const uint8_t* algo, const int8_t* rnd) {
+  back_pending = 0;
+  for (int i = 0; i < ENG_NPARAMS; ++i) back_val[i] = val[i];
+  for (int i = 0; i < ENG_NPAGES; ++i) back_algo[i] = algo[i];
+  for (int t = 0; t < ENG_TRACKS; ++t)
+    for (int i = 0; i < ENG_NTP; ++i) back_rnd[t][i] = rnd[t * ENG_NTP + i];
+  back_pending = 1;
+}
+int eng_back_pending(void) { return back_pending; }
+void eng_back_cancel(void) { back_pending = 0; }
+
 void eng_key(int track, int note, int on) {
   if (track < 0 || track >= ENG_TRACKS) return;
   if (on) {
@@ -1139,6 +1155,16 @@ void eng_render(float* l, float* r, uint32_t n) {
     return;
   }
   uint32_t t0 = plat_ticks24();
+  if (back_pending) {                   // ALL undone: in the block whose next sixteenth starts a bar (or stopped)
+    float step_len = kSr * 60.0f / (bpm_of(P(PG_MARBLES(0), 0)) * 4.0f);
+    if (!playing || restart || ((tick + 1) % 16 == 0 && step_len - step_clk <= static_cast<float>(n))) {
+      for (int i = 0; i < ENG_NPARAMS; ++i) proj.val[i] = back_val[i];
+      for (int i = 0; i < ENG_NPAGES; ++i) proj.algo[i] = back_algo[i];
+      for (int t = 0; t < ENG_TRACKS; ++t)
+        for (int i = 0; i < ENG_NTP; ++i) proj.rnd[t][i] = back_rnd[t][i];
+      back_pending = 0;
+    }
+  }
   // 1-2. the sequencer and the modulators, with the knobs and cables of the last block
   set_marbles();
   if (playing) {
