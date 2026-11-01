@@ -27,8 +27,8 @@ td:first-child {{ white-space: nowrap; font-weight: 700; color: #ffb22e; }}
 <h1>MIFM1 {version}</h1>
 <p>Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient du code open source de Mutable Instruments :
 Plaits sur chaque piste (ses 24 modèles), Marbles ou un séquenceur pas à pas avec P-locks, un Endless par piste, probabilités, ratchets et
-aléatoire, un quantiseur global, deux Tides pour moduler, une matrice de câbles, un mixer avec pans et un départ vers
-la réverbe de Clouds.</p>
+aléatoire, un quantiseur global, deux Tides pour moduler, une matrice de câbles, Warps entre deux pistes, un mixer avec
+pans et un départ vers la réverbe de Clouds.</p>
 <div class="card"><b>Installer</b><br><a href="install/">Installer MIFM1 {version}</a>
 <p>Dans Chrome ou Edge, le FM-1 branché en USB et à l'arrêt. Laisser la page aller jusqu'au bout : le firmware, puis
 les tables des modules.</p></div>
@@ -52,6 +52,8 @@ transpose, REC tenu l'efface</td></tr>
 <tr><td>SAVE tenu</td><td>sauvegarde le projet (à l'arrêt)</td></tr>
 <tr><td>GLO</td><td>SEQUENCER (Marbles ou Steps), TEMPO, SCALE, ROOT ; SELECT : le projet et la machine</td></tr>
 <tr><td>GLO tenu + potard</td><td>ALL : le même réglage sur les 4 pistes</td></tr>
+<tr><td>ENV</td><td>Warps : ALGORITHM, TIMBRE, LEVEL 1, LEVEL 2 ; ENV à nouveau : CARRIER (une piste ou l'oscillateur),
+MODULATOR, MOD DRY, MODE (Warps ou Freq shift)</td></tr>
 <tr><td>ENV tenu + potard</td><td>l'aléatoire de ce réglage : à droite nouveau à chaque trig, à gauche en boucle</td></tr>
 <tr><td>REC</td><td>avec STEPS : les touches blanches sont les 16 pas ; tenir un pas + un potard = P-lock</td></tr>
 <tr><td>GLO, SELECT, K1, REC tenu</td><td>INIT : un projet neuf (4 Plaits sur VIRTUAL ANALOG, rien de câblé), le patch de démo

@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Yoann */
-/* MIFM1's sound: four Plaits voices played by Marbles, two Tides as modulators, a matrix of cables, a mixer
- * (mi/engine.cc). The project (project_t) is what the screen edits and what is saved; the engine reads it at every
+/* MIFM1's sound: four Plaits voices played by Marbles or the steps, two Tides as modulators, a matrix of cables,
+ * Warps between two tracks, a mixer and Clouds' reverb (mi/engine.cc). The project (project_t) is what the screen edits and what is saved; the engine reads it at every
  * audio block (the control rate, 344 Hz), runs Marbles and Tides, adds the cables to the knobs and plays the voices,
  * two of them on the second core when it runs.
  *
- * Parameters: 23 pages of 4 knobs (a page per face of a module, as the screen shows them). A parameter is
+ * Parameters: pages of 4 knobs (a page per face of a module, as the screen shows them). A parameter is
  * page * 4 + knob; its knob is val[] (0..1, bipolar -1..1, or an integer), its value after the cables final[]. */
 #ifndef MIFM1_ENGINE_H_
 #define MIFM1_ENGINE_H_
@@ -17,7 +17,7 @@ extern "C" {
 
 #define ENG_TRACKS 4
 #define ENG_CABLES 8                     /* per track, and as many global */
-#define ENG_NPAGES 33
+#define ENG_NPAGES 35
 #define ENG_NPARAMS (ENG_NPAGES * 4)
 #define ENG_STEPS 64                     /* the step sequencer: steps a track, four pages of 16 */
 #define ENG_PLOCKS 384                   /* parameter locks, for all the tracks' steps */
@@ -35,8 +35,12 @@ extern "C" {
 #define PG_STEP(t) (24 + (t))
 #define PG_GLOBAL 28
 #define PG_ARP(t) (29 + (t))             /* each track's Endless: its rate, gate, direction, transposition */
+#define PG_WARPS(p) (33 + (p))           /* Warps: its knobs (ALGORITHM, TIMBRE, LEVEL 1, LEVEL 2), its patching */
 enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_TIDES1, PT_TIDES2, PT_MARB_T1, PT_MARB_T2, PT_MARB_X1, PT_MARB_X2,
-       PT_MIX, PT_FX1, PT_FX2, PT_PAN, PT_STEP, PT_GLOBAL, PT_ARP, NPT };
+       PT_MIX, PT_FX1, PT_FX2, PT_PAN, PT_STEP, PT_GLOBAL, PT_ARP, PT_WARPS1, PT_WARPS2, NPT };
+/* Warps' carrier (PG_WARPS(1)'s first knob): none (Warps off), a track, or the module's internal oscillator, its three
+ * shapes (sine, triangle, saw; with the vocoder saw, pulse, noise) */
+enum { WC_OFF, WC_T1, WC_T2, WC_T3, WC_T4, WC_OSC1, WC_OSC2, WC_OSC3 };
 enum { SEQ_MARBLES, SEQ_STEPS };         /* PG_GLOBAL's first knob */
 
 /* a track's parameters as a trig sees them (a lock, a random): its Plaits' 12, its level, send and pan, its step
@@ -85,7 +89,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 4u               /* (3: 0.1.3's, without Endless; 2: 0.1's: eng_upgrade reads them) */
+#define PROJECT_VERSION 5u               /* (4: 0.1.4's to 0.1.9's, without Warps; 3: 0.1.3's, without Endless; 2: 0.1's:
+                                          * eng_upgrade reads them) */
 typedef struct {
     uint32_t magic;
     uint16_t version, size;
@@ -105,6 +110,12 @@ typedef struct {
 } project_t;
 int eng_algo_count(int page);            /* 0: the page has no ALGORITHM choice */
 const char *eng_algo_name(int page, int a);
+
+/* Warps as it plays: its algorithm (0..5 the cross-modulations, 6 the vocoder, 7 the frequency shifter; -1 off), its
+ * name, the track its output takes the place of (-1 off) */
+int eng_warps_algo(void);
+const char *eng_warps_name(int algo);
+int eng_warps_track(void);
 
 /* the engine */
 int eng_init(void);                      /* main loop, once: the modules in the engine's memory (0 ok) */

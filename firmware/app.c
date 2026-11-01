@@ -18,7 +18,9 @@
  *   HOME        the mixer: the levels, the pans   FX       the reverb (the sends, then its own knobs)
  *   GLO         SEQUENCER, TEMPO, SCALE, ROOT; then the project (K1, REC held: INIT) and the machine. Held with a
  *               knob: ALL, the same parameter on the four tracks (with ALGORITHM: the same model)
- *   ENV         held with a knob: that parameter's random (right new at each trig, left looped, 0 none)
+ *   ENV         Warps (ALGORITHM, TIMBRE, LEVEL 1, LEVEL 2; then the carrier, the modulator, the modulator heard dry,
+ *               the frequency shifter). Held with a knob: that parameter's random (right new at each trig, left
+ *               looped, 0 none)
  *   REC         with the steps: the white keys are a page's 16 steps, the first black keys the pages; a step held
  *               and a knob turned: a lock; a step held and SEL: its locks cleared
  *   PLAY        the clock runs or stops           SAVE     held: the project saved (stopped)
@@ -130,6 +132,7 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
     case PT_FX1: case PT_FX2: f[0] = PG_FX(0); f[1] = PG_FX(1); return 2;
     case PT_STEP: case PT_RND: f[0] = PG_STEP(t); f[1] = VP_RND(t); return 2;
     case PT_ARP: f[0] = PG_ARP(t); return 1;
+    case PT_WARPS1: case PT_WARPS2: f[0] = PG_WARPS(0); f[1] = PG_WARPS(1); return 2;
     default: f[0] = PG_GLOBAL; f[1] = VP_SYS; return 2;
     }
 }
@@ -189,6 +192,7 @@ static const char *module_name(int page)
     case PT_MIX: case PT_PAN: return "Mixer";
     case PT_STEP: case PT_RND: return "Steps";
     case PT_ARP: return "Endless";
+    case PT_WARPS1: case PT_WARPS2: return "Warps";
     case PT_GLOBAL: case PT_SYS: return "Global";
     default: return "Reverb";
     }
@@ -204,10 +208,18 @@ static uint16_t model_accent(int m)      /* Plaits' banks: teal the classic mode
 }
 static uint16_t track_accent(int t) { return model_accent(eng_project()->algo[PG_TRACK(t, 0)]); }
 
+static uint16_t warps_accent(void)      /* Warps' algorithm: the blends teal, the ring modulators and the logic
+                                          * orange, the vocoder pink; off, grey */
+{
+    int a = eng_warps_algo();
+    return a < 0 ? MUTED : a <= 1 || a == 7 ? TEAL : a <= 5 ? ORANGE : PINK;
+}
+
 static uint16_t page_accent(int page)
 {
     project_t *p = eng_project();
     switch (ptype(page)) {
+    case PT_WARPS1: case PT_WARPS2: return warps_accent();
     case PT_STEP: case PT_RND: case PT_ARP: return track_accent(ptrack(page));
     case PT_PAN: case PT_GLOBAL: case PT_SYS: return TEAL;
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: return model_accent(p->algo[page_first(page)]);
@@ -562,7 +574,7 @@ typedef struct {
     int8_t a, b, c, d;
 } vop_t;
 enum { IC_MODEL = 0, IC_RAMP = 24, IC_TMODEL = 27, IC_XMODE = 34, IC_MIX = 37, IC_REV, IC_GLO, IC_NEW, IC_DEMO,
-       IC_SAVED, IC_STEPS, IC_DICE, IC_ENDLESS, NICON };
+       IC_SAVED, IC_STEPS, IC_DICE, IC_ENDLESS, IC_WARPS, NICON = IC_WARPS + 8 };
 #define IOPS 10
 static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 4, 24, 12, 8}, {'L', 12, 8, 12, 24}, {'L', 12, 24, 20, 8}, {'L', 20, 8, 20, 24}, {'L', 20, 24, 28, 16}},
@@ -624,6 +636,16 @@ static const vop_t ICONS[NICON][IOPS] = {
      {'D', 19, 16, 1, 0}},                                                                           /* the steps */
     {{'R', 5, 5, 22, 22}, {'D', 11, 11, 2, 0}, {'D', 16, 16, 2, 0}, {'D', 21, 21, 2, 0}},           /* random */
     {{'C', 10, 16, 6, 0}, {'C', 22, 16, 6, 0}},                                                     /* Endless */
+    {{'L', 4, 8, 28, 24}, {'L', 4, 24, 28, 8}},                                                     /* Warps: xfade */
+    {{'L', 4, 26, 10, 6}, {'L', 10, 6, 16, 18}, {'L', 16, 18, 22, 6}, {'L', 22, 6, 28, 26}},        /* fold */
+    {{'C', 16, 16, 11, 0}, {'L', 10, 10, 22, 22}, {'L', 22, 10, 10, 22}},                           /* diode ring */
+    {{'R', 5, 5, 22, 22}, {'L', 10, 10, 22, 22}, {'L', 22, 10, 10, 22}},                            /* digital ring */
+    {{'L', 4, 22, 10, 22}, {'L', 10, 22, 10, 10}, {'L', 10, 10, 16, 10}, {'L', 16, 10, 16, 22}, {'L', 16, 22, 22, 22},
+     {'L', 22, 22, 22, 10}, {'L', 22, 10, 28, 10}},                                                  /* xor */
+    {{'L', 8, 7, 24, 16}, {'L', 24, 16, 8, 25}},                                                    /* comparator */
+    {{'L', 6, 26, 6, 16}, {'L', 11, 26, 11, 8}, {'L', 16, 26, 16, 13}, {'L', 21, 26, 21, 6}, {'L', 26, 26, 26, 18}},
+                                                                                                     /* vocoder */
+    {{'C', 9, 16, 4, 0}, {'L', 15, 16, 27, 16}, {'L', 22, 11, 27, 16}, {'L', 27, 16, 22, 21}},      /* freq shifter */
 };
 
 static void vicon(float cx, float cy, float s, float w, uint16_t c, int which, int glow)
@@ -990,6 +1012,43 @@ static void panel_global(void)           /* the sequencer, the scale */
     hero_line(y, s);
 }
 
+static void panel_warps(void)            /* Warps: its algorithm, its marks, what it takes and where it goes */
+{
+    project_t *p = eng_project();
+    int a = eng_warps_algo(), car = (int)(p->val[PG_WARPS(1) * 4] + 0.5f), mod = (int)(p->val[PG_WARPS(1) * 4 + 1] + 0.5f);
+    float alg = eng_final(PG_WARPS(0) * 4);
+    uint16_t ac = warps_accent();
+    char s[48], v[16], u[16];
+    hero_icon(IC_WARPS + (a < 0 ? (alg >= 0.6875f ? 6 : (int)(alg * 8.0f + 0.5f) > 5 ? 5 : (int)(alg * 8.0f + 0.5f)) : a), ac);
+    int y = hero_title(eng_warps_name(a));
+    if (a < 0) {
+        hero_line(y, "OFF|A CARRIER ON PAGE 2");
+        return;
+    }
+    s[0] = 0;
+    if (a != 7 || car < WC_OSC1) {       /* the carrier: a track, or the oscillator's shape */
+        eng_param_text(PG_WARPS(1) * 4, (float)car, v, sizeof v);
+        label_text(v, u, sizeof u);
+        text_cat(s, u, sizeof s);
+        text_cat(s, car >= WC_OSC1 ? " OSC " : " ", sizeof s);
+    }
+    text_cat(s, a == 7 ? "SHIFTS T" : "BY T", sizeof s);
+    v[0] = (char)('1' + mod);
+    v[1] = 0;
+    text_cat(s, v, sizeof s);
+    text_cat(s, "|ON T", sizeof s);
+    v[0] = (char)('1' + (car >= WC_T1 && car <= WC_T4 ? car - WC_T1 : mod));
+    text_cat(s, v, sizeof s);
+    hero_line(y, s);
+    if (a == 7)
+        return;
+    for (int i = 0; i < 7; i++) {        /* the knob's marks: the six cross-modulations, the vocoder; lit as near */
+        float d = alg >= 0.6875f ? (i == 6 ? 0.0f : 1.0f) : alg * 8.0f - (float)i;
+        int lv = i == 6 ? (alg >= 0.6875f ? 8 : 0) : (int)((1.0f - (d < 0 ? -d : d)) * 8.0f + 0.5f);
+        led((float)(89 + i * 12), (float)(y + 26), 3.0f, ac, lv < 0 ? 0 : lv);
+    }
+}
+
 static void panel_reverb(void)
 {
     hero_icon(IC_REV, PINK);
@@ -1047,6 +1106,10 @@ static void draw_panel(void)
         for (int t = 0; t < ENG_TRACKS; t++)
             s[2] |= meter_lit(t) << (t * 3) | (int)(p->algo[PG_TRACK(t, 0)] / 8) << (12 + t * 2);
         break;
+    case PT_WARPS1: case PT_WARPS2:
+        s[2] = (int)(eng_final(PG_WARPS(0) * 4) * 64.0f) | (int)p->val[PG_WARPS(1) * 4] << 7 |
+               (int)p->val[PG_WARPS(1) * 4 + 1] << 11 | (int)p->val[PG_WARPS(1) * 4 + 3] << 13;
+        break;
     default: break;
     }
     if (!ui.full && !memcmp(s, ui.panel_shown, sizeof s)) {
@@ -1066,6 +1129,7 @@ static void draw_panel(void)
     case PT_RND: panel_random(tr); break;
     case PT_ARP: panel_endless(tr); break;
     case PT_GLOBAL: panel_global(); break;
+    case PT_WARPS1: case PT_WARPS2: panel_warps(); break;
     default: panel_reverb(); break;
     }
     cv_blit(0, PANEL_Y);
@@ -1923,9 +1987,10 @@ static void button_up(int b)
             go_page(pt == PT_GLOBAL || pt == PT_SYS ? ui.prev_page : PG_GLOBAL);
         ui.full = 1;
         break;
-    case B_ENV:                          /* held with a knob: its random */
+    case B_ENV:                          /* a tap: Warps, its first page then its second; held with a knob: its
+                                          * random */
         if (!ui.used[b])
-            app_say("ENV HELD + A KNOB:", "ITS RANDOM");
+            go_page(ui.page == PG_WARPS(0) && !ui.matrix ? PG_WARPS(1) : PG_WARPS(0));
         ui.full = 1;
         break;
     default:
@@ -2074,7 +2139,20 @@ static void input(void)
     if (e && !ui.matrix && page_count(ui.page) > 1)
         go_page(page_at(ui.page, page_face(ui.page) + (e > 0 ? 1 : -1)));
     e = plat_enc(EN_ALGO);
-    if (e && !ui.matrix && ptype(ui.page) <= PT_FX2) {
+    if (e && !ui.matrix && (ptype(ui.page) == PT_WARPS1 || ptype(ui.page) == PT_WARPS2)) {
+        /* Warps: ALGORITHM from mark to mark (the six cross-modulations, the vocoder, its longest release) */
+        static const float MARK[8] = {0.0f, 0.125f, 0.25f, 0.375f, 0.5f, 0.625f, 0.75f, 1.0f};
+        float *v = &eng_project()->val[PG_WARPS(0) * 4];
+        int i;
+        if (e > 0)
+            for (i = 0; i < 7 && MARK[i] <= *v + 0.001f; i++)
+                ;
+        else
+            for (i = 7; i > 0 && MARK[i] >= *v - 0.001f; i--)
+                ;
+        *v = MARK[i];
+        dirty = 1;
+    } else if (e && !ui.matrix && ptype(ui.page) <= PT_FX2) {
         project_t *p = eng_project();
         int first = page_first(ui.page), n = eng_algo_count(first);
         if (n) {
@@ -2131,7 +2209,8 @@ static void input(void)
      * blinks), or held, or the sources on this page */
     {
         static const uint8_t PAGE_BTN[PT_SYS + 1] = {B_EDIT, B_EDIT, B_EDIT, B_LFO, B_LFO, B_SEQ, B_SEQ, B_SEQ, B_SEQ,
-                                                    B_HOME, B_FX, B_FX, B_HOME, B_SEQ, B_GLO, B_ARP, B_SEQ, B_GLO};
+                                                    B_HOME, B_FX, B_FX, B_HOME, B_SEQ, B_GLO, B_ARP, B_ENV, B_ENV,
+                                                    B_SEQ, B_GLO};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
         uint32_t bb = 0, kk = ui.keys;
         int pt = ptype(ui.page);

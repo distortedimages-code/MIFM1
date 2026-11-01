@@ -45,6 +45,9 @@ const char* const kNoteName[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G
 const char* const kArpRates[6] = {"1/32", "1/16T", "1/16", "1/8T", "1/8", "1/4"};
 const float kArpMult[6] = {0.5f, 2.0f / 3.0f, 1.0f, 4.0f / 3.0f, 2.0f, 4.0f};   // in sixteenths
 const char* const kArpDir[4] = {"Forward", "Backward", "Ping-pong", "Random"};
+const char* const kWarpsCarrier[8] = {"Off", "T1", "T2", "T3", "T4", "Osc 1", "Osc 2", "Osc 3"};
+const char* const kTrackNames[4] = {"T1", "T2", "T3", "T4"};
+const char* const kWarpsMode[2] = {"Warps", "Freq shift"};
 
 // the names are the modules' own, as their panels print them (sentence case: Mutable's)
 const eng_pdef_t kPages[NPT][4] = {
@@ -71,7 +74,28 @@ const eng_pdef_t kPages[NPT][4] = {
    {"Root", K_ENUM, 0, 11, kNoteName}},
   {{"Rate", K_ENUM, 0, 5, kArpRates}, {"Gate", K_UNI, 0, 0, 0}, {"Direction", K_ENUM, 0, 3, kArpDir},
    {"Transpose", K_INT, -24, 24, 0}},
+  {{"Algorithm", K_UNI, 0, 0, 0}, {"Timbre", K_UNI, 0, 0, 0}, {"Level 1", K_UNI, 0, 0, 0}, {"Level 2", K_UNI, 0, 0, 0}},
+  {{"Carrier", K_ENUM, 0, 7, kWarpsCarrier}, {"Modulator", K_ENUM, 0, 3, kTrackNames},
+   {"Mod dry", K_ENUM, 0, 1, kOnOff}, {"Mode", K_ENUM, 0, 1, kWarpsMode}},
 };
+
+// Warps' algorithms as its panel names them (the ALGORITHM knob's eight marks: six cross-modulations, then the vocoder
+// over the last quarter), then its easter egg
+const char* const kWarpsNames[8] = {"CROSSFADE", "CROSS-FOLD", "DIODE RING", "DIGITAL RING", "XOR", "COMPARATOR",
+                                    "VOCODER", "FREQ SHIFTER"};
+const char* const kWarpsShort[7] = {"Xfade", "Fold", "Diode", "Digital", "Xor", "Compar", "Vocoder"};
+const char* const kOscXmod[3] = {"Sine", "Triangle", "Saw"};        // modulator.cc: xmod_shape
+const char* const kOscVocoder[3] = {"Saw", "Pulse", "Noise"};       // vocoder_shape
+int warps_pos(float a) {                // the knob's nearest mark: 0..5, 6 the vocoder (from 0.6875, the transition's
+  if (a >= 0.6875f) return 6;           // middle; modulator.cc: vocoder_amount)
+  int i = static_cast<int>(a * 8.0f + 0.5f);
+  return i < 0 ? 0 : i > 5 ? 5 : i;
+}
+float warps_shift_hz(float pot) {       // the frequency shifter's shift (modulator.cc: ProcessEasterEgg)
+  float dir = pot >= 0.5f ? 1.0f : -1.0f, f = 2.0f * (pot >= 0.5f ? pot - 0.5f : 0.5f - pot);
+  f = f <= 0.4f ? f * f * f * 62.5f : 4.0f * fm_exp2f(15.0f * (f - 0.4f));
+  return f * dir;
+}
 
 const char* const kModels[24] = {
   "VA VCF", "PHASE DIST", "6-OP FM 1", "6-OP FM 2", "6-OP FM 3", "WAVE TERRAIN", "STRING MACHINE", "CHIPTUNE",
@@ -96,10 +120,12 @@ int page_type(int page) {
   if (page < PG_PAN) return PT_MIX + (page - 20);
   if (page == PG_PAN) return PT_PAN;
   if (page < PG_GLOBAL) return PT_STEP;
+  if (page >= PG_WARPS(0)) return PT_WARPS1 + (page - PG_WARPS(0));
   return page == PG_GLOBAL ? PT_GLOBAL : PT_ARP;
 }
 
 inline float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
+inline int i_of(float v) { return static_cast<int>(v + 0.5f); }
 
 float bpm_of(float v) { return 30.0f * fm_exp2f(v * 3.321928f); }          // 0..1: 30..300 BPM
 float tides_hz(float v, int range) {                                          // 0..1: 0.02..20 Hz, the range / 8, x 8
@@ -117,13 +143,14 @@ float fin[ENG_NPARAMS];                 // the parameters after the cables (the 
 float src[NSRC];
 
 #ifndef ENG_ARENA_BYTES
-#define ENG_ARENA_BYTES (184u * 1024u)        /* 4 Plaits 108 KB, Marbles 9, the reverb in floats 64 */
+#define ENG_ARENA_BYTES (262u * 1024u)        /* 4 Plaits 108 KB, Marbles 9, the reverb in floats 64, Warps 78 */
 #endif
 uint8_t arena[ENG_ARENA_BYTES] __attribute__((aligned(8))) PLAT_POOL;
 void* voice[ENG_TRACKS];
 void* marbles;
 void* tides[2];
 void* reverb;
+void* warps;
 int ready;
 
 volatile int playing, use_core1 = 1;
@@ -164,6 +191,12 @@ int e_pos[ENG_TRACKS], e_dir[ENG_TRACKS], e_note[ENG_TRACKS];
 volatile int e_rec[ENG_TRACKS];
 
 float vbuf[ENG_TRACKS][kN];
+// Warps, on the second core one block behind: it plays the last block's carrier and modulator (w_car, w_mod, copied
+// once the voices are done) while the voices play this one; its output takes the place of a track's this block
+float w_car[kN], w_mod[kN], w_out[kN];
+volatile int w_job;                     // Warps runs in this block's job
+int w_last = -1;                        // the routing w_car and w_mod were taken with: carrier | modulator << 4, -1
+int w_dst = -1, w_mute = -1;            // the track its output replaces; the modulator's track, silenced (-1: none)
 float vaux[ENG_TRACKS][kN];
 float send[kN], wet_l[kN], wet_r[kN];
 float meter[ENG_TRACKS + 1];
@@ -508,7 +541,43 @@ void core1_job(uint32_t) {
   uint32_t t0 = plat_ticks24();
   render_voice(2, job_n);
   render_voice(3, job_n);
+  if (w_job) mw_render(warps, w_car, w_mod, w_out, job_n);
   c1_ticks = plat_ticks24() - t0;
+}
+
+// Warps' knobs for this block, and whether it runs: a carrier (a track or its oscillator), its modulator a track
+void set_warps() {
+  int car = Pi(PG_WARPS(1), 0), mod = Pi(PG_WARPS(1), 1), shift = Pi(PG_WARPS(1), 3);
+  mod = mod < 0 ? 0 : mod > 3 ? 3 : mod;
+  int osc = car >= WC_OSC1 ? car - WC_OSC1 + 1 : 0;
+  w_job = car > WC_OFF && car <= WC_OSC3 && w_last == (car | mod << 4);
+  float level1 = P(PG_WARPS(0), 2);
+  mw_set(warps, clampf(P(PG_WARPS(0), 0), 0.0f, 1.0f), clampf(P(PG_WARPS(0), 1), 0.0f, 1.0f),
+         clampf(level1, 0.0f, 1.0f), clampf(P(PG_WARPS(0), 3), 0.0f, 1.0f), osc,
+         12.0f + 60.0f * clampf(level1, 0.0f, 1.0f), shift);   // the oscillator's note: LEVEL 1, as on the module
+}
+
+// after the voices: this block's carrier and modulator kept for the next block's job, Warps' output (the last
+// block's, warped) in its track's place, the modulator's track silenced unless heard dry
+void route_warps(uint32_t n) {
+  int car = Pi(PG_WARPS(1), 0), mod = Pi(PG_WARPS(1), 1);
+  mod = mod < 0 ? 0 : mod > 3 ? 3 : mod;
+  if (car <= WC_OFF || car > WC_OSC3) {
+    w_last = w_dst = w_mute = -1;
+    return;
+  }
+  int ct = car <= WC_T4 ? car - WC_T1 : -1, dst = ct >= 0 ? ct : mod, job = w_job;
+  for (uint32_t i = 0; i < n; ++i) {
+    float c = ct >= 0 ? vbuf[ct][i] : 0.0f, m = vbuf[mod][i];
+    w_car[i] = c;
+    w_mod[i] = m;
+    vbuf[dst][i] = job ? w_out[i] : 0.0f;   // (the first block of a new patching: silence, Warps not yet run)
+  }
+  w_dst = dst;
+  w_mute = mod != dst && !Pi(PG_WARPS(1), 2) ? mod : -1;
+  if (w_mute >= 0)
+    for (uint32_t i = 0; i < n; ++i) vbuf[w_mute][i] = 0.0f;
+  w_last = car | mod << 4;
 }
 
 uint32_t pct10(uint32_t ticks, uint32_t n) {   // ticks as tenths of a percent of n frames' time
@@ -524,7 +593,7 @@ extern "C" {
 int eng_page_type(int page) { return page_type(page); }
 int eng_page_track(int page) {
   if (page < 12) return page / 3;
-  if (page >= PG_ARP(0) && page < ENG_NPAGES) return page - PG_ARP(0);
+  if (page >= PG_ARP(0) && page < PG_ARP(0) + ENG_TRACKS) return page - PG_ARP(0);
   return page >= PG_STEP(0) && page < PG_GLOBAL ? page - PG_STEP(0) : -1;
 }
 
@@ -597,9 +666,33 @@ static void put_num(char* b, int n, int32_t v, int decimals, int sign) {   // v 
 void eng_param_text(int param, float v, char* b, int n) {
   const eng_pdef_t* d = eng_pdef(param);
   int pt = page_type(param / 4), k = param % 4;
-  if (d->kind == K_ENUM) {
+  if (pt == PT_WARPS2 && k == 0 && i_of(v) >= WC_OSC1) {   // the oscillator's shape, as the algorithm uses it
+    int o = i_of(v) > WC_OSC3 ? 2 : i_of(v) - WC_OSC1;
+    put(b, n, Pi(PG_WARPS(1), 3) ? kWarpsCarrier[WC_OSC1 + o]
+                                 : fin[PG_WARPS(0) * 4] >= 0.6875f ? kOscVocoder[o] : kOscXmod[o]);
+  } else if (d->kind == K_ENUM) {
     int i = static_cast<int>(v + 0.5f);
     put(b, n, d->names[i < d->lo ? d->lo : i > d->hi ? d->hi : i]);
+  } else if (pt == PT_WARPS1 && k == 0 && Pi(PG_WARPS(1), 3)) {   // the frequency shifter: its shift
+    float hz = warps_shift_hz(v), a = hz < 0 ? -hz : hz;
+    if (a >= 1000.0f) {
+      put_num(b, n, static_cast<int32_t>(hz * 0.01f + (hz < 0 ? -0.5f : 0.5f)), 1, 1);
+      int l = 0;
+      while (b[l]) ++l;
+      put(b + l, n - l, "k");
+    } else {
+      put_num(b, n, static_cast<int32_t>(hz + (hz < 0 ? -0.5f : 0.5f)), 0, 1);
+      int l = 0;
+      while (b[l]) ++l;
+      put(b + l, n - l, " Hz");
+    }
+  } else if (pt == PT_WARPS1 && k == 0) {
+    put(b, n, kWarpsShort[warps_pos(v)]);
+  } else if (pt == PT_WARPS1 && k == 2 && !Pi(PG_WARPS(1), 3) && Pi(PG_WARPS(1), 0) >= WC_OSC1) {
+    int nt = static_cast<int>(12.0f + 60.0f * v + 0.5f), l = 0;   // LEVEL 1: the oscillator's note (C0..C5)
+    put(b, n, kNoteName[nt % 12]);
+    while (b[l]) ++l;
+    put_num(b + l, n - l, nt / 12 - 1, 0, 0);
   } else if (pt == PT_STEP && k == 0) {  // the note, from C3
     int nt = 48 + static_cast<int>(v + (v < 0 ? -0.5f : 0.5f)), l = 0;
     put(b, n, kNoteName[nt % 12]);
@@ -680,6 +773,12 @@ static void cable(project_t* p, int g, int c, int s, int dst, int depth) {
   p->cable[g][c].rsv = 0;
 }
 
+// Warps: off (no carrier), ready on the diode ring modulator, track 2 as the modulator
+static void warps_defaults(project_t* p) {
+  static const float kW[8] = {0.25f, 0.5f, 0.6f, 0.6f, static_cast<float>(WC_OFF), 1.0f, 0.0f, 0.0f};
+  for (int k = 0; k < 8; ++k) p->val[PG_WARPS(k / 4) * 4 + k % 4] = kW[k];
+}
+
 void eng_defaults(project_t* p) {
   uint8_t* raw = reinterpret_cast<uint8_t*>(p);
   for (uint32_t i = 0; i < sizeof(project_t); ++i) raw[i] = 0;
@@ -745,6 +844,7 @@ void eng_defaults(project_t* p) {
     p->seed[t] = static_cast<uint16_t>(0x2A5 + 977 * t);
   }
   for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i].tp = 0xFF;
+  warps_defaults(p);
   p->val[PG_GLOBAL * 4 + 0] = static_cast<float>(SEQ_MARBLES);
   p->val[PG_GLOBAL * 4 + 2] = 2.0f;                     // minor
   p->val[PG_GLOBAL * 4 + 3] = 0.0f;                     // C
@@ -823,10 +923,56 @@ struct project_v3 {
   plock_t lock[ENG_PLOCKS];
 };
 
+// 0.1.4's to 0.1.9's (version 4): all of it kept, Warps off
+struct project_v4 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[33 * 4];
+  uint8_t algo[33];
+  uint8_t out_mode;
+  uint8_t rsv[2];
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_TRACKS][ENG_STEPS / 8];
+  int8_t rnd[ENG_TRACKS][ENG_NTP];
+  uint16_t seed[ENG_TRACKS];
+  plock_t lock[ENG_PLOCKS];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+};
+
 int eng_upgrade(project_t* p, int bytes) {
-  static project_v2 old;
-  static project_v3 v3;
+  static union {
+    project_v2 v2;
+    project_v3 v3;
+    project_v4 v4;
+  } u;
+  project_v2& old = u.v2;
+  project_v3& v3 = u.v3;
+  project_v4& v4 = u.v4;
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
+  if (bytes == static_cast<int>(sizeof(project_v4)) && p->magic == PROJECT_MAGIC && p->version == 4 &&
+      p->size == sizeof(project_v4)) {
+    const uint8_t* from = reinterpret_cast<const uint8_t*>(p);
+    uint8_t* to = reinterpret_cast<uint8_t*>(&v4);
+    for (uint32_t i = 0; i < sizeof v4; ++i) to[i] = from[i];
+    eng_defaults(p);
+    for (int i = 0; i < 33 * 4; ++i) p->val[i] = v4.val[i];
+    for (int i = 0; i < 33; ++i) p->algo[i] = v4.algo[i];
+    p->out_mode = v4.out_mode;
+    for (int g = 0; g <= ENG_TRACKS; ++g)
+      for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c] = v4.cable[g][c];
+    for (int t = 0; t < ENG_TRACKS; ++t) {
+      for (int i = 0; i < ENG_STEPS / 8; ++i) p->trig[t][i] = v4.trig[t][i];
+      for (int i = 0; i < ENG_NTP; ++i) p->rnd[t][i] = v4.rnd[t][i];
+      p->seed[t] = v4.seed[t];
+      for (int i = 0; i < ENG_ENDLESS; ++i) p->endless[t][i] = v4.endless[t][i];
+      p->endless_len[t] = v4.endless_len[t];
+      p->endless_key[t] = v4.endless_key[t];
+    }
+    for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i] = v4.lock[i];
+    return 1;
+  }
   if (bytes == static_cast<int>(sizeof(project_v3)) && p->magic == PROJECT_MAGIC && p->version == 3 &&
       p->size == sizeof(project_v3)) {
     const uint8_t* from = reinterpret_cast<const uint8_t*>(p);
@@ -864,7 +1010,7 @@ int eng_upgrade(project_t* p, int bytes) {
 int eng_init(void) {
   uint32_t need = 0, a = 0;
   need = 4u * ((mp_size() + 7u) & ~7u) + ((mm_size() + 7u) & ~7u) + 2u * ((mt_size() + 7u) & ~7u) +
-         ((mrv_size() + 7u) & ~7u);
+         ((mrv_size() + 7u) & ~7u) + ((mw_size() + 7u) & ~7u);
   if (need > sizeof(arena)) return -1;
   for (int t = 0; t < ENG_TRACKS; ++t) {
     voice[t] = arena + a;
@@ -885,6 +1031,9 @@ int eng_init(void) {
   reverb = arena + a;
   a += (mrv_size() + 7u) & ~7u;
   mrv_init(reverb);
+  warps = arena + a;
+  a += (mw_size() + 7u) & ~7u;
+  mw_init(warps);
   if (!eng_check(&proj)) eng_defaults(&proj);
   for (uint32_t k = 0; k < kFrames * 3; ++k) mgates[k] = 0;
   for (uint32_t k = 0; k < kFrames * 4; ++k) mcv[k] = 0.0f;
@@ -941,7 +1090,8 @@ void eng_render(float* l, float* r, uint32_t n) {
   // 4. the trigs
   sequence(n);
   for (int t = 0; t < ENG_TRACKS; ++t) set_voice(t);
-  // 4. the voices: 3 and 4 on the second core
+  set_warps();
+  // 4. the voices: 3 and 4 on the second core, then Warps (the last block's) there too
   job_n = n;
   int on_core1 = use_core1 && plat_cpu2_on() ? plat_cpu2_run(core1_job, 0) : 0;
   render_voice(0, n);
@@ -958,6 +1108,7 @@ void eng_render(float* l, float* r, uint32_t n) {
     c0 = plat_ticks24() - t0;
   }
   on_core1_last = on_core1;
+  route_warps(n);
   // 5. the mixer: the levels, the sends into Clouds' reverb (core 0, once the four voices are done), its return
   uint32_t g = 0;
   for (int t = 0; t < ENG_TRACKS; ++t) g |= vgate[t] ? 1u << t : 0u;
@@ -1055,6 +1206,14 @@ int eng_hist(int s, int i) {
   return hist[s][(hist_at + static_cast<uint32_t>(i)) % ENG_HIST];
 }
 int eng_core1_running(void) { return on_core1_last; }
+
+int eng_warps_algo(void) {
+  int car = Pi(PG_WARPS(1), 0);
+  if (car <= WC_OFF || car > WC_OSC3) return -1;
+  return Pi(PG_WARPS(1), 3) ? 7 : warps_pos(P(PG_WARPS(0), 0));
+}
+const char* eng_warps_name(int algo) { return algo >= 0 && algo < 8 ? kWarpsNames[algo] : "WARPS"; }
+int eng_warps_track(void) { return w_dst; }
 
 int eng_steps_mode(void) { return iround(proj.val[PG_GLOBAL * 4]) == SEQ_STEPS; }
 int eng_trig(int t, int step) {

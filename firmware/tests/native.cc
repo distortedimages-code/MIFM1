@@ -369,6 +369,108 @@ int main(int argc, char** argv) {
     eng_defaults(p);
   }
 
+  // 12. Warps: the demo with track 3 (FM 2-op) as the carrier and track 2 (the bass) as the modulator, through every
+  // mark of ALGORITHM and the frequency shifter; its output on track 3, finite and heard; its cost (Warps runs at 88.2
+  // kHz) against the four voices'. Then its oscillator alone (the tracks silent): A4 on LEVEL 1, 440 Hz out
+  {
+    eng_play(0);
+    eng_defaults(p);
+    p->val[PG_GLOBAL * 4] = SEQ_STEPS;
+    const int nb = 44100 * 2 / static_cast<int>(n);
+    auto play = [&](double* rms, double* us) {
+      double e = 0;
+      int nan = 0;
+      for (int b = 0; b < 200; ++b) eng_render(l, r, n);
+      double t0 = static_cast<double>(clock());
+      for (int b = 0; b < nb; ++b) {
+        eng_render(l, r, n);
+        for (uint32_t i = 0; i < n; ++i) {
+          if (!std::isfinite(l[i]) || !std::isfinite(r[i])) nan = 1;
+          e += static_cast<double>(l[i]) * l[i] + static_cast<double>(r[i]) * r[i];
+        }
+      }
+      *us = (static_cast<double>(clock()) - t0) / CLOCKS_PER_SEC * 1e6 / nb;
+      *rms = nan ? -1.0 : std::sqrt(e / (2.0 * nb * n));
+    };
+    double rms0, us0, rms, us, worst = 0;
+    eng_play(1);
+    play(&rms0, &us0);
+    p->val[PG_WARPS(1) * 4 + 0] = WC_T3;
+    p->val[PG_WARPS(1) * 4 + 1] = 1.0f;                  // track 2
+    static const float kMarks[8] = {0.0f, 0.125f, 0.25f, 0.375f, 0.5f, 0.625f, 0.75f, 1.0f};
+    printf("warps (T3 by T2), rms and the render's time, us a block (off: %.3f, %.0f):", rms0, us0);
+    for (int a = 0; a < 9; ++a) {
+      p->val[PG_WARPS(0) * 4 + 0] = a < 8 ? kMarks[a] : 0.7f;
+      p->val[PG_WARPS(1) * 4 + 3] = a == 8 ? 1.0f : 0.0f;
+      if (a == 8) p->val[PG_WARPS(1) * 4 + 0] = WC_OSC1;   // the shifter on its own oscillator
+      play(&rms, &us);
+      int alg = eng_warps_algo();
+      printf(" %s %.3f %.0f%s", eng_warps_name(alg), rms, us, a == 8 ? "\n" : ",");
+      if (us - us0 > worst) worst = us - us0;
+      if (rms <= 0.002 || rms > 1.0 || eng_warps_track() != (a == 8 ? 1 : 2) || alg != (a < 7 ? (a < 6 ? a : 6) : a == 7 ? 6 : 7))
+        ++failures, printf("FAIL: Warps at %d (%s): rms %.3f, on track %d\n", a, eng_warps_name(alg), rms, eng_warps_track() + 1);
+    }
+    printf("warps: at most %.0f us a block more than without, the four voices and the rest %.0f\n", worst, us0);
+    eng_play(0);
+    eng_blank(p);                                         // nothing plays: the oscillator alone, through XFADE
+    p->val[PG_WARPS(1) * 4 + 0] = WC_OSC1;
+    p->val[PG_WARPS(1) * 4 + 1] = 0.0f;
+    p->val[PG_WARPS(0) * 4 + 0] = 0.0f;
+    p->val[PG_WARPS(0) * 4 + 2] = 57.0f / 60.0f;          // LEVEL 1: A4
+    p->val[PG_MIX * 4 + 0] = 1.0f;
+    double best = 0;
+    for (int side = 0; side < 2; ++side) {                // TIMBRE at either end: the carrier alone, one way
+      p->val[PG_WARPS(0) * 4 + 1] = static_cast<float>(side);
+      for (int b = 0; b < 400; ++b) eng_render(l, r, n);
+      int cross = 0;
+      float prev = 0;
+      double e = 0;
+      for (int b = 0; b < 44100 / static_cast<int>(n); ++b) {
+        eng_render(l, r, n);
+        for (uint32_t i = 0; i < n; ++i) {
+          if ((l[i] >= 0) != (prev >= 0)) ++cross;
+          prev = l[i];
+          e += static_cast<double>(l[i]) * l[i];
+        }
+      }
+      double hz = cross / 2.0 / (44100.0 / n * n / 44100.0 * (44100 / n) / (44100.0 / n));
+      if (e > best) best = e, hz = cross / 2.0 / ((44100 / n) * n / 44100.0);
+      if (side == 1 || e >= best) {
+        printf("warps' oscillator, TIMBRE %d: %.1f Hz, rms %.3f\n", side, cross / 2.0 / ((44100 / n) * n / 44100.0),
+               std::sqrt(e / ((44100 / n) * n)));
+      }
+      (void)hz;
+    }
+    eng_defaults(p);
+  }
+
+  // 13. 0.1.9's project (version 4, 2644 bytes) read into this version's: all of it, Warps off
+  {
+    static uint8_t buf[sizeof(project_t)];
+    project_t* q = reinterpret_cast<project_t*>(buf);
+    for (uint32_t i = 0; i < sizeof buf; ++i) buf[i] = 0;
+    q->magic = PROJECT_MAGIC;
+    q->version = 4;
+    q->size = 2644;
+    float* val = reinterpret_cast<float*>(buf + 8);
+    for (int i = 0; i < 132; ++i) val[i] = 0.25f;
+    buf[8 + 528 + PG_TRACK(1, 0)] = 17;                   // track 2 on NOISE
+    buf[8 + 528 + 33] = 2;                                // the output: mono
+    cable_t* cab = reinterpret_cast<cable_t*>(buf + 572);
+    cab[0].src = SRC_A2;
+    cab[0].dst = 3;
+    cab[0].depth = 33;
+    buf[2380 + 0] = 60;                                   // Endless, track 1: three notes
+    buf[2636 + 0] = 3;
+    int ok = eng_upgrade(q, 2644);
+    printf("a version 4 project: %s, track 2 model %d, output %d, a cable %s, knob %.2f, Endless %d notes, warps %s\n",
+           ok ? "read" : "REFUSED", q->algo[PG_TRACK(1, 0)], q->out_mode, q->cable[0][0].depth == 33 ? "kept" : "LOST",
+           q->val[5], q->endless_len[0], q->val[PG_WARPS(1) * 4] == WC_OFF ? "off" : "ON");
+    if (!ok || !eng_check(q) || q->algo[PG_TRACK(1, 0)] != 17 || q->out_mode != 2 || q->cable[0][0].depth != 33 ||
+        q->val[5] != 0.25f || q->endless_len[0] != 3 || q->endless[0][0] != 60 || q->val[PG_WARPS(1) * 4] != WC_OFF)
+      ++failures, printf("FAIL: the version 4 project\n");
+  }
+
   // 9. v0.1's project (version 2) read into this version's
   {
     static uint8_t buf[sizeof(project_t)];

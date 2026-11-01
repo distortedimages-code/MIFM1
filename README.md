@@ -14,12 +14,15 @@ la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
 - **deux Tides 2** comme modulateurs (8 sorties) ;
 - une **matrice de câbles** : 15 sources (Tides A1-A4, B1-B4, Marbles X1-X3, Y, T1-T3) vers presque tous les
   paramètres, 8 câbles par piste et 8 globaux ;
+- **Warps** entre deux pistes (ou une piste et son oscillateur interne) : ses 6 modulations croisées, son vocodeur
+  et son easter egg, le décaleur de fréquence ; il tourne à 88,2 kHz comme le module (96 kHz) pour que ses filtres
+  et son vocodeur restent à leur place ;
 - un **mixer simple** (un niveau et un pan par piste, à puissance constante : une piste garde le même volume où
   qu'elle soit dans l'image ; ses gains glissent échantillon par échantillon, un pan ou un niveau aléatoire ou locké
   ne claque pas) et un **départ réverbe** par piste vers la réverbe de Clouds
   (ses lignes de retard en flottants : la réverbe du module les stockait sur 12 bits, d'où un grain et un souffle).
 
-Le granulaire de Clouds et Warps arrivent en v0.2 (sur le second cœur), les scènes et les projets multiples en v0.3. Rings a été
+Le granulaire de Clouds arrive ensuite, les scènes et les projets multiples en v0.3. Rings a été
 retiré après le banc d'essai v0.0 : les modèles MODAL et STRING de Plaits en reprennent le code, en plus léger.
 
 ## Installer
@@ -66,6 +69,7 @@ les 16 pas de la piste (allumés : un trig ; un point : des locks ; cerclé : ce
 | **SAVE tenu** | sauvegarde le projet (à l'arrêt) |
 | **GLO** | SEQUENCER (Marbles ou Steps), TEMPO, SCALE, ROOT ; SELECT : le projet (INIT) et la machine ; GLO encore : retour |
 | **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle |
+| **ENV** | Warps : ALGORITHM, TIMBRE, LEVEL 1, LEVEL 2 ; ENV à nouveau : CARRIER, MODULATOR, MOD DRY, MODE |
 | **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage sur la piste (avec GLO tenu aussi : sur les 4) |
 | **REC** | avec STEPS : les touches blanches deviennent les 16 pas, les 4 premières noires les pages |
 
@@ -109,6 +113,20 @@ les triolets), GATE (la longueur des notes), DIRECTION (avant, arrière, aller-r
 tenu** efface la boucle (la piste retrouve ses pas ou Marbles). Probabilité, ratchets, aléatoire et quantiseur
 s'appliquent aussi à ses notes. En bas, ses notes en barres, la note jouée en blanc.
 
+**Warps** (ENV) : le module de modulation croisée de Mutable, entre deux pistes. Sa deuxième page (ENV à nouveau)
+le branche : **CARRIER**, la porteuse (Off : Warps éteint ; une piste T1-T4 ; ou son oscillateur interne, trois formes),
+**MODULATOR**, la piste modulante, **MOD DRY** (On : on entend aussi la piste modulante telle quelle ; Off, elle ne
+passe que par Warps) et **MODE** (Warps, ou Freq shift : l'easter egg du module, un décaleur de fréquence). La sortie
+de Warps prend la place de la piste porteuse (ou de la modulante avec l'oscillateur), avec son niveau, son pan et son
+envoi. Sa première page, ce sont les potards du module : **ALGORITHM** balaie ses huit repères (crossfade,
+cross-folding, anneau à diodes, anneau numérique, XOR, comparateur, puis le vocodeur sur le dernier quart, sa
+retombée de plus en plus longue), en fondu de l'un à l'autre comme sur le module ; le sélecteur ALGORITHM saute d'un
+repère au suivant. **TIMBRE**, **LEVEL 1** et **LEVEL 2** comme sur le module : avec l'oscillateur interne, LEVEL 1
+règle sa note (C0 à C5), comme le potard du module. En Freq shift : ALGORITHM fixe le décalage (au centre, rien ;
+jusqu'à ±2 kHz), TIMBRE la bande (vers le haut, vers le bas), LEVEL 1 la réinjection, LEVEL 2 le mélange. Les câbles
+de la matrice vont aussi sur ses potards (Tides sur ALGORITHM…). Warps tourne sur le second cœur, un bloc derrière
+les voix (~4 ms de latence sur la piste qu'il remplace) ; le vocodeur est son algorithme le plus lourd.
+
 **La sortie** (GLO, SELECT, K2) : Stereo, Mic headset ou Mono. **Mic headset** est pour un casque à micro (fiche à
 4 contacts) branché à fond dans la prise du FM-1 (3 contacts) : ses écouteurs se retrouvent en série entre la
 gauche et la droite et ne reçoivent que leur différence (le centre disparaît, ce qui est panoramiqué ressort). Le
@@ -118,7 +136,7 @@ charge un autre projet.
 
 **Le clavier** relance la note à chaque touche, même jouée legato, et une touche tapée très vite sonne quand même.
 
-Un projet sauvegardé avec la 0.1 ou la 0.1.3 se recharge tel quel (ses réglages, ses modèles, ses câbles) ; le séquenceur pas à
+Un projet sauvegardé avec la 0.1, la 0.1.3 ou les 0.1.4 à 0.1.9 se recharge tel quel (ses réglages, ses modèles, ses câbles) ; le séquenceur pas à
 pas y arrive avec les patterns de démo, sur Marbles par défaut.
 
 ## Le dépôt
@@ -134,7 +152,7 @@ pas y arrive avec les patterns de démo, sur Marbles par défaut.
   - `tests/` : le moteur sur l'ordinateur (`native.cc`) et le simulateur de fm1-base (`screens.txt`)
 - `tools/` : la copie du code Mutable (`vendor_mi.sh`, `patch_mi.sh`, `split_tables.py`), les vérifications « comme
   sur le FM-1 » (`device_check.sh`, `check_res_links.py`, `no_static_init.py`), l'installeur ; `tools/bench/` : le
-  banc d'essai v0.0
+  banc d'essai v0.0 (il se construit depuis le tag `bench-0.0` : les ponts vers les modules ont changé depuis)
 - `make test` : le patch par défaut joué 16 s sur l'ordinateur, chaque piste et chaque modèle entendus, sans NaN
   (WAV dans `build/wav`)
 

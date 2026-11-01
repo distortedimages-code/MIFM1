@@ -45,13 +45,14 @@ void mrv_init(void *mem);
 void mrv_set(void *r, float time, float damping, float diffusion);   /* 0..1 each */
 void mrv_process(void *r, const float *in, float *out_l, float *out_r, uint32_t n);
 
-/* ---- Warps ---- */
-#define MW_ALGOS 9                       /* the 8 positions of ALGORITHM's sweep, then the easter egg */
+/* ---- Warps, at twice the FM-1's rate (88.2 kHz: its tables are for the module's 96) ---- */
 uint32_t mw_size(void);
 void mw_init(void *mem);
-void mw_set(void *w, int algo, float timbre, float level1, float level2);
-void mw_render(void *w, const float *carrier, const float *modulator, float *out, float *aux, uint32_t n);
-const char *mw_algo_name(int algo);
+/* algorithm 0..1 (the module's big knob: six cross-modulations, the vocoder from 0.7), timbre, level 1 and 2 (0..1);
+ * osc 0: the carrier is the input, 1..3 the internal oscillator's shapes, at note (MIDI); shift 1: the frequency
+ * shifter, the easter egg (algorithm the shift, timbre the side, level 1 the feedback, level 2 dry/wet) */
+void mw_set(void *w, float algorithm, float timbre, float level1, float level2, int osc, float note, int shift);
+void mw_render(void *w, const float *carrier, const float *modulator, float *out, uint32_t n);   /* ~1.6 ms late */
 
 /* ---- Tides 2 ---- */
 uint32_t mt_size(void);
