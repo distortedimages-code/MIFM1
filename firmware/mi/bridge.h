@@ -53,6 +53,7 @@ void mw_init(void *mem);
  * shifter, the easter egg (algorithm the shift, timbre the side, level 1 the feedback, level 2 dry/wet) */
 void mw_set(void *w, float algorithm, float timbre, float level1, float level2, int osc, float note, int shift);
 void mw_render(void *w, const float *carrier, const float *modulator, float *out, uint32_t n);   /* ~1.6 ms late */
+uint32_t mw_calls(void *w, uint32_t n);  /* the modulator's Process calls the next n frames make (its cost goes by them) */
 
 /* ---- Tides 2 ---- */
 uint32_t mt_size(void);

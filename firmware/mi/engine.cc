@@ -11,7 +11,7 @@
 //      and its randoms (over the knobs, until the next trig), its probability and its ratchets; the keyboard plays
 //      over, a new key a new trig; a note is put in the global scale;
 //   5. each voice plays the block, cut where its gate changes (a rising gate first takes its trig's note);
-//      voices 3 and 4 on the second core while core 0 plays 1 and 2;
+//      the voices and Warps shared between the two cores by what each costs (measured, block by block);
 //   6. the mixer: level and pan per track (the trig's), the sends, a soft limit on the sum; the gains glide, sample
 //      by sample (a gain that jumps at a block's edge clicks).
 #include <stdint.h>
@@ -191,7 +191,7 @@ int e_pos[ENG_TRACKS], e_dir[ENG_TRACKS], e_note[ENG_TRACKS];
 volatile int e_rec[ENG_TRACKS];
 
 float vbuf[ENG_TRACKS][kN];
-// Warps, on the second core one block behind: it plays the last block's carrier and modulator (w_car, w_mod, copied
+// Warps, one block behind: it plays the last block's carrier and modulator (w_car, w_mod, copied
 // once the voices are done) while the voices play this one; its output takes the place of a track's this block
 float w_car[kN], w_mod[kN], w_out[kN];
 volatile int w_job;                     // Warps runs in this block's job
@@ -537,12 +537,47 @@ void render_voice(int t, uint32_t n) {
 }
 
 volatile uint32_t job_n;
-void core1_job(uint32_t) {
+// the render's five tasks (the four voices, Warps), shared between the cores: each one timed where it ran, its cost
+// averaged, and each block they are split so that the busier core has the least to do (a modal voice costs ten times
+// a virtual analog one; Warps' vocoder as much as two voices)
+const int kTasks = ENG_TRACKS + 1;
+volatile uint32_t task_ticks[kTasks];
+float task_cost[kTasks] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+float warps_chunk_cost = 1.0f;           // Warps' cost a Process call: a block makes 2 or 3 of them (mw_calls)
+uint32_t warps_calls;
+
+void run_task(int i, uint32_t n) {
+  uint32_t q = plat_ticks24();
+  if (i < ENG_TRACKS) render_voice(i, n);
+  else mw_render(warps, w_car, w_mod, w_out, n);
+  task_ticks[i] = plat_ticks24() - q;
+}
+
+void core1_job(uint32_t mask) {         // the second core's tasks (bit i: task i)
   uint32_t t0 = plat_ticks24();
-  render_voice(2, job_n);
-  render_voice(3, job_n);
-  if (w_job) mw_render(warps, w_car, w_mod, w_out, job_n);
+  for (int i = 0; i < kTasks; ++i)
+    if ((mask >> i) & 1u) run_task(i, job_n);
   c1_ticks = plat_ticks24() - t0;
+}
+
+uint32_t split_tasks(uint32_t todo) {   // the second core's share of todo: the busier core's least
+  float cost[kTasks], best = 1e30f;
+  uint32_t pick = 0;
+  for (int i = 0; i < kTasks; ++i) cost[i] = (todo >> i) & 1u ? task_cost[i] : 0.0f;
+  for (uint32_t m = 0; m < (1u << kTasks); ++m) {
+    if (m & ~todo) continue;
+    float a = 0.0f, b = 0.0f;
+    for (int i = 0; i < kTasks; ++i) {
+      if ((m >> i) & 1u) b += cost[i];
+      else a += cost[i];
+    }
+    float worst = a > b ? a : b;
+    if (worst < best - 0.5f) {           // (a tie: the first found, so the split stays put)
+      best = worst;
+      pick = m;
+    }
+  }
+  return pick;
 }
 
 // Warps' knobs for this block, and whether it runs: a carrier (a track or its oscillator), its modulator a track
@@ -1091,23 +1126,34 @@ void eng_render(float* l, float* r, uint32_t n) {
   sequence(n);
   for (int t = 0; t < ENG_TRACKS; ++t) set_voice(t);
   set_warps();
-  // 4. the voices: 3 and 4 on the second core, then Warps (the last block's) there too
+  // 4. the voices and Warps (the last block's), split between the cores
   job_n = n;
-  int on_core1 = use_core1 && plat_cpu2_on() ? plat_cpu2_run(core1_job, 0) : 0;
-  render_voice(0, n);
-  render_voice(1, n);
+  uint32_t todo = w_job ? (1u << kTasks) - 1u : (1u << ENG_TRACKS) - 1u;
+  if (w_job) {
+    warps_calls = mw_calls(warps, n);
+    task_cost[ENG_TRACKS] = warps_chunk_cost * static_cast<float>(warps_calls);
+  }
+  uint32_t mask = split_tasks(todo);
+  int on_core1 = use_core1 && plat_cpu2_on() ? plat_cpu2_run(core1_job, mask) : 0;
+  for (int i = 0; i < kTasks; ++i)
+    if (((todo & ~mask) >> i) & 1u) run_task(i, n);
   uint32_t c0 = plat_ticks24() - t0, c1 = 0;
   if (on_core1) {
     if (plat_cpu2_wait() != 0) {        // given up meanwhile: the job was dropped, do it here
       on_core1 = 0;
-      core1_job(0);
+      core1_job(mask);
     }
     c1 = c1_ticks;
   } else {
-    core1_job(0);
+    core1_job(mask);
     c0 = plat_ticks24() - t0;
   }
   on_core1_last = on_core1;
+  for (int i = 0; i < ENG_TRACKS; ++i)  // the costs: averaged over ~8 blocks
+    task_cost[i] += (static_cast<float>(task_ticks[i]) - task_cost[i]) * 0.125f;
+  if (w_job && warps_calls)
+    warps_chunk_cost += (static_cast<float>(task_ticks[ENG_TRACKS]) / static_cast<float>(warps_calls) -
+                         warps_chunk_cost) * 0.125f;
   route_warps(n);
   // 5. the mixer: the levels, the sends into Clouds' reverb (core 0, once the four voices are done), its return
   uint32_t g = 0;

@@ -15,8 +15,9 @@ la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
 - une **matrice de câbles** : 15 sources (Tides A1-A4, B1-B4, Marbles X1-X3, Y, T1-T3) vers presque tous les
   paramètres, 8 câbles par piste et 8 globaux ;
 - **Warps** entre deux pistes (ou une piste et son oscillateur interne) : ses 6 modulations croisées, son vocodeur
-  et son easter egg, le décaleur de fréquence ; il tourne à 88,2 kHz comme le module (96 kHz) pour que ses filtres
-  et son vocodeur restent à leur place ;
+  et son easter egg, le décaleur de fréquence. Le module tourne à 96 kHz : ses tables (les bandes du vocodeur, les
+  filtres du décaleur, l'oscillateur) sont refaites pour 44,1 kHz par ses propres scripts, et ses modulations croisées
+  tournent à 88,2 kHz (leurs filtres de suréchantillonnage couperaient à 8 kHz sinon) ;
 - un **mixer simple** (un niveau et un pan par piste, à puissance constante : une piste garde le même volume où
   qu'elle soit dans l'image ; ses gains glissent échantillon par échantillon, un pan ou un niveau aléatoire ou locké
   ne claque pas) et un **départ réverbe** par piste vers la réverbe de Clouds
@@ -73,7 +74,9 @@ les 16 pas de la piste (allumés : un trig ; un point : des locks ; cerclé : ce
 | **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage sur la piste (avec GLO tenu aussi : sur les 4) |
 | **REC** | avec STEPS : les touches blanches deviennent les 16 pas, les 4 premières noires les pages |
 
-La charge de calcul est toujours affichée en haut à droite (le cœur le plus chargé, en %).
+La charge de calcul est toujours affichée en haut à droite (le cœur le plus chargé, en %). Les quatre voix et Warps
+se répartissent entre les deux cœurs selon ce que chacun coûte, mesuré bloc après bloc (une voix MODAL ou STRING coûte
+dix fois une VIRTUAL ANALOG).
 
 **Le mode MOD** (SEL) : le clavier devient une rangée de sources. On tient une touche et on tourne un potard : le
 câble est posé, le sens et la quantité de rotation fixent la profondeur ; revenir à 0 le retire. Touches 1-4 :
@@ -124,8 +127,9 @@ retombée de plus en plus longue), en fondu de l'un à l'autre comme sur le modu
 repère au suivant. **TIMBRE**, **LEVEL 1** et **LEVEL 2** comme sur le module : avec l'oscillateur interne, LEVEL 1
 règle sa note (C0 à C5), comme le potard du module. En Freq shift : ALGORITHM fixe le décalage (au centre, rien ;
 jusqu'à ±2 kHz), TIMBRE la bande (vers le haut, vers le bas), LEVEL 1 la réinjection, LEVEL 2 le mélange. Les câbles
-de la matrice vont aussi sur ses potards (Tides sur ALGORITHM…). Warps tourne sur le second cœur, un bloc derrière
-les voix (~4 ms de latence sur la piste qu'il remplace) ; le vocodeur est son algorithme le plus lourd.
+de la matrice vont aussi sur ses potards (Tides sur ALGORITHM…). Warps joue un bloc derrière les voix (~4 ms de
+latence sur la piste qu'il remplace) ; en passant le repère du vocodeur, il redémarre à l'autre fréquence (un fondu de
+1,5 ms).
 
 **La sortie** (GLO, SELECT, K2) : Stereo, Mic headset ou Mono. **Mic headset** est pour un casque à micro (fiche à
 4 contacts) branché à fond dans la prise du FM-1 (3 contacts) : ses écouteurs se retrouvent en série entre la

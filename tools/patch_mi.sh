@@ -22,4 +22,9 @@ python3 "$(dirname "$0")/split_tables.py"
 # 4. Warps' vocoder: a namespace-scope constant computed at start-up (sqrtf), a static initializer fm1-base never runs
 #    (the FM-1's old clang may not fold it): its value written out, sqrtf(20) (tools/no_static_init.py checks)
 sub warps/dsp/vocoder.h 's/^const float kFollowerGain = sqrtf(kNumBands);/const float kFollowerGain = 4.47213595f;  \/\/ MIFM1: sqrtf(kNumBands), kNumBands 20; no static initializer/' 'kFollowerGain = 4.47213595f'
+# 5. Warps at the FM-1's 44.1 kHz instead of 96: the three tables that depend on the rate (the vocoder's filter bank,
+#    the oscillators' note-to-increment table, the frequency shifter's allpass poles) made again by the module's own
+#    scripts, ported (tools/warps_tables.py: it first checks that the port makes the vendored 96 kHz tables)
+python3 -I "$(dirname "$0")/warps_tables.py" "$T/warps/resources.cc"
+grep -q "MIFM1: at 44100 Hz" "$T/warps/resources.cc" || { echo "patch_mi: warps/resources.cc not at 44.1 kHz"; exit 1; }
 echo "patched $T"

@@ -13,6 +13,7 @@ extern "C" {
 #include "plat.h"
 }
 #include "mi/engine.h"
+#include "mi/bridge.h"
 #include "mi/res_tables.h"
 extern "C" int mi_res_check(const uint8_t* payload, uint32_t len);
 
@@ -442,6 +443,37 @@ int main(int argc, char** argv) {
       (void)hz;
     }
     eng_defaults(p);
+  }
+
+  // 14. Warps' frequency shifter (at 44.1 kHz, its allpass pairs made for that rate): 1 kHz in, shifted 100 Hz; one
+  // side kept, the other under it by 30 dB or more (TIMBRE at either end)
+  {
+    static uint8_t wm[96 * 1024] __attribute__((aligned(8)));
+    if (mw_size() > sizeof wm) {
+      ++failures, printf("FAIL: Warps needs %u bytes\n", mw_size());
+    } else {
+      float pot = 0.5f + 0.5f * (0.4f + std::log2(100.0f / 4.0f) / 15.0f);   // modulator.cc: +100 Hz
+      double side[2][2];
+      for (int t = 0; t < 2; ++t) {
+        mw_init(wm);
+        static float c[44100], m[44100], o[44100];
+        for (int i = 0; i < 44100; ++i) c[i] = 0.0f, m[i] = 0.4f * std::sin(2.0 * M_PI * 1000.0 * i / 44100.0);
+        for (int b = 0; b < 44100 / 128; ++b) {
+          mw_set(wm, pot, static_cast<float>(t), 0.0f, 1.0f, 1, 48.0f, 1);
+          mw_render(wm, c + b * 128, m + b * 128, o + b * 128, 128);
+        }
+        for (int k = 0; k < 2; ++k) {
+          double f = k ? 1100.0 : 900.0, re = 0, im = 0;
+          for (int i = 11025; i < 44100 / 128 * 128; ++i)
+            re += o[i] * std::cos(2.0 * M_PI * f * i / 44100.0), im += o[i] * std::sin(2.0 * M_PI * f * i / 44100.0);
+          side[t][k] = 10.0 * std::log10(re * re + im * im + 1e-20);
+        }
+      }
+      printf("warps' frequency shifter, 1 kHz up 100 Hz: TIMBRE 0: 1100 Hz %+.0f dB over 900 Hz; TIMBRE 1: %+.0f dB\n",
+             side[0][1] - side[0][0], side[1][1] - side[1][0]);
+      double a = side[0][1] - side[0][0], b = side[1][1] - side[1][0];
+      if (!((a > 30 && b < -30) || (a < -30 && b > 30))) ++failures, printf("FAIL: the frequency shifter\n");
+    }
   }
 
   // 13. 0.1.9's project (version 4, 2644 bytes) read into this version's: all of it, Warps off

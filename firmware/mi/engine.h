@@ -2,8 +2,8 @@
  * Copyright (C) 2026 Yoann */
 /* MIFM1's sound: four Plaits voices played by Marbles or the steps, two Tides as modulators, a matrix of cables,
  * Warps between two tracks, a mixer and Clouds' reverb (mi/engine.cc). The project (project_t) is what the screen edits and what is saved; the engine reads it at every
- * audio block (the control rate, 344 Hz), runs Marbles and Tides, adds the cables to the knobs and plays the voices,
- * two of them on the second core when it runs.
+ * audio block (the control rate, 344 Hz), runs Marbles and Tides, adds the cables to the knobs and plays the voices and
+ * Warps, shared between the two cores by what each costs.
  *
  * Parameters: pages of 4 knobs (a page per face of a module, as the screen shows them). A parameter is
  * page * 4 + knob; its knob is val[] (0..1, bipolar -1..1, or an integer), its value after the cables final[]. */
@@ -149,7 +149,7 @@ void eng_render(float *l, float *r, uint32_t n);   /* audio interrupt */
 void eng_play(int on);                   /* the transport: Marbles' clock runs or stops (from its start) */
 int eng_playing(void);
 void eng_key(int track, int note, int on);   /* the keyboard plays a track (note: MIDI number) */
-void eng_core1(int on);                  /* two voices on the second core when it runs (1, the default) */
+void eng_core1(int on);                  /* the second core takes its share when it runs (1, the default) */
 
 /* what the screen shows */
 float eng_final(int param);              /* the value after the cables */
