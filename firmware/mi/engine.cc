@@ -852,52 +852,14 @@ struct MixJob {
 };
 MixJob mj;
 // the filter (PG_EQ): a track's two of stmlib's state variable filters (24 dB/oct, Butterworth: Q 0.54 and 1.31),
-// its mode now (0 none, 1 low pass, 2 high pass), its knob glided. stmlib's Svf, its arithmetic as it is, but the
-// tracks' filters run together, their states in registers: each filter is a chain where every sample waits on the
-// last (the FPU idle meanwhile), several chains side by side keep it busy (on a computer: 17,000 cycles a block down
-// to ~6,000, the samples the same to the bit)
-int eq_mode[ENG_TRACKS];
-float eq_st[ENG_TRACKS][4];              // its two filters' states (state_1, state_2 each)
-
-struct EqRun {                          // a track's filters this block: its samples, coefficients, states, mode
-  float* x;
-  float g[2], r[2], h[2];
-  float* st;
-  int hp;
+// made in place by eng_init (no static constructor, no destructor to register), its mode now (0 none, 1 low pass, 2
+// high pass), its knob glided
+struct EqPair {
+  stmlib::Svf f[2];
 };
-inline float svf_step(float in, float g, float r, float h, float& s1, float& s2, int hp) {   // stmlib's Svf::Process
-  float hpv = (in - r * s1 - g * s1 - s2) * h;
-  float bp = g * hpv + s1;
-  s1 = g * hpv + bp;
-  float lp = g * bp + s2;
-  s2 = g * bp + lp;
-  return hp ? hpv : lp;
-}
-void eq_one(EqRun& a, uint32_t n) {      // one track: its second filter a sample behind its first (two chains)
-  float s0 = a.st[0], s1 = a.st[1], s2 = a.st[2], s3 = a.st[3];
-  float* x = a.x;
-  float y = svf_step(x[0], a.g[0], a.r[0], a.h[0], s0, s1, a.hp);
-  for (uint32_t i = 1; i < n; ++i) {
-    float y1 = svf_step(x[i], a.g[0], a.r[0], a.h[0], s0, s1, a.hp);
-    x[i - 1] = svf_step(y, a.g[1], a.r[1], a.h[1], s2, s3, a.hp);
-    y = y1;
-  }
-  x[n - 1] = svf_step(y, a.g[1], a.r[1], a.h[1], s2, s3, a.hp);
-  a.st[0] = s0, a.st[1] = s1, a.st[2] = s2, a.st[3] = s3;
-}
-void eq_two(EqRun& a, EqRun& b, uint32_t n) {   // two tracks side by side (four chains)
-  float a0 = a.st[0], a1 = a.st[1], a2 = a.st[2], a3 = a.st[3];
-  float b0 = b.st[0], b1 = b.st[1], b2 = b.st[2], b3 = b.st[3];
-  float *xa = a.x, *xb = b.x;
-  for (uint32_t i = 0; i < n; ++i) {
-    float ya = svf_step(xa[i], a.g[0], a.r[0], a.h[0], a0, a1, a.hp);
-    float yb = svf_step(xb[i], b.g[0], b.r[0], b.h[0], b0, b1, b.hp);
-    xa[i] = svf_step(ya, a.g[1], a.r[1], a.h[1], a2, a3, a.hp);
-    xb[i] = svf_step(yb, b.g[1], b.r[1], b.h[1], b2, b3, b.hp);
-  }
-  a.st[0] = a0, a.st[1] = a1, a.st[2] = a2, a.st[3] = a3;
-  b.st[0] = b0, b.st[1] = b1, b.st[2] = b2, b.st[3] = b3;
-}
+alignas(8) uint8_t eq_mem[ENG_TRACKS][sizeof(EqPair)];
+EqPair* eq_p[ENG_TRACKS];
+int eq_mode[ENG_TRACKS];
 float eq_s[ENG_TRACKS];
 
 void mix_job(uint32_t n) {
@@ -911,40 +873,36 @@ void mix_job(uint32_t n) {
       if (mj.mute >= 0) mbuf[mj.mute][i] *= 1.0f - o;                // Warps not yet run)
     }
   }
-  EqRun run[ENG_TRACKS];
-  int nrun = 0;
   for (int t = 0; t < ENG_TRACKS; ++t) {   // the filter (before the duck and the sends: what a track sends is
     float v = mj.eq[t], pk = 0.0f;         // filtered with it)
     int mode = v <= -kEqDead ? 1 : v >= kEqDead ? 2 : 0;
     float* x = mbuf[t];
     if (mode)
       for (uint32_t i = 0; i < n; ++i) pk = fm_maxf(pk, fm_fabsf(x[i]));
+    stmlib::Svf* ef = eq_p[t]->f;
     if (mode != eq_mode[t] || pk < 1e-6f) {   // (another mode, or silence: the states from zero, never down into
-      for (int k = 0; k < 4; ++k) eq_st[t][k] = 0.0f;   // the subnormals)
+      ef[0].Init();                        // the subnormals)
+      ef[1].Init();
       eq_mode[t] = mode;
     }
     if (!mode || pk < 1e-6f) continue;
-    float f = clampf(eq_hz(v) / kSr, 0.0004f, 0.41f), g = stmlib::OnePole::tan<stmlib::FREQUENCY_ACCURATE>(f);
-    static const float kQ[2] = {0.5412f, 1.3066f};
-    EqRun& e = run[nrun++];
-    e.x = x;
-    for (int k = 0; k < 2; ++k) {        // (stmlib's set_f_q)
-      e.g[k] = g;
-      e.r[k] = 1.0f / kQ[k];
-      e.h[k] = 1.0f / (1.0f + e.r[k] * g + g * g);
+    float f = clampf(eq_hz(v) / kSr, 0.0004f, 0.41f);
+    ef[0].set_f_q<stmlib::FREQUENCY_ACCURATE>(f, 0.5412f);
+    ef[1].set_f_q<stmlib::FREQUENCY_ACCURATE>(f, 1.3066f);
+    if (mode == 1) {
+      ef[0].Process<stmlib::FILTER_MODE_LOW_PASS>(x, x, n);
+      ef[1].Process<stmlib::FILTER_MODE_LOW_PASS>(x, x, n);
+    } else {
+      ef[0].Process<stmlib::FILTER_MODE_HIGH_PASS>(x, x, n);
+      ef[1].Process<stmlib::FILTER_MODE_HIGH_PASS>(x, x, n);
     }
-    e.st = eq_st[t];
-    e.hp = mode == 2;
   }
-  for (int k = 0; k + 1 < nrun; k += 2) eq_two(run[k], run[k + 1], n);
-  if (nrun & 1) eq_one(run[nrun - 1], n);
   {                                     // the duck: T1's rises (their frames), DECAY, each track's depth
     float rel = mj.duck_rel;
-    uint32_t fr = n / kFrames, j = 0, k = 0;   // (a frame's samples counted: no division a sample)
+    uint32_t fr = n / kFrames;
     for (uint32_t i = 0; i < n; ++i) {
-      if (j == 0 && k < kFrames && mj.hit[k]) duck_d = 1.0f;
+      if (i % fr == 0 && mj.hit[i / fr]) duck_d = 1.0f;
       else duck_d *= rel;
-      if (++j == fr) j = 0, ++k;
       duck_s += (duck_d - duck_s) * 0.03f;
       duckv[i] = duck_s;
     }
@@ -2068,7 +2026,9 @@ int eng_init(void) {
       if (eng_tp_lockable(l, tp)) lane_lockable[l] |= 1u << tp;
     }
   for (int t = 0; t < ENG_TRACKS; ++t) {
-    for (int k = 0; k < 4; ++k) eq_st[t][k] = 0.0f;
+    eq_p[t] = new (eq_mem[t]) EqPair();
+    eq_p[t]->f[0].Init();
+    eq_p[t]->f[1].Init();
     eq_mode[t] = 0;
   }
   if (!eng_check(&proj)) eng_defaults(&proj);
