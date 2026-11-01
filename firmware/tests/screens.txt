@@ -142,6 +142,15 @@ wait 700
 release REC
 wait 300
 shot 16k4_track_cleared.png
+press GLO
+press REC
+wait 500
+shot 16k5_hold_erase_all.png
+wait 700
+release REC
+release GLO
+wait 300
+shot 16k6_all_erased.png
 tap ARP
 wait 300
 shot 16l_endless_empty.png

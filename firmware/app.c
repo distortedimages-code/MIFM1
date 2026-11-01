@@ -1641,23 +1641,23 @@ static void foot_endless(int t)          /* Endless's notes, 16 at a time: a bar
  * footer counts it down; "": nothing to show) */
 static uint32_t hold_ms(int b, char *label, uint32_t max)
 {
-    static const char *const LOAD[3] = {"LOAD: NEW PROJECT", "LOAD: THE DEMO", "LOAD: THE SAVED ONE"};
+    static const char *const LOAD[3] = {"LOAD NEW", "LOAD DEMO", "LOAD SAVED"};
     const char *l = "";
     uint32_t ms = LONG_MS;
     int pt = ptype(ui.page), num = 0;
     if (b == B_SEL && ui.held_step < 0 && !ui.matrix) {
         l = "MATRIX";
     } else if (b == B_SAVE) {
-        l = eng_playing() ? "SAVE (STOP FIRST)" : "SAVE THE PROJECT";
+        l = eng_playing() ? "SAVE: STOP FIRST" : "SAVE PROJECT";
         ms = 1000u;
     } else if (b == B_REC && ui.page == VP_SYS) {
         l = LOAD[ui.init_sel % 3];
         ms = 1000u;
     } else if (b == B_REC && pt == PT_ARP && ui.erec < 0) {
-        l = "CLEAR ENDLESS";
+        l = "ERASE ENDLESS";
         ms = 1000u;
     } else if (b == B_REC && eng_steps_mode() && ui.erec < 0 && (ui.grid || pt == PT_STEP || pt == PT_RND)) {
-        l = held(B_GLO) ? "CLEAR THE 4 TRACKS" : "CLEAR TRACK ";
+        l = held(B_GLO) ? "ERASE ALL" : "ERASE TRACK ";
         num = !held(B_GLO);
         ms = 1000u;
     }
@@ -1767,6 +1767,13 @@ static int all_state(uint32_t *left)     /* 1: the time to undo it, left (ms); 2
     return 0;
 }
 
+/* a countdown: five squares, one gone each fifth of the time (n left) */
+static void squares(int n, uint16_t c)
+{
+    for (int i = 0; i < 5; i++)
+        cv_rect(162 + i * 14, 11, 10, 10, i < n ? c : TRACK);
+}
+
 static void draw_footer(void)
 {
     static const char *const OUT[4][4] = {{"A1", "A2", "A3", "A4"}, {"B1", "B2", "B3", "B4"},
@@ -1797,8 +1804,8 @@ static void draw_footer(void)
             lh = lh * 3 + eng_trig(ui.track, ui.spage * 16 + i) + (eng_step_locked(ui.track, ui.spage * 16 + i) ? 2 : 0);
         lh = lh * 67 + (int)p->val[PG_STEP(ui.track) * 4 + 3];
     }
-    int32_t s[6] = {lh, mode | ui.mod << 4 | msg << 5 | und << 6 | (int32_t)(left * 56u / ALL_UNDO_MS) << 8 |
-                        (hb + 1) << 16 | (int32_t)(hdone * 28u / 1000u) << 20,
+    int hsq = 5 - (int)(hdone * 5u / 1000u), usq = (int)((left * 5u + ALL_UNDO_MS - 1u) / ALL_UNDO_MS);
+    int32_t s[6] = {lh, mode | ui.mod << 4 | msg << 5 | und << 6 | usq << 8 | (hb + 1) << 16 | hsq << 20,
                     (int32_t)(track_accent(0) ^ track_accent(1) << 1 ^
                     track_accent(2) << 2 ^ track_accent(3) << 3) ^ ui.track << 20 ^ (int32_t)ac << 4,
                     eng_note(0) | eng_note(1) << 8 | eng_note(2) << 16,
@@ -1809,11 +1816,9 @@ static void draw_footer(void)
     memcpy(ui.foot_shown, s, sizeof s);
     cv_begin(240, FOOT_H, BG);
     cv_rect(8, 2, 224, 1, RULE);
-    if (hb >= 0) {                       /* a press held: what it will do, and the time left, as a filling bar */
-        uint16_t hc = hb == B_SEL ? TEAL : PINK;
-        cv_text(120 - text_w(&FONT_B, hl) / 2, 6, &FONT_B, hl, C_WHITE);
-        cv_rect(8, 27, 224, 3, TRACK);
-        cv_rect(8, 27, (int)(224u * hdone / 1000u), 3, hc);
+    if (hb >= 0) {                       /* a press held: what it will do, the time left in five squares */
+        cv_text(10, 8, &FONT_B, hl, C_WHITE);
+        squares(hsq, hb == B_SEL ? TEAL : PINK);
     } else if (msg) {
         t[0] = 0;
         text_cat(t, ui.msg[0], sizeof t);
@@ -1822,11 +1827,8 @@ static void draw_footer(void)
         cv_text(120 - text_w(&FONT_B, t) / 2, 11, &FONT_B, t, C_WHITE);
     } else if (und) {                    /* ALL: the time to undo it, or waiting for the bar */
         if (und == 1) {
-            char sec[4];
-            int_text((int32_t)((left + 999u) / 1000u), sec);
             cv_text(10, 8, &FONT_B, "GLO: UNDO ALL", YELLOW);
-            cv_text(230 - text_w(&FONT_B, sec), 8, &FONT_B, sec, YELLOW);
-            cv_rect(8, 29, (int)(224u * left / ALL_UNDO_MS), 2, YELLOW);
+            squares(usq, YELLOW);
         } else {
             cv_text(120 - text_w(&FONT_B, "UNDONE AT THE BAR") / 2, 8, &FONT_B, "UNDONE AT THE BAR", YELLOW);
         }
@@ -2121,6 +2123,21 @@ static void button_down(int b)
     }
 }
 
+static void track_erase(int t)          /* its pattern and its modulations (t = ENG_TRACKS: the global cables) */
+{
+    project_t *p = eng_project();
+    if (t < ENG_TRACKS) {
+        eng_steps_clear(t);
+        for (int i = 0; i < ENG_NTP; i++)
+            p->rnd[t][i] = 0;
+    }
+    for (int c = 0; c < ENG_CABLES; c++) {
+        p->cable[t][c].src = SRC_NONE;
+        p->cable[t][c].dst = 0;
+        p->cable[t][c].depth = 0;
+    }
+}
+
 static void button_long(int b)
 {
     if (b == B_SEL && ui.held_step < 0) {
@@ -2145,20 +2162,22 @@ static void button_long(int b)
             app_say("ENDLESS", "CLEARED");
         } else if (eng_steps_mode() && ui.erec < 0 &&
                    (ui.grid || ptype(ui.page) == PT_STEP || ptype(ui.page) == PT_RND)) {
-            /* the steps: the track's pattern cleared (its trigs and locks), with GLO held every track's */
+            /* the steps: the track erased (its trigs, locks, randoms and cables), with GLO held all of them and the
+             * global cables (Warps stays) */
             char n[16];
             if (held(B_GLO)) {
-                for (int t = 0; t < ENG_TRACKS; t++)
-                    eng_steps_clear(t);
+                for (int t = 0; t <= ENG_TRACKS; t++)
+                    track_erase(t);
                 ui.used[B_GLO] = 1;
-                app_say("ALL TRACKS", "CLEARED");
+                all.press = 1;                /* (not an ALL to undo) */
+                app_say("ALL", "ERASED");
             } else {
-                eng_steps_clear(ui.track);
+                track_erase(ui.track);
                 n[0] = 0;
                 text_cat(n, "TRACK ", sizeof n);
                 n[6] = (char)('1' + ui.track);
                 n[7] = 0;
-                app_say(n, "CLEARED");
+                app_say(n, "ERASED");
             }
             ui.held_step = -1;
             dirty = 1;

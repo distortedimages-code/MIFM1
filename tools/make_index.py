@@ -56,7 +56,7 @@ LEVEL 1, LEVEL 2, puis CARRIER (une piste ou l'oscillateur), MODULATOR, MOD DRY,
 <tr><td>ENV</td><td>l'enveloppe de la piste : DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV</td></tr>
 <tr><td>ENV tenu + potard</td><td>l'aléatoire de ce réglage : à droite nouveau à chaque trig, à gauche en boucle</td></tr>
 <tr><td>REC</td><td>avec STEPS : les touches blanches sont les 16 pas ; tenir un pas + un potard = P-lock</td></tr>
-<tr><td>REC tenu (pas à pas)</td><td>efface le pattern de la piste ; avec GLO tenu, celui des 4 pistes</td></tr>
+<tr><td>REC tenu (pas à pas)</td><td>efface la piste (trigs, locks, aléatoires, câbles) ; avec GLO tenu, les 4 pistes et les câbles globaux</td></tr>
 <tr><td>GLO, SELECT, K1, REC tenu</td><td>INIT : un projet neuf (4 Plaits sur VIRTUAL ANALOG, rien de câblé), le patch de démo
 ou le projet sauvegardé ; rien n'est sauvegardé avant SAVE tenu</td></tr>
 </table>
