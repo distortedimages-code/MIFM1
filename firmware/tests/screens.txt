@@ -5,7 +5,7 @@
 # the black keys, the delay's lane and a lock on its time, the pages on OCT- OCT+), the RANDOM page, ENV held, GLO
 # held: ALL, Endless (recorded, played,
 # transposed by a key), Warps (off, patched, its algorithms, its oscillator, the frequency shifter), a save kept across
-# a power-off and in a backup, a new project (INIT: GLO, SELECT, REC held) and the saved one back, an FM-1 without the
+# a power-off and in a backup, a new project (INIT: GLO, SELECT, REC held), the saved one back, the stress test, an FM-1 without the
 # module tables, then the tables arriving. Screenshots in the output folder.
 wait 1500
 shot 01_plaits_t1.png
@@ -362,6 +362,22 @@ wait 1100
 release REC
 wait 400
 shot 18e_saved_back.png
+tap GLO
+turn SELECT 1
+wait 400
+turn K1 1
+wait 300
+shot 18f_stress_choice.png
+press REC
+wait 1100
+release REC
+wait 3000
+shot 18g_stress_test.png
+wav stress.wav
+wait 6000
+wavstop
+tap PLAY
+wait 300
 res 0
 reboot
 wait 1500

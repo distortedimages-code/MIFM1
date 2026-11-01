@@ -223,7 +223,11 @@ float raw_left[ENG_TRACKS];             // a step's gate: its samples left
 int last_g[ENG_TRACKS];                 // the gate of the last frame
 int rat_on[ENG_TRACKS], rat_n[ENG_TRACKS];
 float rat_pos[ENG_TRACKS], rat_period[ENG_TRACKS];
-float tdelta[ENG_LANES][ENG_NTP];       // the trig's locks and randoms, over the knobs, until the next trig
+float tdelta[ENG_LANES][ENG_NTP];       // the trig's locks and randoms, over the knobs, until the next trig (a lane
+                                        // left without trigs, or another project: back to the knobs, eng_fresh)
+void lane_fresh(int lane) {
+  for (int tp = 0; tp < ENG_NTP; ++tp) tdelta[lane][tp] = 0.0f;
+}
 float tnote[ENG_TRACKS];                // its note
 uint8_t fg[ENG_TRACKS][kFrames];        // the gates the voices play, frame by frame
 float fnote[ENG_TRACKS][kFrames];       // the note a rise in that frame takes
@@ -1552,6 +1556,90 @@ void eng_defaults(project_t* p) {
   set_lock(p, 3, 9, TP_DECAY, 0.95f);
 }
 
+// the stress test (GLO, SELECT: PROJECT, K1, REC held): a fixed patch that keeps everything busy, to read the
+// machine page against, version after version: four tracks playing (a kick, VA VCF, CHORD, MODAL), two of
+// them gritty, Warps (diode ring, T3 by T2), OTT, the delay and the reverb fed, the duck, the filters, the three LFOs
+// on 18 cables, randoms, locks, ratchets
+void eng_stress(project_t* p) {
+  eng_blank(p);
+  static const int kModel[4] = {21, 0, 14, 20};          // kick, VA VCF, chords, modal (the chords: four voices)
+  static const int kOct[4] = {-1, -1, 0, 0};
+  static const float kLevel[4] = {0.9f, 0.75f, 0.6f, 0.6f};
+  static const float kPan[4] = {0.0f, 0.0f, -0.3f, 0.35f};
+  static const float kRSend[4] = {0.0f, 0.15f, 0.35f, 0.5f};
+  static const float kDSend[4] = {0.0f, 0.1f, 0.45f, 0.2f};
+  static const float kDecay[4] = {0.45f, 0.4f, 0.5f, 0.7f};
+  static const float kEq[4] = {0.0f, 0.0f, -0.25f, 0.15f};
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(kModel[t]);
+    p->val[PG_TRACK(t, 2) * 4 + 3] = static_cast<float>(kOct[t]);
+    p->val[PG_TRACK(t, 1) * 4 + 0] = kDecay[t];
+    p->val[PG_MIX * 4 + t] = kLevel[t];
+    p->val[PG_PAN * 4 + t] = kPan[t];
+    p->val[PG_RSEND * 4 + t] = kRSend[t];
+    p->val[PG_DSEND * 4 + t] = kDSend[t];
+    p->val[PG_EQ * 4 + t] = kEq[t];
+  }
+  p->val[PG_TRACK(1, 2) * 4 + 1] = 0.3f;                 // the bass: short notes
+  p->val[PG_GRIT(0) * 4 + 0] = 0.35f;                    // the kick driven (soft)
+  p->val[PG_GRIT(1) * 4 + 0] = 0.25f;                    // the bass clipped, a little decimated
+  p->val[PG_GRIT(1) * 4 + 1] = static_cast<float>(GS_HARD);
+  p->val[PG_GRIT(1) * 4 + 2] = 0.15f;
+  // LFO 1: a triangle a bar; LFO 2: a sample and hold at ~3 Hz, slewed; LFO 3: a sine at 0.3 Hz
+  static const float kLfo[3][4] = {{static_cast<float>(LW_TRI), 4.5f / 9.0f, static_cast<float>(LM_SYNC), 0.0f},
+                                   {static_cast<float>(LW_SH), 0.725f, static_cast<float>(LM_FREE), 0.15f},
+                                   {static_cast<float>(LW_SINE), 0.392f, static_cast<float>(LM_FREE), 0.0f}};
+  for (int i = 0; i < 3; ++i)
+    for (int k = 0; k < 4; ++k) p->val[PG_LFO(i) * 4 + k] = kLfo[i][k];
+  p->val[PG_DUCK * 4 + 0] = 0.35f;
+  p->val[PG_DUCK * 4 + 1] = 0.5f;
+  p->val[PG_DUCK * 4 + 2] = 0.3f;
+  p->val[PG_DUCK * 4 + 3] = 0.25f;
+  static const float kDelay[8] = {7.0f, 0.55f, -0.15f, 0.3f, 0.35f, 1.0f, 0.25f, 0.55f};
+  for (int k = 0; k < 8; ++k) p->val[PG_DELAY(k / 4) * 4 + k % 4] = kDelay[k];
+  static const float kRev[4] = {0.75f, 0.45f, 0.7f, 0.55f};
+  for (int k = 0; k < 4; ++k) p->val[PG_REVERB * 4 + k] = kRev[k];
+  static const float kWarps[8] = {static_cast<float>(WC_T3), 1.0f, 0.4f, 0.8f, 0.5f, 0.6f, 0.6f,
+                                  static_cast<float>(WM_WARPS)};
+  for (int k = 0; k < 8; ++k) p->val[PG_WARPS(k / 4) * 4 + k % 4] = kWarps[k];
+  p->algo[PG_COMP] = MB_OTT;                             // the master bus: OTT
+  static const float kOtt[4] = {0.6f, 0.5f, 0.1f, 0.0f};
+  for (int k = 0; k < 4; ++k) p->val[PG_OTT * 4 + k] = kOtt[k];
+  p->val[PG_GLOBAL * 4 + 1] = 2.0f;                      // minor
+  // the cables: each track's, then the global ones
+  cable(p, 0, 0, SRC_L2, PG_TRACK(0, 0) * 4 + 2, 25);    // T1: S&H -> BRIGHT, sine -> the grit, the triangle -> DECAY
+  cable(p, 0, 1, SRC_L3, PG_GRIT(0) * 4 + 0, 30);
+  cable(p, 0, 2, SRC_L1, PG_TRACK(0, 1) * 4 + 0, 20);
+  cable(p, 1, 0, SRC_L1, PG_TRACK(1, 0) * 4 + 1, 40);    // T2: the triangle -> HARMONICS and the filter, S&H ->
+  cable(p, 1, 1, SRC_L2, PG_TRACK(1, 0) * 4 + 3, 30);    // MORPH, the sine -> BITS
+  cable(p, 1, 2, SRC_L3, PG_GRIT(1) * 4 + 3, 15);
+  cable(p, 1, 3, SRC_L1, PG_EQ * 4 + 1, -20);
+  cable(p, 2, 0, SRC_L1, PG_TRACK(2, 0) * 4 + 3, 40);    // T3: the triangle -> MORPH, S&H -> TIMBRE, the sine -> the
+  cable(p, 2, 1, SRC_L2, PG_TRACK(2, 0) * 4 + 2, 35);    // pan and the delay's send
+  cable(p, 2, 2, SRC_L3, PG_PAN * 4 + 2, 60);
+  cable(p, 2, 3, SRC_L3, PG_DSEND * 4 + 2, 30);
+  cable(p, 3, 0, SRC_L2, PG_TRACK(3, 0) * 4 + 2, 40);    // T4: S&H -> TIMBRE and the pan, the sine -> HARMONICS, the
+  cable(p, 3, 1, SRC_L3, PG_TRACK(3, 0) * 4 + 1, 30);    // triangle -> the reverb's send
+  cable(p, 3, 2, SRC_L1, PG_RSEND * 4 + 3, 30);
+  cable(p, 3, 3, SRC_L2, PG_PAN * 4 + 3, -50);
+  cable(p, 4, 0, SRC_L1, PG_DELAY(0) * 4 + 2, 25);       // global: the delay's filter and wow, Warps' TIMBRE, the
+  cable(p, 4, 1, SRC_L3, PG_DELAY(1) * 4 + 2, 30);       // reverb's time, OTT's depth
+  cable(p, 4, 2, SRC_L2, PG_WARPS(1) * 4 + 0, 40);
+  cable(p, 4, 3, SRC_L3, PG_REVERB * 4 + 0, 20);
+  cable(p, 4, 4, SRC_L1, PG_OTT * 4 + 0, 20);
+  static const uint16_t kPat[4] = {0x5111, 0x6DB6, 0x4925, 0x8282};   // bit s: step s
+  for (int t = 0; t < ENG_TRACKS; ++t) set_trigs(p, t, kPat[t]);
+  set_lock(p, 0, 14, TP_RATCHET, 3.0f);
+  set_lock(p, 1, 3, TP_NOTE, 3.0f);
+  set_lock(p, 1, 6, TP_NOTE, 7.0f);
+  set_lock(p, 1, 11, TP_NOTE, 10.0f);
+  p->rnd[1][TP_RATCHET] = 20;                            // the bass: ratchets now and then
+  p->rnd[2][TP_NOTE] = -30;                              // the chords: a looped random tune, their pan new each trig
+  p->rnd[2][TP_PAN] = 40;
+  p->rnd[3][TP_NOTE] = -50;                              // the resonator: a looped tune, its decay new each trig
+  p->rnd[3][TP_DECAY] = 30;
+}
+
 int eng_check(const project_t* p) {
   return p->magic == PROJECT_MAGIC && p->version == PROJECT_VERSION && p->size == sizeof(project_t);
 }
@@ -1908,6 +1996,7 @@ void cut_now() {
   w_last = -1;                          // (Warps from its first block again: silence, then its job)
   w_job = 0;
   w_gate = w_gmix = 0.0f;               // (its oscillator shut: the transport is stopped)
+  for (int l = 0; l < ENG_LANES; ++l) lane_fresh(l);
   fx_n = 0;                             // (no mix to play: the next block's output silent)
   meter[ENG_TRACKS] = meter[ENG_TRACKS + 1] = 0.0f;
 }
@@ -2253,6 +2342,7 @@ void eng_trig_set(int lane, int step, int on) {
   if (lane < 0 || lane >= ENG_LANES || step < 0 || step >= ENG_STEPS) return;
   if (on) proj.trig[lane][step / 8] = static_cast<uint8_t>(proj.trig[lane][step / 8] | (1u << (step % 8)));
   else proj.trig[lane][step / 8] = static_cast<uint8_t>(proj.trig[lane][step / 8] & ~(1u << (step % 8)));
+  if (!on && !eng_lane_has_trigs(lane)) lane_fresh(lane);   // (its last trig gone: its last lock with it)
 }
 int eng_lane_has_trigs(int lane) {
   if (lane < 0 || lane >= ENG_LANES) return 0;
@@ -2294,6 +2384,10 @@ void eng_steps_clear(int lane) {        // a lane's pattern: its trigs and its l
   for (int b = 0; b < ENG_STEPS / 8; ++b) proj.trig[lane][b] = 0;
   for (int i = 0; i < ENG_PLOCKS; ++i)
     if (proj.lock[i].lane == lane) proj.lock[i].lane = 0xFF;
+  lane_fresh(lane);                     // (the last trig's locks and randoms go with them)
+}
+void eng_fresh(void) {                   // another project: no trig's lock or random left from the last one
+  for (int l = 0; l < ENG_LANES; ++l) lane_fresh(l);
 }
 int eng_step_locked(int lane, int step) {
   int n = 0;

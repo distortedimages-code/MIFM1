@@ -1316,6 +1316,51 @@ int main(int argc, char** argv) {
     eng_defaults(p);
   }
 
+  // 32. the stress test: it plays (every track, Warps, OTT), no NaN, nothing stuck; its weight beside the demo's on
+  // this computer (the FM-1's figures are on its machine page)
+  {
+    auto weigh = [&](int stress, float* pk, int* sounding) {
+      eng_play(0);
+      if (stress) eng_stress(p);
+      else eng_defaults(p);
+      eng_fresh();                                        // (as the screen does: the tests before's locks gone)
+      eng_cut();
+      for (int b = 0; b < 3; ++b) eng_render(l, r, n);
+      eng_play(1);
+      for (int b = 0; b < 200; ++b) eng_render(l, r, n);
+      int nan = 0;
+      float m = 0.0f, tm[ENG_TRACKS] = {0, 0, 0, 0};
+      clock_t c0 = clock();
+      for (int b = 0; b < 44100 * 4 / static_cast<int>(n); ++b) {
+        eng_render(l, r, n);
+        for (uint32_t i = 0; i < n; ++i) {
+          if (!std::isfinite(l[i]) || !std::isfinite(r[i])) ++nan;
+          m = std::max(m, std::fabs(l[i]));
+        }
+        for (int t = 0; t < ENG_TRACKS; ++t) tm[t] = std::max(tm[t], eng_meter(t));
+      }
+      double secs = static_cast<double>(clock() - c0) / CLOCKS_PER_SEC;
+      int s2 = 0;
+      for (int t = 0; t < ENG_TRACKS; ++t) s2 += tm[t] > 0.01f;
+      *pk = nan ? -1.0f : m;
+      *sounding = s2;
+      eng_play(0);
+      return secs;
+    };
+    float pk_demo, pk_stress;
+    int snd_demo, snd_stress;
+    double t_demo = weigh(0, &pk_demo, &snd_demo);
+    double t_stress = weigh(1, &pk_stress, &snd_stress);
+    int warps = eng_warps_algo(), bus = p->algo[PG_COMP], cables = 0;
+    for (int g = 0; g <= ENG_TRACKS; ++g)
+      for (int c = 0; c < ENG_CABLES; ++c) cables += p->cable[g][c].depth != 0;
+    printf("the stress test: peak %.3f, %d tracks sounding, Warps %d, bus %d, %d cables; %.2fx the demo's time here\n",
+           pk_stress, snd_stress, warps, bus, cables, t_stress / (t_demo > 0.0 ? t_demo : 1.0));
+    if (pk_stress < 0.05f || pk_stress > 1.0f || snd_stress != ENG_TRACKS || warps != 2 || bus != MB_OTT || cables != 20)
+      ++failures, printf("FAIL: the stress test\n");
+    eng_defaults(p);
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

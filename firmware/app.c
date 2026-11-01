@@ -21,7 +21,8 @@
  *   HOME        the mixer: the levels, the pans
  *   FX          the effects, one after the other: the delay, the reverb, Warps; SELECT their faces (their knobs,
  *               the tracks' sends, their steps)
- *   GLO         TEMPO, SCALE, ROOT, SWING; then the project (K1, REC held: INIT) and the machine. Held with a knob:
+ *   GLO         TEMPO, SCALE, ROOT, SWING; then the project (K1, REC held: INIT, the demo, the saved one, the stress
+ *               test, which plays at once: the machine's figures under it) and the machine. Held with a knob:
  *               ALL, the same parameter on the four tracks (with ALGORITHM: the same model), the screen yellow while
  *               GLO is held; for 4 s after, GLO undoes it as the next bar starts (again: it stays)
  *   ENV         the track's envelope (PLAITS 2/3: DECAY, LPG COLOUR, the internal envelope's TIMBRE and MORPH).
@@ -150,7 +151,8 @@ static struct {
     int used[NB];                        /* a knob turned while that button was held: no tap when it is let go */
     int mod;                             /* MOD mode */
     int msel;                            /* MATRIX: the cable chosen (0..7 the track's, 8..15 the global ones) */
-    int init_sel;                        /* GLO: the project REC held loads (0 new, 1 the demo, 2 the saved one) */
+    int init_sel;                        /* GLO: the project REC held loads (0 new, 1 the demo, 2 the saved one, 3 the
+                                          * stress test) */
     int octave;                          /* the keyboard's */
     int dice;                            /* OCT- and OCT+ held: SELECT turns the random dose */
     int combo;                           /* REC and SEL held together: every cable erased (REC's hold) */
@@ -473,6 +475,7 @@ static void project_load(void)            /* the saved project (v0.1's read into
         *p = scratch;
     else
         eng_defaults(p);
+    eng_fresh();                         /* (the last project's trigs' locks and randoms gone) */
     dirty = 0;
 }
 
@@ -743,7 +746,8 @@ typedef struct {
     char op;
     int8_t a, b, c, d;
 } vop_t;
-enum { IC_MODEL = 0, IC_WAVE = 24, IC_MIX = IC_WAVE + LW_N, IC_REV, IC_GLO, IC_NEW, IC_DEMO, IC_SAVED, IC_STEPS, IC_DICE,
+enum { IC_MODEL = 0, IC_WAVE = 24, IC_MIX = IC_WAVE + LW_N, IC_REV, IC_GLO, IC_NEW, IC_DEMO, IC_SAVED, IC_STRESS,
+       IC_STEPS, IC_DICE,
        IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, IC_EQ, IC_GRIT, IC_EUC, NICON };
 #define IOPS 10
 static const vop_t ICONS[NICON][IOPS] = {
@@ -799,6 +803,7 @@ static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 16, 6, 16, 26}, {'L', 6, 16, 26, 16}},                                                   /* new */
     {{'L', 10, 6, 10, 26}, {'L', 10, 6, 26, 16}, {'L', 26, 16, 10, 26}},                            /* the demo */
     {{'L', 16, 4, 16, 20}, {'L', 9, 13, 16, 20}, {'L', 16, 20, 23, 13}, {'L', 6, 27, 26, 27}},      /* the saved one */
+    {{'L', 19, 3, 9, 18}, {'L', 9, 18, 20, 15}, {'L', 20, 15, 12, 29}},                            /* the stress test */
     {{'R', 3, 10, 5, 12}, {'R', 10, 10, 5, 12}, {'R', 17, 10, 5, 12}, {'R', 24, 10, 5, 12}, {'D', 5, 16, 1, 0},
      {'D', 19, 16, 1, 0}},                                                                           /* the steps */
     {{'R', 5, 5, 22, 22}, {'D', 11, 11, 2, 0}, {'D', 16, 16, 2, 0}, {'D', 21, 21, 2, 0}},           /* random */
@@ -2046,19 +2051,20 @@ static void draw_matrix(void)
 static void draw_projects(void)          /* the projects REC held loads, in the module's display */
 {
     static int shown = -1;
-    static const char *const P[3] = {"New: 4 Plaits, nothing patched", "The demo patch", "The saved project"};
+    static const char *const P[4] = {"New: 4 Plaits, nothing patched", "The demo patch", "The saved project",
+                                     "Stress test (plays at once)"};
     if (ui.full || ui.body_panel || shown != ui.init_sel) {
         shown = ui.init_sel;
         cv_begin(240, PANEL_H, BG);
         cv_text(10, 0, &FONT_B, "PROJECT", TXT);
         cv_text(232 - text_w(&FONT_T, "K1 CHOOSE, REC HELD LOADS"), 3, &FONT_T, "K1 CHOOSE, REC HELD LOADS", DIM);
-        for (int i = 0; i < 3; i++) {
-            int y = 20 + i * 18, sel = i == ui.init_sel;
+        for (int i = 0; i < 4; i++) {    /* (four rows of 15 px under the title) */
+            int y = 17 + i * 15, sel = i == ui.init_sel;
             if (sel)
-                pill(4, y, 232, 17, SEL);
-            disc(16.0f, (float)y + 8.0f, 6.5f, accent3(i));
-            vicon(16.0f, (float)y + 8.0f, 0.34f, 1.5f, BG, IC_NEW + i, 0);
-            cv_text(30, y + 1, &FONT_XS, P[i], sel ? HI : TXT);
+                pill(4, y, 232, 14, SEL);
+            disc(16.0f, (float)y + 7.0f, 5.5f, i < 3 ? accent3(i) : KNOCK);
+            vicon(16.0f, (float)y + 7.0f, 0.3f, 1.4f, BG, IC_NEW + i, 0);
+            cv_text(30, y - 1, &FONT_XS, P[i], sel ? HI : TXT);
         }
         blit(0, PANEL_Y);
     }
@@ -2290,7 +2296,7 @@ static int erase_lane(void)              /* the lane REC held erases: STEP mode'
 
 static uint32_t hold_ms(int b, char *label, uint32_t max)
 {
-    static const char *const LOAD[3] = {"LOAD NEW", "LOAD DEMO", "LOAD SAVED"};
+    static const char *const LOAD[4] = {"LOAD NEW", "LOAD DEMO", "LOAD SAVED", "LOAD STRESS TEST"};
     static const char *const FX[3] = {"ERASE DELAY STEPS", "ERASE REVERB STEPS", "ERASE WARPS STEPS"};
     char l[24];
     uint32_t ms = LONG_MS;
@@ -2310,7 +2316,7 @@ static uint32_t hold_ms(int b, char *label, uint32_t max)
         text_cat(l, eng_playing() ? "SAVE: STOP FIRST" : "SAVE PROJECT", sizeof l);
         ms = 1000u;
     } else if (b == B_REC && ui.page == VP_SYS) {
-        text_cat(l, LOAD[ui.init_sel % 3], sizeof l);
+        text_cat(l, LOAD[ui.init_sel % 4], sizeof l);
         ms = 1000u;
     } else if (b == B_REC && pt == PT_ARP && ui.erec < 0 && !ui.grid) {
         text_cat(l, "ERASE ENDLESS", sizeof l);
@@ -2678,17 +2684,26 @@ static void project_init(int which)
     } else {
         if (which == 0)
             eng_blank(&scratch);
-        else
+        else if (which == 1)
             eng_defaults(&scratch);
+        else
+            eng_stress(&scratch);
         *eng_project() = scratch;
+        eng_fresh();
         dirty = 1;
-        app_say(which == 0 ? "NEW PROJECT" : "DEMO PATCH", which == 0 ? "4 PLAITS" : "LOADED");
+        app_say(which == 0 ? "NEW PROJECT" : which == 1 ? "DEMO PATCH" : "STRESS TEST",
+                which == 0 ? "4 PLAITS" : which == 1 ? "LOADED" : "PLAYING");
     }
     p->out_mode = out;
     p->warps_hq = hq;
     p->theme = theme;
     ui.track = 0;
     set_lane(0);
+    if (which == 3) {                    /* the stress test: playing, the machine's figures here, under it */
+        eng_play(1);
+        ui.full = 1;
+        return;
+    }
     go_page(PG_TRACK(0, 0));
 }
 
@@ -3338,7 +3353,7 @@ static void input(void)
             project_t *p = eng_project();
             int d = e > 0 ? 1 : -1;
             if (i == 0)
-                ui.init_sel = clamp(ui.init_sel + d, 0, 2);
+                ui.init_sel = clamp(ui.init_sel + d, 0, 3);
             else if (i == 1)
                 p->out_mode = (uint8_t)clamp(p->out_mode + d, 0, 2);
             else if (i == 2)

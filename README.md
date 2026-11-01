@@ -62,7 +62,14 @@ sur deux de ses notes (la piste de pas du delay), piste 4 un résonateur MODAL d
 **Repartir de zéro (INIT)** : GLO, SELECT (la page PROJECT), puis **K1** choisit le projet et **REC tenu** le
 charge : *New* (4 pistes Plaits sur VIRTUAL ANALOG, tous les potards à midi, aucun pas, aucun câble, rien vers les
 effets, do majeur), *The demo patch* (le patch ci-dessus) ou *The saved project* (le dernier sauvegardé, pour
-annuler). Le transport s'arrête ; rien n'est sauvegardé tant que SAVE n'est pas tenu.
+annuler) ou *Stress test*. Le transport s'arrête ; rien n'est sauvegardé tant que SAVE n'est pas tenu.
+
+**Le stress test** (GLO, SELECT, K1 sur *Stress test*, REC tenu) : un patch fixe, le même à chaque fois, qui démarre
+tout seul et laisse sous les yeux la page machine (la charge des cœurs, le pic, ce que coûte chaque piste) : pour
+comparer les versions entre elles. Une grosse caisse et une basse VA VCF passées au grit, des accords (CHORD) et un
+résonateur MODAL, Warps (anneau à diodes, T3 par T2), OTT sur le bus, le delay et la réverbe nourris, le duck, les
+filtres, les trois LFO sur 20 câbles, des aléatoires, des locks et des ratchets. La sortie, la qualité de Warps (Eco
+ou HQ) et le thème restent ceux de la machine : comparer avec le même réglage de Warps.
 
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
 icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis

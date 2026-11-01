@@ -168,6 +168,8 @@ int eng_init(void);                      /* main loop, once: the modules in the 
 project_t *eng_project(void);            /* the live project: the screen writes it, the render reads it */
 void eng_defaults(project_t *p);         /* the patch a new project plays (the demo) */
 void eng_blank(project_t *p);            /* INIT: four Plaits at noon, nothing patched, no steps */
+void eng_stress(project_t *p);           /* the stress test: a fixed patch keeping everything busy (the machine page's
+                                          * figures, version after version) */
 int eng_check(const project_t *p);       /* 1: a project this version can load */
 int eng_upgrade(project_t *p, int bytes);   /* a project read whole or an older one, made this version's: 1 ok */
 
@@ -179,6 +181,7 @@ int eng_lock(int lane, int step, int tp, float *v);   /* 1: that step locks tp (
 int eng_lock_set(int lane, int step, int tp, float v);   /* 0 ok, -1 no room */
 void eng_lock_clear(int lane, int step); /* all its locks */
 void eng_steps_clear(int lane);          /* the lane's pattern: every trig and lock (its knobs and randoms stay) */
+void eng_fresh(void);                    /* another project loaded: the last one's trigs' locks and randoms gone */
 int eng_step_locked(int lane, int step); /* how many locks it has */
 int eng_step_now(int lane);              /* the step playing, -1 stopped */
 float eng_lane_open(int lane);           /* an effect lane's opening now, 0..1 (1: no steps) */
