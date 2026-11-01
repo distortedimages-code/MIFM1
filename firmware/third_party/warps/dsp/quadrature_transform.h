@@ -29,13 +29,6 @@
 
 #ifndef WARPS_DSP_QUADRATURE_TRANSFORM_H_
 #define WARPS_DSP_QUADRATURE_TRANSFORM_H_
-#ifndef MIFM1_RAM  // MIFM1: in RAM on the FM-1 (modulator.h)
-#if defined(MIFM1_RAM_CODE)
-#define MIFM1_RAM __attribute__((section(".c1_text")))
-#else
-#define MIFM1_RAM
-#endif
-#endif
 
 #include "stmlib/stmlib.h"
 #include "stmlib/dsp/dsp.h"
@@ -65,7 +58,7 @@ class QuadratureTransform {
     }
   }
   
-  MIFM1_RAM void Process(const float* in, float* i_out, float* q_out, size_t size) {
+  void Process(const float* in, float* i_out, float* q_out, size_t size) {
     for (int32_t i = 0; i < num_filters_; ++i) {
       float* destination = i & 1 ? q_out : i_out;
       const float* source = i <= 1 ? in : destination;
