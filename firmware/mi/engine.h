@@ -104,7 +104,15 @@ const eng_pdef_t *eng_pdef(int param);
 const char *eng_param_name(int param);   /* its name as the module prints it: Plaits' HARMONICS, TIMBRE and MORPH by
                                           * model (the kick's MORPH is its Decay) */
 int eng_model_enveloped(int model);      /* 1: a Plaits model with its own envelope, the LPG bypassed (6-op FM,
-                                          * string, modal, the drums) */
+                                          * string, modal, the drums), or an FM drum */
+/* the models: Plaits' 24, then the four FM drums (the LXR-02's voices, mi_lxr.cc). An FM drum takes its eight
+ * parameters from the knobs after FREQ: HARMONICS, TIMBRE, MORPH, the envelope page's four, the pitch envelope's */
+#define ENG_MODELS 28
+#define ENG_LX0 24
+void eng_set_model(int t, int model);    /* a track's model (an FM drum new to it: its kit on those knobs) */
+int eng_lx_knob(int param);              /* an FM drum's knob (0..7) that parameter is now, -1 none */
+float eng_lx_step(int param, float v, int detents);   /* an FM drum's knob turned: one of its values a detent (its
+                                          * 128, as on the LXR-02; a wave's 6) */
 int eng_param_mod(int param);            /* 1: a cable may move it */
 void eng_param_text(int param, float v, char *b, int n);   /* its value as the screen writes it */
 
@@ -127,7 +135,7 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 10u              /* (9: 0.3.9's and 0.3.10's, with Tides, Warps' faces as they were, no random
+#define PROJECT_VERSION 11u              /* (10: 0.4's, the same but without the FM drums: read as it is; 9: 0.3.9's and 0.3.10's, with Tides, Warps' faces as they were, no random
                                           * dose; 8: 0.3.8's,
                                           * without the grit and the Euclidean rhythms either; 7: 0.3.3's to
                                           * 0.3.7's, without the filter either; 6: 0.3.0's to 0.3.2's, without
@@ -168,6 +176,7 @@ int eng_init(void);                      /* main loop, once: the modules in the 
 project_t *eng_project(void);            /* the live project: the screen writes it, the render reads it */
 void eng_defaults(project_t *p);         /* the patch a new project plays (the demo) */
 void eng_blank(project_t *p);            /* INIT: four Plaits at noon, nothing patched, no steps */
+void eng_stress_fm(project_t *p);        /* the same with the four FM drums on the tracks */
 void eng_stress(project_t *p);           /* the stress test: a fixed patch keeping everything busy (the machine page's
                                           * figures, version after version) */
 int eng_check(const project_t *p);       /* 1: a project this version can load */

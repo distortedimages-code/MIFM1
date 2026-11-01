@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include "res_tables.h"
 
+extern const int16_t sine_table[];
+extern const int16_t lxr_wave_tables[];
+extern const int8_t lxr_transient_data[];
 namespace marbles {
 extern const float dist_icdf_0_0[];
 extern const float dist_icdf_0_1[];
@@ -114,6 +117,9 @@ const Moved kMoved[] = {
   { marbles::dist_icdf_4_8, 68112u, 1548u },
   { plaits::wav_integrated_waves, 69660u, 50688u },
   { tides::lut_wavetable, 120348u, 24600u },
+  { ::sine_table, 144948u, 8194u },
+  { ::lxr_wave_tables, 153144u, 67586u },
+  { ::lxr_transient_data, 220732u, 26460u },
 };
 }  // namespace
 

@@ -17,6 +17,7 @@ extern "C" {
 #include "mi/engine.h"
 #include "mi/bridge.h"
 #include "mi/res_tables.h"
+#include "Soundengine/DSPAudio/SlopeEg2.h"
 extern "C" int mi_res_check(const uint8_t* payload, uint32_t len);
 
 extern "C" {
@@ -1318,11 +1319,12 @@ int main(int argc, char** argv) {
   }
 
   // 32. the stress test: it plays (every track, Warps, OTT), no NaN, nothing stuck; its weight beside the demo's on
-  // this computer (the FM-1's figures are on its machine page)
+  // this computer (the FM-1's figures are on its machine page); on the FM drums too, lighter
   {
     auto weigh = [&](int stress, float* pk, int* sounding) {
       eng_play(0);
-      if (stress) eng_stress(p);
+      if (stress == 2) eng_stress_fm(p);
+      else if (stress) eng_stress(p);
       else eng_defaults(p);
       eng_fresh();                                        // (as the screen does: the tests before's locks gone)
       eng_cut();
@@ -1359,6 +1361,13 @@ int main(int argc, char** argv) {
            pk_stress, snd_stress, warps, bus, cables, t_stress / (t_demo > 0.0 ? t_demo : 1.0));
     if (pk_stress < 0.05f || pk_stress > 1.0f || snd_stress != ENG_TRACKS || warps != 2 || bus != MB_OTT || cables != 20)
       ++failures, printf("FAIL: the stress test\n");
+    float pk_fm;
+    int snd_fm;
+    double t_fm = weigh(2, &pk_fm, &snd_fm);
+    printf("the stress test on the FM drums: peak %.3f, %d tracks sounding; %.2fx the stress test's time here\n", pk_fm,
+           snd_fm, t_fm / (t_stress > 0.0 ? t_stress : 1.0));
+    if (pk_fm < 0.05f || pk_fm > 1.0f || snd_fm != ENG_TRACKS || t_fm > t_stress)
+      ++failures, printf("FAIL: the stress test on the FM drums\n");
     eng_defaults(p);
   }
 
@@ -1396,6 +1405,163 @@ int main(int argc, char** argv) {
           lv[2][1] > lv[2][0] * 0.05f)
         ++failures, printf("FAIL: the delay's feedback\n");
     }
+  }
+
+  // 34. the FM drums (the LXR-02's voices): a model chosen on a track brings its kit to its knobs, which name its
+  // parameters and write them as the LXR-02 does; each of the four sounds, triggered by the steps, its own pitch at
+  // a step's note at octave 0 (the drum's kit: G1, 49 Hz); STOP twice cuts them; the stress test on them plays and
+  // costs less here than on Plaits
+  {
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    static const char* const kFirst[4] = {"FM", "Noise", "Mod 1", "Mod 1"};
+    int names_ok = 1, kit_ok = 1, sound_ok = 1;
+    float pk[4];
+    char tx[24];
+    for (int m = 0; m < LX_MODELS; ++m) {
+      eng_set_model(0, ENG_LX0 + m);
+      float k[LX_KNOBS];
+      lx_defaults(m, k);
+      for (int i = 0; i < LX_KNOBS; ++i) {
+        int param = PG_TRACK(0, 0) * 4 + 1 + i;
+        float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
+        if (std::fabs(u - k[i]) > 1e-6f || eng_lx_knob(param) != i) kit_ok = 0;
+      }
+      if (std::strcmp(eng_param_name(PG_TRACK(0, 0) * 4 + 1), kFirst[m]) != 0 || eng_lx_knob(PG_TRACK(0, 0) * 4) >= 0 ||
+          eng_lx_knob(PG_TRACK(0, 2) * 4 + 1) >= 0)
+        names_ok = 0;
+      eng_cut();
+      for (int b = 0; b < 3; ++b) eng_render(l, r, n);
+      int nan = 0;
+      pk[m] = 0.0f;
+      for (int b = 0; b < 200; ++b) {
+        if (b % 40 == 0) eng_key(0, 48, 1);
+        if (b % 40 == 10) eng_key(0, 48, 0);
+        eng_render(l, r, n);
+        for (uint32_t i = 0; i < n; ++i) {
+          if (!std::isfinite(l[i])) nan = 1;
+          pk[m] = std::max(pk[m], std::fabs(l[i]));
+        }
+      }
+      if (nan || pk[m] < 0.02f) sound_ok = 0;
+    }
+    eng_set_model(0, ENG_LX0);                           // the drum: its Wave written, its Decay 0..127
+    eng_param_text(PG_TRACK(0, 1) * 4 + 1, p->val[PG_TRACK(0, 1) * 4 + 1], tx, sizeof tx);
+    int text_ok = std::strcmp(tx, "Sine") == 0;
+    eng_param_text(PG_TRACK(0, 1) * 4 + 0, 21.0f / 127.0f, tx, sizeof tx);
+    text_ok &= std::strcmp(tx, "21") == 0;
+    // a detent: the next of its 128 values (DECAY 21 to 22; on a bipolar knob, P.AMT 44 to 41), a wave's next
+    float st = eng_lx_step(PG_TRACK(0, 1) * 4 + 0, p->val[PG_TRACK(0, 1) * 4 + 0], 1);
+    eng_param_text(PG_TRACK(0, 1) * 4 + 0, st, tx, sizeof tx);
+    text_ok &= std::strcmp(tx, "22") == 0;
+    st = eng_lx_step(PG_TRACK(0, 2) * 4 + 0, p->val[PG_TRACK(0, 2) * 4 + 0], -3);
+    eng_param_text(PG_TRACK(0, 2) * 4 + 0, st, tx, sizeof tx);
+    text_ok &= std::strcmp(tx, "41") == 0;
+    st = eng_lx_step(PG_TRACK(0, 1) * 4 + 1, p->val[PG_TRACK(0, 1) * 4 + 1], 1);
+    eng_param_text(PG_TRACK(0, 1) * 4 + 1, st, tx, sizeof tx);
+    text_ok &= std::strcmp(tx, "Tri") == 0;
+    for (int x = 0; x < 128; ++x) {                       // every value of a bipolar knob reachable, written as itself
+      float v = -1.0f;
+      for (int i = 0; i < x; ++i) v = eng_lx_step(PG_TRACK(0, 2) * 4 + 0, v, 1);
+      eng_param_text(PG_TRACK(0, 2) * 4 + 0, v, tx, sizeof tx);
+      if (std::atoi(tx) != x) text_ok = 0;
+    }
+    // its pitch: a sine at the kit's coarse 31 (49 Hz) once the pitch envelope has gone (no click, no drive)
+    p->val[PG_TRACK(0, 0) * 4 + 1] = 0.0f;                // FM 0
+    p->val[PG_TRACK(0, 1) * 4 + 0] = 0.9f;                // a long decay
+    p->val[PG_TRACK(0, 1) * 4 + 2] = -1.0f;               // Click 0
+    p->val[PG_TRACK(0, 1) * 4 + 3] = -1.0f;               // Drive 0
+    p->val[PG_TRACK(0, 2) * 4 + 0] = -1.0f;               // the pitch envelope 0
+    p->val[PG_TRACK(0, 0) * 4 + 0] = 0.0f;                // FREQ 0
+    eng_cut();
+    for (int b = 0; b < 3; ++b) eng_render(l, r, n);
+    eng_key(0, 48, 1);
+    int cross = 0;
+    float last = 0.0f;
+    for (int b = 0; b < 344 * 2; ++b) {                   // 2 s: the crossings of the second one
+      eng_render(l, r, n);
+      for (uint32_t i = 0; i < n; ++i) {
+        if (b >= 344 && last < 0.0f && l[i] >= 0.0f) ++cross;
+        last = l[i];
+      }
+    }
+    eng_key(0, 48, 0);
+    // STOP twice: silent
+    eng_cut();
+    for (int b = 0; b < 3; ++b) eng_render(l, r, n);
+    float after = 0.0f;
+    for (int b = 0; b < 20; ++b) {
+      eng_render(l, r, n);
+      for (uint32_t i = 0; i < n; ++i) after = std::max(after, std::fabs(l[i]));
+    }
+    printf("FM drums: kits %s, names %s, text %s, peaks %.2f %.2f %.2f %.2f, the drum at 48: %d Hz (49), cut %.5f\n",
+           kit_ok ? "ok" : "WRONG", names_ok ? "ok" : "WRONG", text_ok ? "ok" : "WRONG", pk[0], pk[1], pk[2], pk[3],
+           cross, after);
+    if (!kit_ok || !names_ok || !text_ok || !sound_ok || cross < 47 || cross > 51 || after > 1e-4f)
+      ++failures, printf("FAIL: the FM drums\n");
+    eng_defaults(p);
+  }
+
+  // 35. the FM drums' amplitude envelope keeps the LXR-02's double exactly (lxr_port.cc): its times, its slopes and
+  // its curve over whole envelopes, each step against the same computed in double here
+  {
+    long steps = 0, wrong = 0;
+    for (int d = 0; d < 128; ++d) {
+      for (int w = 0; w < 2; ++w) {                       // slopeEg2_calcTime, attack and decay
+        double amount = w ? (2 * 0.999 / (1.0 - 0.999)) : (2 * 0.99 / (1.0 - 0.99));
+        const double val = d / 127.0;
+        const float ret0 = (1.0 - ((1.0 + amount) * val / (1.0 + amount * std::fabs(val)))) * 2.f;
+        float want = ret0 > 1.f ? 1.f : ret0;
+        SlopeEg2 eg;
+        slopeEg2_init(&eg);
+        slopeEg2_setAttack(&eg, static_cast<uint8_t>(d), 0);
+        slopeEg2_setDecay(&eg, static_cast<uint8_t>(d), 0);
+        ++steps;
+        if ((w ? eg.decay : eg.attack) != want) ++wrong;
+      }
+    }
+    for (int s = 0; s < 128; s += 3)
+      for (int dc = 0; dc < 128; dc += 13)
+        for (int at = 0; at < 128; at += 31) {
+          SlopeEg2 eg;
+          slopeEg2_init(&eg);
+          slopeEg2_setSlope(&eg, static_cast<uint8_t>(s));
+          slopeEg2_setAttack(&eg, static_cast<uint8_t>(at), 0);
+          slopeEg2_setDecay(&eg, static_cast<uint8_t>(dc), 0);
+          double amount = ((s / 127.f) - 0.5f) * 1.999f, inv = -amount;
+          double sl = 2 * amount / (1 - amount), isl = 2 * inv / (1 - inv), v = 0, A = eg.attack, D = eg.decay;
+          int st = 1;
+          slopeEg2_trigger(&eg);
+          for (int b = 0; b < 3000 && st; ++b) {
+            double out;
+            if (st == 1) {
+              v += A;
+              if (v >= 1.0) v = 1.0, st = 2;
+              out = (1.0 + isl) * v / (1.0 + isl * std::fabs(v));
+            } else if (v > 0) {
+              v -= D;
+              out = (1.0 + sl) * v / (1.0 + sl * std::fabs(v));
+            } else {
+              out = 0, st = 0;
+            }
+            ++steps;
+            if (slopeEg2_calc(&eg) != static_cast<float>(out)) ++wrong;
+          }
+        }
+    printf("FM drums' envelope: %ld steps, %ld not the double's\n", steps, wrong);
+    if (wrong) ++failures, printf("FAIL: the FM drums' envelope\n");
+  }
+
+  // 36. 0.4's projects (version 10): read as they are
+  {
+    static project_t q;
+    eng_defaults(&q);
+    q.version = 10;
+    q.algo[PG_TRACK(2, 0)] = 7;
+    int ok = eng_upgrade(&q, static_cast<int>(sizeof q)) && eng_check(&q) && q.algo[PG_TRACK(2, 0)] == 7;
+    printf("a version 10 project: %s\n", ok ? "read" : "REFUSED");
+    if (!ok) ++failures, printf("FAIL: a version 10 project\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

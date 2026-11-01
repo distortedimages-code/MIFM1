@@ -152,7 +152,7 @@ static struct {
     int mod;                             /* MOD mode */
     int msel;                            /* MATRIX: the cable chosen (0..7 the track's, 8..15 the global ones) */
     int init_sel;                        /* GLO: the project REC held loads (0 new, 1 the demo, 2 the saved one, 3 the
-                                          * stress test) */
+                                          * stress test, 4 the stress test on the FM drums) */
     int octave;                          /* the keyboard's */
     int dice;                            /* OCT- and OCT+ held: SELECT turns the random dose */
     int combo;                           /* REC and SEL held together: every cable erased (REC's hold) */
@@ -350,11 +350,12 @@ static uint16_t page_accent(int page)
 }
 static uint16_t mod_colour(uint16_t ac) { return ac == AC1 ? AC3 : AC1; }   /* where the cables take a knob */
 
-/* Plaits' models in four letters or so (the tracks' row), its banks */
-static const char *const SHORT[24] = {"VCF", "PD", "6OP1", "6OP2", "6OP3", "TERR", "SMCH", "CHIP",
-                                      "VA", "SHPR", "FM", "FRMT", "HARM", "WTBL", "CHRD", "SPCH",
-                                      "SWRM", "NOIS", "PART", "STRG", "MODL", "KICK", "SNAR", "HHAT"};
-static const char *const BANK[3] = {"PLAITS 1.2", "PITCHED", "NOISE & DRUMS"};
+/* the models in four letters or so (the tracks' row), their banks: Plaits' three, the FM drums (the LXR-02's) */
+static const char *const SHORT[ENG_MODELS] = {"VCF", "PD", "6OP1", "6OP2", "6OP3", "TERR", "SMCH", "CHIP",
+                                              "VA", "SHPR", "FM", "FRMT", "HARM", "WTBL", "CHRD", "SPCH",
+                                              "SWRM", "NOIS", "PART", "STRG", "MODL", "KICK", "SNAR", "HHAT",
+                                              "FDRM", "FSNR", "FCYM", "FHAT"};
+static const char *const BANK[4] = {"PLAITS 1.2", "PITCHED", "NOISE & DRUMS", "FM DRUMS"};
 
 /* ------------------------------------------------------------------ text --- */
 static int iabs(int v) { return v < 0 ? -v : v; }
@@ -740,13 +741,13 @@ static void led(float cx, float cy, float r, uint16_t c, int lvl)   /* an LED: l
     disc(cx, cy, r, col);
 }
 
-/* the icons, as strokes in a 32-unit box: Plaits' 24 models, the LFOs' waves, the mixer, the reverb, the global page,
+/* the icons, as strokes in a 32-unit box: the 28 models (Plaits' 24, the FM drums), the LFOs' waves, the mixer, the reverb, the global page,
  * the projects, the steps, Warps' algorithms, the delay. L a line, C a circle, D a dot, R a rectangle (x y w h) */
 typedef struct {
     char op;
     int8_t a, b, c, d;
 } vop_t;
-enum { IC_MODEL = 0, IC_WAVE = 24, IC_MIX = IC_WAVE + LW_N, IC_REV, IC_GLO, IC_NEW, IC_DEMO, IC_SAVED, IC_STRESS,
+enum { IC_MODEL = 0, IC_WAVE = ENG_MODELS, IC_MIX = IC_WAVE + LW_N, IC_REV, IC_GLO, IC_NEW, IC_DEMO, IC_SAVED, IC_STRESS,
        IC_STEPS, IC_DICE,
        IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, IC_EQ, IC_GRIT, IC_EUC, NICON };
 #define IOPS 10
@@ -783,6 +784,14 @@ static const vop_t ICONS[NICON][IOPS] = {
     {{'C', 16, 16, 9, 0}, {'D', 16, 16, 3, 0}},
     {{'R', 6, 11, 20, 12}, {'L', 6, 15, 26, 15}, {'L', 9, 4, 15, 9}, {'L', 23, 4, 17, 9}},
     {{'L', 5, 13, 16, 8}, {'L', 16, 8, 27, 13}, {'L', 5, 16, 16, 20}, {'L', 16, 20, 27, 16}, {'L', 16, 20, 16, 28}},
+    {{'C', 16, 16, 11, 0}, {'L', 9, 17, 12, 12}, {'L', 12, 12, 16, 20}, {'L', 16, 20, 20, 12},
+     {'L', 20, 12, 23, 17}},                                                                        /* FM drum */
+    {{'R', 6, 13, 20, 11}, {'L', 6, 17, 26, 17}, {'L', 7, 9, 11, 5}, {'L', 11, 5, 15, 9}, {'L', 15, 9, 19, 5},
+     {'L', 19, 5, 23, 9}},                                                                          /* FM snare */
+    {{'L', 3, 13, 16, 8}, {'L', 16, 8, 29, 13}, {'L', 3, 13, 29, 13}, {'L', 16, 13, 16, 28},
+     {'L', 10, 28, 22, 28}},                                                                        /* FM cymbal */
+    {{'L', 5, 11, 27, 11}, {'L', 5, 15, 27, 15}, {'D', 16, 7, 2, 0}, {'L', 16, 15, 16, 28},
+     {'L', 10, 22, 22, 22}},                                                                        /* FM hi-hat */
     {{'L', 4, 16, 7, 10}, {'L', 7, 10, 10, 7}, {'L', 10, 7, 13, 10}, {'L', 13, 10, 16, 16}, {'L', 16, 16, 19, 22},
      {'L', 19, 22, 22, 25}, {'L', 22, 25, 25, 22}, {'L', 25, 22, 28, 16}},                          /* sine */
     {{'L', 4, 16, 10, 7}, {'L', 10, 7, 22, 25}, {'L', 22, 25, 28, 16}},                             /* triangle */
@@ -1101,7 +1110,9 @@ static void panel_plaits(int t, int face, uint16_t ac)
         text_cat(s, "|", sizeof s);
         int_text(m + 1, n);
         text_cat(s, n, sizeof s);
-        text_cat(s, " / 24", sizeof s);
+        text_cat(s, " / ", sizeof s);
+        int_text(ENG_MODELS, n);
+        text_cat(s, n, sizeof s);
         hero_line(y, s);
     } else if (face == 1) {              /* the low-pass gate: DECAY's tail, COLOUR's tone */
         int pg = PG_TRACK(t, 1), y0 = 68, h = 48;
@@ -1142,7 +1153,15 @@ static void panel_plaits(int t, int face, uint16_t ac)
         text_cat(s, "GATE ", sizeof s);
         eng_param_text(pg * 4 + 1, eng_final(pg * 4 + 1), v, sizeof v);
         text_cat(s, v, sizeof s);
-        text_cat(s, "|PITCH ENV ", sizeof s);
+        if (m >= ENG_LX0) {             /* an FM drum's own (its pitch envelope's depth, a drive) */
+            char u[16];
+            label_text(eng_param_name(pg * 4), u, sizeof u);
+            text_cat(s, "|", sizeof s);
+            text_cat(s, u, sizeof s);
+            text_cat(s, " ", sizeof s);
+        } else {
+            text_cat(s, "|PITCH ENV ", sizeof s);
+        }
         eng_param_text(pg * 4, eng_final(pg * 4), v, sizeof v);
         text_cat(s, v, sizeof s);
         hero_line(44, s);
@@ -1838,8 +1857,8 @@ static int knob_view(int page, int param, int *t, int *tp)
 static int knob_idle(int param)
 {
     int page = param / 4, k = param % 4;
-    if (page < 12 && page % 3 == 1 && k == 1)
-        return eng_model_enveloped(eng_project()->algo[page - 1]);
+    if (page < 12 && page % 3 == 1 && k == 1)    /* (an FM drum's: one of its own) */
+        return eng_model_enveloped(eng_project()->algo[page - 1]) && eng_project()->algo[page - 1] < ENG_LX0;
     if (page == PG_COMP || page == PG_OTT)
         return bus_mode() != (page == PG_OTT ? MB_OTT : MB_COMP);
     if (ptype(page) == PT_LANE && k != 3)
@@ -2051,20 +2070,20 @@ static void draw_matrix(void)
 static void draw_projects(void)          /* the projects REC held loads, in the module's display */
 {
     static int shown = -1;
-    static const char *const P[4] = {"New: 4 Plaits, nothing patched", "The demo patch", "The saved project",
-                                     "Stress test (plays at once)"};
+    static const char *const P[5] = {"New: 4 Plaits, nothing patched", "The demo patch", "The saved project",
+                                     "Stress test (plays at once)", "Stress test, on the 4 FM drums"};
     if (ui.full || ui.body_panel || shown != ui.init_sel) {
         shown = ui.init_sel;
         cv_begin(240, PANEL_H, BG);
         cv_text(10, 0, &FONT_B, "PROJECT", TXT);
         cv_text(232 - text_w(&FONT_T, "K1 CHOOSE, REC HELD LOADS"), 3, &FONT_T, "K1 CHOOSE, REC HELD LOADS", DIM);
-        for (int i = 0; i < 4; i++) {    /* (four rows of 15 px under the title) */
-            int y = 17 + i * 15, sel = i == ui.init_sel;
+        for (int i = 0; i < 5; i++) {    /* (five rows of 12 px under the title) */
+            int y = 15 + i * 12, sel = i == ui.init_sel;
             if (sel)
-                pill(4, y, 232, 14, SEL);
-            disc(16.0f, (float)y + 7.0f, 5.5f, i < 3 ? accent3(i) : KNOCK);
-            vicon(16.0f, (float)y + 7.0f, 0.3f, 1.4f, BG, IC_NEW + i, 0);
-            cv_text(30, y - 1, &FONT_XS, P[i], sel ? HI : TXT);
+                pill(4, y, 232, 12, SEL);
+            disc(16.0f, (float)y + 6.0f, 5.0f, i < 3 ? accent3(i) : KNOCK);
+            vicon(16.0f, (float)y + 6.0f, 0.27f, 1.3f, BG, i < 4 ? IC_NEW + i : IC_STRESS, 0);
+            cv_text(30, y - 2, &FONT_XS, P[i], sel ? HI : TXT);
         }
         blit(0, PANEL_Y);
     }
@@ -2296,7 +2315,8 @@ static int erase_lane(void)              /* the lane REC held erases: STEP mode'
 
 static uint32_t hold_ms(int b, char *label, uint32_t max)
 {
-    static const char *const LOAD[4] = {"LOAD NEW", "LOAD DEMO", "LOAD SAVED", "LOAD STRESS TEST"};
+    static const char *const LOAD[5] = {"LOAD NEW", "LOAD DEMO", "LOAD SAVED", "LOAD STRESS TEST",
+                                        "LOAD STRESS FM"};
     static const char *const FX[3] = {"ERASE DELAY STEPS", "ERASE REVERB STEPS", "ERASE WARPS STEPS"};
     char l[24];
     uint32_t ms = LONG_MS;
@@ -2316,7 +2336,7 @@ static uint32_t hold_ms(int b, char *label, uint32_t max)
         text_cat(l, eng_playing() ? "SAVE: STOP FIRST" : "SAVE PROJECT", sizeof l);
         ms = 1000u;
     } else if (b == B_REC && ui.page == VP_SYS) {
-        text_cat(l, LOAD[ui.init_sel % 4], sizeof l);
+        text_cat(l, LOAD[ui.init_sel % 5], sizeof l);
         ms = 1000u;
     } else if (b == B_REC && pt == PT_ARP && ui.erec < 0 && !ui.grid) {
         text_cat(l, "ERASE ENDLESS", sizeof l);
@@ -2580,7 +2600,7 @@ static void draw_footer(void)
                 n[1] = ' ';
                 n[2] = 0;
                 text_cat(t, n, sizeof t);
-                text_cat(t, SHORT[p->algo[PG_TRACK(i, 0)] % 24], sizeof t);
+                text_cat(t, SHORT[p->algo[PG_TRACK(i, 0)] % ENG_MODELS], sizeof t);
                 if (act) {               /* the track played: knocked out of a block of its colour */
                     uint16_t tc = track_accent(i);
                     cv_rect(x - 4, 7, 52, 25, tc);
@@ -2736,20 +2756,22 @@ static void project_init(int which)
             eng_blank(&scratch);
         else if (which == 1)
             eng_defaults(&scratch);
-        else
+        else if (which == 3)
             eng_stress(&scratch);
+        else
+            eng_stress_fm(&scratch);
         *eng_project() = scratch;
         eng_fresh();
         dirty = 1;
         app_say(which == 0 ? "NEW PROJECT" : which == 1 ? "DEMO PATCH" : "STRESS TEST",
-                which == 0 ? "4 PLAITS" : which == 1 ? "LOADED" : "PLAYING");
+                which == 0 ? "4 PLAITS" : which == 1 ? "LOADED" : which == 3 ? "PLAYING" : "FM DRUMS PLAYING");
     }
     p->out_mode = out;
     p->warps_hq = hq;
     p->theme = theme;
     ui.track = 0;
     set_lane(0);
-    if (which == 3) {                    /* the stress test: playing, the machine's figures here, under it */
+    if (which >= 3) {                    /* the stress tests: playing, the machine's figures here, under it */
         eng_play(1);
         ui.full = 1;
         return;
@@ -2762,6 +2784,8 @@ static float step_value(int param, float v, int32_t e)
 {
     const eng_pdef_t *d = eng_pdef(param);
     int32_t a = e > 1 || e < -1 ? e * 3 : e;
+    if (eng_lx_knob(param) >= 0)         /* an FM drum's: its own values, one a detent */
+        return eng_lx_step(param, v, (int)a);
     if (d->kind == K_UNI)
         return fm_clampf(v + 0.01f * (float)a, 0.0f, 1.0f);
     if (d->kind == K_BIP)
@@ -3386,8 +3410,10 @@ static void input(void)
             int a = clamp((int32_t)p->algo[first] + e, 0, n - 1);
             if (held(B_GLO) && ptype(ui.page) <= PT_PLAITS3) {   /* GLO held: the four tracks on that model */
                 for (int t = 0; t < ENG_TRACKS; t++)
-                    p->algo[PG_TRACK(t, 0)] = (uint8_t)a;
+                    eng_set_model(t, a);
                 ui.used[B_GLO] = 1;
+            } else if (ptype(ui.page) <= PT_PLAITS3) {
+                eng_set_model(eng_page_track(first), a);   /* (an FM drum: its kit on its knobs) */
             } else {
                 p->algo[first] = (uint8_t)a;
             }
@@ -3403,7 +3429,7 @@ static void input(void)
             project_t *p = eng_project();
             int d = e > 0 ? 1 : -1;
             if (i == 0)
-                ui.init_sel = clamp(ui.init_sel + d, 0, 3);
+                ui.init_sel = clamp(ui.init_sel + d, 0, 4);
             else if (i == 1)
                 p->out_mode = (uint8_t)clamp(p->out_mode + d, 0, 2);
             else if (i == 2)

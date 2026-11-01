@@ -28,6 +28,20 @@ void mp_amounts(void *v, float fm, float timbre, float morph);   /* the attenuve
 void mp_render(void *v, float *out, float *aux, uint32_t n);
 const char *mp_model_name(int model);
 
+/* ---- the LXR-02's drum voices (mi_lxr.cc: Erica Synths' LXR firmware, GPL-3.0), one of each a track ---- */
+#define LX_MODELS 4                      /* the drum (kick, tom), the snare, the cymbal, the hi-hat */
+#define LX_KNOBS 8                       /* the parameters a model takes from its track's knobs */
+void lx_init(void);
+/* k: the LX_KNOBS knobs, 0..1 (as a modulation reaches the LXR: its MIDI value is v x 127); note: MIDI, its fraction
+ * on the fine tune (48: the voice's own pitch). A new model on the track starts that voice afresh */
+void lx_set(int t, int model, float note, const float *k);
+void lx_trigger(int t);                  /* at the next frame rendered */
+void lx_render(int t, float *out, uint32_t n);
+const char *lx_knob_name(int model, int k);
+void lx_knob_text(int model, int k, float v, char *b, int n);   /* as the LXR-02 shows it: 0..127, a wave's name */
+void lx_defaults(int model, float *k);   /* the knobs as the model's kit has them */
+int lx_knob_steps(int model, int k);     /* its values a knob's turn goes through: 128 (MIDI's), a wave's 6 */
+
 /* ---- Clouds ---- */
 #define MC_MODES 4
 uint32_t mc_size(void);                  /* the processor alone */

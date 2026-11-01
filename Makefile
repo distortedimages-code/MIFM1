@@ -5,12 +5,12 @@ CXX ?= c++
 CC ?= cc
 BASE ?= base
 FLAGS = -O2 -ffp-contract=off -DTEST -DPLAT_HOST -fno-exceptions -fno-rtti -fno-threadsafe-statics
-INC = -Ifirmware -Ifirmware/third_party -I$(BASE)/include
+INC = -Ifirmware -Ifirmware/third_party -Ifirmware/third_party/lxr -I$(BASE)/include
 OUT = build
 SRC = $(wildcard firmware/mi/*.cc) $(shell find firmware/third_party -name '*.cc')
 OBJ = $(patsubst %.cc,$(OUT)/obj/%.o,$(SRC))
 
-.PHONY: all test device-check firmware host clean
+.PHONY: all test lxr-check device-check firmware host clean
 all: test
 
 $(OUT)/obj/%.o: %.cc
@@ -24,9 +24,22 @@ $(OUT)/native: firmware/tests/native.cc $(OBJ)
 	$(CC) $(OUT)/obj/native.o $(OBJ) -lm -o $@
 
 # the engine on a computer: the default patch plays, every track and model sounds, no NaN; WAVs in build/wav
-test: $(OUT)/native
+test: $(OUT)/native lxr-check
 	@mkdir -p $(OUT)/wav
 	$(OUT)/native $(OUT)/wav 16
+
+# the FM drums (third_party/lxr) as the FM-1 computes them, against the LXR-02's arithmetic (doubles, fused
+# multiply-adds): the same voices, sample by sample
+LXR_SRC = firmware/mi/mi_lxr.cc $(wildcard firmware/third_party/lxr/*.cc firmware/third_party/lxr/Soundengine/DSPAudio/*.cc)
+$(OUT)/lxr_port: tools/lxr_check.cc $(LXR_SRC)
+	@mkdir -p $(OUT)
+	$(CXX) -std=gnu++11 $(FLAGS) -w $(INC) tools/lxr_check.cc $(LXR_SRC) -lm -o $@
+$(OUT)/lxr_ref: tools/lxr_check.cc $(LXR_SRC)
+	@mkdir -p $(OUT)
+	$(CXX) -std=gnu++11 $(FLAGS) -DLXR_HARD_DOUBLE -w $(INC) tools/lxr_check.cc $(LXR_SRC) -lm -o $@
+lxr-check: $(OUT)/lxr_port $(OUT)/lxr_ref
+	$(OUT)/lxr_ref $(OUT)/lxr_ref.raw
+	$(OUT)/lxr_port $(OUT)/lxr_ref.raw
 
 # the FM-1's constraints checked with the computer's clang: no C++ library, no libm, a float-only FPU (any double
 # left in the code links soft-double routines and shows here as an undefined symbol)

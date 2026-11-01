@@ -53,5 +53,8 @@ __asm__(
     ".globl _ZN7marbles13dist_icdf_4_8E\n.set _ZN7marbles13dist_icdf_4_8E, 0x020a3a30\n"
     ".globl _ZN6plaits20wav_integrated_wavesE\n.set _ZN6plaits20wav_integrated_wavesE, 0x020a403c\n"
     ".globl _ZN5tides13lut_wavetableE\n.set _ZN5tides13lut_wavetableE, 0x020b063c\n"
+    ".globl sine_table\n.set sine_table, 0x020b6654\n"
+    ".globl lxr_wave_tables\n.set lxr_wave_tables, 0x020b8658\n"
+    ".globl lxr_transient_data\n.set lxr_transient_data, 0x020c8e5c\n"
 );
 #endif

@@ -1,10 +1,13 @@
 # MIFM1
 
-Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient du code open source de Mutable Instruments, sur
-la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
+Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient de code open source, celui de Mutable Instruments
+et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la base de
+[fm1-base](https://github.com/charlesvestal/fm1-base) :
 
 - **Plaits** sur chaque piste, ses 24 modèles au complet, et un **grit** par piste (drive doux, dur ou replié,
   réduction de fréquence d'échantillonnage et de bits) ;
+- **quatre batteries FM** comme modèles de piste en plus : les voix du **LXR-02** (son firmware est open source,
+  GPL-3.0), grosse caisse et toms, caisse claire, cymbale et charleston, leur code tel quel (voir plus bas) ;
 - un **séquenceur pas à pas** à la Elektron, 64 pas par piste, avec P-locks, et deux modes de jeu : **KEY** (le
   clavier joue la piste) et **STEP** (le clavier est la grille, les touches noires choisissent la piste ou l'effet) ;
 - **Endless** sur chaque piste, comme sur l'OP-1 : on enregistre des notes et des silences un par un, ils tournent
@@ -62,14 +65,42 @@ sur deux de ses notes (la piste de pas du delay), piste 4 un résonateur MODAL d
 **Repartir de zéro (INIT)** : GLO, SELECT (la page PROJECT), puis **K1** choisit le projet et **REC tenu** le
 charge : *New* (4 pistes Plaits sur VIRTUAL ANALOG, tous les potards à midi, aucun pas, aucun câble, rien vers les
 effets, do majeur), *The demo patch* (le patch ci-dessus) ou *The saved project* (le dernier sauvegardé, pour
-annuler) ou *Stress test*. Le transport s'arrête ; rien n'est sauvegardé tant que SAVE n'est pas tenu.
+annuler), *Stress test* ou *Stress test, on the 4 FM drums*. Le transport s'arrête ; rien n'est sauvegardé tant que SAVE n'est pas tenu.
 
 **Le stress test** (GLO, SELECT, K1 sur *Stress test*, REC tenu) : un patch fixe, le même à chaque fois, qui démarre
 tout seul et laisse sous les yeux la page machine (la charge des cœurs, le pic, ce que coûte chaque piste) : pour
 comparer les versions entre elles. Une grosse caisse et une basse VA VCF passées au grit, des accords (CHORD) et un
 résonateur MODAL, Warps (anneau à diodes, T3 par T2), OTT sur le bus, le delay et la réverbe nourris, le duck, les
 filtres, les trois LFO sur 20 câbles, des aléatoires, des locks et des ratchets. La sortie, la qualité de Warps (Eco
-ou HQ) et le thème restent ceux de la machine : comparer avec le même réglage de Warps.
+ou HQ) et le thème restent ceux de la machine : comparer avec le même réglage de Warps. *Stress test, on the 4 FM
+drums* (le cinquième choix) joue le même patch, les mêmes câbles et les mêmes effets, mais les quatre pistes sur les
+quatre batteries FM (chacune sur son kit, à sa hauteur) : ce que coûtent les voix du LXR-02 à côté de celles de
+Plaits, piste par piste sur la page machine. Sur l'ordinateur, il prend un quart du temps du stress test.
+
+**Les batteries FM** (ALGORITHM après HI-HAT, la banque FM DRUMS) : **FM DRUM** (la voix grosse caisse et toms du
+LXR-02 : un oscillateur et un modulateur en FM, une enveloppe de hauteur), **FM SNARE** (un oscillateur et un bruit
+filtré), **FM CYMBAL** et **FM HI-HAT** (un oscillateur modulé en FM par deux autres). Choisir l'une d'elles sur une
+piste met ses huit réglages à ceux de son kit (le kit INIT du LXR-02, retouché pour sonner tout de suite), sur les
+potards qui suivent FREQ : les trois de la première face, les quatre de l'enveloppe (ENV), et le premier de la face
+de hauteur (à la place de P.ENV). Ils sont écrits de 0 à 127 comme sur le LXR-02, WAVE par son nom, et chaque cran
+de potard passe à la valeur suivante (WAVE : à la forme d'onde suivante) :
+
+| | 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **FM DRUM** | FM (l'index) | MODFRQ (le modulateur) | P.DEC (l'enveloppe de hauteur) | DECAY | WAVE | CLICK (le snap) | DRIVE | P.AMT (la profondeur de l'enveloppe de hauteur) |
+| **FM SNARE** | NOISE (le mélange) | NOISF (la fréquence du bruit) | P.DEC | DECAY | FILTER (sur le bruit) | RESO | DRIVE | P.AMT |
+| **FM CYMBAL** | MOD 1 | FRQ 1 | MOD 2 | DECAY | FILTER (passe-haut) | FRQ 2 | WAVE (l'oscillateur) | DRIVE |
+| **FM HI-HAT** | MOD 1 | FRQ 1 | MOD 2 | DECAY | FILTER (passe-haut) | FRQ 2 | WAVE (l'oscillateur) | DRIVE |
+
+Les autres réglages des voix restent ceux du kit. FREQ, la note, TRANSP et OCTAVE déplacent leurs oscillateurs comme
+une note MIDI le fait sur le LXR-02 (un pas en do 3, octave 0, joue la hauteur du kit ; ce qui dépasse le demi-ton va
+sur leur accord fin). Un trig relance la voix (à pleine vélocité), son enveloppe fait le reste : GATE n'y change
+rien. Le charleston ouvert est un DECAY plus long : un lock sur DECAY. Les câbles, les locks, les aléatoires, la dose
+et le grit marchent sur elles comme sur Plaits. Leur code est celui du LXR-02, compilé tel quel (ce qui change pour le
+FM-1 est listé dans `firmware/third_party/lxr/MIFM1.md`) : le LXR-02 calcule une partie en double précision, que le
+FM-1 n'a pas ; leur enveloppe d'amplitude garde exactement la valeur du double (vérifiée pas à pas), le reste passe
+en float, et `make lxr-check` compare les deux : 99,99 % des échantillons identiques à ceux du LXR-02, les autres à
+quelques pas de 16 bits (-111 dB).
 
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
 icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis
@@ -90,7 +121,7 @@ porte le numéro de sa piste dans sa couleur.
 | --- | --- |
 | **KNOB 1 à 4** | les 4 paramètres de la page affichée |
 | **SELECT** | l'autre face du module (PLAITS 1/3, 2/3, 3/3…), en glissant |
-| **ALGORITHM** | le modèle de Plaits ; sur Warps, d'un repère d'ALGO au suivant ; sur le delay, SYNC (vers la gauche) ou FREE (vers la droite) |
+| **ALGORITHM** | le modèle de la piste (les 24 de Plaits, puis les 4 batteries FM) ; sur Warps, d'un repère d'ALGO au suivant ; sur le delay, SYNC (vers la gauche) ou FREE (vers la droite) |
 | **PRESETS** | la piste active, de 1 à 4 |
 | **EDIT** | Plaits de la piste active (appuis suivants : ses trois faces, puis GRIT) |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
@@ -304,19 +335,29 @@ aléatoires ; le delay est en SYNC.
     matrice, le quantiseur, les effets et leurs pistes de pas, le mixer ; les voix et Warps partagés entre les deux
     cœurs) ; `mi/mi_*.cc` : un pont C par module Mutable ; `mi/mi_reverb.h` : la réverbe de Clouds, ses lignes de
     retard en flottants ; `mi/mi_delay.h` : le delay (le SVF et la saturation de stmlib dans une ligne 16 bits)
-  - `third_party/` : le code Mutable Instruments utilisé, copié tel quel ; les retouches sont dans `PATCHES.md`
+  - `third_party/` : le code Mutable Instruments utilisé, copié tel quel ; les retouches sont dans `PATCHES.md` ;
+    `third_party/lxr/` : les voix du LXR-02 (leurs retouches dans `MIFM1.md`), `lxr_port.h` / `.cc` ce sur quoi
+    elles tournent ; `mi/mi_lxr.cc` : leur pont
   - `res/mi_tables.bin` : la zone de ressources (les plus grosses tables, écrites par l'installeur après le
     firmware), `mi/res_abs.cc` leurs adresses
   - `shim/` : les en-têtes C et C++ que la chaîne JieLi n'a pas (pas de libm, pas de bibliothèque C++)
   - `tests/` : le moteur sur l'ordinateur (`native.cc`) et le simulateur de fm1-base (`screens.txt`)
-- `tools/` : la copie du code Mutable (`vendor_mi.sh`, `patch_mi.sh`, `split_tables.py`), les vérifications « comme
+- `tools/` : la copie du code Mutable (`vendor_mi.sh`, `patch_mi.sh`, `split_tables.py`) et celle du LXR-02
+  (`vendor_lxr.py`, depuis un clone de son dépôt ; `lxr_check.cc`), les vérifications « comme
   sur le FM-1 » (`device_check.sh`, `check_res_links.py`, `no_static_init.py`), l'installeur ; `tools/bench/` : le
   banc d'essai v0.0 (il se construit depuis le tag `bench-0.0` : les ponts vers les modules ont changé depuis)
 - `make test` : le patch par défaut joué 16 s sur l'ordinateur, chaque piste et chaque modèle entendus, sans NaN
-  (WAV dans `build/wav`)
+  (WAV dans `build/wav`), et `make lxr-check` : les batteries FM comparées au calcul du LXR-02
 
 ## Licences
 
-Le code de ce dépôt est sous MPL-2.0, comme fm1-base. Le code de Mutable Instruments (Émilie Gillet) est sous
-licence MIT (`firmware/third_party/LICENSE-eurorack`). Mutable Instruments est une marque déposée : ce projet ne
-l'utilise pas comme nom et ne cite les modules que pour dire de qui est le code qu'il fait tourner.
+Le firmware tel qu'il est publié (l'installeur, le `.fwsc`) contient les voix du LXR-02, sous GPL-3.0 : il est
+distribué, dans son ensemble, sous **GPL-3.0** (`COPYING` ; le détail fichier par fichier : `LICENSING.md`), et ses
+sources sont ce dépôt. Le code propre à MIFM1 reste sous
+MPL-2.0, comme fm1-base (la MPL-2.0 permet de le combiner à du code GPL : sa section 3.3). Le code de Mutable
+Instruments (Émilie Gillet) est sous licence MIT (`firmware/third_party/LICENSE-eurorack`). Les voix du LXR-02
+(`firmware/third_party/lxr/`, et ce qui en reprend du code : `mi/mi_lxr.cc`, `tools/vendor_lxr.py`,
+`tools/lxr_check.cc`) sont sous GPL-3.0-only (Copyright Erica Synths), avec les conditions de son `NOTICE.md`.
+Mutable Instruments est une marque déposée, de même qu'Erica Synths, LXR et LXR-02 : ce projet n'utilise pas ces
+noms comme les siens (à l'écran, les modèles s'appellent FM DRUM, FM SNARE…) et ne les cite que pour dire de qui est
+le code qu'il fait tourner.
