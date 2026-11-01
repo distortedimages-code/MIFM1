@@ -79,16 +79,16 @@ const eng_pdef_t kPages[NPT][4] = {
    {"Mod dry", K_ENUM, 0, 1, kOnOff}, {"Mode", K_ENUM, 0, 1, kWarpsMode}},
 };
 
-// Warps' algorithms as its panel names them (the ALGORITHM knob's eight marks: six cross-modulations, then the vocoder
-// over the last quarter), then its easter egg
-const char* const kWarpsNames[8] = {"CROSSFADE", "CROSS-FOLD", "DIODE RING", "DIGITAL RING", "XOR", "COMPARATOR",
-                                    "VOCODER", "FREQ SHIFTER"};
-const char* const kWarpsShort[7] = {"Xfade", "Fold", "Diode", "Digital", "Xor", "Compar", "Vocoder"};
+// Warps' algorithms: its six cross-modulations, as its panel names them, over the whole of ALGORITHM (the module's
+// knob, from its first mark to its sixth: 0..0.625; the vocoder, the rest of its travel, is left out: alone it cost
+// as much as the four voices), then its easter egg
+const char* const kWarpsNames[7] = {"CROSSFADE", "CROSS-FOLD", "DIODE RING", "DIGITAL RING", "XOR", "COMPARATOR",
+                                    "FREQ SHIFTER"};
+const char* const kWarpsShort[6] = {"Xfade", "Fold", "Diode", "Digital", "Xor", "Compar"};
 const char* const kOscXmod[3] = {"Sine", "Triangle", "Saw"};        // modulator.cc: xmod_shape
-const char* const kOscVocoder[3] = {"Saw", "Pulse", "Noise"};       // vocoder_shape
-int warps_pos(float a) {                // the knob's nearest mark: 0..5, 6 the vocoder (from 0.6875, the transition's
-  if (a >= 0.6875f) return 6;           // middle; modulator.cc: vocoder_amount)
-  int i = static_cast<int>(a * 8.0f + 0.5f);
+const float kWarpsTravel = 0.625f;      // ALGORITHM's 0..1 on the module's 0..0.625
+int warps_pos(float a) {                // the knob's nearest mark: 0..5
+  int i = static_cast<int>(a * 5.0f + 0.5f);
   return i < 0 ? 0 : i > 5 ? 5 : i;
 }
 float warps_shift_hz(float pot) {       // the frequency shifter's shift (modulator.cc: ProcessEasterEgg)
@@ -592,7 +592,8 @@ void set_warps() {
   int osc = car >= WC_OSC1 ? car - WC_OSC1 + 1 : 0;
   w_job = car > WC_OFF && car <= WC_OSC3 && w_last == (car | mod << 4);
   float level1 = P(PG_WARPS(0), 2);
-  mw_set(warps, clampf(P(PG_WARPS(0), 0), 0.0f, 1.0f), clampf(P(PG_WARPS(0), 1), 0.0f, 1.0f),
+  float alg = clampf(P(PG_WARPS(0), 0), 0.0f, 1.0f);
+  mw_set(warps, shift ? alg : alg * kWarpsTravel, clampf(P(PG_WARPS(0), 1), 0.0f, 1.0f),
          clampf(level1, 0.0f, 1.0f), clampf(P(PG_WARPS(0), 3), 0.0f, 1.0f), osc,
          12.0f + 60.0f * clampf(level1, 0.0f, 1.0f), shift);   // the oscillator's note: LEVEL 1, as on the module
 }
@@ -731,8 +732,7 @@ void eng_param_text(int param, float v, char* b, int n) {
   int pt = page_type(param / 4), k = param % 4;
   if (pt == PT_WARPS2 && k == 0 && i_of(v) >= WC_OSC1) {   // the oscillator's shape, as the algorithm uses it
     int o = i_of(v) > WC_OSC3 ? 2 : i_of(v) - WC_OSC1;
-    put(b, n, Pi(PG_WARPS(1), 3) ? kWarpsCarrier[WC_OSC1 + o]
-                                 : fin[PG_WARPS(0) * 4] >= 0.6875f ? kOscVocoder[o] : kOscXmod[o]);
+    put(b, n, Pi(PG_WARPS(1), 3) ? kWarpsCarrier[WC_OSC1 + o] : kOscXmod[o]);
   } else if (d->kind == K_ENUM) {
     int i = static_cast<int>(v + 0.5f);
     put(b, n, d->names[i < d->lo ? d->lo : i > d->hi ? d->hi : i]);
@@ -838,7 +838,7 @@ static void cable(project_t* p, int g, int c, int s, int dst, int depth) {
 
 // Warps: off (no carrier), ready on the diode ring modulator, track 2 as the modulator
 static void warps_defaults(project_t* p) {
-  static const float kW[8] = {0.25f, 0.5f, 0.6f, 0.6f, static_cast<float>(WC_OFF), 1.0f, 0.0f, 0.0f};
+  static const float kW[8] = {0.4f, 0.5f, 0.6f, 0.6f, static_cast<float>(WC_OFF), 1.0f, 0.0f, 0.0f};
   for (int k = 0; k < 8; ++k) p->val[PG_WARPS(k / 4) * 4 + k % 4] = kW[k];
 }
 
@@ -1288,9 +1288,9 @@ uint32_t eng_task_load(int task) {
 int eng_warps_algo(void) {
   int car = Pi(PG_WARPS(1), 0);
   if (car <= WC_OFF || car > WC_OSC3) return -1;
-  return Pi(PG_WARPS(1), 3) ? 7 : warps_pos(P(PG_WARPS(0), 0));
+  return Pi(PG_WARPS(1), 3) ? 6 : warps_pos(P(PG_WARPS(0), 0));
 }
-const char* eng_warps_name(int algo) { return algo >= 0 && algo < 8 ? kWarpsNames[algo] : "WARPS"; }
+const char* eng_warps_name(int algo) { return algo >= 0 && algo < 7 ? kWarpsNames[algo] : "WARPS"; }
 int eng_warps_track(void) { return w_dst; }
 
 int eng_steps_mode(void) { return iround(proj.val[PG_GLOBAL * 4]) == SEQ_STEPS; }
@@ -1325,6 +1325,12 @@ void eng_lock_clear(int t, int step) {
   uint8_t ts = static_cast<uint8_t>(t << 6 | step);
   for (int i = 0; i < ENG_PLOCKS; ++i)
     if (proj.lock[i].tp != 0xFF && proj.lock[i].ts == ts) proj.lock[i].tp = 0xFF;
+}
+void eng_steps_clear(int t) {          // a track's pattern: its trigs and its locks (its knobs and randoms stay)
+  if (t < 0 || t >= ENG_TRACKS) return;
+  for (int b = 0; b < ENG_STEPS / 8; ++b) proj.trig[t][b] = 0;
+  for (int i = 0; i < ENG_PLOCKS; ++i)
+    if (proj.lock[i].tp != 0xFF && (proj.lock[i].ts >> 6) == t) proj.lock[i].tp = 0xFF;
 }
 int eng_step_locked(int t, int step) {
   uint8_t ts = static_cast<uint8_t>(t << 6 | step);

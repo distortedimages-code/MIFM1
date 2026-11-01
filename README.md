@@ -14,11 +14,11 @@ la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
 - **deux Tides 2** comme modulateurs (8 sorties) ;
 - une **matrice de câbles** : 15 sources (Tides A1-A4, B1-B4, Marbles X1-X3, Y, T1-T3) vers presque tous les
   paramètres, 8 câbles par piste et 8 globaux ;
-- **Warps** entre deux pistes (ou une piste et son oscillateur interne) : ses 6 modulations croisées, son vocodeur
-  et son easter egg, le décaleur de fréquence. Le module tourne à 96 kHz : ce qui en dépend (les bandes du vocodeur,
-  les filtres du décaleur, l'oscillateur) est refait pour les 44,1 kHz du FM-1 par ses propres scripts, et les filtres
-  du suréchantillonnage de ses modulations croisées par la recette écrite au-dessus d'eux (plus longs, pour rester
-  plats jusqu'à 12 kHz) ;
+- **Warps** entre deux pistes (ou une piste et son oscillateur interne) : ses 6 modulations croisées et son easter
+  egg, le décaleur de fréquence (son vocodeur est laissé de côté : il coûtait autant que les quatre voix). Le module
+  tourne à 96 kHz : ce qui en dépend (les filtres du décaleur, l'oscillateur) est refait pour les 44,1 kHz du FM-1
+  par ses propres scripts, et les filtres du suréchantillonnage de ses modulations croisées par la recette écrite
+  au-dessus d'eux (plus longs, pour rester plats jusqu'à 12 kHz) ;
 - un **mixer simple** (un niveau et un pan par piste, à puissance constante : une piste garde le même volume où
   qu'elle soit dans l'image ; ses gains glissent échantillon par échantillon, un pan ou un niveau aléatoire ou locké
   ne claque pas) et un **départ réverbe** par piste vers la réverbe de Clouds
@@ -71,9 +71,10 @@ les 16 pas de la piste (allumés : un trig ; un point : des locks ; cerclé : ce
 | **SEL** | le mode MOD (voir plus bas) ; **tenu** : la matrice de la piste |
 | **SAVE tenu** | sauvegarde le projet (à l'arrêt) |
 | **GLO** | SEQUENCER (Marbles ou Steps), TEMPO, SCALE, ROOT ; SELECT : le projet (INIT) et la machine ; GLO encore : retour |
-| **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle |
+| **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en jaune et noir |
 | **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage sur la piste (avec GLO tenu aussi : sur les 4) |
 | **REC** | avec STEPS : les touches blanches deviennent les 16 pas, les 4 premières noires les pages |
+| **REC tenu** (pas à pas) | efface le pattern de la piste (ses trigs et ses locks) ; avec **GLO tenu** : celui des 4 pistes |
 
 La charge de calcul est toujours affichée en haut à droite (le cœur le plus chargé, en %) ; GLO puis SELECT
 détaille ce que coûte chaque piste et Warps. Les quatre voix et Warps
@@ -134,15 +135,14 @@ le branche : **CARRIER**, la porteuse (Off : Warps éteint ; une piste T1-T4 ; o
 **MODULATOR**, la piste modulante, **MOD DRY** (On : on entend aussi la piste modulante telle quelle ; Off, elle ne
 passe que par Warps) et **MODE** (Warps, ou Freq shift : l'easter egg du module, un décaleur de fréquence). La sortie
 de Warps prend la place de la piste porteuse (ou de la modulante avec l'oscillateur), avec son niveau, son pan et son
-envoi. Sa première page, ce sont les potards du module : **ALGORITHM** balaie ses huit repères (crossfade,
-cross-folding, anneau à diodes, anneau numérique, XOR, comparateur, puis le vocodeur sur le dernier quart, sa
-retombée de plus en plus longue), en fondu de l'un à l'autre comme sur le module ; le sélecteur ALGORITHM saute d'un
-repère au suivant. **TIMBRE**, **LEVEL 1** et **LEVEL 2** comme sur le module : avec l'oscillateur interne, LEVEL 1
+envoi. Sa première page, ce sont les potards du module : **ALGORITHM** balaie ses six modulations croisées
+(crossfade, cross-folding, anneau à diodes, anneau numérique, XOR, comparateur), en fondu de l'une à l'autre comme
+sur le module (sa course jusqu'au comparateur ; le vocodeur, au-delà, n'y est pas) ; le sélecteur ALGORITHM saute
+d'un repère au suivant. **TIMBRE**, **LEVEL 1** et **LEVEL 2** comme sur le module : avec l'oscillateur interne, LEVEL 1
 règle sa note (C0 à C5), comme le potard du module. En Freq shift : ALGORITHM fixe le décalage (au centre, rien ;
 jusqu'à ±2 kHz), TIMBRE la bande (vers le haut, vers le bas), LEVEL 1 la réinjection, LEVEL 2 le mélange. Les câbles
 de la matrice vont aussi sur ses potards (Tides sur ALGORITHM…). Warps joue un bloc derrière les voix (~4 ms de
-latence sur la piste qu'il remplace). Le vocodeur est son algorithme le plus lourd (le premier
-à surveiller dans la charge).
+latence sur la piste qu'il remplace). 
 
 **La sortie** (GLO, SELECT, K2) : Stereo, Mic headset ou Mono. **Mic headset** est pour un casque à micro (fiche à
 4 contacts) branché à fond dans la prise du FM-1 (3 contacts) : ses écouteurs se retrouvent en série entre la

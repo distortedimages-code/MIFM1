@@ -129,6 +129,12 @@ shot 16j_all.png
 release GLO
 wait 300
 shot 16k_all_after.png
+tap SEQ
+press REC
+wait 900
+release REC
+wait 300
+shot 16k2_track_cleared.png
 tap ARP
 wait 300
 shot 16l_endless_empty.png
@@ -176,7 +182,7 @@ wait 600
 shot 16r_warps_diode.png
 turn ALGO 4
 wait 600
-shot 16s_warps_vocoder.png
+shot 16s_warps_comparator.png
 turn SELECT 1
 turn K1 2
 turn SELECT -1

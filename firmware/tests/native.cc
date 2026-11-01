@@ -371,8 +371,8 @@ int main(int argc, char** argv) {
   }
 
   // 12. Warps: the demo with track 3 (FM 2-op) as the carrier and track 2 (the bass) as the modulator, through every
-  // mark of ALGORITHM and the frequency shifter; its output on track 3, finite and heard; its cost (Warps runs at 88.2
-  // kHz) against the four voices'. Then its oscillator alone (the tracks silent): A4 on LEVEL 1, 440 Hz out
+  // mark of ALGORITHM (its six cross-modulations) and the frequency shifter; its output on track 3, finite and heard;
+  // its cost against the four voices'. Then its oscillator alone (the tracks silent): A4 on LEVEL 1, 440 Hz out
   {
     eng_play(0);
     eng_defaults(p);
@@ -398,17 +398,17 @@ int main(int argc, char** argv) {
     play(&rms0, &us0);
     p->val[PG_WARPS(1) * 4 + 0] = WC_T3;
     p->val[PG_WARPS(1) * 4 + 1] = 1.0f;                  // track 2
-    static const float kMarks[8] = {0.0f, 0.125f, 0.25f, 0.375f, 0.5f, 0.625f, 0.75f, 1.0f};
+    static const float kMarks[6] = {0.0f, 0.2f, 0.4f, 0.6f, 0.8f, 1.0f};
     printf("warps (T3 by T2), rms and the render's time, us a block (off: %.3f, %.0f):", rms0, us0);
-    for (int a = 0; a < 9; ++a) {
-      p->val[PG_WARPS(0) * 4 + 0] = a < 8 ? kMarks[a] : 0.7f;
-      p->val[PG_WARPS(1) * 4 + 3] = a == 8 ? 1.0f : 0.0f;
-      if (a == 8) p->val[PG_WARPS(1) * 4 + 0] = WC_OSC1;   // the shifter on its own oscillator
+    for (int a = 0; a < 7; ++a) {
+      p->val[PG_WARPS(0) * 4 + 0] = a < 6 ? kMarks[a] : 0.7f;
+      p->val[PG_WARPS(1) * 4 + 3] = a == 6 ? 1.0f : 0.0f;
+      if (a == 6) p->val[PG_WARPS(1) * 4 + 0] = WC_OSC1;   // the shifter on its own oscillator
       play(&rms, &us);
       int alg = eng_warps_algo();
-      printf(" %s %.3f %.0f%s", eng_warps_name(alg), rms, us, a == 8 ? "\n" : ",");
+      printf(" %s %.3f %.0f%s", eng_warps_name(alg), rms, us, a == 6 ? "\n" : ",");
       if (us - us0 > worst) worst = us - us0;
-      if (rms <= 0.002 || rms > 1.0 || eng_warps_track() != (a == 8 ? 1 : 2) || alg != (a < 7 ? (a < 6 ? a : 6) : a == 7 ? 6 : 7))
+      if (rms <= 0.002 || rms > 1.0 || eng_warps_track() != (a == 6 ? 1 : 2) || alg != a)
         ++failures, printf("FAIL: Warps at %d (%s): rms %.3f, on track %d\n", a, eng_warps_name(alg), rms, eng_warps_track() + 1);
     }
     printf("warps: at most %.0f us a block more than without, the four voices and the rest %.0f\n", worst, us0);
@@ -501,6 +501,18 @@ int main(int argc, char** argv) {
     if (!ok || !eng_check(q) || q->algo[PG_TRACK(1, 0)] != 17 || q->out_mode != 2 || q->cable[0][0].depth != 33 ||
         q->val[5] != 0.25f || q->endless_len[0] != 3 || q->endless[0][0] != 60 || q->val[PG_WARPS(1) * 4] != WC_OFF)
       ++failures, printf("FAIL: the version 4 project\n");
+  }
+
+  // 15. clearing a track's pattern: its trigs and locks gone, the other tracks' kept
+  {
+    eng_defaults(p);
+    int before = 0, after = 0, other = 0, locks = 0;
+    for (int s = 0; s < 16; ++s) before += eng_trig(1, s), other += eng_trig(0, s);
+    eng_steps_clear(1);
+    for (int s = 0; s < 16; ++s) after += eng_trig(1, s), other -= eng_trig(0, s), locks += eng_step_locked(1, s);
+    printf("clear track 2: %d trigs, then %d (%d locks); track 1 %s\n", before, after, locks, other ? "CHANGED" : "kept");
+    if (!before || after || locks || other) ++failures, printf("FAIL: clearing a track\n");
+    eng_defaults(p);
   }
 
   // 9. v0.1's project (version 2) read into this version's

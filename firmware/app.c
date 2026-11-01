@@ -209,10 +209,10 @@ static uint16_t model_accent(int m)      /* Plaits' banks: teal the classic mode
 static uint16_t track_accent(int t) { return model_accent(eng_project()->algo[PG_TRACK(t, 0)]); }
 
 static uint16_t warps_accent(void)      /* Warps' algorithm: the blends teal, the ring modulators and the logic
-                                          * orange, the vocoder pink; off, grey */
+                                          * orange, the frequency shifter pink; off, grey */
 {
     int a = eng_warps_algo();
-    return a < 0 ? MUTED : a <= 1 || a == 7 ? TEAL : a <= 5 ? ORANGE : PINK;
+    return a < 0 ? MUTED : a <= 1 ? TEAL : a <= 5 ? ORANGE : PINK;
 }
 
 static uint16_t page_accent(int page)
@@ -576,7 +576,7 @@ typedef struct {
     int8_t a, b, c, d;
 } vop_t;
 enum { IC_MODEL = 0, IC_RAMP = 24, IC_TMODEL = 27, IC_XMODE = 34, IC_MIX = 37, IC_REV, IC_GLO, IC_NEW, IC_DEMO,
-       IC_SAVED, IC_STEPS, IC_DICE, IC_ENDLESS, IC_WARPS, NICON = IC_WARPS + 8 };
+       IC_SAVED, IC_STEPS, IC_DICE, IC_ENDLESS, IC_WARPS, NICON = IC_WARPS + 7 };
 #define IOPS 10
 static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 4, 24, 12, 8}, {'L', 12, 8, 12, 24}, {'L', 12, 24, 20, 8}, {'L', 20, 8, 20, 24}, {'L', 20, 24, 28, 16}},
@@ -645,8 +645,6 @@ static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 4, 22, 10, 22}, {'L', 10, 22, 10, 10}, {'L', 10, 10, 16, 10}, {'L', 16, 10, 16, 22}, {'L', 16, 22, 22, 22},
      {'L', 22, 22, 22, 10}, {'L', 22, 10, 28, 10}},                                                  /* xor */
     {{'L', 8, 7, 24, 16}, {'L', 24, 16, 8, 25}},                                                    /* comparator */
-    {{'L', 6, 26, 6, 16}, {'L', 11, 26, 11, 8}, {'L', 16, 26, 16, 13}, {'L', 21, 26, 21, 6}, {'L', 26, 26, 26, 18}},
-                                                                                                     /* vocoder */
     {{'C', 9, 16, 4, 0}, {'L', 15, 16, 27, 16}, {'L', 22, 11, 27, 16}, {'L', 27, 16, 22, 21}},      /* freq shifter */
 };
 
@@ -676,6 +674,24 @@ static void vicon(float cx, float cy, float s, float w, uint16_t c, int which, i
 }
 
 /* -------------------------------------------------------------- drawing --- */
+/* ALL (GLO held a moment, or with a knob): the screen yellow, everything on it knocked out in black, until GLO is let
+ * go. Each canvas goes out through blit: its pixels by their brightness, from yellow (black) to black (white) */
+#define YELLOW RGB(255, 214, 0)
+static int knock;
+static void blit(uint32_t x, uint32_t y)
+{
+    if (knock) {
+        for (uint32_t i = 0, n = cv_w * cv_h; i < n; i++) {
+            uint32_t c = swap16(cv_px[i]);
+            uint32_t l = ((c >> 11) * 16u + ((c >> 5) & 63u) * 20u + (c & 31u) * 8u) / 8u;   /* 0..250 */
+            l = l * 3u / 2u;
+            l = l > 255u ? 0u : 255u - l;   /* what is left of the yellow */
+            cv_px[i] = swap16((uint16_t)((31u * l / 255u) << 11 | (53u * l / 255u) << 5));
+        }
+    }
+    cv_blit(x, y);
+}
+
 void app_say(const char *a, const char *b)
 {
     ui.msg[0][0] = ui.msg[1][0] = 0;
@@ -724,7 +740,11 @@ static void draw_header(void)
         text_pill(x + 26, 7, &FONT_T, t, C_WHITE, BG);
     } else if (mode) {
         static const char *const M[5] = {"", "MOD", "REC", "ALL", "RND"};
-        text_pill(x + 20, 7, &FONT_T, M[mode], mode == 3 ? TEAL : mode == 4 ? ORANGE : PINK, mode == 4 ? BG : C_WHITE);
+        if (mode == 3 && knock)          /* ALL in yellow and black: white on black here, black on yellow there */
+            text_pill(x + 20, 7, &FONT_T, M[mode], C_WHITE, BG);
+        else
+            text_pill(x + 20, 7, &FONT_T, M[mode], mode == 3 ? TEAL : mode == 4 ? ORANGE : PINK,
+                      mode == 4 ? BG : C_WHITE);
     }
     t[0] = 0;
     int_text(load, v);
@@ -746,7 +766,7 @@ static void draw_header(void)
         pill(x - 32, 8, 22, 12, BG);
         cv_text(x - 21 - text_w(&FONT_XS, t) / 2, 7, &FONT_XS, t, tc);
     }
-    cv_blit(0, 0);
+    blit(0, 0);
 }
 
 /* the module's display: its icon in a lit ring, its name, a line on its state ---------------------------------- */
@@ -1031,20 +1051,20 @@ static void panel_warps(void)            /* Warps: its algorithm, its marks, wha
     float alg = eng_final(PG_WARPS(0) * 4);
     uint16_t ac = warps_accent();
     char s[48], v[16], u[16];
-    hero_icon(IC_WARPS + (a < 0 ? (alg >= 0.6875f ? 6 : (int)(alg * 8.0f + 0.5f) > 5 ? 5 : (int)(alg * 8.0f + 0.5f)) : a), ac);
+    hero_icon(IC_WARPS + (a < 0 ? clamp((int)(alg * 5.0f + 0.5f), 0, 5) : a), ac);
     int y = hero_title(eng_warps_name(a));
     if (a < 0) {
         hero_line(y, "OFF|A CARRIER ON PAGE 2");
         return;
     }
     s[0] = 0;
-    if (a != 7 || car < WC_OSC1) {       /* the carrier: a track, or the oscillator's shape */
+    if (a != 6 || car < WC_OSC1) {       /* the carrier: a track, or the oscillator's shape */
         eng_param_text(PG_WARPS(1) * 4, (float)car, v, sizeof v);
         label_text(v, u, sizeof u);
         text_cat(s, u, sizeof s);
         text_cat(s, car >= WC_OSC1 ? " OSC " : " ", sizeof s);
     }
-    text_cat(s, a == 7 ? "SHIFTS T" : "BY T", sizeof s);
+    text_cat(s, a == 6 ? "SHIFTS T" : "BY T", sizeof s);
     v[0] = (char)('1' + mod);
     v[1] = 0;
     text_cat(s, v, sizeof s);
@@ -1052,11 +1072,11 @@ static void panel_warps(void)            /* Warps: its algorithm, its marks, wha
     v[0] = (char)('1' + (car >= WC_T1 && car <= WC_T4 ? car - WC_T1 : mod));
     text_cat(s, v, sizeof s);
     hero_line(y, s);
-    if (a == 7)
+    if (a == 6)
         return;
-    for (int i = 0; i < 7; i++) {        /* the knob's marks: the six cross-modulations, the vocoder; lit as near */
-        float d = alg >= 0.6875f ? (i == 6 ? 0.0f : 1.0f) : alg * 8.0f - (float)i;
-        int lv = i == 6 ? (alg >= 0.6875f ? 8 : 0) : (int)((1.0f - (d < 0 ? -d : d)) * 8.0f + 0.5f);
+    for (int i = 0; i < 6; i++) {        /* the knob's six marks, the cross-modulations; lit as near (they blend) */
+        float d = alg * 5.0f - (float)i;
+        int lv = (int)((1.0f - (d < 0 ? -d : d)) * 8.0f + 0.5f);
         led((float)(89 + i * 12), (float)(y + 26), 3.0f, ac, lv < 0 ? 0 : lv);
     }
 }
@@ -1076,7 +1096,7 @@ static void reverb_meter(int force)      /* the return's meter, alone: the rest 
     shown = m;
     cv_begin(6, 52, TRACK);
     cv_rect(0, 52 - m, 6, m, PINK);
-    cv_blit(226, PANEL_Y + 12);
+    blit(226, PANEL_Y + 12);
 }
 
 static void draw_panel(void)
@@ -1144,7 +1164,7 @@ static void draw_panel(void)
     case PT_WARPS1: case PT_WARPS2: panel_warps(); break;
     default: panel_reverb(); break;
     }
-    cv_blit(0, PANEL_Y);
+    blit(0, PANEL_Y);
     if (pt == PT_FX1 || pt == PT_FX2)
         reverb_meter(1);
 }
@@ -1365,7 +1385,7 @@ static void draw_knob(int k)
         cv_text(30 - text_w(&FONT_XS, under) / 2, 78, &FONT_XS, under, view != KV_VALUE ? vc : MUTED);
     else if (ui.mod && eng_param_mod(param))
         ring(30.0f, 85.0f, 4.5f, 1.4f, DIM);
-    cv_blit((uint32_t)(k * KNOB_W), KNOB_Y);
+    blit((uint32_t)(k * KNOB_W), KNOB_Y);
 }
 
 /* lists: the matrix, the global page, the missing tables --------------------------------------------------- */
@@ -1376,7 +1396,7 @@ static void draw_lines(int y, int h, const char *const *lines, const uint16_t *c
         if (i == sel)
             pill(4, 1, 232, h - 2, SEL);
         cv_text(10, (h - 15) / 2, &FONT_XS, lines[i], i == sel ? C_WHITE : colours[i]);
-        cv_blit(0, (uint32_t)(y + i * h));
+        blit(0, (uint32_t)(y + i * h));
     }
 }
 
@@ -1420,7 +1440,7 @@ static void draw_matrix(void)
     cv_begin(240, 24, BG);
     cv_text(10, 0, &FONT_XS, g < ENG_TRACKS ? "THE TRACK'S CABLES" : "GLOBAL CABLES (TIDES, MARBLES, REVERB)", TXT);
     cv_text(10, 12, &FONT_T, "K1 CABLE   K2 SOURCE   K3 TARGET   K4 DEPTH", DIM);
-    cv_blit(0, PANEL_Y);
+    blit(0, PANEL_Y);
     draw_lines(PANEL_Y + 24, 19, lines, col, 8, ui.msel - first);
 }
 
@@ -1443,7 +1463,7 @@ static void draw_global(void)
             vicon(16.0f, (float)y + 8.0f, 0.34f, 1.5f, BG, IC_NEW + i, 0);
             cv_text(30, y + 1, &FONT_XS, P[i], sel ? C_WHITE : TXT);
         }
-        cv_blit(0, PANEL_Y);
+        blit(0, PANEL_Y);
     }
     if (!ui.full && plat_ms() - at < 400u)
         return;
@@ -1515,7 +1535,7 @@ static void draw_global(void)
         cv_text(10, y, &FONT_XS, l, MUTED);
         cv_text(230 - text_w(&FONT_XS, v), y, &FONT_XS, v, c);
         if (i % 3 == 2)
-            cv_blit(0, (uint32_t)(KNOB_Y + (i < 3 ? 0 : 49)));
+            blit(0, (uint32_t)(KNOB_Y + (i < 3 ? 0 : 49)));
     }
 }
 
@@ -1690,15 +1710,20 @@ static void draw_footer(void)
             cv_text(x + 12, 11, text_w(&FONT_XS, t) <= 42 ? &FONT_XS : &FONT_T, t, act ? C_WHITE : DIM);
         }
     }
-    cv_blit(0, FOOT_Y);
+    blit(0, FOOT_Y);
 }
 
 static void poll_keys(void);             /* (input, below): the keys read between the screen's parts too */
 
 static void draw(void)
 {
+    int k = held(B_GLO) && (ui.used[B_GLO] || plat_ms() - ui.down_at[B_GLO] >= 250u);
+    if (k != knock) {                    /* ALL: in yellow and black while GLO is held, then as it was */
+        knock = k;
+        ui.full = 1;
+    }
     if (ui.full)
-        lcd_fill(0, 0, 240, 240, BG);
+        lcd_fill(0, 0, 240, 240, knock ? YELLOW : BG);
     draw_header();
     poll_keys();
     if (!data_ok || !engine_ok) {
@@ -1961,6 +1986,26 @@ static void button_long(int b)
             eng_endless_clear(ui.track);
             dirty = 1;
             app_say("ENDLESS", "CLEARED");
+        } else if (eng_steps_mode() && ui.erec < 0 &&
+                   (ui.grid || ptype(ui.page) == PT_STEP || ptype(ui.page) == PT_RND)) {
+            /* the steps: the track's pattern cleared (its trigs and locks), with GLO held every track's */
+            char n[16];
+            if (held(B_GLO)) {
+                for (int t = 0; t < ENG_TRACKS; t++)
+                    eng_steps_clear(t);
+                ui.used[B_GLO] = 1;
+                app_say("ALL TRACKS", "CLEARED");
+            } else {
+                eng_steps_clear(ui.track);
+                n[0] = 0;
+                text_cat(n, "TRACK ", sizeof n);
+                n[6] = (char)('1' + ui.track);
+                n[7] = 0;
+                app_say(n, "CLEARED");
+            }
+            ui.held_step = -1;
+            dirty = 1;
+            ui.full = 1;
         } else if (!ui.grid && ui.erec < 0) {
             app_say("INIT:", "GLO, SELECT, REC HELD");
         }
@@ -2179,17 +2224,16 @@ static void input(void)
         go_page(page_at(ui.page, page_face(ui.page) + (e > 0 ? 1 : -1)));
     e = plat_enc(EN_ALGO);
     if (e && !ui.matrix && (ptype(ui.page) == PT_WARPS1 || ptype(ui.page) == PT_WARPS2)) {
-        /* Warps: ALGORITHM from mark to mark (the six cross-modulations, the vocoder, its longest release) */
-        static const float MARK[8] = {0.0f, 0.125f, 0.25f, 0.375f, 0.5f, 0.625f, 0.75f, 1.0f};
+        /* Warps: ALGORITHM from mark to mark (its six cross-modulations, a fifth of the knob apart) */
         float *v = &eng_project()->val[PG_WARPS(0) * 4];
         int i;
         if (e > 0)
-            for (i = 0; i < 7 && MARK[i] <= *v + 0.001f; i++)
+            for (i = 0; i < 5 && (float)i * 0.2f <= *v + 0.001f; i++)
                 ;
         else
-            for (i = 7; i > 0 && MARK[i] >= *v - 0.001f; i--)
+            for (i = 5; i > 0 && (float)i * 0.2f >= *v - 0.001f; i--)
                 ;
-        *v = MARK[i];
+        *v = (float)i * 0.2f;
         dirty = 1;
     } else if (e && !ui.matrix && ptype(ui.page) <= PT_FX2) {
         project_t *p = eng_project();

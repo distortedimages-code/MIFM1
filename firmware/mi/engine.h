@@ -39,7 +39,7 @@ extern "C" {
 enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_TIDES1, PT_TIDES2, PT_MARB_T1, PT_MARB_T2, PT_MARB_X1, PT_MARB_X2,
        PT_MIX, PT_FX1, PT_FX2, PT_PAN, PT_STEP, PT_GLOBAL, PT_ARP, PT_WARPS1, PT_WARPS2, NPT };
 /* Warps' carrier (PG_WARPS(1)'s first knob): none (Warps off), a track, or the module's internal oscillator, its three
- * shapes (sine, triangle, saw; with the vocoder saw, pulse, noise) */
+ * shapes (sine, triangle, saw) */
 enum { WC_OFF, WC_T1, WC_T2, WC_T3, WC_T4, WC_OSC1, WC_OSC2, WC_OSC3 };
 enum { SEQ_MARBLES, SEQ_STEPS };         /* PG_GLOBAL's first knob */
 
@@ -115,7 +115,7 @@ typedef struct {
 int eng_algo_count(int page);            /* 0: the page has no ALGORITHM choice */
 const char *eng_algo_name(int page, int a);
 
-/* Warps as it plays: its algorithm (0..5 the cross-modulations, 6 the vocoder, 7 the frequency shifter; -1 off), its
+/* Warps as it plays: its algorithm (0..5 the cross-modulations, 6 the frequency shifter; -1 off), its
  * name, the track its output takes the place of (-1 off) */
 int eng_warps_algo(void);
 const char *eng_warps_name(int algo);
@@ -136,6 +136,7 @@ void eng_trig_set(int t, int step, int on);
 int eng_lock(int t, int step, int tp, float *v);   /* 1: that step locks tp (its value in v) */
 int eng_lock_set(int t, int step, int tp, float v);   /* 0 ok, -1 no room */
 void eng_lock_clear(int t, int step);    /* all its locks */
+void eng_steps_clear(int t);             /* the track's pattern: every trig and lock (its knobs and randoms stay) */
 int eng_step_locked(int t, int step);    /* how many locks it has */
 int eng_step_now(int t);                 /* the step playing, -1 stopped (or Marbles) */
 int eng_quantize(int note);              /* a note in the global scale */
