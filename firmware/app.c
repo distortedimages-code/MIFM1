@@ -53,7 +53,7 @@ int mi_res_check(const uint8_t *payload, uint32_t len);   /* mi/res_symbols.cc: 
 #define TXT RGB(240, 239, 235)
 #define MUTED RGB(154, 151, 152)
 #define DIM RGB(107, 104, 105)
-#define TRACK RGB(44, 42, 43)            /* a ring's travel, unlit */
+#define TRACK RGB(60, 58, 59)            /* a ring's travel, unlit (1 px) */
 #define OFF RGB(48, 46, 47)              /* an LED off */
 #define RULE RGB(38, 36, 37)
 #define SEL RGB(46, 44, 45)              /* the chosen row */
@@ -538,19 +538,12 @@ static int text_pill(int cx, int y, const felucca_font_t *f, const char *s, uint
     return w;
 }
 
-/* light: a lit thing glows, as an LED behind a panel would (two wider, darker passes under it) */
-static void glow_arc(float cx, float cy, float r0, float r1, float u0, float u1, uint16_t c)
+/* light: a lit thing in its colour, flat (no glow: finer, Yoann's choice) */
+static void lit_arc(float cx, float cy, float r0, float r1, float u0, float u1, uint16_t c)
 {
-    arc(cx, cy, r0 - 1.8f, r1 + 1.8f, u0, u1, tint(c, BG, 2));
-    arc(cx, cy, r0 - 0.9f, r1 + 0.9f, u0, u1, tint(c, BG, 4));
     arc(cx, cy, r0, r1, u0, u1, c);
 }
-static void glow_disc(float cx, float cy, float r, uint16_t c)
-{
-    disc(cx, cy, r + 2.8f, tint(c, BG, 2));
-    disc(cx, cy, r + 1.4f, tint(c, BG, 4));
-    disc(cx, cy, r, c);
-}
+static void lit_disc(float cx, float cy, float r, uint16_t c) { disc(cx, cy, r, c); }
 static void led(float cx, float cy, float r, uint16_t c, int lvl)   /* an LED: lvl 0 off .. 8 full */
 {
     uint16_t col;
@@ -559,10 +552,7 @@ static void led(float cx, float cy, float r, uint16_t c, int lvl)   /* an LED: l
         return;
     }
     col = lvl >= 8 ? c : tint(c, BG, lvl);
-    if (lvl >= 5)
-        glow_disc(cx, cy, r, col);
-    else
-        disc(cx, cy, r, col);
+    disc(cx, cy, r, col);
 }
 
 /* the icons, as strokes in a 32-unit box: Plaits' 24 models, Tides' ramps, Marbles' t models and X modes, the mixer,
@@ -721,8 +711,6 @@ static void draw_header(void)
     if (dirty)                           /* not saved */
         disc((float)(x - 6), 14.0f, 2.2f, PINK);
     x -= 26;
-    if (eng_playing())                   /* PLAY: a triangle, lit */
-        disc((float)x + 4.0f, 14.0f, 9.0f, tint(TEAL, BG, 1));
     for (int y = -6; y <= 6; y++)
         cv_rect(x, 14 + y, 11 - (iabs(y) * 11 + 3) / 6, 1, eng_playing() ? TEAL : DIM);
     if (tr >= 0 || ui.matrix) {          /* the track, ringed in its model's colour */
@@ -742,10 +730,8 @@ static void draw_header(void)
 #define HY 35.0f
 static void hero_icon(int which, uint16_t c)
 {
-    ring(HX, HY, 30.5f, 8.0f, tint(c, BG, 2));
-    ring(HX, HY, 29.0f, 5.0f, tint(c, BG, 4));
-    ring(HX, HY, 27.5f, 3.0f, c);
-    vicon(HX, HY, 1.05f, 2.8f, c, which, 1);
+    ring(HX, HY, 27.0f, 2.0f, c);
+    vicon(HX, HY, 1.05f, 2.4f, c, which, 0);
 }
 
 static int hero_title(const char *name)  /* the name: one line of L, two cut at a space, else M; the y under it */
@@ -1133,14 +1119,14 @@ static float knob_u(int param, float v)  /* a value's place on its knob, 0..1 */
 
 #define RX 30.0f                         /* a knob's ring in its 60 x 100 cell */
 #define RY 45.0f
-#define R0 21.5f                         /* a fine ring: 3 px */
+#define R0 22.5f                         /* a fine ring: 2 px lit, its travel 1 px */
 #define R1 24.5f
 static void ring_end(float u, uint16_t c, int glow)   /* a lit travel's round end */
 {
     float x, y;
     travel_xy(RX, RY, u, (R0 + R1) * 0.5f, &x, &y);
     if (glow)
-        glow_disc(x, y, (R1 - R0) * 0.5f, c);
+        lit_disc(x, y, (R1 - R0) * 0.5f, c);
     else
         disc(x, y, (R1 - R0) * 0.5f, c);
 }
@@ -1248,19 +1234,17 @@ static void draw_knob(int k)
         for (int j = 0; j < n; j++) {
             float a = (float)j / (float)n + gap, b = (float)(j + 1) / (float)n - gap;
             if (j == i)
-                glow_arc(RX, RY, R0, R1, a, b, ac);
+                lit_arc(RX, RY, R0, R1, a, b, ac);
             else
-                arc(RX, RY, R0, R1, a, b, TRACK);
+                arc(RX, RY, R0 + 0.5f, R1 - 0.5f, a, b, TRACK);
         }
         label_text(txt, nm, sizeof nm);
         ring_text(nm, C_WHITE, under, sizeof under);
     } else {
         float lo = bip ? fm_minf(u, 0.5f) : 0.0f, hi = bip ? fm_maxf(u, 0.5f) : u;
-        arc(RX, RY, R0, R1, 0.0f, 1.0f, TRACK);
-        ring_end(0.0f, TRACK, 0);
-        ring_end(1.0f, TRACK, 0);
+        arc(RX, RY, R0 + 0.5f, R1 - 0.5f, 0.0f, 1.0f, TRACK);
         if (hi - lo > 0.004f) {
-            glow_arc(RX, RY, R0, R1, lo, hi, vc);
+            lit_arc(RX, RY, R0, R1, lo, hi, vc);
             ring_end(lo, vc, 1);
             ring_end(hi, vc, 1);
         } else {
@@ -1277,7 +1261,7 @@ static void draw_knob(int k)
                 arc(RX, RY, R0 - 3.0f, R0 - 1.6f, q, fm_minf(q + 0.025f, b), mc);
             float x, y;
             travel_xy(RX, RY, uf, (R0 + R1) * 0.5f, &x, &y);
-            glow_disc(x, y, 2.4f, mc);
+            lit_disc(x, y, 2.0f, mc);
         }
         ring_text(txt, ncab ? mc : view == KV_RND && !rnd ? DIM : C_WHITE, under, sizeof under);
     }

@@ -39,9 +39,9 @@ rien vers la réverbe, Marbles en do majeur), *The demo patch* (le patch ci-dess
 sauvegardé, pour annuler). Le transport s'arrête ; rien n'est sauvegardé tant que SAVE n'est pas tenu.
 
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
-icônes). En haut, l'icône du module dans un anneau lumineux, son nom en grand et une ligne sur son état : sur Plaits,
+icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état : sur Plaits,
 le seul logo du modèle et son nom (KICK, VIRTUAL ANALOG…), sur Tides la rampe, sur Marbles le modèle de *t* ou la
-gamme. Puis les quatre potards côte à côte, dans l'ordre des KNOB 1 à 4 : un anneau allumé de son début (ou de son
+gamme. Puis les quatre potards côte à côte, dans l'ordre des KNOB 1 à 4 : un anneau fin allumé de son début (ou de son
 milieu, avec « − + ») jusqu'à la valeur, la valeur dedans, un câble en pointillé et son point d'arrivée dans l'autre
 couleur, la source écrite dessous. En bas les quatre pistes, une LED chacune allumée par sa gate dans la couleur de son
 modèle ; sur les pages de Tides et de Marbles, leurs sorties, allumées à leur hauteur ; avec le séquenceur pas à pas,
