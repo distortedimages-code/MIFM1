@@ -45,14 +45,24 @@ void mrv_init(void *mem);
 void mrv_set(void *r, float time, float damping, float diffusion);   /* 0..1 each */
 void mrv_process(void *r, const float *in, float *out_l, float *out_r, uint32_t n);
 
-/* ---- Warps, at twice the FM-1's rate (88.2 kHz: its tables are for the module's 96) ---- */
+/* ---- the delay (mi_delay.h: Mutable's filter and saturation in a 16-bit line, Zen Delay's knobs) ---- */
+uint32_t mdl_size(void);                 /* its 1.2 s line included */
+void mdl_init(void *mem);
+/* time in samples, feedback 0..1, filter -1 (low pass) .. 1 (high pass), resonance, drive, mod 0..1 */
+void mdl_set(void *d, float time, float feedback, float filter, float resonance, float drive, int ping_pong,
+             float mod);
+void mdl_process(void *d, const float *in, float *out_l, float *out_r, uint32_t n);
+
+/* ---- Warps, at the FM-1's 44.1 kHz (its tables made again for it: mi_warps.cc) ---- */
 uint32_t mw_size(void);
 void mw_init(void *mem);
-/* algorithm 0..1 (the module's big knob: six cross-modulations, the vocoder from 0.7), timbre, level 1 and 2 (0..1);
- * osc 0: the carrier is the input, 1..3 the internal oscillator's shapes, at note (MIDI); shift 1: the frequency
- * shifter, the easter egg (algorithm the shift, timbre the side, level 1 the feedback, level 2 dry/wet) */
+/* algorithm 0..1 (the module's big knob), timbre, level 1 and 2 (0..1); osc 0: the carrier is the input, 1..3 the
+ * internal oscillator's shapes, at note (MIDI); shift 1: the frequency shifter, the easter egg (algorithm the shift,
+ * timbre the side, level 1 the feedback, level 2 dry/wet) */
 void mw_set(void *w, float algorithm, float timbre, float level1, float level2, int osc, float note, int shift);
-void mw_render(void *w, const float *carrier, const float *modulator, float *out, uint32_t n);   /* ~1.6 ms late */
+/* ~1.1 ms late; dry: the input given as dry_in, as late (to mix with the output) */
+void mw_render(void *w, const float *carrier, const float *modulator, const float *dry_in, float *out, float *dry,
+               uint32_t n);
 uint32_t mw_calls(void *w, uint32_t n);  /* the modulator's Process calls the next n frames make (its cost goes by them) */
 
 /* ---- Tides 2 ---- */

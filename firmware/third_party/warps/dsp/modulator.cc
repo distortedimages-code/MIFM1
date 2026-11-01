@@ -54,7 +54,7 @@ void Modulator::Init(float sample_rate) {
   xmod_oscillator_.Init(sample_rate);
   vocoder_oscillator_.Init(sample_rate);
   quadrature_oscillator_.Init(sample_rate);
-  vocoder_.Init(sample_rate);
+  // vocoder_.Init(sample_rate);  MIFM1: no vocoder
   
   previous_parameters_.carrier_shape = 0;
   previous_parameters_.channel_drive[0] = 0.0f;
@@ -315,9 +315,8 @@ void Modulator::Process(ShortFrame* input, ShortFrame* output, size_t size) {
     float release_time = 4.0f * (parameters_.modulation_algorithm - 0.75f);
     CONSTRAIN(release_time, 0.0f, 1.0f);
     
-    vocoder_.set_release_time(release_time * (2.0f - release_time));
-    vocoder_.set_formant_shift(parameters_.modulation_parameter);
-    vocoder_.Process(modulator, carrier, main_output, size);
+    (void)release_time;  // MIFM1: no vocoder: silence
+    fill(&main_output[0], &main_output[size], 0.0f);
   }
   
   // Cross-fade to raw modulator for the transition between cross-modulation

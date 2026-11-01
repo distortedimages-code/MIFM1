@@ -36,6 +36,10 @@
    Warps then runs whole at 44.1 kHz (`firmware/mi/mi_warps.cc`). 0.2.0 and 0.2.1 ran it at 88.2 kHz on the 96 kHz
    tables: twice the cost, too much for the FM-1.
 
+6. `warps/dsp/modulator.h`, `modulator.cc`: the vocoder left out (`tools/warps_no_vocoder.py`): its member (64 KB of
+   the modulator's 72), its `Init` and its `Process` call. MIFM1's ALGORITHM never reaches it (0..0.625 of the module's
+   knob: the six cross-modulations); were it to, the output would be silent.
+
 Not changed, but used differently from the modules: Marbles and Tides 2 run at the control rate (Marbles 8 frames
 per audio block, Tides one), their time constants given that rate; Clouds' granular processor (written for 32 kHz)
 is not played yet (Rings, measured at v0.0, is no longer part of the firmware: Plaits' MODAL and STRING models

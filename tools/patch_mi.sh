@@ -29,4 +29,7 @@ sub warps/dsp/vocoder.h 's/^const float kFollowerGain = sqrtf(kNumBands);/const 
 python3 -I "$(dirname "$0")/warps_tables.py" "$T/warps"
 grep -q "MIFM1: at 44100 Hz" "$T/warps/resources.cc" || { echo "patch_mi: warps/resources.cc not at 44.1 kHz"; exit 1; }
 grep -q "MIFM1: 72 taps" "$T/warps/dsp/modulator.h" || { echo "patch_mi: warps/dsp/modulator.h: 72 taps"; exit 1; }
+# 6. Warps' vocoder out (MIFM1 plays its cross-modulations and its frequency shifter only): its 64 KB object, its Init and
+#    its Process call (tools/warps_no_vocoder.py)
+python3 -I "$(dirname "$0")/warps_no_vocoder.py" "$T/warps"
 echo "patched $T"

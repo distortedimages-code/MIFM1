@@ -26,39 +26,45 @@ td:first-child {{ white-space: nowrap; font-weight: 700; color: #ffb22e; }}
 </style>
 <h1>MIFM1 {version}</h1>
 <p>Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient du code open source de Mutable Instruments :
-Plaits sur chaque piste (ses 24 modèles), Marbles ou un séquenceur pas à pas avec P-locks, un Endless par piste, probabilités, ratchets et
-aléatoire, un quantiseur global, deux Tides pour moduler, une matrice de câbles, Warps entre deux pistes, un mixer avec
-pans et un départ vers la réverbe de Clouds.</p>
+Plaits sur chaque piste (ses 24 modèles), un séquenceur pas à pas avec P-locks (modes KEY et STEP), un Endless par
+piste, probabilités, ratchets, longueurs, aléatoire et swing, un quantiseur global, deux Tides pour moduler, une
+matrice de câbles, et trois effets avec chacun sa piste de pas : un delay (filtre, drive, ping-pong), la réverbe de
+Clouds et Warps entre deux pistes.</p>
 <div class="card"><b>Installer</b><br><a href="install/">Installer MIFM1 {version}</a>
 <p>Dans Chrome ou Edge, le FM-1 branché en USB et à l'arrêt. Laisser la page aller jusqu'au bout : le firmware, puis
 les tables des modules.</p></div>
 <h2>Les commandes</h2>
 <table>
 <tr><td>KNOB 1 à 4</td><td>les 4 paramètres de la page</td></tr>
-<tr><td>SELECT</td><td>l'autre face du module (1/3, 2/3…)</td></tr>
-<tr><td>ALGORITHM</td><td>le modèle de Plaits, le mode de Tides, le modèle de T, la gamme</td></tr>
+<tr><td>SELECT</td><td>l'autre face du module (1/3, 2/3…), qui glisse</td></tr>
+<tr><td>ALGORITHM</td><td>le modèle de Plaits, le mode de Tides ; Warps : d'un repère au suivant ; le delay : son temps</td></tr>
 <tr><td>PRESETS</td><td>la piste active, de 1 à 4</td></tr>
 <tr><td>EDIT · LFO</td><td>Plaits · Tides A puis B</td></tr>
-<tr><td>SEQ</td><td>les séquenceurs : les pas de la piste, Marbles t, Marbles X</td></tr>
+<tr><td>SEQ</td><td>les pas de la piste : NOTE, PROB, RATCHET, LENGTH, puis RANDOM (PAN, DECAY, TUNE, RATCHET) ;
+d'un effet : DECAY, PROB, DEPTH, LENGTH</td></tr>
 <tr><td>ARP</td><td>Endless : REC enregistre (une touche = une note, SEL = un silence), REC à nouveau le joue, une touche le
 transpose, REC tenu l'efface</td></tr>
-<tr><td>HOME · FX</td><td>le mixer (les niveaux, les pans) · les envois, la réverbe, puis Warps : ALGORITHM, TIMBRE,
-LEVEL 1, LEVEL 2, puis CARRIER (une piste ou l'oscillateur), MODULATOR, MOD DRY, MODE (Warps ou Freq shift)</td></tr>
-<tr><td>PLAY</td><td>l'horloge de Marbles tourne ou s'arrête</td></tr>
-<tr><td>clavier</td><td>joue la piste active, même à l'arrêt (OCT− OCT+ pour l'octave)</td></tr>
-<tr><td>SEQ (STEPS)</td><td>les pas de la piste : NOTE, PROB, RATCHET, LENGTH ; SELECT : RANDOM (PAN, DECAY, TUNE, RATCHET)</td></tr>
+<tr><td>HOME</td><td>le mixer : les niveaux, les pans</td></tr>
+<tr><td>FX</td><td>les effets l'un après l'autre : le delay (TIME, FEEDBACK, FILTER, DRIVE ; RESONANCE, MODE, MOD,
+RETURN), la réverbe, Warps (ALGORITHM, TIMBRE, LEVEL 1, LEVEL 2 ; CARRIER, MODULATOR, MOD DRY, MODE) ; SELECT : leurs
+faces, les envois des pistes, leurs pas</td></tr>
+<tr><td>PLAY</td><td>le séquenceur tourne ou s'arrête</td></tr>
+<tr><td>REC</td><td>KEY (le clavier joue la piste active, même à l'arrêt, OCT− OCT+ pour l'octave) ou STEP : les
+touches blanches sont les 16 pas, les 7 premières noires les pistes de pas (1-4 les pistes, 5 le delay, 6 la réverbe,
+7 Warps), OCT− OCT+ les pages ; tenir un pas + un potard = P-lock</td></tr>
+<tr><td>REC tenu (pas)</td><td>efface la piste de pas (trigs, locks, aléatoires ; d'une piste ses câbles) ; avec GLO tenu, toutes et les câbles globaux</td></tr>
+<tr><td>les pas d'un effet</td><td>sans trig, l'effet est toujours là ; avec des trigs, chaque trig l'ouvre et il se
+referme avec DECAY ; ses P-locks changent ses réglages pas par pas</td></tr>
 <tr><td>SEL</td><td>mode MOD : tenir une touche-source et tourner un potard pose un câble (touches 1-4 Tides A,
-5-8 Tides B, 9-11 X1-X3, 12 Y, 13-15 T1-T3, 17-18 Tides A ou B en éventail sur les 4 potards)</td></tr>
+5-8 Tides B, 9-10 Tides A ou B en éventail sur les 4 potards)</td></tr>
 <tr><td>SEL tenu</td><td>la matrice de la piste : K1 le câble, K2 la source, K3 la cible, K4 la dose</td></tr>
 <tr><td>SAVE tenu</td><td>sauvegarde le projet (à l'arrêt)</td></tr>
-<tr><td>GLO</td><td>SEQUENCER (Marbles ou Steps), TEMPO, SCALE, ROOT ; SELECT : le projet et la machine</td></tr>
+<tr><td>GLO</td><td>TEMPO, SCALE, ROOT, SWING ; SELECT : le projet et la machine</td></tr>
 <tr><td>GLO tenu + potard</td><td>ALL : le même réglage sur les 4 pistes, l'écran en jaune et noir ; pendant 4 s, GLO remet tout comme avant au début de la mesure suivante</td></tr>
 <tr><td>ENV</td><td>l'enveloppe de la piste : DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV</td></tr>
 <tr><td>ENV tenu + potard</td><td>l'aléatoire de ce réglage : à droite nouveau à chaque trig, à gauche en boucle</td></tr>
-<tr><td>REC</td><td>avec STEPS : les touches blanches sont les 16 pas ; tenir un pas + un potard = P-lock</td></tr>
-<tr><td>REC tenu (pas à pas)</td><td>efface la piste (trigs, locks, aléatoires, câbles) ; avec GLO tenu, les 4 pistes et les câbles globaux</td></tr>
-<tr><td>GLO, SELECT, K1, REC tenu</td><td>INIT : un projet neuf (4 Plaits sur VIRTUAL ANALOG, rien de câblé), le patch de démo
-ou le projet sauvegardé ; rien n'est sauvegardé avant SAVE tenu</td></tr>
+<tr><td>GLO, SELECT, K1, REC tenu</td><td>INIT : un projet neuf (4 Plaits sur VIRTUAL ANALOG, rien de câblé, aucun pas), le
+patch de démo ou le projet sauvegardé ; rien n'est sauvegardé avant SAVE tenu</td></tr>
 </table>
 <p><a href="backup/">Sauvegarder ou restaurer le projet dans un fichier</a></p>
 </html>

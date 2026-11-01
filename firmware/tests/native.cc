@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 // Copyright (C) 2026 Yoann
 // MIFM1 on a computer: the engine (mi/engine.cc) plays its default patch, as the FM-1 would at power-on, and is
-// checked: every track sounds, Marbles' gates fall on the tempo, the sources stay in range, no NaN, the keyboard
-// plays a stopped machine, a project's values are written as the screen writes them. WAVs in the folder given.
+// checked: every track sounds, the steps fall on the tempo, the sources stay in range, no NaN, the keyboard plays a
+// stopped machine, a project's values are written as the screen writes them, the effects' lanes open and close them.
+// WAVs in the folder given.
 //   build/native build/wav [seconds]
 #include <cmath>
 #include <cstdio>
@@ -115,10 +116,10 @@ int main(int argc, char** argv) {
          rms, peak, us, notes_lo, notes_hi, bad ? ", NaN" : "");
   printf("gates per track:");
   for (int t = 0; t < ENG_TRACKS; ++t) printf(" %u", rises[t]);
-  printf("  (T2 on track 1: %0.f beats at 120 BPM expected)\n", seconds * 2.0f);
+  printf("  (track 1: %0.f at 120 BPM expected, a beat each and a ratchet a bar)\n", seconds * 2.5f);
   if (bad || rms < 0.01) ++failures;
-  if (rises[0] < seconds * 2.0f * 0.9f || rises[0] > seconds * 2.0f * 1.1f + 1) {
-    printf("FAIL: track 1 does not follow T2 at 120 BPM\n");
+  if (rises[0] < seconds * 2.5f * 0.95f || rises[0] > seconds * 2.5f * 1.05f + 1) {
+    printf("FAIL: track 1 does not play its steps at 120 BPM\n");
     ++failures;
   }
   for (int t = 1; t < ENG_TRACKS; ++t) {
@@ -156,7 +157,6 @@ int main(int argc, char** argv) {
 
   // 3. every model on track 1, a second each
   project_t* p = eng_project();
-  p->val[PG_TRACK(0, 2) * 4 + 0] = GATE_KEYS;
   for (int m = 0; m < eng_algo_count(PG_TRACK(0, 0)); ++m) {
     p->algo[PG_TRACK(0, 0)] = static_cast<uint8_t>(m);
     eng_key(0, 48, 1);
@@ -179,8 +179,8 @@ int main(int argc, char** argv) {
 
   // 4. the values as the screen writes them
   char t[24];
-  eng_param_text(PG_MARBLES(0) * 4 + 0, p->val[PG_MARBLES(0) * 4 + 0], t, sizeof t);
-  printf("RATE %s", t);
+  eng_param_text(PG_GLOBAL * 4 + 0, p->val[PG_GLOBAL * 4 + 0], t, sizeof t);
+  printf("TEMPO %s", t);
   if (strcmp(t, "120 BPM")) ++failures, printf(" (FAIL: 120 BPM expected)");
   eng_param_text(PG_TRACK(0, 0) * 4 + 0, 0.5f, t, sizeof t);
   printf(", FREQUENCY +0.5 -> %s", t);
@@ -190,10 +190,24 @@ int main(int argc, char** argv) {
   eng_param_text(PG_TIDES(0, 0) * 4 + 0, 0.0f, t, sizeof t);
   printf(", TIDES A at 0: %s\n", t);
   if (strcmp(t, "0.02 Hz")) ++failures, printf(" (FAIL: 0.02 Hz expected)\n");
+  {
+    static const struct { int param; float v; const char* want; } kText[] = {
+        {PG_DELAY(0) * 4 + 0, 7.0f, "1/8D"},    {PG_DELAY(0) * 4 + 2, -0.2f, "LP 20"}, {PG_DELAY(0) * 4 + 2, 0.0f, "Flat"},
+        {PG_DELAY(1) * 4 + 1, 1.0f, "Ping-pong"}, {PG_GLOBAL * 4 + 3, 1.0f, "75%"},  {PG_GLOBAL * 4 + 3, 0.0f, "50%"},
+        {PG_STEP(LANE_DELAY) * 4 + 0, 0.0f, "10 ms"}, {PG_STEP(LANE_REVERB) * 4 + 0, 1.0f, "5.1 s"},
+        {PG_TRACK(0, 2) * 4 + 1, 1.0f, "95%"},   {PG_TIDES(0, 1) * 4 + 3, 4.0f, "T4"}};
+    for (const auto& k : kText) {
+      eng_param_text(k.param, k.v, t, sizeof t);
+      if (strcmp(t, k.want)) ++failures, printf("FAIL: %s at %.2f written %s, %s expected\n", eng_pdef(k.param)->name, k.v, t, k.want);
+    }
+    printf("the delay's, the swing's, the lanes' values: written as expected\n");
+  }
 
-  // 5. INIT: four Plaits on VIRTUAL ANALOG, nothing patched; each track plays
+  // 5. INIT: four Plaits on VIRTUAL ANALOG, nothing patched, no steps; a step on each, each track plays
   eng_blank(p);
-  int cables = 0, models = 0;
+  int cables = 0, models = 0, steps = 0;
+  for (int l = 0; l < ENG_LANES; ++l) steps += eng_lane_has_trigs(l);
+  for (int tr = 0; tr < ENG_TRACKS; ++tr) eng_trig_set(tr, tr * 4, 1);
   for (int g = 0; g <= ENG_TRACKS; ++g)
     for (int c = 0; c < ENG_CABLES; ++c) cables += p->cable[g][c].depth != 0;
   for (int tr = 0; tr < ENG_TRACKS; ++tr) models += p->algo[PG_TRACK(tr, 0)] == 8;
@@ -220,16 +234,16 @@ int main(int argc, char** argv) {
     wi.add(l, r, n);
   }
   wi.close();
-  printf("init: %d cables, %d tracks on VIRTUAL ANALOG (%s), rms %.3f, gates %u %u %u %u\n", cables, models,
-         eng_algo_name(PG_TRACK(0, 0), 8), std::sqrt(ie / (iblocks * n)), irises[0], irises[1], irises[2], irises[3]);
-  if (cables || models != ENG_TRACKS || inan || ie < 1e-3) ++failures, printf("FAIL: the INIT project\n");
+  printf("init: %d cables, %d lanes with steps, %d tracks on VIRTUAL ANALOG (%s), a step each: rms %.3f, gates %u %u %u %u\n",
+         cables, steps, models, eng_algo_name(PG_TRACK(0, 0), 8), std::sqrt(ie / (iblocks * n)), irises[0], irises[1],
+         irises[2], irises[3]);
+  if (cables || steps || models != ENG_TRACKS || inan || ie < 1e-3) ++failures, printf("FAIL: the INIT project\n");
   for (int tr = 0; tr < ENG_TRACKS; ++tr)
     if (!irises[tr]) ++failures, printf("FAIL: INIT, track %d never plays\n", tr + 1);
 
   // 6. the step sequencer: the demo's patterns at 120 BPM (a sixteenth 125 ms), 8 s = 4 bars
   eng_play(0);
   eng_defaults(p);
-  p->val[PG_GLOBAL * 4] = SEQ_STEPS;
   auto run = [&](int seconds, uint32_t* rises, int* lo, int* hi, uint16_t* inscale) {
     uint32_t pv = 0, bl = static_cast<uint32_t>(seconds) * 44100u / n;
     for (int tr = 0; tr < ENG_TRACKS; ++tr) rises[tr] = 0, lo[tr] = 999, hi[tr] = -999;
@@ -266,7 +280,7 @@ int main(int argc, char** argv) {
   p->val[PG_STEP(2) * 4 + 1] = 0.0f;                   // track 3 never
   p->val[PG_STEP(0) * 4 + 2] = 3.0f;                   // track 1: three a trig (its locked step: two)
   p->rnd[3][TP_NOTE] = 100;                             // track 4: any note an octave around, new at each trig
-  p->val[PG_GLOBAL * 4 + 2] = 11.0f;                    // minor pentatonic
+  p->val[PG_GLOBAL * 4 + 1] = 11.0f;                    // minor pentatonic
   run(8, sr, slo, shi, &ok_scale);
   printf("prob 0 on track 3: %u trigs; ratchets x3 on track 1: %u (44 expected); random tune on track 4: %d..%d, %s\n",
          sr[2], sr[0], slo[3], shi[3], ok_scale ? "all in the scale" : "OUT OF THE SCALE");
@@ -303,7 +317,6 @@ int main(int argc, char** argv) {
 
   // 10. Endless: track 1 records C3, a rest, D#3, G3, then loops them on sixteenths; a key transposes it
   eng_defaults(p);
-  p->val[PG_GLOBAL * 4] = SEQ_STEPS;
   eng_endless_rec(0, 1);
   eng_endless_add(0, 60);
   eng_endless_add(0, ENDLESS_REST);
@@ -327,7 +340,6 @@ int main(int argc, char** argv) {
   {
     eng_play(0);
     eng_blank(p);
-    p->val[PG_GLOBAL * 4] = SEQ_STEPS;
     p->algo[PG_TRACK(0, 0)] = 12;
     p->val[eng_track_param(0, TP_DECAY)] = 0.75f;
     p->val[eng_track_param(0, TP_SEND)] = 0.0f;
@@ -335,9 +347,7 @@ int main(int argc, char** argv) {
     p->rnd[0][TP_PAN] = 100;
     p->rnd[0][TP_NOTE] = 100;
     p->rnd[0][TP_RATCHET] = 100;
-    p->lock[0].ts = 0 << 6 | 4;                           // a lock on the level, step 5: half
-    p->lock[0].tp = TP_LEVEL;
-    p->lock[0].v = 128;
+    eng_lock_set(0, 4, TP_LEVEL, 0.5f);                   // a lock on the level, step 5: half
     for (int b = 0; b < 400; ++b) eng_render(l, r, n);
     eng_play(1);
     static float d2[2][44100 * 4];
@@ -376,7 +386,6 @@ int main(int argc, char** argv) {
   {
     eng_play(0);
     eng_defaults(p);
-    p->val[PG_GLOBAL * 4] = SEQ_STEPS;
     const int nb = 44100 * 2 / static_cast<int>(n);
     auto play = [&](double* rms, double* us) {
       double e = 0;
@@ -460,7 +469,8 @@ int main(int argc, char** argv) {
         for (int i = 0; i < 44100; ++i) c[i] = 0.0f, m[i] = 0.4f * std::sin(2.0 * M_PI * 1000.0 * i / 44100.0);
         for (int b = 0; b < 44100 / 128; ++b) {
           mw_set(wm, pot, static_cast<float>(t), 0.0f, 1.0f, 1, 48.0f, 1);
-          mw_render(wm, c + b * 128, m + b * 128, o + b * 128, 128);
+          static float dry[128];
+          mw_render(wm, c + b * 128, m + b * 128, m + b * 128, o + b * 128, dry, 128);
         }
         for (int k = 0; k < 2; ++k) {
           double f = k ? 1100.0 : 900.0, re = 0, im = 0;
@@ -547,7 +557,7 @@ int main(int argc, char** argv) {
     eng_defaults(p);
   }
 
-  // 9. v0.1's project (version 2) read into this version's
+  // 9. v0.1's project (version 2) is not read any more (0.3 reads 0.1.4's and later)
   {
     static uint8_t buf[sizeof(project_t)];
     project_t* q = reinterpret_cast<project_t*>(buf);
@@ -555,18 +565,162 @@ int main(int argc, char** argv) {
     q->magic = PROJECT_MAGIC;
     q->version = 2;
     q->size = 564;
+    if (eng_upgrade(q, 564)) ++failures, printf("FAIL: a version 2 project read\n");
+  }
+
+  // 17. 0.2's project (version 5, 2680 bytes): Marbles' RATE the tempo, the pages moved (the mixer, the reverb, the
+  // steps, the scale, Warps), a lock and a cable kept, a cable from Marbles dropped
+  {
+    static uint8_t buf[sizeof(project_t)];
+    project_t* q = reinterpret_cast<project_t*>(buf);
+    for (uint32_t i = 0; i < sizeof buf; ++i) buf[i] = 0;
+    q->magic = PROJECT_MAGIC;
+    q->version = 5;
+    q->size = 2680;
     float* val = reinterpret_cast<float*>(buf + 8);
-    for (int i = 0; i < 92; ++i) val[i] = 0.25f;
-    buf[8 + 92 * 4 + PG_TRACK(1, 0)] = 17;                // track 2 on NOISE
-    cable_t* cab = reinterpret_cast<cable_t*>(buf + 8 + 92 * 4 + 25);
-    cab[0].src = SRC_A2;
-    cab[0].dst = 3;
-    cab[0].depth = 33;
-    int ok = eng_upgrade(q, 564);
-    printf("a version 2 project: %s, track 2 model %d, a cable %s, knob %.2f, %d locks\n", ok ? "read" : "REFUSED",
-           q->algo[PG_TRACK(1, 0)], q->cable[0][0].depth == 33 ? "kept" : "LOST", q->val[5], eng_step_locked(0, 12));
-    if (!ok || !eng_check(q) || q->algo[PG_TRACK(1, 0)] != 17 || q->cable[0][0].depth != 33 || q->val[5] != 0.25f)
-      ++failures, printf("FAIL: the version 2 project\n");
+    val[16 * 4 + 0] = 0.7f;                               // Marbles' RATE
+    val[20 * 4 + 2] = 0.33f;                              // the mixer: track 3's level
+    val[22 * 4 + 0] = 0.8f;                               // the reverb's time
+    val[24 * 4 + 3] = 12.0f;                              // track 1's steps: 12
+    val[28 * 4 + 2] = 3.0f;                               // the scale: Dorian
+    val[34 * 4 + 0] = 2.0f;                               // Warps: T2 the carrier
+    val[13 * 4 + 3] = 4.0f;                               // Tides A's trigger: the clock
+    uint8_t* algo = buf + 8 + 140 * 4;
+    algo[PG_TRACK(2, 0)] = 19;                            // track 3 on STRING
+    cable_t* cab = reinterpret_cast<cable_t*>(buf + 8 + 560 + 35 + 3);
+    cab[0] = {SRC_B1, 20 * 4 + 1, 40, 0};                 // B1 -> track 2's level
+    cab[1] = {12, 2, 50, 0};                              // Marbles' Y -> track 1's TIMBRE
+    uint8_t* trig = buf + 8 + 560 + 35 + 3 + 160;
+    trig[1 * 8 + 0] = 0x11;                               // track 2: steps 1 and 5
+    uint8_t* lock = trig + 32 + 72 + 8;
+    lock[0] = 1 << 6 | 4;                                 // track 2, step 5: its note
+    lock[1] = TP_NOTE;
+    lock[2] = 200;
+    for (int i = 1; i < ENG_PLOCKS; ++i) lock[i * 4 + 1] = 0xFF;
+    int ok = eng_upgrade(q, 2680);
+    char tx[24];
+    eng_param_text(PG_GLOBAL * 4, q->val[PG_GLOBAL * 4], tx, sizeof tx);
+    float lv = 0;
+    int haslock = 0;
+    for (int i = 0; i < ENG_PLOCKS; ++i)
+      if (q->lock[i].lane == 1 && q->lock[i].step == 4 && q->lock[i].tp == TP_NOTE) haslock = q->lock[i].v;
+    lv = q->val[PG_MIX * 4 + 2];
+    printf("a version 5 project: %s, tempo %s, level %.2f, reverb %.2f, length %.0f, scale %.0f, Warps' carrier %.0f, "
+           "Tides A %.0f, model %d, cables %d/%d, trig %d, lock %d\n",
+           ok ? "read" : "REFUSED", tx, lv, q->val[PG_REVERB * 4], q->val[PG_STEP(0) * 4 + 3], q->val[PG_GLOBAL * 4 + 1],
+           q->val[PG_WARPS(1) * 4], q->val[PG_TIDES(0, 1) * 4 + 3], q->algo[PG_TRACK(2, 0)], q->cable[0][0].depth,
+           q->cable[0][1].depth, (q->trig[1][0] >> 4) & 1, haslock);
+    if (!ok || !eng_check(q) || q->val[PG_GLOBAL * 4] != 0.7f || lv != 0.33f || q->val[PG_REVERB * 4] != 0.8f ||
+        q->val[PG_STEP(0) * 4 + 3] != 12.0f || q->val[PG_GLOBAL * 4 + 1] != 3.0f || q->val[PG_WARPS(1) * 4] != 2.0f ||
+        q->val[PG_TIDES(0, 1) * 4 + 3] != 5.0f || q->algo[PG_TRACK(2, 0)] != 19 || q->cable[0][0].depth != 40 ||
+        q->cable[0][0].dst != PG_MIX * 4 + 1 || q->cable[0][1].depth != 0 || haslock != 200)
+      ++failures, printf("FAIL: the version 5 project\n");
+  }
+
+  // 18. swing: every step of track 1 played, SWING at 75 %: the off-beats late, a sixteenth and a half then half of
+  // one apart (at 120 BPM 8269 and 2756 samples, ~65 and ~22 blocks)
+  {
+    eng_play(0);
+    eng_blank(p);
+    for (int s = 0; s < 16; ++s) eng_trig_set(0, s, 1);
+    p->val[PG_GLOBAL * 4 + 3] = 1.0f;
+    for (int b = 0; b < 400; ++b) eng_render(l, r, n);
+    uint32_t r0 = eng_rises(0);
+    int at[12], k = 0;
+    eng_play(1);
+    for (int b = 0; b < 2000 && k < 12; ++b) {
+      eng_render(l, r, n);
+      if (eng_rises(0) != r0) r0 = eng_rises(0), at[k++] = b;
+    }
+    eng_play(0);
+    int lo = 9999, hi = 0;
+    for (int i = 2; i + 1 < k; i += 2) {
+      int a = at[i + 1] - at[i], b = i + 2 < k ? at[i + 2] - at[i + 1] : -1;
+      if (a > hi) hi = a;
+      if (b >= 0 && b < lo) lo = b;
+      if (b >= 0 && (a < 60 || a > 70 || b < 18 || b > 26)) lo = -1;
+    }
+    printf("swing 75 %%: the sixteenths %d and %d blocks apart (65 and 22 expected)\n", hi, lo);
+    if (k < 12 || lo < 0) ++failures, printf("FAIL: swing\n");
+  }
+
+  // 19. a step's LENGTH: a sustained voice (VIRTUAL ANALOG), its gate 5 % then 95 % of the sixteenth (6 and 119 ms)
+  {
+    eng_blank(p);
+    for (int s = 0; s < 16; s += 4) eng_trig_set(0, s, 1);
+    int held[2];
+    for (int k = 0; k < 2; ++k) {
+      p->val[eng_track_param(0, TP_LENGTH)] = static_cast<float>(k);
+      for (int b = 0; b < 400; ++b) eng_render(l, r, n);
+      eng_play(1);
+      held[k] = 0;
+      for (int b = 0; b < 689; ++b) {                     // a bar: four notes
+        eng_render(l, r, n);
+        held[k] += eng_gates() & 1u;
+      }
+      eng_play(0);
+    }
+    printf("length 5 %% then 95 %%: the gate held %d then %d blocks a bar (~8 and ~164 expected)\n", held[0], held[1]);
+    if (held[0] > 14 || held[1] < 150 || held[1] > 175) ++failures, printf("FAIL: the steps' length\n");
+  }
+
+  // 20. the delay: one note (a kick), its echoes a quarter (0.5 s) apart, ping-pong: left at a quarter, right at two
+  {
+    eng_blank(p);
+    p->algo[PG_TRACK(0, 0)] = 21;
+    eng_trig_set(0, 0, 1);
+    p->val[PG_STEP(0) * 4 + 3] = 64.0f;                   // one note in four bars
+    p->val[eng_track_param(0, TP_DSEND)] = 1.0f;
+    p->val[eng_track_param(0, TP_PAN)] = 1.0f;           // the kick on the right: the left the echoes alone
+    static const float kD[8] = {8.0f, 0.3f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f};   // 1/4, ping-pong, flat, no mod
+    for (int k = 0; k < 8; ++k) p->val[PG_DELAY(k / 4) * 4 + k % 4] = kD[k];
+    for (int b = 0; b < 400; ++b) eng_render(l, r, n);
+    eng_play(1);
+    static float L[44100 * 2], R[44100 * 2];
+    for (int b = 0; b < 44100 * 2 / 128; ++b) {
+      eng_render(l, r, n);
+      for (int i = 0; i < 128; ++i) L[b * 128 + i] = l[i], R[b * 128 + i] = r[i];
+    }
+    eng_play(0);
+    int pl = 0, pr = 0;
+    pr = 33075;                                           // (the right after the kick)
+    for (int i = 1; i < 44100 * 2 / 128 * 128; ++i) {
+      if (std::fabs(L[i]) > std::fabs(L[pl])) pl = i;
+      if (i > 33075 && std::fabs(R[i]) > std::fabs(R[pr])) pr = i;
+    }
+    printf("the delay, a quarter ping-pong: its loudest echo at %.3f s left, %.3f s right (0.5 and 1.0 expected)\n",
+           pl / 44100.0, pr / 44100.0);
+    if (pl < 22050 || pl > 22050 + 2000 || pr < 44100 || pr > 44100 + 2000) ++failures, printf("FAIL: the delay\n");
+  }
+
+  // 21. the effects' lanes: without a step the effect stays open (1); a step opens it, DECAY closes it down to
+  // 1 - DEPTH; Warps' lane locks its ALGORITHM on a step
+  {
+    eng_defaults(p);
+    eng_steps_clear(LANE_DELAY);
+    p->val[PG_WARPS(1) * 4 + 0] = WC_T3;                  // Warps: T3 by T2
+    p->val[PG_WARPS(0) * 4 + 0] = 0.0f;                   // CROSSFADE, and DIGITAL RING locked on step 9
+    eng_trig_set(LANE_WARPS, 0, 1);
+    eng_trig_set(LANE_WARPS, 8, 1);
+    eng_lock_set(LANE_WARPS, 8, 0, 0.6f);
+    p->val[PG_STEP(LANE_WARPS) * 4 + 0] = 0.2f;           // ~35 ms
+    p->val[PG_STEP(LANE_WARPS) * 4 + 2] = 1.0f;
+    for (int b = 0; b < 400; ++b) eng_render(l, r, n);
+    eng_play(1);
+    float dmin = 2, dmax = -1, wmin = 2, wmax = -1, rmin = 2;
+    int algs = 0;
+    for (int b = 0; b < 689; ++b) {
+      eng_render(l, r, n);
+      float d = eng_lane_open(LANE_DELAY), w = eng_lane_open(LANE_WARPS), rv = eng_lane_open(LANE_REVERB);
+      dmin = std::fmin(dmin, d), dmax = std::fmax(dmax, d), wmin = std::fmin(wmin, w), wmax = std::fmax(wmax, w);
+      rmin = std::fmin(rmin, rv);
+      algs |= 1 << eng_warps_algo();
+    }
+    eng_play(0);
+    printf("lanes: the delay without steps open %.2f..%.2f, the reverb %.2f; Warps' %.2f..%.2f, its algorithms %s%s\n",
+           dmin, dmax, rmin, wmin, wmax, algs & 1 ? "CROSSFADE" : "", algs & 8 ? " and DIGITAL RING" : "");
+    if (dmin < 1.0f || rmin < 1.0f || wmax < 0.95f || wmin > 0.05f || algs != (1 | 8)) ++failures, printf("FAIL: the lanes\n");
+    eng_defaults(p);
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

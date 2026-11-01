@@ -1,9 +1,10 @@
-# MIFM1 in fm1-base's host simulator: the default patch playing, the pages, a knob turned, a cable made in MOD mode
-# (hold a source key, turn a knob), the matrix, the global page, the step sequencer (REC, a step held and locked, the
-# RANDOM page, ENV held, GLO held: ALL), Endless (recorded, played, transposed by a key), Warps (off, patched, its
-# algorithms, its oscillator, the frequency shifter), a save kept across a power-off and in a backup, a new project (INIT: GLO,
-# SELECT, REC held) and the saved one back, an FM-1 without the module tables, then the tables arriving.
-# Screenshots in the output folder.
+# MIFM1 in fm1-base's host simulator: the default patch playing, the pages (a face sliding in), a knob turned, the
+# effects (the delay, the reverb, Warps, their steps), a cable made in MOD mode (hold a source key, turn a knob), the
+# matrix, the global page, STEP mode (REC: a step held and locked, the lanes on the black keys, the delay's lane and a
+# lock on its time, the pages on OCT- OCT+), the RANDOM page, ENV held, GLO held: ALL, Endless (recorded, played,
+# transposed by a key), Warps (off, patched, its algorithms, its oscillator, the frequency shifter), a save kept across
+# a power-off and in a backup, a new project (INIT: GLO, SELECT, REC held) and the saved one back, an FM-1 without the
+# module tables, then the tables arriving. Screenshots in the output folder.
 wait 1500
 shot 01_plaits_t1.png
 tap PLAY
@@ -18,10 +19,12 @@ turn K3 6
 wait 300
 shot 03_t2_timbre.png
 turn SELECT 1
+wait 60
+shot 04a_sliding.png
 wait 300
 shot 04_plaits2.png
 turn SELECT 1
-wait 300
+wait 400
 shot 05_plaits3.png
 tap LFO
 wait 300
@@ -30,23 +33,38 @@ tap LFO
 wait 300
 shot 07_tides_b.png
 turn SELECT 1
-wait 300
+wait 400
 shot 08_tides_b2.png
 tap SEQ
 wait 300
-shot 09_marbles_t.png
-tap ARP
-wait 300
-shot 10_marbles_x.png
+shot 09_steps_t2.png
+turn SELECT 1
+wait 400
+shot 10_random.png
 tap HOME
 wait 300
 shot 11_mixer.png
 tap FX
 wait 300
-shot 11b_reverb_sends.png
+shot 11b_delay.png
+turn SELECT 1
+wait 400
+shot 11c_delay2.png
+turn SELECT 1
+wait 400
+shot 11d_delay_sends.png
+turn SELECT 1
+wait 400
+shot 11e_delay_steps.png
 tap FX
 wait 300
-shot 11c_reverb.png
+shot 11f_reverb.png
+turn SELECT 1
+wait 400
+shot 11g_reverb_sends.png
+tap FX
+wait 300
+shot 11h_warps_off.png
 tap EDIT
 wait 300
 tap SEL
@@ -73,87 +91,100 @@ wait 300
 tap GLO
 wait 600
 shot 16_global.png
+turn K4 8
+wait 300
+shot 16a_swing.png
+turn K4 -8
 turn SELECT 1
 wait 600
 shot 16b_project.png
-turn SELECT 1
-turn K1 1
+turn SELECT -1
 wait 400
-shot 16c_steps_on.png
-tap SEQ
-wait 1500
-shot 16d_steps_t1.png
-tap SEQ
+tap GLO
 wait 300
-shot 16d2_marbles_t_steps.png
-tap SEQ
-tap SEQ
+tap REC
 wait 300
+shot 16c_step_mode.png
 wav steps.wav
 wait 4000
 wavstop
-tap REC
-wait 300
-shot 16e_rec.png
 key 0 down
 wait 200
 turn K1 7
 wait 300
-shot 16f_step_lock.png
+shot 16d_step_lock.png
 key 0 up
 key 4 down
 key 4 up
 wait 300
-shot 16g_step_added.png
+shot 16e_step_added.png
+key 10 down
+key 10 up
+wait 400
+shot 16f_delay_lane.png
+key 6 down
+wait 200
+turn K1 3
+wait 300
+shot 16g_delay_lock.png
+key 6 up
+wait 300
+shot 16h_delay_steps.png
+tap OCT+
+wait 300
+shot 16i_step_page2.png
+tap OCT-
+key 15 down
+key 15 up
+wait 400
+shot 16j_warps_lane.png
+key 1 down
+key 1 up
+wait 400
+shot 16k_lane_t1.png
 tap REC
+wait 300
 turn SELECT 1
-wait 300
-turn K1 10
-turn K3 -12
-wait 300
-shot 16h_random.png
-tap EDIT
-tap EDIT
 wait 300
 press ENV
 wait 200
 turn K1 -8
 wait 300
-shot 16i_env_rnd.png
+shot 16l_env_rnd.png
 release ENV
 wait 300
 press GLO
 turn K1 -6
 wait 300
-shot 16j_all.png
+shot 16m_all.png
 release GLO
 wait 300
-shot 16k_all_after.png
+shot 16n_all_after.png
 tap GLO
 wait 100
-shot 16k1_undo_at_bar.png
+shot 16o_undo_at_bar.png
 wait 2200
-shot 16k2_undone.png
+shot 16p_undone.png
 tap SEQ
 press REC
 wait 500
-shot 16k3_hold_clear.png
+shot 16q_hold_clear.png
 wait 700
 release REC
 wait 300
-shot 16k4_track_cleared.png
+shot 16r_track_cleared.png
 press GLO
 press REC
 wait 500
-shot 16k5_hold_erase_all.png
+shot 16s_hold_erase_all.png
 wait 700
 release REC
 release GLO
 wait 300
-shot 16k6_all_erased.png
+shot 16t_all_erased.png
 tap ARP
 wait 300
-shot 16l_endless_empty.png
+shot 16u_endless_empty.png
 tap REC
 wait 100
 key 0 down
@@ -174,61 +205,59 @@ key 12 down
 wait 100
 key 12 up
 wait 300
-shot 16m_endless_rec.png
+shot 16v_endless_rec.png
 tap REC
 wait 1500
-shot 16n_endless_plays.png
+shot 16w_endless_plays.png
 key 5 down
 wait 100
 key 5 up
 wait 1500
-shot 16o_endless_key.png
-tap FX
-tap FX
+shot 16x_endless_key.png
 tap FX
 wait 300
-shot 16p_warps_off.png
+shot 16y_fx_back.png
+tap HOME
+tap FX
+wait 300
 turn SELECT 1
-wait 200
+wait 400
 turn K1 3
 wait 400
-shot 16q_warps_patch.png
+shot 17a_warps_patch.png
 turn SELECT -1
 wait 600
-shot 16r_warps_diode.png
+shot 17b_warps_diode.png
 turn ALGO 4
 wait 600
-shot 16s_warps_comparator.png
+shot 17c_warps_comparator.png
 turn SELECT 1
 turn K1 2
 turn SELECT -1
 wait 600
-shot 16t_warps_osc.png
+shot 17d_warps_osc.png
 turn SELECT 1
 turn K4 1
 turn SELECT -1
 wait 600
-shot 16u_warps_shift.png
+shot 17e_warps_shift.png
 turn SELECT 1
 turn K1 -5
 turn K4 -1
 turn PRESET -1
 tap ENV
 wait 300
-shot 16v_env_kick.png
+shot 17f_env_kick.png
 turn PRESET 1
 wait 300
-shot 16w_env_va.png
-tap GLO
-turn K1 -1
-tap GLO
+shot 17g_env_va.png
 tap PLAY
 wait 500
 press SAVE
-wait 900
+wait 1100
 release SAVE
 wait 300
-shot 17_saved.png
+shot 17h_saved.png
 backup out:project.mifm1
 reboot
 wait 1500
@@ -239,7 +268,7 @@ tap GLO
 turn SELECT 1
 wait 300
 press REC
-wait 900
+wait 1100
 release REC
 wait 400
 shot 18b_init.png
@@ -258,7 +287,7 @@ turn K1 2
 wait 300
 shot 18d_glo_saved.png
 press REC
-wait 900
+wait 1100
 release REC
 wait 400
 shot 18e_saved_back.png

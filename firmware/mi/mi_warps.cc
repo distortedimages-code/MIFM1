@@ -24,9 +24,10 @@ const uint32_t kFifo = 256;
 struct WarpsMod {
   warps::Modulator modulator;
   warps::ShortFrame in[kFrames], out[kFrames];
+  float dry_in[kFrames];                 // the dry input, queued with them (to come out as late as Warps' output)
   uint32_t num_in;                       // the frames queued
   uint32_t dither;                       // a little noise generator (LCG)
-  float fifo[kFifo];                     // the output, waiting to go
+  float fifo[kFifo], fifo_dry[kFifo];    // the output and the dry, waiting to go
   uint32_t fifo_read, fifo_count;
 };
 
@@ -61,7 +62,7 @@ void mw_init(void* mem) {
   w->dither = 0x2545F491u;
   w->fifo_read = 0;
   w->fifo_count = kFrames / 2;           // a call's worth of silence ahead: the output never waits mid-block
-  for (uint32_t i = 0; i < kFifo; ++i) w->fifo[i] = 0.0f;
+  for (uint32_t i = 0; i < kFifo; ++i) w->fifo[i] = w->fifo_dry[i] = 0.0f;
 }
 
 void mw_set(void* v, float algorithm, float timbre, float level1, float level2, int osc, float note, int shift) {
@@ -81,26 +82,31 @@ uint32_t mw_calls(void* v, uint32_t n) {   // the Process calls the next n frame
   return (static_cast<WarpsMod*>(v)->num_in + n) / kFrames;
 }
 
-void mw_render(void* v, const float* carrier, const float* modulator, float* out, uint32_t n) {
+void mw_render(void* v, const float* carrier, const float* modulator, const float* dry_in, float* out, float* dry,
+               uint32_t n) {
   WarpsMod* w = static_cast<WarpsMod*>(v);
   for (uint32_t i = 0; i < n; ++i) {
     w->in[w->num_in].l = to_short(carrier[i], &w->dither);
     w->in[w->num_in].r = to_short(modulator[i], &w->dither);
+    w->dry_in[w->num_in] = dry_in[i];
     if (++w->num_in < kFrames) continue;
     w->num_in = 0;
     w->modulator.Process(w->in, w->out, kFrames);
     for (uint32_t j = 0; j < kFrames && w->fifo_count < kFifo; ++j) {
-      w->fifo[(w->fifo_read + w->fifo_count) % kFifo] = static_cast<float>(w->out[j].l) * (1.0f / 32768.0f);
+      uint32_t k = (w->fifo_read + w->fifo_count) % kFifo;
+      w->fifo[k] = static_cast<float>(w->out[j].l) * (1.0f / 32768.0f);
+      w->fifo_dry[k] = w->dry_in[j];
       ++w->fifo_count;
     }
   }
   for (uint32_t i = 0; i < n; ++i) {
     if (w->fifo_count) {
       out[i] = w->fifo[w->fifo_read];
+      dry[i] = w->fifo_dry[w->fifo_read];
       w->fifo_read = (w->fifo_read + 1) % kFifo;
       --w->fifo_count;
     } else {
-      out[i] = 0.0f;
+      out[i] = dry[i] = 0.0f;
     }
   }
 }

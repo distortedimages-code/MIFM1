@@ -7,27 +7,32 @@
  * panels print them): at the top the module's icon in a lit ring, its name and a line on its state (Plaits shows
  * the model alone, its logo and its name); then its four knobs in a row, as KNOB 1 to 4 sit on the FM-1, each a ring
  * lit from its start (or its middle) to its value, the value in it; at the bottom the four tracks, an LED each lit by
- * its gate (on Tides' and Marbles' pages: their outputs, lit as high as they are).
+ * its gate (on Tides' pages: its outputs, lit as high as they are; on the steps' and the effects' pages: the steps).
+ * A module's faces slide in from the side SELECT turns to.
  *
  *   KNOB 1..4   the page's four parameters        SELECT   the module's other face (1/3, 2/3...)
- *   ALGORITHM   the page's model or mode          PRESETS  the active track, 1 to 4
+ *   ALGORITHM   the page's model or mode (the delay: its time)   PRESETS  the active track, 1 to 4
  *   EDIT        Plaits, the active track          LFO      Tides A, then B
- *   SEQ         the sequencers, the one playing first: the track's steps (TRIG, RANDOM), Marbles' t, Marbles' X
+ *   SEQ         the lane's steps (a track's: NOTE, PROB, RATCHET, LENGTH, then its RANDOM; an effect's: DECAY,
+ *               PROB, DEPTH, LENGTH)
  *   ARP         Endless, the track's: REC records (a key a note, SEL a rest), REC again plays it, a key transposes
  *               it; REC held clears it
- *   HOME        the mixer: the levels, the pans   FX       the sends, the reverb, then Warps (ALGORITHM, TIMBRE,
- *               LEVEL 1 and 2; its carrier, modulator, MOD DRY, the frequency shifter)
- *   GLO         SEQUENCER, TEMPO, SCALE, ROOT; then the project (K1, REC held: INIT) and the machine. Held with a
- *               knob: ALL, the same parameter on the four tracks (with ALGORITHM: the same model), the screen
- *               yellow while GLO is held; for 4 s after, GLO undoes it as the next bar starts (again: it stays)
+ *   HOME        the mixer: the levels, the pans
+ *   FX          the effects, one after the other: the delay, the reverb, Warps; SELECT their faces (their knobs,
+ *               the tracks' sends, their steps)
+ *   GLO         TEMPO, SCALE, ROOT, SWING; then the project (K1, REC held: INIT) and the machine. Held with a knob:
+ *               ALL, the same parameter on the four tracks (with ALGORITHM: the same model), the screen yellow while
+ *               GLO is held; for 4 s after, GLO undoes it as the next bar starts (again: it stays)
  *   ENV         the track's envelope (PLAITS 2/3: DECAY, LPG COLOUR, the internal envelope's TIMBRE and MORPH).
  *               Held with a knob: that parameter's random (right new at each trig, left looped, 0 none)
- *   REC         with the steps: the white keys are a page's 16 steps, the first black keys the pages; a step held
- *               and a knob turned: a lock; a step held and SEL: its locks cleared
+ *   REC         KEY mode (the keys play the track) or STEP mode: the white keys a page's 16 steps, the first seven
+ *               black keys the lanes (the four tracks, the delay, the reverb, Warps), OCT- OCT+ the pages; a step
+ *               held and a knob turned: a lock (the lane's knobs); a step held and SEL: its locks cleared. Held: the
+ *               lane erased (with GLO: all of them)
  *   PLAY        the clock runs or stops           SAVE     held: the project saved (stopped)
  *   SEL         MOD mode: hold a source key, turn a knob: a cable. Held: the track's cables (MATRIX)
- *   keys        play the active track (MOD mode: the 15 sources, then Tides A and B fanned over the 4 knobs)
- *   OCT- OCT+   the keyboard's octave
+ *   keys        play the active track (MOD mode: Tides A's and B's outputs, then each fanned over the 4 knobs)
+ *   OCT- OCT+   the keyboard's octave (STEP mode: the steps' page)
  *
  * Part of the unity build (base/device/unity.c, base/host/plat_host.c), after the platform: gfx.c is in scope.
  * The modules' biggest tables are in the resource region (app.h), which the installer writes after the firmware:
@@ -84,8 +89,13 @@ static struct {
     int prev_page;                       /* the page before GLO */
     int matrix;                          /* the MATRIX page, over the page */
     int track;                           /* the active track */
-    int grid;                            /* REC, the steps on: the white keys are the steps */
+    int grid;                            /* STEP mode (REC): the white keys are the steps */
+    int lane;                            /* the lane the steps show: a track, the delay, the reverb, Warps */
     int spage;                           /* the steps' page on the keys (16 each) */
+    int fx_page;                         /* the effect's page FX goes back to */
+    int body;                            /* the module's display and the knobs again (a slide) */
+    uint32_t slide_at;                   /* a face sliding in: since when, from which side (+1 the right, -1 the left) */
+    int slide_dir;
     int held_step, step_new, step_edit;  /* a step held (-1: none), made by this press, locked meanwhile */
     int erec;                            /* the track Endless records (-1: none) */
     int used[NB];                        /* a knob turned while that button was held: no tap when it is let go */
@@ -114,6 +124,7 @@ static int ptrack(int page)              /* the track a page belongs to, -1: non
     return page >= VP_SYS ? -1 : page >= VP_RND(0) ? page - VP_RND(0) : eng_page_track(page);
 }
 
+#define MAXFACES 4
 static int module_pages(int page, int *f)   /* its module's pages (its faces), in order; how many */
 {
     int t = ptrack(page);
@@ -127,24 +138,34 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
         f[0] = page >= PG_TIDES(1, 0) ? PG_TIDES(1, 0) : PG_TIDES(0, 0);
         f[1] = f[0] + 1;
         return 2;
-    case PT_MARB_T1: case PT_MARB_T2: f[0] = PG_MARBLES(0); f[1] = PG_MARBLES(1); return 2;
-    case PT_MARB_X1: case PT_MARB_X2: f[0] = PG_MARBLES(2); f[1] = PG_MARBLES(3); return 2;
     case PT_MIX: case PT_PAN: f[0] = PG_MIX; f[1] = PG_PAN; return 2;
-    case PT_FX1: case PT_FX2: f[0] = PG_FX(0); f[1] = PG_FX(1); return 2;
     case PT_STEP: case PT_RND: f[0] = PG_STEP(t); f[1] = VP_RND(t); return 2;
     case PT_ARP: f[0] = PG_ARP(t); return 1;
-    case PT_WARPS1: case PT_WARPS2: f[0] = PG_WARPS(0); f[1] = PG_WARPS(1); return 2;
+    case PT_DELAY1: case PT_DELAY2: case PT_DSEND: case PT_LANE: case PT_REVERB: case PT_RSEND:
+    case PT_WARPS1: case PT_WARPS2: {    /* an effect: its knobs, the tracks' sends, its steps */
+        int l = eng_page_lane(page);
+        if (l == LANE_DELAY) {
+            f[0] = PG_DELAY(0), f[1] = PG_DELAY(1), f[2] = PG_DSEND, f[3] = PG_STEP(LANE_DELAY);
+            return 4;
+        }
+        if (l == LANE_REVERB) {
+            f[0] = PG_REVERB, f[1] = PG_RSEND, f[2] = PG_STEP(LANE_REVERB);
+            return 3;
+        }
+        f[0] = PG_WARPS(0), f[1] = PG_WARPS(1), f[2] = PG_STEP(LANE_WARPS);
+        return 3;
+    }
     default: f[0] = PG_GLOBAL; f[1] = VP_SYS; return 2;
     }
 }
 static int page_count(int page)
 {
-    int f[3];
+    int f[MAXFACES];
     return module_pages(page, f);
 }
 static int page_face(int page)           /* which face of its module */
 {
-    int f[3], n = module_pages(page, f);
+    int f[MAXFACES], n = module_pages(page, f);
     for (int i = 0; i < n; i++)
         if (f[i] == page)
             return i;
@@ -152,13 +173,13 @@ static int page_face(int page)           /* which face of its module */
 }
 static int page_first(int page)
 {
-    int f[3];
+    int f[MAXFACES];
     module_pages(page, f);
     return f[0];
 }
 static int page_at(int page, int face)   /* its module's page at face (wrapping) */
 {
-    int f[3], n = module_pages(page, f);
+    int f[MAXFACES], n = module_pages(page, f);
     return f[((face % n) + n) % n];
 }
 static int track_page(int page, int t)   /* the same page on track t */
@@ -172,12 +193,22 @@ static int track_page(int page, int t)   /* the same page on track t */
     }
 }
 
-/* the parameter a knob turns: its page's, the GLOBAL page's TEMPO is Marbles' RATE, the RANDOM page's are its track's
- * PAN, DECAY, NOTE and RATCHET (their randoms) */
+/* the lane a page's knobs belong to (its steps lock them), -1: the tracks' (the mixer, the sends) or none */
+static int page_lane(int page)
+{
+    int t = ptrack(page);
+    if (t >= 0)
+        return t;
+    if (page >= ENG_NPAGES || page == PG_DSEND || page == PG_RSEND)
+        return -1;
+    int l = eng_page_lane(page);
+    return l >= ENG_TRACKS ? l : -1;
+}
+
+/* the parameter a knob turns: its page's, the RANDOM page's are its track's PAN, DECAY, NOTE and RATCHET (their
+ * randoms) */
 static int knob_param(int page, int k)
 {
-    if (page == PG_GLOBAL && k == 1)
-        return PG_MARBLES(0) * 4;
     if (ptype(page) == PT_RND)
         return eng_track_param(ptrack(page), RND_TP[k]);
     return page * 4 + k;
@@ -188,16 +219,18 @@ static const char *module_name(int page)
     switch (ptype(page)) {
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: return "Plaits";
     case PT_TIDES1: case PT_TIDES2: return page >= PG_TIDES(1, 0) ? "Tides B" : "Tides A";
-    case PT_MARB_T1: case PT_MARB_T2: return "Marbles t";
-    case PT_MARB_X1: case PT_MARB_X2: return "Marbles X";
     case PT_MIX: case PT_PAN: return "Mixer";
     case PT_STEP: case PT_RND: return "Steps";
     case PT_ARP: return "Endless";
-    case PT_WARPS1: case PT_WARPS2: return "Warps";
     case PT_GLOBAL: case PT_SYS: return "Global";
-    default: return "Reverb";
+    default: {
+        int l = eng_page_lane(page);
+        return l == LANE_DELAY ? "Delay" : l == LANE_REVERB ? "Reverb" : "Warps";
+    }
     }
 }
+
+static const char *const LANE_SHORT[ENG_LANES] = {"T1", "T2", "T3", "T4", "DL", "RV", "WP"};
 
 /* the colours of a module's state, as its icons print them: teal, orange, pink */
 static uint16_t accent3(int i) { return i <= 0 ? TEAL : i == 1 ? ORANGE : PINK; }
@@ -216,22 +249,20 @@ static uint16_t warps_accent(void)      /* Warps' algorithm: the blends teal, th
     return a < 0 ? MUTED : a <= 1 ? TEAL : a <= 5 ? ORANGE : PINK;
 }
 
+static uint16_t lane_accent(int l)      /* a lane's colour: its track's model's, or its effect's */
+{
+    return l < ENG_TRACKS ? track_accent(l) : l == LANE_DELAY ? ORANGE : l == LANE_REVERB ? PINK : warps_accent();
+}
+
 static uint16_t page_accent(int page)
 {
     project_t *p = eng_project();
     switch (ptype(page)) {
-    case PT_WARPS1: case PT_WARPS2: return warps_accent();
     case PT_STEP: case PT_RND: case PT_ARP: return track_accent(ptrack(page));
-    case PT_PAN: case PT_GLOBAL: case PT_SYS: return TEAL;
+    case PT_PAN: case PT_GLOBAL: case PT_SYS: case PT_MIX: return TEAL;
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: return model_accent(p->algo[page_first(page)]);
     case PT_TIDES1: case PT_TIDES2: return accent3(p->algo[page_first(page)]);
-    case PT_MARB_T1: case PT_MARB_T2: {
-        int m = p->algo[PG_MARBLES(0)];
-        return m < 3 ? accent3(m) : TEAL;
-    }
-    case PT_MARB_X1: case PT_MARB_X2: return accent3((int)(p->val[PG_MARBLES(2) * 4 + 3] + 0.5f));
-    case PT_MIX: return TEAL;
-    default: return PINK;
+    default: return lane_accent(eng_page_lane(page));
     }
 }
 static uint16_t mod_colour(uint16_t ac) { return ac == TEAL ? PINK : TEAL; }   /* where the cables take a knob */
@@ -313,21 +344,17 @@ static void param_name(int param, char *b, uint32_t max)
     char n[4];
     b[0] = 0;
     eng_param_tp(param, &t);
-    if (t >= 0) {
+    if (t >= 0 && t < ENG_TRACKS) {
         text_cat(b, "T", max);
         int_text(t + 1, n);
         text_cat(b, n, max);
-    } else if (page < PG_MARBLES(0)) {
-        text_cat(b, page >= PG_TIDES(1, 0) ? "TB" : "TA", max);
     } else if (page < PG_MIX) {
-        text_cat(b, "Mb", max);
-    } else if (page == PG_MIX) {
-        text_cat(b, "Mix", max);
+        text_cat(b, page >= PG_TIDES(1, 0) ? "TB" : "TA", max);
     } else {
-        text_cat(b, "Rv", max);
+        int l = eng_page_lane(page);
+        text_cat(b, l == LANE_DELAY ? "Dl" : l == LANE_REVERB ? "Rv" : l == LANE_WARPS ? "Wp" : "Gl", max);
     }
-    if (page >= PG_WARPS(0) && page < ENG_NPAGES)
-        b[0] = 0, text_cat(b, "Wp", max);
+    (void)n;
     text_cat(b, " ", max);
     text_cat(b, eng_param_name(param), max);
 }
@@ -413,8 +440,9 @@ void app_init(void)
     data_ok = data_check();
     project_load();
     engine_ok = data_ok && eng_init() == 0;   /* (not before the tables: the modules' set-up may read them) */
-    ui.track = 0;
+    ui.track = ui.lane = 0;
     ui.page = ui.prev_page = PG_TRACK(0, 0);
+    ui.fx_page = PG_DELAY(0);
     ui.touched_k = -1;
     ui.held_step = ui.erec = -1;
 }
@@ -570,14 +598,14 @@ static void led(float cx, float cy, float r, uint16_t c, int lvl)   /* an LED: l
     disc(cx, cy, r, col);
 }
 
-/* the icons, as strokes in a 32-unit box: Plaits' 24 models, Tides' ramps, Marbles' t models and X modes, the mixer,
- * the reverb, the global page, the projects. L a line, C a circle, D a dot, R a rectangle (x y w h) */
+/* the icons, as strokes in a 32-unit box: Plaits' 24 models, Tides' ramps, the mixer, the reverb, the global page,
+ * the projects, the steps, Warps' algorithms, the delay. L a line, C a circle, D a dot, R a rectangle (x y w h) */
 typedef struct {
     char op;
     int8_t a, b, c, d;
 } vop_t;
-enum { IC_MODEL = 0, IC_RAMP = 24, IC_TMODEL = 27, IC_XMODE = 34, IC_MIX = 37, IC_REV, IC_GLO, IC_NEW, IC_DEMO,
-       IC_SAVED, IC_STEPS, IC_DICE, IC_ENDLESS, IC_WARPS, NICON = IC_WARPS + 7 };
+enum { IC_MODEL = 0, IC_RAMP = 24, IC_MIX = 27, IC_REV, IC_GLO, IC_NEW, IC_DEMO, IC_SAVED, IC_STEPS, IC_DICE,
+       IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, NICON };
 #define IOPS 10
 static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 4, 24, 12, 8}, {'L', 12, 8, 12, 24}, {'L', 12, 24, 20, 8}, {'L', 20, 8, 20, 24}, {'L', 20, 24, 28, 16}},
@@ -615,17 +643,6 @@ static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 5, 24, 16, 8}, {'L', 16, 8, 27, 24}},                                                    /* AD */
     {{'L', 4, 22, 9, 10}, {'L', 9, 10, 14, 22}, {'L', 14, 22, 19, 10}, {'L', 19, 10, 24, 22}, {'L', 24, 22, 28, 15}},
     {{'L', 4, 24, 10, 9}, {'L', 10, 9, 22, 9}, {'L', 22, 9, 28, 24}},                               /* AR */
-    {{'L', 16, 27, 16, 16}, {'L', 16, 16, 8, 6}, {'L', 16, 16, 24, 6}},                             /* coin toss */
-    {{'D', 8, 10, 2, 0}, {'D', 12, 13, 2, 0}, {'D', 9, 16, 2, 0}, {'D', 21, 18, 2, 0}, {'D', 25, 21, 2, 0}, {'D', 20, 23, 2, 0}},
-    {{'D', 9, 9, 2, 0}, {'D', 16, 9, 2, 0}, {'D', 23, 9, 2, 0}, {'D', 9, 16, 2, 0}, {'D', 16, 16, 2, 0}, {'D', 23, 16, 2, 0},
-     {'D', 9, 23, 2, 0}, {'D', 16, 23, 2, 0}, {'D', 23, 23, 2, 0}},                                           /* drums */
-    {{'L', 8, 26, 8, 12}, {'L', 16, 26, 16, 6}, {'L', 24, 26, 24, 18}},                             /* independent */
-    {{'L', 6, 16, 26, 16}, {'D', 16, 9, 2, 0}, {'D', 16, 23, 2, 0}},                                      /* divider */
-    {{'C', 8, 16, 4, 0}, {'C', 16, 16, 4, 0}, {'D', 24, 16, 4, 0}},                                          /* three states */
-    {{'C', 9, 16, 5, 0}, {'C', 23, 16, 5, 0}, {'L', 14, 13, 18, 13}, {'L', 14, 19, 18, 19}},              /* Markov */
-    {{'L', 9, 26, 9, 10}, {'L', 16, 26, 16, 10}, {'L', 23, 26, 23, 10}},                            /* X: identical */
-    {{'L', 9, 26, 9, 17}, {'L', 16, 26, 16, 7}, {'L', 23, 26, 23, 17}},                             /* bump */
-    {{'L', 9, 26, 9, 20}, {'L', 16, 26, 16, 14}, {'L', 23, 26, 23, 7}},                             /* tilt */
     {{'L', 8, 6, 8, 26}, {'L', 16, 6, 16, 26}, {'L', 24, 6, 24, 26}, {'L', 5, 20, 11, 20}, {'L', 13, 10, 19, 10},
      {'L', 21, 16, 27, 16}},                                                                         /* mixer */
     {{'D', 7, 16, 2, 0}, {'L', 11, 10, 13, 16}, {'L', 13, 16, 11, 22}, {'L', 16, 7, 19, 16}, {'L', 19, 16, 16, 25},
@@ -647,6 +664,7 @@ static const vop_t ICONS[NICON][IOPS] = {
      {'L', 22, 22, 22, 10}, {'L', 22, 10, 28, 10}},                                                  /* xor */
     {{'L', 8, 7, 24, 16}, {'L', 24, 16, 8, 25}},                                                    /* comparator */
     {{'C', 9, 16, 4, 0}, {'L', 15, 16, 27, 16}, {'L', 22, 11, 27, 16}, {'L', 27, 16, 22, 21}},      /* freq shifter */
+    {{'L', 5, 6, 5, 26}, {'L', 12, 9, 12, 23}, {'L', 19, 12, 19, 20}, {'L', 26, 14, 26, 18}},       /* the delay */
 };
 
 static void vicon(float cx, float cy, float s, float w, uint16_t c, int which, int glow)
@@ -679,6 +697,10 @@ static void vicon(float cx, float cy, float s, float w, uint16_t c, int which, i
  * go. Each canvas goes out through blit: its pixels by their brightness, from yellow (black) to black (white) */
 #define YELLOW RGB(255, 214, 0)
 static int knock;
+/* a face sliding in (SELECT within a module): the module's display and the knobs drawn shifted by slide_s px, over
+ * what the screen shows (only their part on the screen goes out) */
+#define SLIDE_MS 250u
+static int32_t slide_s;
 static void blit(uint32_t x, uint32_t y)
 {
     if (knock) {
@@ -689,6 +711,20 @@ static void blit(uint32_t x, uint32_t y)
             l = l > 255u ? 0u : 255u - l;   /* what is left of the yellow */
             cv_px[i] = swap16((uint16_t)((31u * l / 255u) << 11 | (53u * l / 255u) << 5));
         }
+    }
+    if (slide_s && y >= PANEL_Y && y < FOOT_Y) {
+        int32_t sx = (int32_t)x + slide_s, c0 = sx < 0 ? -sx : 0, c1 = (int32_t)cv_w;
+        if (sx + c1 > 240)
+            c1 = 240 - sx;
+        if (c1 <= c0)
+            return;
+        uint32_t w = (uint32_t)(c1 - c0);
+        if (w != cv_w)                   /* the columns on the screen, packed (each row moves back: in order) */
+            for (uint32_t r = 0; r < cv_h; r++)
+                for (uint32_t i = 0; i < w; i++)
+                    cv_px[r * w + i] = cv_px[r * cv_w + (uint32_t)c0 + i];
+        lcd_blit((uint32_t)(sx + c0), y, w, cv_h, cv_px);
+        return;
     }
     cv_blit(x, y);
 }
@@ -714,14 +750,14 @@ static void draw_header(void)
     static uint32_t load_at;
     char t[32], v[12];
     int tr = ptrack(ui.page), x, mode = ui.held_step >= 0 ? 5 : held(B_ENV) ? 4 : held(B_GLO) ? 3
-                                       : ui.grid || ui.erec >= 0 ? 2 : ui.mod;
+                                       : ui.grid ? 6 : ui.erec >= 0 ? 2 : ui.mod;
     uint16_t ac = page_accent(ui.page);
     if (load < 0 || plat_ms() - load_at >= 250u) {
         load = load_now();
         load_at = plat_ms();
     }
-    int32_t s[5] = {ui.page | ui.matrix << 8 | mode << 10 | (ui.held_step & 127) << 13, load,
-                    eng_playing() | dirty << 1, ui.track | track_accent(ui.track) << 4, ac};
+    int32_t s[5] = {ui.page | ui.matrix << 8 | mode << 10 | (ui.held_step & 127) << 13 | ui.lane << 20, load,
+                    eng_playing() | dirty << 1, ui.track | lane_accent(ui.grid ? ui.lane : ui.track) << 4, ac};
     if (!ui.full && !memcmp(s, ui.head_shown, sizeof s))
         return;
     memcpy(ui.head_shown, s, sizeof s);
@@ -740,7 +776,7 @@ static void draw_header(void)
         text_cat(t, v, sizeof t);
         text_pill(x + 26, 7, &FONT_T, t, C_WHITE, BG);
     } else if (mode) {
-        static const char *const M[5] = {"", "MOD", "REC", "ALL", "RND"};
+        static const char *const M[7] = {"", "MOD", "REC", "ALL", "RND", "", "STEP"};
         if (mode == 3 && knock)          /* ALL in yellow and black: white on black here, black on yellow there */
             text_pill(x + 20, 7, &FONT_T, M[mode], C_WHITE, BG);
         else
@@ -758,11 +794,11 @@ static void draw_header(void)
     x -= 26;
     for (int y = -6; y <= 6; y++)
         cv_rect(x, 14 + y, 11 - (iabs(y) * 11 + 3) / 6, 1, eng_playing() ? TEAL : DIM);
-    if (tr >= 0 || ui.matrix) {          /* the track, ringed in its model's colour */
-        uint16_t tc = track_accent(ui.track);
-        t[0] = 'T';
-        t[1] = (char)('1' + ui.track);
-        t[2] = 0;
+    if (tr >= 0 || ui.matrix || ui.grid) {   /* the track (STEP mode: the lane), ringed in its colour */
+        int l = ui.grid ? ui.lane : ui.track;
+        uint16_t tc = lane_accent(l);
+        t[0] = 0;
+        text_cat(t, LANE_SHORT[l], sizeof t);
         pill(x - 34, 6, 26, 16, tc);
         pill(x - 32, 8, 22, 12, BG);
         cv_text(x - 21 - text_w(&FONT_XS, t) / 2, 7, &FONT_XS, t, tc);
@@ -868,17 +904,19 @@ static void panel_plaits(int t, int face, uint16_t ac)
             px = (float)x;
             py = y;
         }
-    } else {                             /* the gate and the note: where they come from, the note now */
+    } else {                             /* the note now, the gate's length, the envelope on the pitch */
         int pg = PG_TRACK(t, 2), on = (int)((eng_gates() >> t) & 1u), x;
+        char v[12];
         note_text(eng_note(t), n);
         x = cv_text(84, 6, &FONT_L, n, on ? C_WHITE : MUTED);
         led((float)(x + 12), 22.0f, 5.0f, ac, on ? 8 : 0);
         s[0] = 0;
-        text_cat(s, "GATE ", sizeof s);
-        text_cat(s, eng_pdef(pg * 4)->names[(int)(p->val[pg * 4] + 0.5f)], sizeof s);
-        text_cat(s, "|NOTE ", sizeof s);
-        text_cat(s, eng_pdef(pg * 4 + 1)->names[(int)(p->val[pg * 4 + 1] + 0.5f)], sizeof s);
-        label_text(s, s, sizeof s);
+        text_cat(s, "LENGTH ", sizeof s);
+        eng_param_text(pg * 4 + 1, eng_final(pg * 4 + 1), v, sizeof v);
+        text_cat(s, v, sizeof s);
+        text_cat(s, "|PITCH ENV ", sizeof s);
+        eng_param_text(pg * 4, eng_final(pg * 4), v, sizeof v);
+        text_cat(s, v, sizeof s);
         hero_line(44, s);
     }
 }
@@ -909,39 +947,6 @@ static void panel_tides(int tide)
     hero_line(y, s);
 }
 
-static void panel_marbles(int x)
-{
-    project_t *p = eng_project();
-    char s[40], n[8];
-    if (!x) {                            /* t: its model, the loop's length and range, DEJA VU */
-        int m = p->algo[PG_MARBLES(0)];
-        hero_icon(IC_TMODEL + m, m < 3 ? accent3(m) : TEAL);
-        int y = hero_title(eng_algo_name(PG_MARBLES(0), m));
-        if (eng_steps_mode()) {          /* the steps play the tracks: t is only a source (cables, Tides' trigger) */
-            hero_line(y, "STEPS PLAY|RATE: TEMPO");
-            return;
-        }
-        s[0] = 0;
-        text_cat(s, "LENGTH ", sizeof s);
-        int_text((int32_t)(p->val[PG_MARBLES(1) * 4] + 0.5f), n);
-        text_cat(s, n, sizeof s);
-        text_cat(s, "|", sizeof s);
-        enum_cat(s, PG_MARBLES(1) * 4 + 1, sizeof s);
-        if (p->val[PG_MARBLES(1) * 4 + 2] > 0.5f)
-            text_cat(s, "|DEJA VU", sizeof s);
-        hero_line(y, s);
-    } else {                             /* X: its scale, its mode, its range */
-        int xm = (int)(p->val[PG_MARBLES(2) * 4 + 3] + 0.5f);
-        hero_icon(IC_XMODE + xm, accent3(xm));
-        int y = hero_title(eng_algo_name(PG_MARBLES(2), p->algo[PG_MARBLES(2)]));
-        s[0] = 0;
-        enum_cat(s, PG_MARBLES(2) * 4 + 3, sizeof s);
-        text_cat(s, "|", sizeof s);
-        enum_cat(s, PG_MARBLES(3) * 4, sizeof s);
-        hero_line(y, s);
-    }
-}
-
 static int meter_lit(int t) { return (int)(fm_clampf(eng_meter(t) * 1.25f, 0.0f, 1.0f) * 7.0f + 0.5f); }
 
 static void panel_mixer(int pan)
@@ -959,30 +964,33 @@ static void panel_mixer(int pan)
     }
 }
 
-static void panel_steps(int t)            /* a track's steps: how many, how many trigs, the page on the keys */
+static void panel_steps(int l)            /* a lane's steps: how many, how many trigs; an effect's: held without */
 {
+    static const char *const FX[3] = {"DELAY STEPS", "REVERB STEPS", "WARPS STEPS"};
     char s[48], n[8];
-    int len = (int)(eng_project()->val[PG_STEP(t) * 4 + 3] + 0.5f), trigs = 0;
+    int len = (int)(eng_project()->val[PG_STEP(l) * 4 + 3] + 0.5f), trigs = 0;
     for (int i = 0; i < len; i++)
-        trigs += eng_trig(t, i);
-    hero_icon(IC_STEPS, track_accent(t));
+        trigs += eng_trig(l, i);
+    hero_icon(IC_STEPS, lane_accent(l));
     s[0] = 0;
-    text_cat(s, "TRACK ", sizeof s);
-    int_text(t + 1, n);
-    text_cat(s, n, sizeof s);
+    if (l < ENG_TRACKS) {
+        text_cat(s, "TRACK ", sizeof s);
+        int_text(l + 1, n);
+        text_cat(s, n, sizeof s);
+    } else {
+        text_cat(s, FX[l - ENG_TRACKS], sizeof s);
+    }
     int y = hero_title(s);
     s[0] = 0;
-    if (!eng_steps_mode()) {
-        text_cat(s, "PLAYED BY MARBLES|GLO: STEPS", sizeof s);
+    int_text(len, n);
+    text_cat(s, n, sizeof s);
+    text_cat(s, " STEPS|", sizeof s);
+    if (l >= ENG_TRACKS && !eng_lane_has_trigs(l)) {
+        text_cat(s, "NO TRIG: ALWAYS ON", sizeof s);
     } else {
-        int_text(len, n);
-        text_cat(s, n, sizeof s);
-        text_cat(s, " STEPS|", sizeof s);
         int_text(trigs, n);
         text_cat(s, n, sizeof s);
-        text_cat(s, " TRIGS|PAGE ", sizeof s);
-        int_text(ui.spage + 1, n);
-        text_cat(s, n, sizeof s);
+        text_cat(s, l < ENG_TRACKS ? " TRIGS" : " TRIGS OPEN IT", sizeof s);
     }
     hero_line(y, s);
 }
@@ -1022,25 +1030,26 @@ static void panel_endless(int t)         /* Endless: recording, or how many note
     hero_line(y, s);
 }
 
-static void panel_global(void)           /* the sequencer, the scale */
+static void panel_global(void)           /* the tempo, the scale, the swing */
 {
     project_t *p = eng_project();
     char s[40], v[16];
     hero_icon(IC_GLO, TEAL);
-    int y = hero_title(eng_steps_mode() ? "STEPS" : "MARBLES");
+    eng_param_text(PG_GLOBAL * 4, p->val[PG_GLOBAL * 4], v, sizeof v);
+    int y = hero_title(v);
     s[0] = 0;
-    if ((int)(p->val[PG_GLOBAL * 4 + 2] + 0.5f) == 0) {
+    if ((int)(p->val[PG_GLOBAL * 4 + 1] + 0.5f) == 0) {
         text_cat(s, "NO SCALE", sizeof s);
     } else {
-        eng_param_text(PG_GLOBAL * 4 + 3, p->val[PG_GLOBAL * 4 + 3], v, sizeof v);
+        eng_param_text(PG_GLOBAL * 4 + 2, p->val[PG_GLOBAL * 4 + 2], v, sizeof v);
         text_cat(s, v, sizeof s);
         text_cat(s, " ", sizeof s);
-        eng_param_text(PG_GLOBAL * 4 + 2, p->val[PG_GLOBAL * 4 + 2], v, sizeof v);
+        eng_param_text(PG_GLOBAL * 4 + 1, p->val[PG_GLOBAL * 4 + 1], v, sizeof v);
         label_text(v, v, sizeof v);
         text_cat(s, v, sizeof s);
     }
-    text_cat(s, "|", sizeof s);
-    eng_param_text(PG_MARBLES(0) * 4, eng_final(PG_MARBLES(0) * 4), v, sizeof v);
+    text_cat(s, "|SWING ", sizeof s);
+    eng_param_text(PG_GLOBAL * 4 + 3, p->val[PG_GLOBAL * 4 + 3], v, sizeof v);
     text_cat(s, v, sizeof s);
     hero_line(y, s);
 }
@@ -1085,18 +1094,45 @@ static void panel_warps(void)            /* Warps: its algorithm, its marks, wha
 static void panel_reverb(void)
 {
     hero_icon(IC_REV, PINK);
-    hero_line(hero_title("REVERB"), ui.page == PG_FX(0) ? "FROM CLOUDS|SENDS" : "FROM CLOUDS");
+    hero_line(hero_title("REVERB"), ui.page == PG_RSEND ? "FROM CLOUDS|THE SENDS" : "FROM CLOUDS");
 }
 
-static void reverb_meter(int force)      /* the return's meter, alone: the rest is not drawn again for it */
+static void panel_delay(void)            /* the delay: its time, its mode, its repeats */
+{
+    project_t *p = eng_project();
+    char s[48], v[16];
+    hero_icon(IC_DELAY, ORANGE);
+    int y = hero_title("DELAY");
+    s[0] = 0;
+    if (ui.page == PG_DSEND)
+        text_cat(s, "THE SENDS|", sizeof s);
+    eng_param_text(PG_DELAY(0) * 4, eng_final(PG_DELAY(0) * 4), v, sizeof v);
+    text_cat(s, v, sizeof s);
+    if (ui.page != PG_DSEND) {
+        text_cat(s, "|", sizeof s);
+        enum_cat(s, PG_DELAY(1) * 4 + 1, sizeof s);
+        text_cat(s, "|FB ", sizeof s);
+        eng_param_text(PG_DELAY(0) * 4 + 1, eng_final(PG_DELAY(0) * 4 + 1), v, sizeof v);
+        text_cat(s, v, sizeof s);
+    }
+    (void)p;
+    hero_line(y, s);
+}
+
+/* an effect's return meter (the delay's, the reverb's), alone: the rest is not drawn again for it (how open its lane
+ * holds it: the row at the bottom) */
+static void fx_meter(int force)
 {
     static int shown = -1;
-    int m = (int)(fm_clampf(eng_meter(ENG_TRACKS) * 2.0f, 0.0f, 1.0f) * 52.0f);
-    if (!force && m == shown)
+    int l = eng_page_lane(ui.page), m;
+    if (l != LANE_DELAY && l != LANE_REVERB)
         return;
-    shown = m;
+    m = (int)(fm_clampf(eng_meter(l == LANE_DELAY ? ENG_TRACKS + 1 : ENG_TRACKS) * 2.0f, 0.0f, 1.0f) * 52.0f);
+    if (!force && (m | l << 8) == shown)
+        return;
+    shown = m | l << 8;
     cv_begin(6, 52, TRACK);
-    cv_rect(0, 52 - m, 6, m, PINK);
+    cv_rect(0, 52 - m, 6, m, lane_accent(l));
     blit(226, PANEL_Y + 12);
 }
 
@@ -1104,27 +1140,29 @@ static void draw_panel(void)
 {
     project_t *p = eng_project();
     int pt = ptype(ui.page), tr = ptrack(ui.page);
-    int32_t s[3] = {ui.page, pt <= PT_FX2 && eng_algo_count(page_first(ui.page)) ? p->algo[page_first(ui.page)] : -1, 0};
+    int32_t s[3] = {ui.page, eng_algo_count(page_first(ui.page)) ? p->algo[page_first(ui.page)] : -1, 0};
+    int fx = pt == PT_DELAY1 || pt == PT_DELAY2 || pt == PT_DSEND || pt == PT_REVERB || pt == PT_RSEND ||
+             pt == PT_WARPS1 || pt == PT_WARPS2 || pt == PT_LANE;
     switch (pt) {                        /* what the display shows, to draw it again only when it changes */
     case PT_PLAITS2: s[2] = (int)(eng_final(ui.page * 4) * 200.0f) | (int)(eng_final(ui.page * 4 + 1) * 8.0f) << 8; break;
-    case PT_PLAITS3: s[2] = eng_note(tr) | (int)((eng_gates() >> tr) & 1u) << 8 | (int)p->val[ui.page * 4] << 9 |
-                            (int)p->val[ui.page * 4 + 1] << 14; break;
+    case PT_PLAITS3: s[2] = eng_note(tr) | (int)((eng_gates() >> tr) & 1u) << 8 |
+                            (int)(eng_final(ui.page * 4) * 50.0f + 50.0f) << 9 | (int)(eng_final(ui.page * 4 + 1) * 100.0f) << 16;
+        break;
     case PT_TIDES1: case PT_TIDES2: {
         int pg = PG_TIDES(ui.page >= PG_TIDES(1, 0), 1);
         s[2] = (int)p->val[pg * 4 + 1] | (int)p->val[pg * 4 + 2] << 4 | (int)p->val[pg * 4 + 3] << 8;
         break;
     }
-    case PT_MARB_T1: case PT_MARB_T2:
-        s[2] = (int)p->val[PG_MARBLES(1) * 4] | (int)p->val[PG_MARBLES(1) * 4 + 1] << 5 |
-               (p->val[PG_MARBLES(1) * 4 + 2] > 0.5f) << 8;
-        break;
-    case PT_MARB_X1: case PT_MARB_X2:
-        s[2] = (int)(p->val[PG_MARBLES(2) * 4 + 3] + 0.5f) | (int)p->val[PG_MARBLES(3) * 4] << 4;
-        break;
-    case PT_STEP:
+    case PT_STEP: case PT_LANE: {
+        int l = eng_page_lane(ui.page);
         for (int i = 0; i < ENG_STEPS / 8; i++)
-            s[2] = s[2] * 31 + p->trig[tr][i];
-        s[2] = s[2] * 7 + ui.spage + 5 * eng_steps_mode() + 11 * (int)p->val[PG_STEP(tr) * 4 + 3];
+            s[2] = s[2] * 31 + p->trig[l][i];
+        s[2] = s[2] * 7 + 11 * (int)p->val[PG_STEP(l) * 4 + 3] + (l == LANE_WARPS ? eng_warps_algo() * 3 : 0);
+        break;
+    }
+    case PT_DELAY1: case PT_DELAY2: case PT_DSEND:
+        s[2] = (int)p->val[PG_DELAY(0) * 4] | (int)p->val[PG_DELAY(1) * 4 + 1] << 5 |
+               (int)(eng_final(PG_DELAY(0) * 4 + 1) * 100.0f) << 6;
         break;
     case PT_ARP:
         s[2] = p->endless_len[tr] | (p->endless_key[tr] + 64) << 7 | (ui.erec == tr) << 14;
@@ -1132,8 +1170,8 @@ static void draw_panel(void)
             s[2] = s[2] * 31 + (p->endless[tr][i] == ENDLESS_REST);
         break;
     case PT_GLOBAL:
-        s[2] = (int)p->val[PG_GLOBAL * 4] | (int)p->val[PG_GLOBAL * 4 + 2] << 2 | (int)p->val[PG_GLOBAL * 4 + 3] << 6 |
-               (int)(eng_final(PG_MARBLES(0) * 4) * 1000.0f) << 10;
+        s[2] = (int)p->val[PG_GLOBAL * 4 + 1] | (int)p->val[PG_GLOBAL * 4 + 2] << 4 |
+               (int)(p->val[PG_GLOBAL * 4 + 3] * 100.0f) << 8 | (int)(p->val[PG_GLOBAL * 4] * 1000.0f) << 16;
         break;
     case PT_MIX: case PT_PAN:
         for (int t = 0; t < ENG_TRACKS; t++)
@@ -1145,9 +1183,9 @@ static void draw_panel(void)
         break;
     default: break;
     }
-    if (!ui.full && !memcmp(s, ui.panel_shown, sizeof s)) {
-        if (pt == PT_FX1 || pt == PT_FX2)
-            reverb_meter(0);
+    if (!ui.full && !ui.body && !memcmp(s, ui.panel_shown, sizeof s)) {
+        if (fx)
+            fx_meter(0);
         return;
     }
     memcpy(ui.panel_shown, s, sizeof s);
@@ -1155,19 +1193,18 @@ static void draw_panel(void)
     switch (pt) {
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: panel_plaits(tr, page_face(ui.page), page_accent(ui.page)); break;
     case PT_TIDES1: case PT_TIDES2: panel_tides(ui.page >= PG_TIDES(1, 0)); break;
-    case PT_MARB_T1: case PT_MARB_T2: panel_marbles(0); break;
-    case PT_MARB_X1: case PT_MARB_X2: panel_marbles(1); break;
     case PT_MIX: case PT_PAN: panel_mixer(pt == PT_PAN); break;
-    case PT_STEP: panel_steps(tr); break;
+    case PT_STEP: case PT_LANE: panel_steps(eng_page_lane(ui.page)); break;
     case PT_RND: panel_random(tr); break;
     case PT_ARP: panel_endless(tr); break;
     case PT_GLOBAL: panel_global(); break;
     case PT_WARPS1: case PT_WARPS2: panel_warps(); break;
+    case PT_DELAY1: case PT_DELAY2: case PT_DSEND: panel_delay(); break;
     default: panel_reverb(); break;
     }
     blit(0, PANEL_Y);
-    if (pt == PT_FX1 || pt == PT_FX2)
-        reverb_meter(1);
+    if (fx)
+        fx_meter(1);
 }
 
 /* the knobs: a ring each, lit from its start (or its middle) to its value ---------------------------------------- */
@@ -1264,27 +1301,25 @@ static int knob_view(int param, int *t, int *tp)
     *tp = eng_param_tp(param, t);
     if (ptype(ui.page) == PT_RND)
         return KV_RND;
-    if (*tp < 0 || !eng_tp_lockable(*tp))
+    if (*tp < 0 || !eng_tp_lockable(*t, *tp))
         return KV_VALUE;
     if (held(B_ENV))
         return KV_RND;
-    if (ui.held_step >= 0 && *t == ui.track)
+    if (ui.held_step >= 0 && *t == ui.lane)
         return KV_LOCK;
     return KV_VALUE;
 }
 
-/* a knob that does nothing now, drawn grey (it still turns): the LPG's colour on a model with its own envelope; with
- * the steps playing the tracks, a track's gate and note sources and Marbles' t settings (its outputs stay sources) */
+/* a knob that does nothing now, drawn grey (it still turns): the LPG's colour on a model with its own envelope; an
+ * effect lane's DECAY and DEPTH while it has no trig (the effect held open) */
 static int knob_idle(int param)
 {
     int page = param / 4, k = param % 4;
     if (page < 12 && page % 3 == 1 && k == 1)
         return eng_model_enveloped(eng_project()->algo[page - 1]);
-    if (!eng_steps_mode())
-        return 0;
-    if (page < 12 && page % 3 == 2)
-        return k <= 1;
-    return (page == PG_MARBLES(0) && (k == 1 || k == 2)) || (page == PG_MARBLES(1) && (k == 1 || k == 2));
+    if (ptype(page) == PT_LANE && k != 3)
+        return !eng_lane_has_trigs(eng_page_lane(page));
+    return 0;
 }
 
 static void draw_knob(int k)
@@ -1327,9 +1362,11 @@ static void draw_knob(int k)
     int32_t s[4] = {(int32_t)(view == KV_RND ? (float)(rnd + 100) : knob_u(param, v) * 270.0f) |
                     (int32_t)(knob_u(param, f) * 270.0f) << 10 | view << 20 | locked << 22,
                     text_hash(txt), hash, hot | ui.mod << 1 | (int32_t)ac << 2};
-    if (!ui.full && !memcmp(s, ui.knob_shown[k], sizeof s))
+    if (!ui.full && !ui.body && !memcmp(s, ui.knob_shown[k], sizeof s))
         return;
     memcpy(ui.knob_shown[k], s, sizeof s);
+    if (slide_s && (k * KNOB_W + slide_s >= 240 || k * KNOB_W + KNOB_W + slide_s <= 0))
+        return;                          /* sliding in, not on the screen yet */
     cv_begin(KNOB_W, KNOB_H, BG);
     label_text(ptype(ui.page) == PT_RND ? RND_NAME[k] : eng_param_name(param), lab, sizeof lab);   /* touched: white,
                                                                                                 * underlined */
@@ -1435,11 +1472,11 @@ static void draw_matrix(void)
         lines[i] = rows[i];
     }
     h = h * 17 + ui.msel + g * 1000;
-    if (!ui.full && h == shown)
+    if (!ui.full && !ui.body && h == shown)
         return;
     shown = h;
     cv_begin(240, 24, BG);
-    cv_text(10, 0, &FONT_XS, g < ENG_TRACKS ? "THE TRACK'S CABLES" : "GLOBAL CABLES (TIDES, MARBLES, REVERB)", TXT);
+    cv_text(10, 0, &FONT_XS, g < ENG_TRACKS ? "THE TRACK'S CABLES" : "GLOBAL CABLES (TIDES, THE EFFECTS)", TXT);
     cv_text(10, 12, &FONT_T, "K1 CABLE   K2 SOURCE   K3 TARGET   K4 DEPTH", DIM);
     blit(0, PANEL_Y);
     draw_lines(PANEL_Y + 24, 19, lines, col, 8, ui.msel - first);
@@ -1451,7 +1488,7 @@ static void draw_global(void)
     static int shown = -1;
     static const char *const P[3] = {"New: 4 Plaits, nothing patched", "The demo patch", "The saved project"};
     char v[24];
-    if (ui.full || shown != ui.init_sel) {   /* the projects REC held loads, in the module's display */
+    if (ui.full || ui.body || shown != ui.init_sel) {   /* the projects REC held loads, in the module's display */
         shown = ui.init_sel;
         cv_begin(240, PANEL_H, BG);
         cv_text(10, 0, &FONT_B, "PROJECT", TXT);
@@ -1466,7 +1503,7 @@ static void draw_global(void)
         }
         blit(0, PANEL_Y);
     }
-    if (!ui.full && plat_ms() - at < 400u)
+    if (!ui.full && !ui.body && plat_ms() - at < 400u)
         return;
     at = plat_ms();
     for (int i = 0; i < 6; i++) {        /* the machine, where the knobs are: two canvases of three rows (a 240 x 100
@@ -1552,21 +1589,31 @@ static void draw_missing(void)
     draw_lines(PANEL_Y + 4, 19, L, col, 8, -1);
 }
 
-/* the row at the bottom: the four tracks (an LED lit by its gate or its trig, in its model's colour); on Tides' and
- * Marbles' pages their outputs, lit as much as they are high; the steps of the active track when they play it and
- * REC is on (or on their pages) */
+/* the row at the bottom: the four tracks (an LED lit by its gate or its trig, in its model's colour); on Tides' pages
+ * its outputs, lit as much as they are high; the steps of the lane in STEP mode, and on the steps' and the effects'
+ * pages theirs */
+static int foot_lane(void)               /* the lane whose steps the row shows, -1 none */
+{
+    int pt = ptype(ui.page);
+    if (ui.grid)
+        return ui.lane;
+    if (pt == PT_STEP || pt == PT_RND)
+        return ptrack(ui.page);
+    if (ui.page < ENG_NPAGES && eng_page_lane(ui.page) >= ENG_TRACKS)
+        return eng_page_lane(ui.page);
+    return -1;
+}
+
 static int foot_mode(void)
 {
     if (ui.matrix || ui.page == VP_SYS)
         return 0;
-    if (ui.erec >= 0 || ptype(ui.page) == PT_ARP)
+    if (ui.erec >= 0 || (ptype(ui.page) == PT_ARP && !ui.grid))
         return 6;
-    if (eng_steps_mode() && (ui.grid || ptype(ui.page) == PT_STEP || ptype(ui.page) == PT_RND))
+    if (foot_lane() >= 0)
         return 5;
     switch (ptype(ui.page)) {
     case PT_TIDES1: case PT_TIDES2: return ui.page >= PG_TIDES(1, 0) ? 2 : 1;
-    case PT_MARB_T1: case PT_MARB_T2: return 3;
-    case PT_MARB_X1: case PT_MARB_X2: return 4;
     default: return 0;
     }
 }
@@ -1586,7 +1633,7 @@ static void foot_steps(int t)            /* the steps of a page: a trig lit, a l
 {
     project_t *p = eng_project();
     int len = (int)(p->val[PG_STEP(t) * 4 + 3] + 0.5f), now = eng_step_now(t);
-    uint16_t ac = track_accent(t);
+    uint16_t ac = lane_accent(t);
     for (int i = 0; i < 16; i++) {
         int st = ui.spage * 16 + i, x = 9 + i * 13;
         if (st >= len) {
@@ -1609,6 +1656,11 @@ static void foot_steps(int t)            /* the steps of a page: a trig lit, a l
     for (int j = 0; j < 4; j++)          /* the pages */
         if (j * 16 < len)
             cv_rect(222, 9 + j * 5, 6, 3, j == ui.spage ? TXT : DIM);
+    if (t >= ENG_TRACKS) {               /* an effect: how open its lane holds it */
+        int o = (int)(eng_lane_open(t) * 18.0f + 0.5f);
+        cv_rect(231, 8, 3, 18, TRACK);
+        cv_rect(231, 26 - o, 3, o, C_WHITE);
+    }
 }
 
 static void foot_endless(int t)          /* Endless's notes, 16 at a time: a bar as high as the note, a rest a dot */
@@ -1639,35 +1691,47 @@ static void foot_endless(int t)          /* Endless's notes, 16 at a time: a bar
 
 /* the presses held for an action: how long (an action that loses something, a second), what it will do (the
  * footer counts it down; "": nothing to show) */
+static int erase_lane(void)              /* the lane REC held erases: STEP mode's, or the steps' page's */
+{
+    return ui.grid ? ui.lane : ui.page < ENG_NPAGES ? eng_page_lane(ui.page) : ptrack(ui.page);
+}
+
 static uint32_t hold_ms(int b, char *label, uint32_t max)
 {
     static const char *const LOAD[3] = {"LOAD NEW", "LOAD DEMO", "LOAD SAVED"};
-    const char *l = "";
+    static const char *const FX[3] = {"ERASE DELAY STEPS", "ERASE REVERB STEPS", "ERASE WARPS STEPS"};
+    char l[24];
     uint32_t ms = LONG_MS;
-    int pt = ptype(ui.page), num = 0;
+    int pt = ptype(ui.page);
+    l[0] = 0;
     if (b == B_SEL && ui.held_step < 0 && !ui.matrix) {
-        l = "MATRIX";
+        text_cat(l, "MATRIX", sizeof l);
     } else if (b == B_SAVE) {
-        l = eng_playing() ? "SAVE: STOP FIRST" : "SAVE PROJECT";
+        text_cat(l, eng_playing() ? "SAVE: STOP FIRST" : "SAVE PROJECT", sizeof l);
         ms = 1000u;
     } else if (b == B_REC && ui.page == VP_SYS) {
-        l = LOAD[ui.init_sel % 3];
+        text_cat(l, LOAD[ui.init_sel % 3], sizeof l);
         ms = 1000u;
-    } else if (b == B_REC && pt == PT_ARP && ui.erec < 0) {
-        l = "ERASE ENDLESS";
+    } else if (b == B_REC && pt == PT_ARP && ui.erec < 0 && !ui.grid) {
+        text_cat(l, "ERASE ENDLESS", sizeof l);
         ms = 1000u;
-    } else if (b == B_REC && eng_steps_mode() && ui.erec < 0 && (ui.grid || pt == PT_STEP || pt == PT_RND)) {
-        l = held(B_GLO) ? "ERASE ALL" : "ERASE TRACK ";
-        num = !held(B_GLO);
+    } else if (b == B_REC && ui.erec < 0 && (ui.grid || pt == PT_STEP || pt == PT_RND || pt == PT_LANE)) {
+        int e = erase_lane();             /* the lane erased: its steps, locks, randoms (a track: its cables); GLO
+                                           * held: all of them */
+        if (held(B_GLO)) {
+            text_cat(l, "ERASE ALL", sizeof l);
+        } else if (e >= ENG_TRACKS) {
+            text_cat(l, FX[e - ENG_TRACKS], sizeof l);
+        } else {
+            char n[2] = {(char)('1' + e), 0};
+            text_cat(l, "ERASE TRACK ", sizeof l);
+            text_cat(l, n, sizeof l);
+        }
         ms = 1000u;
     }
     if (label) {
         label[0] = 0;
         text_cat(label, l, max);
-        if (num) {                       /* the track's number */
-            char n[2] = {(char)('1' + ui.track), 0};
-            text_cat(label, n, max);
-        }
     }
     return ms;
 }
@@ -1767,17 +1831,20 @@ static int all_state(uint32_t *left)     /* 1: the time to undo it, left (ms); 2
     return 0;
 }
 
-/* a countdown: five squares, one gone each fifth of the time (n left) */
-static void squares(int n, uint16_t c)
+/* a countdown: five squares, the last one shrinking away each fifth of the time (left: 0..5000) */
+static void squares(int32_t left, uint16_t c)
 {
-    for (int i = 0; i < 5; i++)
-        cv_rect(162 + i * 14, 11, 10, 10, i < n ? c : TRACK);
+    for (int i = 0; i < 5; i++) {
+        int32_t f = left - i * 1000, w;
+        cv_rect(162 + i * 14, 11, 10, 10, f >= 1000 ? c : TRACK);
+        if (f > 0 && f < 1000 && (w = (f * 10 + 500) / 1000) > 0)
+            cv_rect(162 + i * 14 + (10 - w) / 2, 11 + (10 - w) / 2, w, w, c);
+    }
 }
 
 static void draw_footer(void)
 {
-    static const char *const OUT[4][4] = {{"A1", "A2", "A3", "A4"}, {"B1", "B2", "B3", "B4"},
-                                          {"t1", "t2", "t3", "Y"}, {"X1", "X2", "X3", "Y"}};
+    static const char *const OUT[2][4] = {{"A1", "A2", "A3", "A4"}, {"B1", "B2", "B3", "B4"}};
     project_t *p = eng_project();
     char t[40], n[8];
     uint32_t now = plat_ms();
@@ -1788,9 +1855,8 @@ static void draw_footer(void)
     int hb = hold_now(hl, sizeof hl, &hdone);
     uint16_t ac = page_accent(ui.page);
     for (int i = 0; i < 4; i++) {        /* each LED's level, 0..8 */
-        int src = mode == 1 ? SRC_A1 + i : mode == 2 ? SRC_B1 + i : mode == 3 ? (i < 3 ? SRC_T1 + i : SRC_Y)
-                : SRC_X1 + i, v = mode && mode < 5 ? eng_hist(src, ENG_HIST - 1) : 0;
-        lv[i] = mode && mode < 5 ? (iabs(v) * 8 + 63) / 127 : track_lit(i) * 8;
+        int src = mode == 1 ? SRC_A1 + i : SRC_B1 + i, v = mode && mode < 3 ? eng_hist(src, ENG_HIST - 1) : 0;
+        lv[i] = mode && mode < 3 ? (iabs(v) * 8 + 63) / 127 : track_lit(i) * 8;
         lh = lh * 9 + lv[i];
     }
     if (mode == 6) {                     /* Endless: its notes, the one playing */
@@ -1798,14 +1864,18 @@ static void draw_footer(void)
         for (int i = 0; i < p->endless_len[ui.track]; i++)
             lh = lh * 31 + p->endless[ui.track][i];
     }
+    int fl = foot_lane();
     if (mode == 5) {                     /* the steps shown: their trigs, locks, the one playing, the one held */
-        lh = eng_step_now(ui.track) | ui.held_step << 7 | ui.spage << 14;
+        lh = eng_step_now(fl) | ui.held_step << 7 | ui.spage << 14 | fl << 17;
         for (int i = 0; i < 16; i++)
-            lh = lh * 3 + eng_trig(ui.track, ui.spage * 16 + i) + (eng_step_locked(ui.track, ui.spage * 16 + i) ? 2 : 0);
-        lh = lh * 67 + (int)p->val[PG_STEP(ui.track) * 4 + 3];
+            lh = lh * 3 + eng_trig(fl, ui.spage * 16 + i) + (eng_step_locked(fl, ui.spage * 16 + i) ? 2 : 0);
+        lh = lh * 67 + (int)p->val[PG_STEP(fl) * 4 + 3];
+        if (fl >= ENG_TRACKS)
+            lh = lh * 19 + (int)(eng_lane_open(fl) * 18.0f + 0.5f);
     }
-    int hsq = 5 - (int)(hdone * 5u / 1000u), usq = (int)((left * 5u + ALL_UNDO_MS - 1u) / ALL_UNDO_MS);
-    int32_t s[6] = {lh, mode | ui.mod << 4 | msg << 5 | und << 6 | usq << 8 | (hb + 1) << 16 | hsq << 20,
+    int32_t hsq = 5000 - (int32_t)hdone * 5, usq = (int32_t)(left * 5000u / ALL_UNDO_MS);
+    int32_t s[6] = {lh, mode | ui.mod << 4 | msg << 5 | und << 6 | (hb + 1) << 8 |
+                        ((hb >= 0 ? hsq : und == 1 ? usq : 0) / 50) << 12,
                     (int32_t)(track_accent(0) ^ track_accent(1) << 1 ^
                     track_accent(2) << 2 ^ track_accent(3) << 3) ^ ui.track << 20 ^ (int32_t)ac << 4,
                     eng_note(0) | eng_note(1) << 8 | eng_note(2) << 16,
@@ -1834,11 +1904,11 @@ static void draw_footer(void)
         }
     } else if (ui.mod) {
         cv_text(10, 6, &FONT_XS, "MOD: HOLD A SOURCE KEY, TURN A KNOB", C_WHITE);
-        cv_text(10, 21, &FONT_T, "KEYS 1-4 A  5-8 B  9-11 X  12 Y  13-15 T", MUTED);
+        cv_text(10, 21, &FONT_T, "KEYS 1-4 TIDES A  5-8 B  9, 10: A, B ON THE 4 KNOBS", MUTED);
     } else if (mode == 6) {
         foot_endless(ui.erec >= 0 ? ui.erec : ui.track);
     } else if (mode == 5) {
-        foot_steps(ui.track);
+        foot_steps(fl);
     } else {
         for (int i = 0; i < 4; i++) {
             int x = 12 + i * 57, act = mode ? lv[i] > 0 : i == ui.track;
@@ -1879,8 +1949,20 @@ static void draw(void)
     }
     if (ui.full)
         lcd_fill(0, 0, 240, 240, knock ? YELLOW : BG);
+    int32_t sh = 0;
+    if (ui.slide_dir) {                  /* a face sliding in: quick, then slowing (an ease out), its edge lit */
+        uint32_t t = plat_ms() - ui.slide_at;
+        if (t >= SLIDE_MS) {
+            ui.slide_dir = 0;            /* the last frame: in place */
+        } else {
+            float u = 1.0f - (float)t / (float)SLIDE_MS;
+            sh = (int32_t)((float)ui.slide_dir * 240.0f * u * u * u);
+        }
+        ui.body = 1;
+    }
     draw_header();
     poll_keys();
+    slide_s = sh;
     if (!data_ok || !engine_ok) {
         draw_missing();
     } else if (ui.page == VP_SYS) {
@@ -1894,22 +1976,52 @@ static void draw(void)
             draw_knob(k);
         }
     }
+    slide_s = 0;
+    if (sh > 2)                          /* the edge, on the side it comes from */
+        lcd_fill((uint32_t)(sh - 2), PANEL_Y, 2, FOOT_Y - PANEL_Y, knock ? BG : page_accent(ui.page));
+    else if (sh < -2)
+        lcd_fill((uint32_t)(240 + sh), PANEL_Y, 2, FOOT_Y - PANEL_Y, knock ? BG : page_accent(ui.page));
     poll_keys();
     draw_footer();
     ui.full = 0;
+    ui.body = 0;
 }
 
 /* ---------------------------------------------------------------- input --- */
-static void go_page(int page)
+static int lane_len(int l) { return (int)(eng_project()->val[PG_STEP(l) * 4 + 3] + 0.5f); }
+
+static void set_lane(int l)              /* the steps shown: their page kept if the lane has it */
 {
-    int g = ptype(page) == PT_GLOBAL || ptype(page) == PT_SYS;
+    ui.lane = l;
+    if (ui.spage * 16 >= lane_len(l))
+        ui.spage = 0;
+}
+
+/* a page: another face of the module shown slides in (dir: from the right +1, the left -1; 0: by the faces' order);
+ * another module, at once. The lane follows the page whose knobs a lane's steps lock */
+static void go_page_dir(int page, int dir)
+{
+    int g = ptype(page) == PT_GLOBAL || ptype(page) == PT_SYS, l = page_lane(page);
     if (g && ptype(ui.page) != PT_GLOBAL && ptype(ui.page) != PT_SYS)
         ui.prev_page = ui.page;          /* GLO again goes back there */
+    if (!ui.matrix && page != ui.page && page_first(page) == page_first(ui.page) && data_ok && engine_ok) {
+        ui.slide_dir = dir ? dir : page_face(page) > page_face(ui.page) ? 1 : -1;
+        ui.slide_at = plat_ms();
+        ui.head_shown[0] = -1;
+        ui.foot_shown[0] = -1;
+    } else {
+        ui.slide_dir = 0;
+        ui.full = 1;
+    }
+    if (l >= 0 && l != ui.lane)
+        set_lane(l);
+    if (page < ENG_NPAGES && eng_page_lane(page) >= ENG_TRACKS)
+        ui.fx_page = page;               /* FX goes back to it */
     ui.page = page;
     ui.touched_k = -1;
     ui.matrix = 0;
-    ui.full = 1;
 }
+static void go_page(int page) { go_page_dir(page, 0); }
 
 /* GLO, REC held: a new project (four Plaits, nothing patched), the demo patch, or the saved project again. The
  * transport stops; nothing is saved until SAVE is held */
@@ -1931,6 +2043,7 @@ static void project_init(int which)
     }
     eng_project()->out_mode = out;
     ui.track = 0;
+    set_lane(0);
     go_page(PG_TRACK(0, 0));
 }
 
@@ -1956,7 +2069,7 @@ static void edit_param(int param, int32_t e)
 static int edit_all(int param, int32_t e)   /* GLO held: a track's parameter moved on the four tracks */
 {
     int t, tp = eng_param_tp(param, &t);
-    if (tp < 0)
+    if (tp < 0 || t >= ENG_TRACKS)
         return 0;
     for (int i = 0; i < ENG_TRACKS; i++)
         edit_param(eng_track_param(i, tp), e);
@@ -1969,12 +2082,12 @@ static void edit_rnd(int param, int32_t e)
 {
     project_t *p = eng_project();
     int t, tp = eng_param_tp(param, &t);
-    if (tp < 0 || !eng_tp_lockable(tp)) {
-        app_say("RANDOM:", "A TRACK'S KNOBS");
+    if (tp < 0 || !eng_tp_lockable(t, tp)) {
+        app_say("RANDOM:", "A LANE'S KNOBS");
         return;
     }
-    for (int i = 0; i < ENG_TRACKS; i++)
-        if (i == t || held(B_GLO)) {
+    for (int i = 0; i < ENG_LANES; i++)
+        if (i == t || (held(B_GLO) && t < ENG_TRACKS && i < ENG_TRACKS)) {
             int r = p->rnd[i][tp], n = clamp(r + e * (e > 1 || e < -1 ? 5 : 2), -100, 100);
             if ((r > 0 && n < 0) || (r < 0 && n > 0))
                 n = 0;                   /* a stop at 0 on the way through */
@@ -1983,13 +2096,13 @@ static void edit_rnd(int param, int32_t e)
     dirty = 1;
 }
 
-static void edit_lock(int param, int32_t e)   /* a held step: its lock on the active track's parameter */
+static void edit_lock(int param, int32_t e)   /* a held step: its lock on the lane's parameter */
 {
     project_t *p = eng_project();
     int t, tp = eng_param_tp(param, &t);
     float v;
-    if (tp < 0 || !eng_tp_lockable(tp) || t != ui.track) {
-        app_say("LOCK:", "THIS TRACK'S KNOBS");
+    if (tp < 0 || !eng_tp_lockable(t, tp) || t != ui.lane) {
+        app_say("LOCK:", "THIS LANE'S KNOBS");
         return;
     }
     if (!eng_lock(t, ui.held_step, tp, &v))
@@ -2004,7 +2117,7 @@ static void edit_lock(int param, int32_t e)   /* a held step: its lock on the ac
 static int cable_group(int param)
 {
     int t, tp = eng_param_tp(param, &t);
-    return tp >= 0 ? t : ENG_TRACKS;
+    return tp >= 0 && t < ENG_TRACKS ? t : ENG_TRACKS;
 }
 
 /* MOD mode: source s on parameter param, its depth moved by e */
@@ -2044,17 +2157,17 @@ static void cable_turn(int s, int param, int32_t e)
     dirty = 1;
 }
 
-static int held_source(void)             /* MOD mode: the source key held (1..16), 17 / 18 the fans, 0 none */
+static int held_source(void)             /* MOD mode: the source key held (1..8), 9 / 10 the fans, 0 none */
 {
-    for (int k = 0; k < 18; k++)
+    for (int k = 0; k < 10; k++)
         if (ui.keys & (1u << k))
             return k + 1;
     return 0;
 }
 
-static int key_source(int key)           /* the spec's row: 1-4 A1-A4, 5-8 B1-B4, 9-11 X1-X3, 12 Y, 13-15 T1-T3 */
+static int key_source(int key)           /* the first eight keys: A1-A4, B1-B4 */
 {
-    return key >= 1 && key <= 15 ? SRC_A1 + key - 1 : SRC_NONE;
+    return key >= 1 && key <= 8 ? SRC_A1 + key - 1 : SRC_NONE;
 }
 
 /* the module buttons: their first page, and where a second press goes */
@@ -2071,27 +2184,26 @@ static void module_button(int b)
         else
             go_page(PG_TIDES(0, 0));
         break;
-    case B_SEQ: {                        /* the sequencers, the one playing first: the track's steps (TRIG, RANDOM),
-                                          * Marbles' t, Marbles' X; again: the next */
-        int steps = pt == PT_STEP || pt == PT_RND, mt = pt == PT_MARB_T1 || pt == PT_MARB_T2;
-        int mx = pt == PT_MARB_X1 || pt == PT_MARB_X2;
-        if (!here || (!steps && !mt && !mx))
-            go_page(eng_steps_mode() ? PG_STEP(ui.track) : PG_MARBLES(0));
+    case B_SEQ:                          /* the lane's steps (a track's: then its RANDOM face) */
+        if (here && (pt == PT_STEP || pt == PT_RND))
+            go_page(next);
         else
-            go_page(steps ? PG_MARBLES(0) : mt ? PG_MARBLES(2) : PG_STEP(ui.track));
-        (void)next;
+            go_page(PG_STEP(ui.lane));
         break;
-    }
     case B_ARP:                          /* Endless, the active track's */
         go_page(PG_ARP(ui.track));
         break;
     case B_HOME:
         go_page(here && pt == PT_MIX ? PG_PAN : PG_MIX);
         break;
-    case B_FX:                           /* the sends, the reverb, Warps' two pages, round */
-        go_page(!here ? PG_FX(0) : pt == PT_FX1 ? PG_FX(1) : pt == PT_FX2 ? PG_WARPS(0) : pt == PT_WARPS1 ? PG_WARPS(1)
-                : PG_FX(0));
+    case B_FX: {                         /* the effect shown last; on an effect: the next one (delay, reverb, Warps) */
+        int l = ui.page < ENG_NPAGES ? eng_page_lane(ui.page) : -1;
+        if (here && l >= ENG_TRACKS)
+            go_page(l == LANE_DELAY ? PG_REVERB : l == LANE_REVERB ? PG_WARPS(0) : PG_DELAY(0));
+        else
+            go_page(ui.fx_page);
         break;
+    }
     default:
         break;
     }
@@ -2104,11 +2216,11 @@ static void button_down(int b)
     case B_PLAY:
         eng_play(!eng_playing());
         break;
-    case B_OCTDN:
-        ui.octave = clamp(ui.octave - 1, -3, 3);
-        break;
-    case B_OCTUP:
-        ui.octave = clamp(ui.octave + 1, -3, 3);
+    case B_OCTDN: case B_OCTUP:          /* the keyboard's octave; STEP mode: the steps' page */
+        if (ui.grid)
+            ui.spage = clamp(ui.spage + (b == B_OCTUP ? 1 : -1), 0, (lane_len(ui.lane) - 1) / 16);
+        else
+            ui.octave = clamp(ui.octave + (b == B_OCTUP ? 1 : -1), -3, 3);
         break;
     case B_GLO:                          /* ALL, or its undo */
         all_down();
@@ -2123,19 +2235,24 @@ static void button_down(int b)
     }
 }
 
-static void track_erase(int t)          /* its pattern and its modulations (t = ENG_TRACKS: the global cables) */
+static void cables_erase(int g)          /* a track's cables (g = ENG_TRACKS: the global ones) */
 {
     project_t *p = eng_project();
-    if (t < ENG_TRACKS) {
-        eng_steps_clear(t);
-        for (int i = 0; i < ENG_NTP; i++)
-            p->rnd[t][i] = 0;
-    }
     for (int c = 0; c < ENG_CABLES; c++) {
-        p->cable[t][c].src = SRC_NONE;
-        p->cable[t][c].dst = 0;
-        p->cable[t][c].depth = 0;
+        p->cable[g][c].src = SRC_NONE;
+        p->cable[g][c].dst = 0;
+        p->cable[g][c].depth = 0;
     }
+}
+
+static void lane_erase(int l)            /* its pattern, its randoms; a track's cables too */
+{
+    project_t *p = eng_project();
+    eng_steps_clear(l);
+    for (int i = 0; i < ENG_NTP; i++)
+        p->rnd[l][i] = 0;
+    if (l < ENG_TRACKS)
+        cables_erase(l);
 }
 
 static void button_long(int b)
@@ -2156,27 +2273,34 @@ static void button_long(int b)
     } else if (b == B_REC) {
         if (ui.page == VP_SYS) {
             project_init(ui.init_sel);
-        } else if (ptype(ui.page) == PT_ARP && ui.erec < 0) {   /* Endless: its notes cleared */
+        } else if (ptype(ui.page) == PT_ARP && ui.erec < 0 && !ui.grid) {   /* Endless: its notes cleared */
             eng_endless_clear(ui.track);
             dirty = 1;
             app_say("ENDLESS", "CLEARED");
-        } else if (eng_steps_mode() && ui.erec < 0 &&
-                   (ui.grid || ptype(ui.page) == PT_STEP || ptype(ui.page) == PT_RND)) {
-            /* the steps: the track erased (its trigs, locks, randoms and cables), with GLO held all of them and the
-             * global cables (Warps stays) */
+        } else if (ui.erec < 0 && (ui.grid || ptype(ui.page) == PT_STEP || ptype(ui.page) == PT_RND ||
+                                   ptype(ui.page) == PT_LANE)) {
+            /* the steps: the lane erased (its trigs, locks, randoms; a track's cables), with GLO held all of them
+             * and the global cables (the effects' knobs stay) */
+            static const char *const FX[3] = {"DELAY STEPS", "REVERB STEPS", "WARPS STEPS"};
             char n[16];
+            int l = erase_lane();
             if (held(B_GLO)) {
-                for (int t = 0; t <= ENG_TRACKS; t++)
-                    track_erase(t);
+                for (int i = 0; i < ENG_LANES; i++)
+                    lane_erase(i);
+                cables_erase(ENG_TRACKS);
                 ui.used[B_GLO] = 1;
                 all.press = 1;                /* (not an ALL to undo) */
                 app_say("ALL", "ERASED");
-            } else {
-                track_erase(ui.track);
+            } else if (l >= 0) {
+                lane_erase(l);
                 n[0] = 0;
-                text_cat(n, "TRACK ", sizeof n);
-                n[6] = (char)('1' + ui.track);
-                n[7] = 0;
+                if (l < ENG_TRACKS) {
+                    text_cat(n, "TRACK ", sizeof n);
+                    n[6] = (char)('1' + l);
+                    n[7] = 0;
+                } else {
+                    text_cat(n, FX[l - ENG_TRACKS], sizeof n);
+                }
                 app_say(n, "ERASED");
             }
             ui.held_step = -1;
@@ -2200,7 +2324,7 @@ static void button_up(int b)
                 app_say("ENDLESS", "64 STEPS, FULL");
             dirty = 1;
         } else if (ui.held_step >= 0) {  /* a step held: its locks cleared */
-            eng_lock_clear(ui.track, ui.held_step);
+            eng_lock_clear(ui.lane, ui.held_step);
             ui.step_edit = 1;
             dirty = 1;
             app_say("STEP", "LOCKS CLEARED");
@@ -2212,7 +2336,7 @@ static void button_up(int b)
         }
         ui.full = 1;
         break;
-    case B_REC:                          /* Endless records (on its page) or plays; the steps on the white keys */
+    case B_REC:                          /* KEY or STEP mode; on Endless' page it records, then plays */
         if (ui.long_done[b])
             break;
         if (ui.erec >= 0) {              /* Endless: recorded, it plays */
@@ -2224,7 +2348,7 @@ static void button_up(int b)
             ui.full = 1;
             break;
         }
-        if (pt == PT_ARP) {              /* Endless: recording from nothing */
+        if (pt == PT_ARP && !ui.grid) {  /* Endless: recording from nothing */
             eng_endless_clear(ui.track);
             eng_endless_rec(ui.track, 1);
             ui.erec = ui.track;
@@ -2234,11 +2358,9 @@ static void button_up(int b)
             ui.full = 1;
             break;
         }
-        if (!eng_steps_mode()) {
-            app_say("REC:", "SEQUENCER ON STEPS (GLO)");
-            break;
-        }
-        ui.grid = !ui.grid;
+        ui.grid = !ui.grid;              /* STEP mode: the lane the page's knobs belong to, else the last one */
+        if (ui.grid && page_lane(ui.page) >= 0)
+            set_lane(page_lane(ui.page));
         ui.mod = 0;
         ui.held_step = -1;
         ui.full = 1;
@@ -2290,12 +2412,48 @@ static void matrix_turn(int k, int32_t e)
     dirty = 1;
 }
 
-/* the keys: the active track's notes; MOD's sources; with REC on, the white keys are the 16 steps of a page (held: its
- * locks on the knobs), the first four black keys the pages */
+static void set_track(int t)             /* the active track: the keys' notes stop on the old one */
+{
+    if (t == ui.track)
+        return;
+    for (uint32_t k = 0; k < NKEYS; k++)
+        if (ui.keys & (1u << k) && !ui.grid && !ui.mod)
+            eng_key(ui.track, 53 + (int)k + 12 * ui.octave, 0);
+    if (ui.erec >= 0) {                  /* recording Endless: it stops there */
+        eng_endless_rec(ui.erec, 0);
+        ui.erec = -1;
+    }
+    ui.track = t;
+    ui.held_step = -1;
+}
+
+/* STEP mode, a black key: a lane. A track: its sound (or its steps), unless the page is one of the tracks' (the mixer,
+ * the sends); an effect: its knobs (or its steps) */
+static void select_lane(int l)
+{
+    int pl = page_lane(ui.page), pt = ptype(ui.page), steps = pt == PT_STEP || pt == PT_RND || pt == PT_LANE;
+    ui.held_step = -1;
+    if (l < ENG_TRACKS) {
+        set_track(l);
+        if (steps)
+            go_page(PG_STEP(l));
+        else if (pl >= ENG_TRACKS)
+            go_page(PG_TRACK(l, 0));
+        else
+            ui.page = track_page(ui.page, l), ui.full = 1;
+    } else if (pl != l) {
+        go_page(steps ? PG_STEP(l) : l == LANE_DELAY ? PG_DELAY(0) : l == LANE_REVERB ? PG_REVERB : PG_WARPS(0));
+    }
+    set_lane(l);
+    ui.full = 1;
+}
+
+/* the keys: the active track's notes; MOD's sources; STEP mode: the white keys are the 16 steps of a page (held: its
+ * locks on the knobs), the first seven black keys the lanes */
 static void grid_key(int k, int down)
 {
     static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
-    int w = -1, bl = -1, len = (int)(eng_project()->val[PG_STEP(ui.track) * 4 + 3] + 0.5f);
+    int w = -1, bl = -1, len = lane_len(ui.lane), ln = ui.lane;
     for (int i = 0; i < 16; i++)
         if (W[i] == k)
             w = i;
@@ -2309,21 +2467,21 @@ static void grid_key(int k, int down)
         if (down) {
             ui.held_step = st;
             ui.step_edit = 0;
-            ui.step_new = !eng_trig(ui.track, st);
+            ui.step_new = !eng_trig(ln, st);
             if (ui.step_new) {
-                eng_trig_set(ui.track, st, 1);
+                eng_trig_set(ln, st, 1);
                 dirty = 1;
             }
         } else if (st == ui.held_step) { /* let go: a trig that was there, not locked meanwhile, goes (its locks too) */
             if (!ui.step_new && !ui.step_edit) {
-                eng_trig_set(ui.track, st, 0);
-                eng_lock_clear(ui.track, st);
+                eng_trig_set(ln, st, 0);
+                eng_lock_clear(ln, st);
                 dirty = 1;
             }
             ui.held_step = -1;
         }
-    } else if (bl >= 0 && bl < 4 && down && bl * 16 < len) {
-        ui.spage = bl;
+    } else if (bl >= 0 && bl < ENG_LANES && down) {
+        select_lane(bl);
     }
 }
 
@@ -2384,22 +2542,16 @@ static void input(void)
     if (e) {
         int t = clamp(ui.track + e, 0, ENG_TRACKS - 1);
         if (t != ui.track) {
-            for (k = 0; k < NKEYS; k++)  /* the keyboard's notes stop on the old track */
-                if (ui.keys & (1u << k) && !ui.grid && !ui.mod)
-                    eng_key(ui.track, 53 + (int)k + 12 * ui.octave, 0);
-            if (ui.erec >= 0) {          /* recording Endless: it stops there */
-                eng_endless_rec(ui.erec, 0);
-                ui.erec = -1;
-            }
-            ui.track = t;
-            ui.held_step = -1;
+            set_track(t);
             ui.page = track_page(ui.page, t);
+            if (ui.lane < ENG_TRACKS)
+                set_lane(t);
             ui.full = 1;
         }
     }
     e = plat_enc(EN_SELECT);
     if (e && !ui.matrix && page_count(ui.page) > 1)
-        go_page(page_at(ui.page, page_face(ui.page) + (e > 0 ? 1 : -1)));
+        go_page_dir(page_at(ui.page, page_face(ui.page) + (e > 0 ? 1 : -1)), e > 0 ? 1 : -1);
     e = plat_enc(EN_ALGO);
     if (e && !ui.matrix && (ptype(ui.page) == PT_WARPS1 || ptype(ui.page) == PT_WARPS2)) {
         /* Warps: ALGORITHM from mark to mark (its six cross-modulations, a fifth of the knob apart) */
@@ -2413,7 +2565,12 @@ static void input(void)
                 ;
         *v = (float)i * 0.2f;
         dirty = 1;
-    } else if (e && !ui.matrix && ptype(ui.page) <= PT_FX2) {
+    } else if (e && !ui.matrix && (ptype(ui.page) == PT_DELAY1 || ptype(ui.page) == PT_DELAY2 ||
+                                   ptype(ui.page) == PT_DSEND)) {
+        edit_param(PG_DELAY(0) * 4, e > 0 ? 1 : -1);   /* the delay: its time, a division at a time */
+        ui.touched_at[0] = now;
+        ui.touched_k = ui.page == PG_DELAY(0) ? 0 : -1;
+    } else if (e && !ui.matrix && ui.page < ENG_NPAGES) {
         project_t *p = eng_project();
         int first = page_first(ui.page), n = eng_algo_count(first);
         if (n) {
@@ -2456,10 +2613,10 @@ static void input(void)
             edit_rnd(param, e);
         } else if (ui.held_step >= 0) {
             edit_lock(param, e);
-        } else if (h >= 1 && h <= 15) {
+        } else if (h >= 1 && h <= 8) {
             cable_turn(key_source(h), param, e);
-        } else if (h == 17 || h == 18) { /* the fans: A n (or B n) on knob n */
-            cable_turn((h == 17 ? SRC_A1 : SRC_B1) + i, param, e);
+        } else if (h == 9 || h == 10) {  /* the fans: A n (or B n) on knob n */
+            cable_turn((h == 9 ? SRC_A1 : SRC_B1) + i, param, e);
         } else if (!held(B_GLO) || !edit_all(param, e)) {
             edit_param(param, e);
         }
@@ -2469,9 +2626,11 @@ static void input(void)
     /* lights: the page's button, PLAY, SEL in MOD mode, REC with the steps; the keys: the steps (the one playing
      * blinks), or held, or the sources on this page */
     {
-        static const uint8_t PAGE_BTN[PT_SYS + 1] = {B_EDIT, B_ENV, B_EDIT, B_LFO, B_LFO, B_SEQ, B_SEQ, B_SEQ, B_SEQ,
-                                                    B_HOME, B_FX, B_FX, B_HOME, B_SEQ, B_GLO, B_ARP, B_FX, B_FX,
-                                                    B_SEQ, B_GLO};
+        static const uint8_t PAGE_BTN[PT_SYS + 1] = {
+            [PT_PLAITS1] = B_EDIT, [PT_PLAITS2] = B_ENV, [PT_PLAITS3] = B_EDIT, [PT_TIDES1] = B_LFO, [PT_TIDES2] = B_LFO,
+            [PT_MIX] = B_HOME, [PT_PAN] = B_HOME, [PT_REVERB] = B_FX, [PT_RSEND] = B_FX, [PT_DELAY1] = B_FX,
+            [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
+            [PT_ARP] = B_ARP, [PT_WARPS1] = B_FX, [PT_WARPS2] = B_FX, [PT_RND] = B_SEQ, [PT_SYS] = B_GLO};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
         uint32_t bb = 0, kk = ui.keys;
         int pt = ptype(ui.page);
@@ -2485,17 +2644,19 @@ static void input(void)
             bb |= LED_PLAY_GREEN;
         if (dirty)
             bb |= 1u << B_SAVE;
-        if (ui.grid) {
-            int len = (int)(eng_project()->val[PG_STEP(ui.track) * 4 + 3] + 0.5f), st = eng_step_now(ui.track);
+        if (ui.grid) {                   /* the lane's steps, its key; OCT- OCT+ lit when there are pages that way */
+            int len = lane_len(ui.lane), st = eng_step_now(ui.lane);
             kk = 0;
             for (int i = 0; i < 16; i++)
-                if (eng_trig(ui.track, ui.spage * 16 + i))
+                if (eng_trig(ui.lane, ui.spage * 16 + i))
                     kk |= 1u << W[i];
             if (st >= ui.spage * 16 && st < ui.spage * 16 + 16)
                 kk ^= 1u << W[st - ui.spage * 16];
-            for (int j = 0; j < 4 && j * 16 < len; j++)
-                if (j == ui.spage)
-                    kk |= 1u << Bk[j];
+            kk |= 1u << Bk[ui.lane];
+            if (ui.spage > 0)
+                bb |= 1u << B_OCTDN;
+            if ((ui.spage + 1) * 16 < len)
+                bb |= 1u << B_OCTUP;
         } else if (ui.mod) {
             project_t *p = eng_project();
             for (int g = 0; g <= ENG_TRACKS; g++)
@@ -2528,6 +2689,7 @@ void app_host_reboot(void)
     ui.touched_k = -1;
     ui.held_step = ui.erec = -1;
     ui.prev_page = PG_TRACK(0, 0);
+    ui.fx_page = PG_DELAY(0);
     halted = save_hold = dirty = 0;
     eng_play(0);
 }
@@ -2551,7 +2713,8 @@ void app_frame(void)
         ui.msg_until = 0;
         ui.foot_shown[0] = -1;
     }
-    if (ui.full || now - ui.drawn_at >= 40u) {   /* 25 frames a second at most: what changed */
+    if (ui.full || ui.slide_dir || now - ui.drawn_at >= 20u) {   /* 50 frames a second at most (a slide: all it can):
+                                                                   * what changed */
         ui.drawn_at = now;
         draw();
     }

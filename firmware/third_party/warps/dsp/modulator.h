@@ -219,7 +219,7 @@ class Modulator {
   SampleRateConverter<SRC_UP, kOversampling, 72> src_up_[2];
   SampleRateConverter<SRC_DOWN, kOversampling, 72> src_down_;  // MIFM1: 72 taps (were 48), the 44.1 kHz pair
 
-  Vocoder vocoder_;
+  // Vocoder vocoder_;  MIFM1: no vocoder (64 KB; not played)
   QuadratureTransform quadrature_transform_[2];
   
   float internal_modulation_[kMaxBlockSize];
