@@ -30,8 +30,8 @@
  *   REC         KEY mode (the keys play the track) or STEP mode: the white keys a page's 16 steps, the first seven
  *               black keys the lanes (the four tracks, the delay, the reverb, Warps), OCT- OCT+ the pages; a step
  *               held and a knob turned: a lock (the lane's knobs); a step held and SEL: its locks cleared. Held: the
- *               lane erased (with GLO, 3 s: all of them, the pans to the middle, the sends, the cables, the random
- *               dose to 0). REC and SEL held: every cable erased (the modulations)
+ *               lane erased (with GLO, 3 s: everything as a new project has it but the four sounds, the tempo and
+ *               the scale). REC and SEL held: every cable erased (the modulations)
  *   PLAY        the clock runs or stops (twice quickly: stopped, every sound cut)   SAVE  held: the project saved
  *   SEL         MOD mode: hold an LFO's key, turn a knob: a cable, as deep as turned (to the left: upside down).
  *               Held: the track's cables (MATRIX)
@@ -2328,7 +2328,7 @@ static uint32_t hold_ms(int b, char *label, uint32_t max)
         text_cat(l, "ERASE ALL CABLES", sizeof l);
         ms = 1500u;
     } else if (b == B_REC && held(B_GLO) && ui.erec < 0 && ui.page != VP_SYS) {
-        text_cat(l, "ERASE ALL", sizeof l);   /* the patterns, randoms, cables, pans, sends, the random dose */
+        text_cat(l, "ERASE ALL", sizeof l);   /* all but the sounds, the tempo and the scale (erase_all) */
         ms = 3000u;
     } else if (b == B_SEL && ui.held_step < 0 && !ui.matrix) {
         text_cat(l, "MATRIX", sizeof l);
@@ -3117,20 +3117,29 @@ static void lane_erase(int l)            /* its pattern, its randoms; a track's 
         cables_erase(l);
 }
 
-static void erase_all(void)              /* GLO and REC held 3 s: every lane's pattern and randoms, every cable, the
-                                          * pans to the middle, the sends and the random dose to 0 (the levels, the
-                                          * sounds, the effects' knobs stay) */
+static void erase_all(void)              /* GLO and REC held 3 s: the project as a new one has it (INIT, eng_blank)
+                                          * but for the four tracks' sounds (their models and their three pages: the
+                                          * sound, the envelope, the pitch), the tempo, the scale and its root, and
+                                          * the machine's settings (the output, Warps' quality, the colours). So: no
+                                          * steps, locks, randoms, cables or Endless; the levels as new, the pans in
+                                          * the middle, no filter, no send, the grit off, the LFOs, the effects, the
+                                          * duck and the bus as new, no swing, the random dose at 0 */
 {
     project_t *p = eng_project();
-    for (int i = 0; i < ENG_LANES; i++)
-        lane_erase(i);
-    cables_erase(ENG_TRACKS);
-    for (int t = 0; t < ENG_TRACKS; t++) {
-        p->val[PG_PAN * 4 + t] = 0.0f;
-        p->val[PG_RSEND * 4 + t] = 0.0f;
-        p->val[PG_DSEND * 4 + t] = 0.0f;
-    }
-    p->dice = 0;
+    eng_blank(&scratch);
+    for (int t = 0; t < ENG_TRACKS; t++)
+        for (int pg = 0; pg < 3; pg++) {
+            for (int k = 0; k < 4; k++)
+                scratch.val[PG_TRACK(t, pg) * 4 + k] = p->val[PG_TRACK(t, pg) * 4 + k];
+            scratch.algo[PG_TRACK(t, pg)] = p->algo[PG_TRACK(t, pg)];
+        }
+    for (int k = 0; k < 3; k++)          /* TEMPO, SCALE, ROOT */
+        scratch.val[PG_GLOBAL * 4 + k] = p->val[PG_GLOBAL * 4 + k];
+    scratch.out_mode = p->out_mode;
+    scratch.warps_hq = p->warps_hq;
+    scratch.theme = p->theme;
+    *p = scratch;
+    eng_fresh();                         /* (no trig's lock or random left) */
 }
 
 static void button_long(int b)

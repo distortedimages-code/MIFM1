@@ -256,6 +256,14 @@ release REC
 release GLO
 wait 300
 shot 16t_all_erased.png
+tap HOME
+wait 300
+shot 16t2_mix_erased.png
+turn SELECT 2
+wait 400
+shot 16t3_eq_erased.png
+turn SELECT -2
+wait 300
 tap ARP
 wait 300
 shot 16u_endless_empty.png
