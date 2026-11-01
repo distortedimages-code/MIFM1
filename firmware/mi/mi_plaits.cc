@@ -19,6 +19,8 @@ struct PlaitsVoice {
   float pend_out[plaits::kBlockSize];   // a block rendered and not yet given out (see mp_render)
   float pend_aux[plaits::kBlockSize];
   uint32_t pend_at, pend_n;
+  float note;                           // the note as set: the patch takes it at once, or with the trig (below)
+  int note_wait;                        // Render calls until the voice sees a rise of the gate
 };
 
 const char* const kModelNames[MP_MODELS] = {
@@ -61,6 +63,8 @@ void mp_init(void* mem) {
   p->mod.trigger_patched = true;        // the LPG and the decay envelope follow our triggers
   p->mod.level_patched = false;
   p->gate = 0;
+  p->note = 48.0f;
+  p->note_wait = 0;
   p->pend_at = p->pend_n = 0;
   p->target[0] = p->target[1] = p->target[2] = 0.5f;
 }
@@ -69,7 +73,7 @@ void mp_set(void* v, int model, float note, float harmonics, float timbre, float
             float colour) {
   PlaitsVoice* p = static_cast<PlaitsVoice*>(v);
   p->patch.engine = model < 0 ? 0 : model >= MP_MODELS ? MP_MODELS - 1 : model;
-  p->patch.note = note;
+  p->note = note;
   p->target[0] = harmonics;
   p->target[1] = timbre;
   p->target[2] = morph;
@@ -77,7 +81,14 @@ void mp_set(void* v, int model, float note, float harmonics, float timbre, float
   p->patch.lpg_colour = colour;
 }
 
-void mp_gate(void* v, int high) { static_cast<PlaitsVoice*>(v)->gate = high; }
+// The voice sees its trigger 4 Render calls late (voice.cc: kTriggerDelay, for the CV that lags the gate on the
+// module), its note at once: a trig's new note would bend the last note's tail for a millisecond before the new one
+// starts, a crackle on the voices that ring (six-op FM, chords, string machine...). A rise's note waits for it.
+void mp_gate(void* v, int high) {
+  PlaitsVoice* p = static_cast<PlaitsVoice*>(v);
+  if (high && !p->gate) p->note_wait = plaits::kTriggerDelay;
+  p->gate = high;
+}
 
 void mp_amounts(void* v, float fm, float timbre, float morph) {
   PlaitsVoice* p = static_cast<PlaitsVoice*>(v);
@@ -95,6 +106,7 @@ void mp_render(void* v, float* out, float* aux, uint32_t n) {
   while (n) {
     if (p->pend_at == p->pend_n) {
       p->mod.trigger = p->gate ? 1.0f : 0.0f;   // the voice delays it by 1 ms and finds its edges
+      if (p->note_wait == 0 || --p->note_wait == 0) p->patch.note = p->note;
       p->patch.harmonics += 0.25f * (p->target[0] - p->patch.harmonics);
       p->patch.timbre += 0.25f * (p->target[1] - p->patch.timbre);
       p->patch.morph += 0.25f * (p->target[2] - p->patch.morph);

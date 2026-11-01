@@ -12,7 +12,8 @@
 //      over, a new key a new trig; a note is put in the global scale;
 //   5. each voice plays the block, cut where its gate changes (a rising gate first takes its trig's note);
 //      voices 3 and 4 on the second core while core 0 plays 1 and 2;
-//   6. the mixer: level and pan per track (the trig's), the sends, a soft limit on the sum.
+//   6. the mixer: level and pan per track (the trig's), the sends, a soft limit on the sum; the gains glide, sample
+//      by sample (a gain that jumps at a block's edge clicks).
 #include <stdint.h>
 #include <stddef.h>
 extern "C" {
@@ -155,6 +156,8 @@ uint8_t fg[ENG_TRACKS][kFrames];        // the gates the voices play, frame by f
 float fnote[ENG_TRACKS][kFrames];       // the note a rise in that frame takes
 uint32_t rng = 0x9E3779B9u;
 float pan_s[ENG_TRACKS];                // each track's pan, glided
+float lev_s[ENG_TRACKS], snd_s[ENG_TRACKS];   // its level and send, glided
+float mix_gl[ENG_TRACKS], mix_gr[ENG_TRACKS], mix_send[ENG_TRACKS], mix_ret;   // the gains the last block ended on
 // Endless: its clock, the note playing, ping-pong's way, recording
 float e_clk[ENG_TRACKS];
 int e_pos[ENG_TRACKS], e_dir[ENG_TRACKS], e_note[ENG_TRACKS];
@@ -959,22 +962,36 @@ void eng_render(float* l, float* r, uint32_t n) {
   uint32_t g = 0;
   for (int t = 0; t < ENG_TRACKS; ++t) g |= vgate[t] ? 1u << t : 0u;
   gates_now = g;
+  // the gains: each block's targets, glided (a trig's random pan, a lock on the level, a cable), and reached sample by
+  // sample over the block from the last block's: a gain that jumps at a block's edge is a click on what plays
   float gain[ENG_TRACKS], gl[ENG_TRACKS], gr[ENG_TRACKS], sends[ENG_TRACKS];
+  float dgl[ENG_TRACKS], dgr[ENG_TRACKS], dsend[ENG_TRACKS], inv = 1.0f / static_cast<float>(n);
   for (int t = 0; t < ENG_TRACKS; ++t) {
-    // the pan: equal power (a track as loud wherever it sits: 0.71 a side in the middle, 1 on one side), glided
-    // over ~10 ms so that a trig's random pan or a lock does not click on the last note's tail
-    pan_s[t] += (E(t, TP_PAN) - pan_s[t]) * 0.25f;
-    float a = (clampf(pan_s[t], -1.0f, 1.0f) + 1.0f) * 0.785398f, level = E(t, TP_LEVEL);
+    // the pan: equal power (a track as loud wherever it sits: 0.71 a side in the middle, 1 on one side)
+    pan_s[t] += (E(t, TP_PAN) - pan_s[t]) * 0.5f;
+    lev_s[t] += (E(t, TP_LEVEL) - lev_s[t]) * 0.5f;
+    snd_s[t] += (E(t, TP_SEND) - snd_s[t]) * 0.5f;
+    float a = (clampf(pan_s[t], -1.0f, 1.0f) + 1.0f) * 0.785398f, level = lev_s[t];
     gain[t] = level * 0.7f;
-    gl[t] = level * 0.85f * fm_cosf(a);
-    gr[t] = level * 0.85f * fm_sinf(a);
-    sends[t] = E(t, TP_SEND) * gain[t];   // post-fader, before the pan (the reverb is stereo itself)
+    float tl = level * 0.85f * fm_cosf(a), tr = level * 0.85f * fm_sinf(a);
+    float ts = snd_s[t] * gain[t];        // post-fader, before the pan (the reverb is stereo itself)
+    gl[t] = mix_gl[t];
+    gr[t] = mix_gr[t];
+    sends[t] = mix_send[t];
+    dgl[t] = (tl - gl[t]) * inv;
+    dgr[t] = (tr - gr[t]) * inv;
+    dsend[t] = (ts - sends[t]) * inv;
+    mix_gl[t] = tl;
+    mix_gr[t] = tr;
+    mix_send[t] = ts;
   }
   mrv_set(reverb, P(PG_FX(1), 0), P(PG_FX(1), 1), P(PG_FX(1), 2));
-  float ret = P(PG_FX(1), 3) * 1.6f, pk[ENG_TRACKS + 1] = {0, 0, 0, 0, 0};
+  float ret = mix_ret, dret = (P(PG_FX(1), 3) * 1.6f - mix_ret) * inv, pk[ENG_TRACKS + 1] = {0, 0, 0, 0, 0};
+  mix_ret = P(PG_FX(1), 3) * 1.6f;
   for (uint32_t i = 0; i < n; ++i) {
     float s = 0.0f;
     for (int t = 0; t < ENG_TRACKS; ++t) {
+      sends[t] += dsend[t];
       s += sends[t] * vbuf[t][i];
       float a = fm_fabsf(vbuf[t][i] * gain[t]);
       if (a > pk[t]) pk[t] = a;
@@ -985,9 +1002,12 @@ void eng_render(float* l, float* r, uint32_t n) {
   for (uint32_t i = 0; i < n; ++i) {
     float dl = 0.0f, dr = 0.0f;
     for (int t = 0; t < ENG_TRACKS; ++t) {
+      gl[t] += dgl[t];
+      gr[t] += dgr[t];
       dl += gl[t] * vbuf[t][i];
       dr += gr[t] * vbuf[t][i];
     }
+    ret += dret;
     float wl = ret * wet_l[i], wr = ret * wet_r[i];
     float a = fm_fabsf(wl) > fm_fabsf(wr) ? fm_fabsf(wl) : fm_fabsf(wr);
     if (a > pk[ENG_TRACKS]) pk[ENG_TRACKS] = a;

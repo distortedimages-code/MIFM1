@@ -15,7 +15,8 @@ la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
 - une **matrice de câbles** : 15 sources (Tides A1-A4, B1-B4, Marbles X1-X3, Y, T1-T3) vers presque tous les
   paramètres, 8 câbles par piste et 8 globaux ;
 - un **mixer simple** (un niveau et un pan par piste, à puissance constante : une piste garde le même volume où
-  qu'elle soit dans l'image) et un **départ réverbe** par piste vers la réverbe de Clouds
+  qu'elle soit dans l'image ; ses gains glissent échantillon par échantillon, un pan ou un niveau aléatoire ou locké
+  ne claque pas) et un **départ réverbe** par piste vers la réverbe de Clouds
   (ses lignes de retard en flottants : la réverbe du module les stockait sur 12 bits, d'où un grain et un souffle).
 
 Le granulaire de Clouds et Warps arrivent en v0.2 (sur le second cœur), les scènes et les projets multiples en v0.3. Rings a été
@@ -44,7 +45,7 @@ le seul logo du modèle et son nom (KICK, VIRTUAL ANALOG…), sur Tides la rampe
 gamme. Puis les quatre potards côte à côte, dans l'ordre des KNOB 1 à 4 : un anneau fin allumé de son début (ou de son
 milieu, avec « − + ») jusqu'à la valeur, la valeur dedans, un câble en pointillé et son point d'arrivée dans l'autre
 couleur, la source écrite dessous. En bas les quatre pistes, une LED chacune allumée par sa gate dans la couleur de son
-modèle ; sur les pages de Tides et de Marbles, leurs sorties, allumées à leur hauteur ; avec le séquenceur pas à pas,
+modèle, celle qu'on joue en défonce (un bloc de sa couleur, le texte en noir) ; sur les pages de Tides et de Marbles, leurs sorties, allumées à leur hauteur ; avec le séquenceur pas à pas,
 les 16 pas de la piste (allumés : un trig ; un point : des locks ; cerclé : celui qui joue).
 
 | Contrôle | Effet |

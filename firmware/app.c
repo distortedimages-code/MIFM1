@@ -1564,7 +1564,7 @@ static void draw_footer(void)
         foot_steps(ui.track);
     } else {
         for (int i = 0; i < 4; i++) {
-            int x = 10 + i * 57, act = mode ? lv[i] > 0 : i == ui.track;
+            int x = 12 + i * 57, act = mode ? lv[i] > 0 : i == ui.track;
             t[0] = 0;
             if (mode) {
                 text_cat(t, OUT[mode - 1][i], sizeof t);
@@ -1575,6 +1575,13 @@ static void draw_footer(void)
                 n[2] = 0;
                 text_cat(t, n, sizeof t);
                 text_cat(t, SHORT[p->algo[PG_TRACK(i, 0)] % 24], sizeof t);
+                if (act) {               /* the track played: knocked out of a block of its colour */
+                    uint16_t tc = track_accent(i);
+                    cv_rect(x - 4, 7, 53, 25, tc);   /* the rule's width over the four */
+                    disc((float)(x + 4), 19.0f, 3.6f, lv[i] ? BG : tint(BG, tc, 3));
+                    cv_text(x + 12, 11, text_w(&FONT_XS, t) <= 42 ? &FONT_XS : &FONT_T, t, BG);
+                    continue;
+                }
                 led((float)(x + 4), 19.0f, 3.6f, track_accent(i), lv[i]);
             }
             cv_text(x + 12, 11, text_w(&FONT_XS, t) <= 42 ? &FONT_XS : &FONT_T, t, act ? C_WHITE : DIM);

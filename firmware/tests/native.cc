@@ -320,6 +320,55 @@ int main(int argc, char** argv) {
     ++failures, printf("FAIL: Endless\n");
   eng_endless_clear(0);
 
+  // 11. no clicks: a smooth voice (HARMONIC, long decay) on every sixteenth, its pan, level and tune random at each
+  // trig. A click is a sample whose second difference stands far above its neighbours' (a gain or a pitch that jumps
+  // at a block's edge); 0.1.8's mixer made them by the thousand, ~5000 times its neighbours
+  {
+    eng_play(0);
+    eng_blank(p);
+    p->val[PG_GLOBAL * 4] = SEQ_STEPS;
+    p->algo[PG_TRACK(0, 0)] = 12;
+    p->val[eng_track_param(0, TP_DECAY)] = 0.75f;
+    p->val[eng_track_param(0, TP_SEND)] = 0.0f;
+    for (int s = 0; s < 16; ++s) eng_trig_set(0, s, 1);
+    p->rnd[0][TP_PAN] = 100;
+    p->rnd[0][TP_NOTE] = 100;
+    p->rnd[0][TP_RATCHET] = 100;
+    p->lock[0].ts = 0 << 6 | 4;                           // a lock on the level, step 5: half
+    p->lock[0].tp = TP_LEVEL;
+    p->lock[0].v = 128;
+    for (int b = 0; b < 400; ++b) eng_render(l, r, n);
+    eng_play(1);
+    static float d2[2][44100 * 4];
+    float pl = 0, pr = 0, ppl = 0, ppr = 0;
+    const int nb = 44100 * 4 / static_cast<int>(n);
+    for (int b = 0; b < nb; ++b) {
+      eng_render(l, r, n);
+      for (uint32_t i = 0; i < n; ++i) {
+        d2[0][b * n + i] = l[i] - 2.0f * pl + ppl;
+        d2[1][b * n + i] = r[i] - 2.0f * pr + ppr;
+        ppl = pl, pl = l[i], ppr = pr, pr = r[i];
+      }
+    }
+    eng_play(0);
+    double worst = 0;
+    for (int c = 0; c < 2; ++c) {
+      double acc = 0;
+      const int W = 88;                                   // 2 ms around
+      for (int i = 2; i < nb * static_cast<int>(n); ++i) {
+        acc += std::fabs(d2[c][i]);
+        if (i >= W + 2) acc -= std::fabs(d2[c][i - W]);
+        if (i < W + 3) continue;
+        double q = std::fabs(d2[c][i]) / ((acc - std::fabs(d2[c][i])) / (W - 1) + 1e-5);
+        if (std::fabs(d2[c][i]) > 0.003 && q > worst) worst = q;
+      }
+    }
+    printf("random pan, tune and ratchets, a level lock: the worst click %.0f times its neighbours (under 200: none)\n",
+           worst);
+    if (worst > 200.0) ++failures, printf("FAIL: clicks\n");
+    eng_defaults(p);
+  }
+
   // 9. v0.1's project (version 2) read into this version's
   {
     static uint8_t buf[sizeof(project_t)];
