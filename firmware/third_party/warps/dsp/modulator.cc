@@ -26,9 +26,6 @@
 //
 // Modulator.
 
-#if defined(MIFM1_RAM_CODE) && defined(__clang__)  // MIFM1: the unit's code in RAM (fm1-base's .c1_text)
-#pragma clang section text=".c1_text"
-#endif
 #include "warps/dsp/modulator.h"
 
 #include <algorithm>

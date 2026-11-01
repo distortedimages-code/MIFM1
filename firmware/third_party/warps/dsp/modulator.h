@@ -29,6 +29,14 @@
 #ifndef WARPS_DSP_MODULATOR_H_
 #define WARPS_DSP_MODULATOR_H_
 
+#ifndef MIFM1_RAM
+#if defined(MIFM1_RAM_CODE)  // MIFM1: in RAM on the FM-1 (fm1-base's .c1_text: copied at boot)
+#define MIFM1_RAM __attribute__((section(".c1_text")))
+#else
+#define MIFM1_RAM
+#endif
+#endif
+
 #include "stmlib/stmlib.h"
 #include "stmlib/dsp/dsp.h"
 #include "stmlib/dsp/parameter_interpolator.h"
@@ -58,7 +66,7 @@ class SaturatingAmplifier {
     drive_ = 0.0f;
   }
   
-  void Process(
+  MIFM1_RAM void Process(
       float drive,
       float limit,
       short* in,
@@ -141,8 +149,8 @@ class Modulator {
   ~Modulator() { }
 
   void Init(float sample_rate);
-  void Process(ShortFrame* input, ShortFrame* output, size_t size);
-  void ProcessEasterEgg(ShortFrame* input, ShortFrame* output, size_t size);
+  MIFM1_RAM void Process(ShortFrame* input, ShortFrame* output, size_t size);
+  MIFM1_RAM void ProcessEasterEgg(ShortFrame* input, ShortFrame* output, size_t size);
   inline Parameters* mutable_parameters() { return &parameters_; }
   inline const Parameters& parameters() { return parameters_; }
   
@@ -154,7 +162,7 @@ class Modulator {
   
  private:
   template<XmodAlgorithm algorithm_1, XmodAlgorithm algorithm_2>
-  void ProcessXmod(
+  MIFM1_RAM void ProcessXmod(
       float balance,
       float balance_end,
       float parameter,

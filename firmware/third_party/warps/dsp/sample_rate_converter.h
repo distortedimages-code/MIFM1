@@ -28,6 +28,13 @@
 
 #ifndef WARPS_DSP_SAMPLE_RATE_CONVERTER_H_
 #define WARPS_DSP_SAMPLE_RATE_CONVERTER_H_
+#ifndef MIFM1_RAM  // MIFM1: in RAM on the FM-1 (modulator.h)
+#if defined(MIFM1_RAM_CODE)
+#define MIFM1_RAM __attribute__((section(".c1_text")))
+#else
+#define MIFM1_RAM
+#endif
+#endif
 
 #include "stmlib/stmlib.h"
 
@@ -178,7 +185,7 @@ class SampleRateConverter<SRC_UP, ratio, filter_size> {
 
   inline int32_t delay() const { return filter_size / ratio / 2; }
 
-  inline void Process(const float* in, float* out, size_t input_size) {
+  MIFM1_RAM inline void Process(const float* in, float* out, size_t input_size) {
     SRC_FIR<SRC_UP, ratio, filter_size> ir;
     FilterState<N> x;
     x.Load(x_);
@@ -215,7 +222,7 @@ class SampleRateConverter<SRC_DOWN, ratio, filter_size> {
 
   inline int32_t delay() const { return filter_size / 2; }
 
-  inline void Process(const float* in, float* out, size_t input_size) {
+  MIFM1_RAM inline void Process(const float* in, float* out, size_t input_size) {
     // When downsampling, the number of input samples must be a multiple
     // of the downsampling ratio.
     if ((input_size % ratio) != 0) {
