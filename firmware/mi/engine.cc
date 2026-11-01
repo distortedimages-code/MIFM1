@@ -154,6 +154,7 @@ float tnote[ENG_TRACKS];                // its note
 uint8_t fg[ENG_TRACKS][kFrames];        // the gates the voices play, frame by frame
 float fnote[ENG_TRACKS][kFrames];       // the note a rise in that frame takes
 uint32_t rng = 0x9E3779B9u;
+float pan_s[ENG_TRACKS];                // each track's pan, glided
 // Endless: its clock, the note playing, ping-pong's way, recording
 float e_clk[ENG_TRACKS];
 int e_pos[ENG_TRACKS], e_dir[ENG_TRACKS], e_note[ENG_TRACKS];
@@ -731,7 +732,7 @@ void eng_defaults(project_t* p) {
   cable(p, 3, 1, SRC_B2, PG_TRACK(3, 0) * 4 + 2, 30);   // and B2 -> TIMBRE (brightness)
   // the step sequencer (SEQUENCER on STEPS): a pattern a track, a few locks; the global scale: C minor
   for (int t = 0; t < ENG_TRACKS; ++t) {
-    p->val[PG_PAN * 4 + t] = 0.0f;
+    p->val[PG_PAN * 4 + t] = t == 2 ? -0.3f : t == 3 ? 0.35f : 0.0f;   // the kick and the bass in the middle
     p->val[PG_STEP(t) * 4 + 0] = 0.0f;
     p->val[PG_STEP(t) * 4 + 1] = 1.0f;
     p->val[PG_STEP(t) * 4 + 2] = 1.0f;
@@ -776,6 +777,7 @@ void eng_blank(project_t* p) {
     p->algo[PG_TRACK(t, 0)] = 8;                   // VIRTUAL ANALOG
     p->val[PG_MIX * 4 + t] = 0.75f;
     p->val[PG_FX(0) * 4 + t] = 0.0f;
+    p->val[PG_PAN * 4 + t] = 0.0f;
   }
   p->algo[PG_MARBLES(2)] = 0;                      // major
   p->val[PG_GLOBAL * 4 + 2] = 1.0f;                // the global scale too
@@ -959,11 +961,14 @@ void eng_render(float* l, float* r, uint32_t n) {
   gates_now = g;
   float gain[ENG_TRACKS], gl[ENG_TRACKS], gr[ENG_TRACKS], sends[ENG_TRACKS];
   for (int t = 0; t < ENG_TRACKS; ++t) {
-    float pan = E(t, TP_PAN);
-    gain[t] = E(t, TP_LEVEL) * 0.7f;
-    gl[t] = gain[t] * (pan > 0.0f ? 1.0f - pan : 1.0f);
-    gr[t] = gain[t] * (pan < 0.0f ? 1.0f + pan : 1.0f);
-    sends[t] = E(t, TP_SEND) * gain[t];   // post-fader
+    // the pan: equal power (a track as loud wherever it sits: 0.71 a side in the middle, 1 on one side), glided
+    // over ~10 ms so that a trig's random pan or a lock does not click on the last note's tail
+    pan_s[t] += (E(t, TP_PAN) - pan_s[t]) * 0.25f;
+    float a = (clampf(pan_s[t], -1.0f, 1.0f) + 1.0f) * 0.785398f, level = E(t, TP_LEVEL);
+    gain[t] = level * 0.7f;
+    gl[t] = level * 0.85f * fm_cosf(a);
+    gr[t] = level * 0.85f * fm_sinf(a);
+    sends[t] = E(t, TP_SEND) * gain[t];   // post-fader, before the pan (the reverb is stereo itself)
   }
   mrv_set(reverb, P(PG_FX(1), 0), P(PG_FX(1), 1), P(PG_FX(1), 2));
   float ret = P(PG_FX(1), 3) * 1.6f, pk[ENG_TRACKS + 1] = {0, 0, 0, 0, 0};

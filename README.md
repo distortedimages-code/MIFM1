@@ -14,7 +14,8 @@ la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
 - **deux Tides 2** comme modulateurs (8 sorties) ;
 - une **matrice de câbles** : 15 sources (Tides A1-A4, B1-B4, Marbles X1-X3, Y, T1-T3) vers presque tous les
   paramètres, 8 câbles par piste et 8 globaux ;
-- un **mixer simple** (un niveau et un pan par piste) et un **départ réverbe** par piste vers la réverbe de Clouds
+- un **mixer simple** (un niveau et un pan par piste, à puissance constante : une piste garde le même volume où
+  qu'elle soit dans l'image) et un **départ réverbe** par piste vers la réverbe de Clouds
   (ses lignes de retard en flottants : la réverbe du module les stockait sur 12 bits, d'où un grain et un souffle).
 
 Le granulaire de Clouds et Warps arrivent en v0.2 (sur le second cœur), les scènes et les projets multiples en v0.3. Rings a été
@@ -30,7 +31,7 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 
 Un projet neuf joue déjà (PLAY) : piste 1 une grosse caisse sur chaque temps (T2), piste 2 une basse VA sur T1 et
 X1 ouverte par Tides A, piste 3 un FM 2 opérateurs sur T3 et X2 modulé par Tides B, piste 4 un résonateur MODAL sur
-T3 et X3, les pistes 3 et 4 envoyées dans la réverbe. Marbles à 120 BPM, gamme mineure, DÉJÀ VU à midi sur 8 pas.
+T3 et X3, les pistes 3 et 4 envoyées dans la réverbe et placées un peu à gauche et un peu à droite. Marbles à 120 BPM, gamme mineure, DÉJÀ VU à midi sur 8 pas.
 
 **Repartir de zéro (INIT)** : GLO, SELECT (la page PROJECT), puis **K1** choisit le projet et **REC tenu** le charge : *New* (4 pistes
 Plaits sur VIRTUAL ANALOG, tous les potards à midi, jouées par t1, t2, t3 et t2 avec X1, X2, X3 et Y, aucun câble,
