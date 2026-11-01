@@ -268,8 +268,11 @@ float meter[ENG_TRACKS + 2];
 int8_t hist[NSRC][ENG_HIST];
 uint32_t hist_at, hist_div;
 
-volatile uint32_t load0, load1, peak, peak_hold_blocks, c1_ticks;
+volatile uint32_t load0, load1, peak, peak_hold_blocks;
+volatile uint32_t c1_job_ticks[2];      // core 1's time on the block's first and second job (written by it alone)
+float prep_cost = 1.0f;                 // core 0's preparation of a block (ticks, averaged): the sequencer, the cables
 volatile int on_core1_last;
+uint32_t last_voices;                   // the voices the last block played (core 1's first job's guess)
 
 float sat(float x) {                    // a soft limit: tanh's shape up to |x| = 3, then flat
   x = clampf(x, -3.0f, 3.0f);
@@ -845,29 +848,49 @@ void run_task(int i, uint32_t n) {
   task_ticks[i] = plat_ticks24() - q;
 }
 
-void core1_job(uint32_t mask) {         // the second core's tasks (bit i: task i)
+// the second core's job: tasks (bit i: task i), the block's first or second job (bit 8)
+void core1_job(uint32_t arg) {
   uint32_t t0 = plat_ticks24();
   for (int i = 0; i < kTasks; ++i)
-    if ((mask >> i) & 1u) run_task(i, job_n);
-  c1_ticks = plat_ticks24() - t0;
+    if ((arg >> i) & 1u) run_task(i, job_n);
+  c1_job_ticks[(arg >> 8) & 1u] = plat_ticks24() - t0;
 }
 
-uint32_t split_tasks(uint32_t todo) {   // the second core's share of todo: the busier core's least
-  float cost[kTasks], best = 1e30f;
+float cost_of(uint32_t m) {
+  float c = 0.0f;
+  for (int i = 0; i < kTasks; ++i)
+    if ((m >> i) & 1u) c += task_cost[i];
+  return c;
+}
+
+// the voices core 1 plays (its share of v), it free at a, core 0 at b: the busier core's least (16 ways at most)
+uint32_t split_voices(uint32_t v, float a, float b, float* worst) {
+  float best = 1e30f;
   uint32_t pick = 0;
-  // (64 ways at most)
-  for (int i = 0; i < kTasks; ++i) cost[i] = (todo >> i) & 1u ? task_cost[i] : 0.0f;
-  for (uint32_t m = 0; m < (1u << kTasks); ++m) {
-    if (m & ~todo) continue;
-    float a = 0.0f, b = 0.0f;
-    for (int i = 0; i < kTasks; ++i) {
-      if ((m >> i) & 1u) b += cost[i];
-      else a += cost[i];
-    }
-    float worst = a > b ? a : b;
-    if (worst < best - 0.5f) {           // (a tie: the first found, so the split stays put)
-      best = worst;
+  for (uint32_t m = 0; m < (1u << ENG_TRACKS); ++m) {
+    if (m & ~v) continue;
+    float c1 = a + cost_of(m), c0 = b + cost_of(v & ~m), w = c0 > c1 ? c0 : c1;
+    if (w < best - 0.5f) {               // (a tie: the first found, so the split stays put)
+      best = w;
       pick = m;
+    }
+  }
+  if (worst) *worst = best;
+  return pick;
+}
+
+// what core 1 takes at once, before core 0 has prepared the block: some of the early tasks (the effects, Warps:
+// they play the last block, nothing of this one), so that it reaches the voices when core 0 does (the voices: the
+// last block's, a guess)
+uint32_t split_early(uint32_t early, uint32_t voices) {
+  float best = 1e30f, w;
+  uint32_t pick = 0;
+  for (uint32_t a = 0; a < (1u << kTasks); ++a) {
+    if (a & ~early) continue;
+    split_voices(voices, cost_of(a), prep_cost + cost_of(early & ~a), &w);
+    if (w < best - 0.5f) {
+      best = w;
+      pick = a;
     }
   }
   return pick;
@@ -1674,6 +1697,23 @@ void eng_render(float* l, float* r, uint32_t n) {
     return;
   }
   uint32_t t0 = plat_ticks24();
+  // 0. what can start at once, on core 1 while core 0 prepares the block: the effects (the last block's mix) and
+  // Warps (the last block's carrier and modulator), their knobs set at the end of the last block
+  job_n = n;
+  uint32_t early = fx_n ? 1u << kTaskFx : 0u;
+  if (w_job) {
+    early |= 1u << kTaskWarps;
+    warps_calls = mw_calls(warps, n);
+    task_cost[kTaskWarps] = warps_chunk_cost * static_cast<float>(warps_calls);
+  }
+  int c1ok = use_core1 && plat_cpu2_on(), jobs = 0;
+  uint32_t ja = c1ok ? split_early(early, last_voices) : 0u, pending = 0;   // core 1's first job, its job outstanding
+  if (ja && plat_cpu2_run(core1_job, ja)) {
+    pending = ja;
+    jobs = 1;
+  } else {
+    ja = 0;
+  }
   if (back_pending) {                   // ALL undone: in the block whose next sixteenth starts a bar (or stopped)
     if (!playing || restart || ((tick + 1) % 16 == 0 && six_len(step_len_now()) - step_clk <= static_cast<float>(n))) {
       for (int i = 0; i < ENG_NPARAMS; ++i) proj.val[i] = back_val[i];
@@ -1696,50 +1736,70 @@ void eng_render(float* l, float* r, uint32_t n) {
     set_voice(t);
     set_grit(t);
   }
-  set_warps();
-  // the effects' and the master bus's knobs (they play the last block's mix)
-  mrv_set(reverb, E(LANE_REVERB, 0), E(LANE_REVERB, 1), E(LANE_REVERB, 2));
-  int div = iround(E(LANE_DELAY, 0));
-  mdl_set(delay, step_len_now() * kDivMult[div < 0 ? 0 : div >= kDivs ? kDivs - 1 : div], E(LANE_DELAY, 1),
-          E(LANE_DELAY, 2), E(LANE_DELAY, 4), E(LANE_DELAY, 3), iround(E(LANE_DELAY, 5)), E(LANE_DELAY, 6));
-  mms_mode(master, proj.algo[PG_COMP] > MB_OTT ? static_cast<int>(MB_COMP) : proj.algo[PG_COMP]);
-  mms_comp(master, comp_threshold(P(PG_COMP, 0)), comp_ratio(P(PG_COMP, 1)), comp_release(P(PG_COMP, 2)),
-           P(PG_COMP, 3) * 12.0f);
-  mms_ott(master, P(PG_OTT, 0), ott_time(P(PG_OTT, 1)), P(PG_OTT, 2) * 12.0f, P(PG_OTT, 3) * 12.0f);
-  // 4. the voices (those not resting), Warps (the last block's), the effects (the last block's mix), split between
-  // the cores
-  job_n = n;
-  uint32_t todo = 0, rest = 0;
+  // 4. the voices (those not resting) on both cores: core 1's handed over as soon as it is done with its first job;
+  // core 0 meanwhile plays the early tasks it kept, then its voices, the costliest first
+  uint32_t v = 0, rest = 0;
   for (int t = 0; t < ENG_TRACKS; ++t) {
     if (voice_rests(t)) rest |= 1u << t;
-    else todo |= 1u << t;
+    else v |= 1u << t;
   }
-  if (w_job) {
-    todo |= 1u << kTaskWarps;
-    warps_calls = mw_calls(warps, n);
-    task_cost[kTaskWarps] = warps_chunk_cost * static_cast<float>(warps_calls);
-  }
-  if (fx_n) todo |= 1u << kTaskFx;
   for (int t = 0; t < ENG_TRACKS; ++t)
     if ((rest >> t) & 1u) render_voice(t, n);   // (silence: nothing to share)
+  last_voices = v;
+  prep_cost += (static_cast<float>(plat_ticks24() - t0) - prep_cost) * 0.125f;
 #ifdef ENG_PROFILE
   eng_prof[0] += plat_ticks24() - t0;
 #endif
-  uint32_t mask = split_tasks(todo);
-  int on_core1 = use_core1 && plat_cpu2_on() ? plat_cpu2_run(core1_job, mask) : 0;
-  for (int i = 0; i < kTasks; ++i)
-    if (((todo & ~mask) >> i) & 1u) run_task(i, n);
-  uint32_t c0 = plat_ticks24() - t0, c1 = 0;
-  if (on_core1) {
-    if (plat_cpu2_wait() != 0) {        // given up meanwhile: the job was dropped, do it here
-      on_core1 = 0;
-      core1_job(mask);
+  uint32_t jb = c1ok ? split_voices(v, cost_of(ja), prep_cost + cost_of(early & ~ja), 0) : 0u;
+  uint32_t mine = (early & ~ja) | (v & ~jb), done = 0;
+  auto hand_b = [&]() -> int {          // core 1's voices to it, if it is free (1: handed)
+    if (!c1ok) return 0;
+    if (pending) {
+      if (plat_cpu2_busy()) return 0;   // (still on its first job)
+      if (plat_cpu2_wait() != 0) {      // given up meanwhile: its job dropped, played here; core 1's voices too
+        for (int i = 0; i < kTasks; ++i)
+          if ((pending >> i) & 1u) run_task(i, n);
+        c1ok = 0;
+        jobs = 0;
+        pending = 0;
+        return 0;
+      }
+      pending = 0;
     }
-    c1 = c1_ticks;
-  } else {
-    core1_job(mask);
-    c0 = plat_ticks24() - t0;
+    if (!plat_cpu2_run(core1_job, jb | 1u << 8)) return 0;
+    pending = jb;
+    jobs |= 2;
+    return 1;
+  };
+  while (mine) {                        // core 0's own: the early ones first, then the voices by cost
+    int pick = -1;
+    for (int i = kTasks - 1; i >= 0; --i) {
+      if (!((mine >> i) & 1u)) continue;
+      if (pick < 0 || (i < ENG_TRACKS && pick < ENG_TRACKS && task_cost[i] > task_cost[pick])) pick = i;
+    }
+    if (jb && !(jobs & 2)) hand_b();
+    run_task(pick, n);
+    mine &= ~(1u << pick);
+    done |= 1u << pick;
   }
+  while (jb && !(jobs & 2)) {           // core 1 still busy (or gone): its voices one by one here, the rest to it as
+    if (hand_b()) break;                // soon as it is free
+    int pick = -1;
+    for (int i = 0; i < ENG_TRACKS; ++i)
+      if (((jb >> i) & 1u) && (pick < 0 || task_cost[i] < task_cost[pick])) pick = i;
+    run_task(pick, n);
+    jb &= ~(1u << pick);
+  }
+  uint32_t c0 = plat_ticks24() - t0, c1 = 0;
+  if (pending && plat_cpu2_wait() != 0) {   // given up meanwhile: the job dropped, played here
+    for (int i = 0; i < kTasks; ++i)
+      if ((pending >> i) & 1u) run_task(i, n);
+    jobs = 0;
+  }
+  if (jobs & 1) c1 += c1_job_ticks[0];
+  if (jobs & 2) c1 += c1_job_ticks[1];
+  int on_core1 = jobs != 0;
+  uint32_t todo = early | v;
   on_core1_last = on_core1;
 #ifdef ENG_PROFILE
   uint32_t tj = plat_ticks24();
@@ -1805,10 +1865,21 @@ void eng_render(float* l, float* r, uint32_t n) {
   fx_dret1 = dv;
   mix_ret = rv;
   mix_dret = dv;
+  // the next block's early tasks' knobs: Warps' (and whether it runs), the effects' and the master bus's (they will
+  // play this block's mix)
+  set_warps();
+  mrv_set(reverb, E(LANE_REVERB, 0), E(LANE_REVERB, 1), E(LANE_REVERB, 2));
+  int div = iround(E(LANE_DELAY, 0));
+  mdl_set(delay, step_len_now() * kDivMult[div < 0 ? 0 : div >= kDivs ? kDivs - 1 : div], E(LANE_DELAY, 1),
+          E(LANE_DELAY, 2), E(LANE_DELAY, 4), E(LANE_DELAY, 3), iround(E(LANE_DELAY, 5)), E(LANE_DELAY, 6));
+  mms_mode(master, proj.algo[PG_COMP] > MB_OTT ? static_cast<int>(MB_COMP) : proj.algo[PG_COMP]);
+  mms_comp(master, comp_threshold(P(PG_COMP, 0)), comp_ratio(P(PG_COMP, 1)), comp_release(P(PG_COMP, 2)),
+           P(PG_COMP, 3) * 12.0f);
+  mms_ott(master, P(PG_OTT, 0), ott_time(P(PG_OTT, 1)), P(PG_OTT, 2) * 12.0f, P(PG_OTT, 3) * 12.0f);
   {
-    float(*v)[kN] = vbuf;               // the voices' next block where the mix takes this one
+    float(*vb)[kN] = vbuf;              // the voices' next block where the mix takes this one
     vbuf = mbuf;
-    mbuf = v;
+    mbuf = vb;
     float *o = w_out, *d = w_dry;       // and Warps'
     w_out = m_out;
     w_dry = m_dry;
@@ -1849,6 +1920,7 @@ float eng_src(int s) { return src_value(s); }
 uint32_t eng_gates(void) { return gates_now; }
 int eng_note(int t) { return t >= 0 && t < ENG_TRACKS ? static_cast<int>(vnote[t] + 0.5f) : 0; }
 uint32_t eng_load(int core) { return core ? load1 : load0; }
+uint32_t eng_prep_load(void) { return ready ? pct10(static_cast<uint32_t>(prep_cost), kN) : 0u; }
 uint32_t eng_peak(void) { return peak; }
 float eng_meter(int t) { return t >= 0 && t < ENG_TRACKS + 2 ? meter[t] : 0.0f; }
 float eng_duck(void) { return duck_s; }

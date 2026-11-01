@@ -25,9 +25,22 @@ uint32_t plat_ticks24(void) {
   clock_gettime(CLOCK_MONOTONIC, &t);
   return static_cast<uint32_t>(static_cast<uint64_t>(t.tv_sec) * 24000000u + t.tv_nsec / 1000u * 24u);
 }
-int plat_cpu2_on(void) { return 0; }
-int plat_cpu2_run(void (*)(uint32_t), uint32_t) { return 0; }
-int plat_cpu2_wait(void) { return 0; }
+static int cpu2_sim = 1;                 /* the second core, as fm1-base's simulator has it: a job runs at once, in order
+                                          * (MIFM1_ONE_CORE=1: none; MIFM1_LAZY=1: it runs when waited for, a late core.
+                                          * The sound is the same, but for the order the voices draw from Plaits' one
+                                          * random generator in: it follows the costs measured) */
+int plat_cpu2_on(void) { return cpu2_sim; }
+static void (*lazy_fn)(uint32_t);
+static uint32_t lazy_arg;
+static int lazy = 0;
+int plat_cpu2_run(void (*fn)(uint32_t), uint32_t a) {
+  if (!cpu2_sim) return 0;
+  if (lazy) { lazy_fn = fn; lazy_arg = a; return 1; }
+  fn(a);
+  return 1;
+}
+int plat_cpu2_wait(void) { if (lazy && lazy_fn) { void (*f)(uint32_t) = lazy_fn; lazy_fn = 0; f(lazy_arg); } return 0; }
+int plat_cpu2_busy(void) { return 0; }
 }
 
 static void put32(FILE* f, uint32_t v) { fwrite(&v, 4, 1, f); }
@@ -55,6 +68,8 @@ struct Wav {
 
 int main(int argc, char** argv) {
   const char* dir = argc > 1 ? argv[1] : ".";
+  if (getenv("MIFM1_ONE_CORE")) cpu2_sim = 0;
+  if (getenv("MIFM1_LAZY")) lazy = 1;
   float seconds = argc > 2 ? static_cast<float>(atof(argv[2])) : 16.0f;
   const uint32_t n = 128, blocks = static_cast<uint32_t>(seconds * 44100.0f / n);
   int failures = 0;

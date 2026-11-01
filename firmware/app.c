@@ -1991,6 +1991,10 @@ static void draw_machine(int force)      /* the machine, where the knobs are */
                 text_cat(v, cpu2_ok ? "paused" : "off", sizeof v);
                 c = AC2;
             }
+            text_cat(v, "  prep ", sizeof v);   /* core 0's preparation of a block (the sequencer, the cables, Tides) */
+            int_text((int32_t)((eng_prep_load() + 5u) / 10u), n);
+            text_cat(v, n, sizeof v);
+            text_cat(v, "%", sizeof v);
             break;
         }
         case 1:

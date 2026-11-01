@@ -197,6 +197,7 @@ float eng_src(int src);                  /* a source's value: -1..1 */
 uint32_t eng_gates(void);                /* bit t: track t's gate now */
 int eng_note(int track);                 /* its note now (MIDI number) */
 uint32_t eng_load(int core);             /* the render's time on core 0 or 1, in tenths of % of the block (smoothed) */
+uint32_t eng_prep_load(void);            /* core 0's preparation of a block (the sequencer, the cables, Tides), the same */
 uint32_t eng_peak(void);                 /* the worst total of the last second, same unit */
 uint32_t eng_task_load(int task);        /* a voice's (0..3, while it plays), Warps' (4) or the effects' and the
                                           * master bus's (5) time, averaged, same unit */
