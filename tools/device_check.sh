@@ -43,6 +43,7 @@ int plat_cpu2_on(void) { return 0; }
 int plat_cpu2_run(void (*fn)(uint32_t), uint32_t a) { (void)fn; (void)a; return 0; }
 int plat_cpu2_wait(void) { return 0; }
 int plat_cpu2_busy(void) { return 0; }
+void plat_cpu2_sync(void) {}
 int eng_init(void); void eng_play(int); void eng_render(float *, float *, uint32_t);
 const void *mi_res_where(void);
 float out_l[128], out_r[128];

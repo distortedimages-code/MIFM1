@@ -41,6 +41,7 @@ int plat_cpu2_run(void (*fn)(uint32_t), uint32_t a) {
 }
 int plat_cpu2_wait(void) { if (lazy && lazy_fn) { void (*f)(uint32_t) = lazy_fn; lazy_fn = 0; f(lazy_arg); } return 0; }
 int plat_cpu2_busy(void) { return 0; }
+void plat_cpu2_sync(void) {}
 }
 
 static void put32(FILE* f, uint32_t v) { fwrite(&v, 4, 1, f); }

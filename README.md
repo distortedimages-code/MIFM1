@@ -124,7 +124,9 @@ quatre voix, Warps et les effets se répartissent entre les deux cœurs selon ce
 bloc (une voix MODAL ou STRING coûte dix fois une VIRTUAL ANALOG) : le mixer, les effets et le bus master jouent pour
 cela un bloc derrière les voix (2,9 ms de latence en sortie), pendant que les voix jouent le bloc suivant : le cœur 1
 les commence dès le début du bloc, pendant que le cœur 0 le prépare (le séquenceur, les LFO, les câbles : « prep »
-sur la page machine), puis les deux cœurs se partagent les voix. Une voix silencieuse depuis un moment, sa note finie, se repose jusqu'à son
+sur la page machine), puis les deux cœurs se partagent les voix : le cœur 0 propose les siennes au cœur 1 dès que le bloc est prêt, et
+le cœur 1 les prend à la fin de son premier travail, sans attendre que le cœur 0 ait fini une de ses voix pour les
+lui passer (sur le stress test, cette attente faisait monter le pic de 70 à 96 %). Une voix silencieuse depuis un moment, sa note finie, se repose jusqu'à son
 trig suivant (elle ne coûte plus rien).
 
 **Le mode STEP** (REC) : les 16 touches blanches sont les pas de la page (allumés : un trig, celui qui joue

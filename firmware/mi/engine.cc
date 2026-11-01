@@ -963,11 +963,27 @@ void run_task(int i, uint32_t n) {
   task_ticks[i] = plat_ticks24() - q;
 }
 
-// the second core's job: tasks (bit i: task i), the block's first or second job (bit 8)
+// core 1's voices, offered while it plays its first job (core 0 posts them once it has prepared the block): it takes
+// them as that job ends, instead of waiting idle for core 0 to hand them over between two of its own tasks (on the
+// FM-1, up to a voice's time: the stress test's peak was 96 % with both cores busy 70 %). The offer carries the
+// block's number and its complement (a misread fails it: then core 0 hands them over, or plays them); core 1 says
+// it took them (claim), read once its job is done
+volatile uint32_t offer, offer_chk, claim, block_no;
+
+// the second core's job: tasks (bit i: task i), the block's first or second job (bit 8), the block's number (bits 16..)
 void core1_job(uint32_t arg) {
   uint32_t t0 = plat_ticks24();
   for (int i = 0; i < kTasks; ++i)
     if ((arg >> i) & 1u) run_task(i, job_n);
+  if (!((arg >> 8) & 1u)) {             // the first job: the voices offered meanwhile, at once
+    plat_cpu2_sync();
+    uint32_t o = offer, k = offer_chk, b = arg >> 16;
+    if (o == ~k && (o >> 8) == b && (o & 0xF0u) == 0u && (o & 0x0Fu)) {
+      claim = b;
+      for (int i = 0; i < ENG_TRACKS; ++i)
+        if ((o >> i) & 1u) run_task(i, job_n);
+    }
+  }
   c1_job_ticks[(arg >> 8) & 1u] = plat_ticks24() - t0;
 }
 
@@ -2069,7 +2085,9 @@ void eng_render(float* l, float* r, uint32_t n) {
   }
   int c1ok = use_core1 && plat_cpu2_on(), jobs = 0;
   uint32_t ja = c1ok ? split_early(early, last_voices) : 0u, pending = 0;   // core 1's first job, its job outstanding
-  if (ja && plat_cpu2_run(core1_job, ja)) {
+  uint32_t bno = (block_no + 1u) & 0xFFFFu;   // (this block's number: its offer's)
+  block_no = bno;
+  if (ja && plat_cpu2_run(core1_job, ja | bno << 16)) {
     pending = ja;
     jobs = 1;
   } else {
@@ -2113,11 +2131,23 @@ void eng_render(float* l, float* r, uint32_t n) {
 #endif
   uint32_t jb = c1ok ? split_voices(v, cost_of(ja), prep_cost + cost_of(early & ~ja), 0) : 0u;
   uint32_t mine = (early & ~ja) | (v & ~jb), done = 0;
-  auto hand_b = [&]() -> int {          // core 1's voices to it, if it is free (1: handed)
-    if (!c1ok) return 0;
+  int offered = 0;
+  if (jb && pending) {                  // core 1 still on its first job: its voices offered, taken as it ends
+    offer_chk = ~(jb | bno << 8);
+    offer = jb | bno << 8;
+    plat_cpu2_sync();
+    offered = 1;
+  }
+  auto hand_b = [&](int block) -> int { // core 1's voices: taken, or handed to it if it is free (1); offered, core 0
+    if (!c1ok) return 0;                // waits for it (block), never plays them meanwhile
     if (pending) {
-      if (plat_cpu2_busy()) return 0;   // (still on its first job)
-      if (plat_cpu2_wait() != 0) {      // given up meanwhile: its job dropped, played here; core 1's voices too
+      if (!block && plat_cpu2_busy()) return 0;   // (still on its first job)
+      int failed = plat_cpu2_wait() != 0;
+      plat_cpu2_sync();
+      int took = offered && !failed && claim == bno;
+      offered = 0;
+      offer = 0;
+      if (failed) {                     // given up meanwhile: its job dropped, played here; core 1's voices too
         for (int i = 0; i < kTasks; ++i)
           if ((pending >> i) & 1u) run_task(i, n);
         c1ok = 0;
@@ -2126,6 +2156,11 @@ void eng_render(float* l, float* r, uint32_t n) {
         return 0;
       }
       pending = 0;
+      if (took) {                       // played with its first job
+        c1_job_ticks[1] = 0;
+        jobs |= 2;
+        return 1;
+      }
     }
     if (!plat_cpu2_run(core1_job, jb | 1u << 8)) return 0;
     pending = jb;
@@ -2138,13 +2173,13 @@ void eng_render(float* l, float* r, uint32_t n) {
       if (!((mine >> i) & 1u)) continue;
       if (pick < 0 || (i < ENG_TRACKS && pick < ENG_TRACKS && task_cost[i] > task_cost[pick])) pick = i;
     }
-    if (jb && !(jobs & 2)) hand_b();
+    if (jb && !(jobs & 2)) hand_b(0);
     run_task(pick, n);
     mine &= ~(1u << pick);
     done |= 1u << pick;
   }
   while (jb && !(jobs & 2)) {           // core 1 still busy (or gone): its voices one by one here, the rest to it as
-    if (hand_b()) break;                // soon as it is free
+    if (hand_b(offered)) break;         // soon as it is free (offered: they are its, once its first job ends)
     int pick = -1;
     for (int i = 0; i < ENG_TRACKS; ++i)
       if (((jb >> i) & 1u) && (pick < 0 || task_cost[i] < task_cost[pick])) pick = i;
