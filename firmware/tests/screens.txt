@@ -1,4 +1,4 @@
-# MIFM1 in fm1-base's host simulator: the default patch playing, the pages (a face sliding in), a knob turned, a
+# MIFM1 in fm1-base's host simulator: the intro at power-on, the default patch playing, the pages (a face sliding in), a knob turned, a
 # track's grit, a Euclidean rhythm, the three LFOs, the mixer's filters, the effects (the delay, FREE too, the reverb,
 # Warps, their steps), a cable made in MOD mode (hold an LFO's key, turn a knob), the random dose (OCT- and OCT+ held,
 # SELECT), the matrix, every cable erased (REC and SEL held), the global page (the machine: Warps HQ, another theme), STEP mode (REC: a step held and locked, the lanes on
@@ -9,6 +9,8 @@
 # Plaits, then on the FM drums: their pages, a model chosen bringing its kit), an FM-1 without the
 # module tables, then the tables arriving. Screenshots in the output folder.
 wait 1500
+shot 00_intro.png
+wait 500
 shot 01_plaits_t1.png
 tap PLAY
 wait 2500

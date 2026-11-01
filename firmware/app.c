@@ -2643,6 +2643,88 @@ static void draw_row(int page, int32_t sh)
     }
 }
 
+/* ---------------------------------------------------------------- intro --- */
+/* the first 1.8 s at power-on: MIFM1's name written in Syne (logo_font.h), its letters at random a moment (signs in
+ * the theme's three colours) landing left to right as the pages' names do, a rule drawn out under it in the third
+ * colour, then what it is and the version. Any button lets the machine through at once */
+#define INTRO_MS 1800u
+#define INTRO_NAME_Y 91                  /* the name's cell (its capitals 2 px under it, its baseline 22) */
+#define INTRO_RULE_Y (INTRO_NAME_Y + 32)
+#define INTRO_LINE_Y (INTRO_RULE_Y + 6)
+#include "logo_font.h"
+static const char LOGO_SIGNS[] = "#%+0268";   /* (tools/gen_logo_font.py: the font has these, and the name's) */
+static const char TEXT_SIGNS[] = "ABCDEFGHJKLMNPRSTUVWXYZ0123456789#%/*+";
+static int intro_on;
+static uint32_t intro_at;
+
+/* s written from x (its letters where the name's will be), letter i landing at t0 + (t1 - t0) (i + 1) / n: before,
+ * a sign of g at random a frame, in an accent; nothing before t0 */
+static void intro_text(int32_t x, int32_t y, const felucca_font_t *f, const char *g, const char *s, uint32_t t,
+                       uint32_t t0, uint32_t t1, uint16_t c)
+{
+    int n = 0, ng = 0;
+    if (t < t0)
+        return;
+    while (s[n])
+        n++;
+    while (g[ng])
+        ng++;
+    for (int i = 0; i < n; i++) {
+        char one[2] = {s[i], 0}, r[2] = {0, 0};
+        int32_t w = text_w(f, one);
+        uint32_t land = t0 + (t1 - t0) * (uint32_t)(i + 1) / (uint32_t)n;
+        if (t >= land || s[i] == ' ') {
+            cv_text(x, y, f, one, c);
+        } else {                         /* a sign about as wide as the letter (Syne's are wide: a # over an I would
+                                          * cover its neighbours) */
+            char fit[48];
+            int nf = 0;
+            uint32_t h = (t / 40u + 1u) * 2654435761u ^ (uint32_t)(i + 1) * 0x9E3779B9u;
+            for (int k = 0; k < ng && nf < 47; k++) {
+                char o[2] = {g[k], 0};
+                if (text_w(f, o) <= w + 12)
+                    fit[nf++] = g[k];
+            }
+            h ^= h >> 15;
+            r[0] = nf ? fit[(h >> 8) % (uint32_t)nf] : g[(h >> 8) % (uint32_t)ng];
+            cv_text(x + (w - text_w(f, r)) / 2, y, f, r, accent3((int)(h % 3u)));
+        }
+        x += w;
+    }
+}
+
+static void intro_center(int32_t y, const felucca_font_t *f, const char *g, const char *s, uint32_t t, uint32_t t0,
+                         uint32_t t1, uint16_t c)
+{
+    intro_text((240 - text_w(f, s)) / 2, y, f, g, s, t, t0, t1, c);
+}
+
+static void intro_scene(uint32_t t)
+{
+    float half = (float)text_w(&FONT_LOGO, "MIFM1") * 0.5f, u = 0.0f;
+    if (t > 250u)                        /* the rule: out from the middle, quick then slowing, as wide as the name */
+        u = t >= 700u ? 1.0f : 1.0f - (1.0f - (float)(t - 250u) / 450.0f) * (1.0f - (float)(t - 250u) / 450.0f);
+    intro_center(INTRO_NAME_Y, &FONT_LOGO, LOGO_SIGNS, "MIFM1", t, 0u, 700u, HI);
+    if (u > 0.0f)
+        seg(120.0f - half * u, (float)INTRO_RULE_Y, 120.0f + half * u, (float)INTRO_RULE_Y, 2.0f, AC3);
+    intro_center(INTRO_LINE_Y, &FONT_XS, TEXT_SIGNS, "4-TRACK SYNTHESIS MACHINE", t, 450u, 1050u, MUTED);
+    intro_center(218, &FONT_T, TEXT_SIGNS, APP_VERSION, t, 900u, 1100u, DIM);   /* (a release's number; DEV here) */
+}
+
+static void draw_intro(uint32_t t)       /* the screen in three bands of 80 rows, each drawn in screen rows */
+{
+    for (int b = 0; b < 3; b++) {
+        cv_begin(240, 80, BG);
+        cv_oy = -80 * b;
+        cv_y0 = 0;
+        cv_y1 = 80;
+        intro_scene(t);
+        cv_oy = 0;
+        blit(0, (uint32_t)(80 * b));
+    }
+}
+
+
 static void draw(void)
 {
     int k = held(B_GLO) && !all.press && (ui.used[B_GLO] || plat_ms() - ui.down_at[B_GLO] >= 250u);
@@ -2654,6 +2736,15 @@ static void draw(void)
     }
     if (k != knock) {                    /* ALL: in yellow and black while GLO is held, then as it was */
         knock = k;
+        ui.full = 1;
+    }
+    if (intro_on) {                      /* power-on: the intro, until its end or a button */
+        uint32_t it = plat_ms() - intro_at;
+        if (it < INTRO_MS && !ui.btn && data_ok && engine_ok) {
+            draw_intro(it);
+            return;
+        }
+        intro_on = 0;
         ui.full = 1;
     }
     if (ui.full && (!data_ok || !engine_ok))
@@ -3516,12 +3607,24 @@ static void input(void)
 void app_input_only(void) { input(); }
 
 /* --------------------------------------------------------------- frames --- */
+
+void app_splash(void)                    /* at boot, while the platform and the engine start: black, the intro next */
+{
+    lcd_fill(0, 0, 240, 240, 0);
+}
+
 void app_ui_init(void)                   /* at power-on, and after an update, a restore or the tables' transfer */
 {
+    static int booted;
     data_ok = data_check();
     if (!data_ok)
         halted = 1;
     ui.full = 1;
+    if (!booted && data_ok) {            /* (power-on only: the intro) */
+        booted = 1;
+        intro_on = 1;
+        intro_at = plat_ms();
+    }
 }
 
 #ifdef PLAT_HOST

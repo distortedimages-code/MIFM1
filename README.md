@@ -58,6 +58,10 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 
 ## Jouer
 
+**À l'allumage**, l'écran reste noir pendant que la machine démarre, puis le nom MIFM1 s'écrit en Syne (ses lettres
+passent par des signes au hasard dans les couleurs du thème avant de se poser, de gauche à droite), un trait de la
+troisième couleur se tire dessous, puis « 4-TRACK SYNTHESIS MACHINE » et la version : 1,8 s, qu'un bouton passe.
+
 Un projet neuf joue déjà (PLAY) : piste 1 une grosse caisse sur chaque temps, piste 2 une basse VA dont le LFO 1
 (une rampe relancée par ses notes) ouvre le MORPH, piste 3 un FM 2 opérateurs en mélodie aléatoire bouclée, jetée dans le delay
 sur deux de ses notes (la piste de pas du delay), piste 4 un résonateur MODAL dans la réverbe. 120 BPM, do mineur.

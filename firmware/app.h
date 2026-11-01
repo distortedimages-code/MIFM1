@@ -1,15 +1,18 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Yoann */
-/* MIFM1: a four-track groovebox for the M-VAVE FM-1 whose whole sound is Mutable Instruments' open source code:
- * Plaits on every track, Marbles as the only sequencer, two Tides as modulators, a matrix of cables. This header is
- * the app's half of the contract with fm1-base (base/device/unity.c, base/host/plat_host.c). */
+/* MIFM1: a four-track groovebox for the M-VAVE FM-1 whose whole sound is open source code: Mutable Instruments'
+ * (Plaits on every track, Clouds' reverb, Warps) and the LXR-02's drum voices; a step sequencer, three LFOs, a
+ * matrix of cables. This header is the app's half of the contract with fm1-base (base/device/unity.c,
+ * base/host/plat_host.c). */
 #pragma once
 #include <stdint.h>
 #include "plat.h"
 
 #define APP_NAME "MIFM1"
-#define APP_TAGLINE "PLAITS MARBLES TIDES"
+#define APP_TAGLINE "4-TRACK SYNTHESIS MACHINE"
 #define APP_SPLASH_RGB RGB(120, 200, 255)
+#define APP_SPLASH                        /* the boot's screen black, not on paper: the intro (app.c) comes next */
+void app_splash(void);
 #define APP_PALETTE 2                     /* gfx.c's CYAN */
 #define APP_BLOCK 128u                    /* frames per audio block: 2.9 ms at 44.1 kHz, the control rate's step */
 #define APP_CANVAS_PX (240u * 84u)        /* gfx.c's canvas: the module's display (240 x 82), a knob (60 x 100) */
