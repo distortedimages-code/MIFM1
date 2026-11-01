@@ -22,7 +22,10 @@ la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
   egg, le décaleur de fréquence (son vocodeur est laissé de côté : il coûtait autant que les quatre voix). Le module
   tourne à 96 kHz : ce qui en dépend (les filtres du décaleur, l'oscillateur) est refait pour les 44,1 kHz du FM-1
   par ses propres scripts, et les filtres du suréchantillonnage de ses modulations croisées par la recette écrite
-  au-dessus d'eux (plus longs, pour rester plats jusqu'à 12 kHz) ;
+  au-dessus d'eux (plus longs, pour rester plats jusqu'à 12 kHz). Par défaut, Warps est en **Eco** : ses modulations
+  croisées suréchantillonnées 3 fois au lieu de 6 (moitié moins de calcul, le même son à quelques repliements près
+  dans l'extrême aigu des algorithmes les plus brillants, XOR surtout) ; **HQ** (GLO, SELECT, K3) remet le 6x du
+  module ;
 - un **mixer simple** (un niveau et un pan par piste, à puissance constante : une piste garde le même volume où
   qu'elle soit dans l'image ; ses gains glissent échantillon par échantillon, un pan ou un niveau aléatoire ou locké
   ne claque pas), un envoi par piste vers le delay et un vers la réverbe (ses lignes de retard en flottants : la
@@ -86,7 +89,7 @@ porte le numéro de sa piste dans sa couleur.
 | **SEL** | le mode MOD (voir plus bas) ; **tenu** : la matrice de la piste |
 | **SAVE tenu** | sauvegarde le projet (à l'arrêt) |
 | **GLO** | TEMPO, SCALE, ROOT, SWING ; SELECT : le projet (INIT) et la machine ; GLO encore : retour |
-| **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en jaune et noir. Les réglages restent ; pendant 4 s (cinq carrés jaunes en bas), **GLO** les remet comme avant ALL au début de la mesure suivante (GLO encore avant la mesure : ils restent) |
+| **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en noir sur la couleur du thème. Les réglages restent ; pendant 4 s (cinq carrés jaunes en bas), **GLO** les remet comme avant ALL au début de la mesure suivante (GLO encore avant la mesure : ils restent) |
 | **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage (avec GLO tenu aussi : sur les 4 pistes) |
 | **REC tenu** (pas) | efface la piste de pas affichée : ses trigs, ses locks, ses aléatoires (et les câbles d'une piste) ; avec **GLO tenu** : toutes, et les câbles globaux |
 
@@ -94,10 +97,10 @@ Les appuis tenus (SAVE, REC pour effacer ou charger, SEL pour la matrice) affich
 cinq carrés qui se vident un à un : lâcher avant le dernier annule. Ceux qui effacent ou écrasent durent une seconde.
 
 La charge de calcul est toujours affichée en haut à droite (le cœur le plus chargé, en %) ; GLO puis SELECT
-détaille ce que coûte chaque piste, Warps et les effets (FX : le delay, la réverbe et le bus master). Les quatre
-voix, Warps et les effets se répartissent entre les deux cœurs selon ce que chacun coûte, mesuré bloc après bloc (une
-voix MODAL ou STRING coûte dix fois une VIRTUAL ANALOG) : les effets et le bus master jouent pour cela un bloc derrière
-les voix (2,9 ms de latence en sortie). Une voix silencieuse depuis un moment, sa note finie, se repose jusqu'à son
+détaille ce que coûte chaque piste, Warps et les effets (FX : le mixer, le delay, la réverbe et le bus master). Les
+quatre voix, Warps et les effets se répartissent entre les deux cœurs selon ce que chacun coûte, mesuré bloc après
+bloc (une voix MODAL ou STRING coûte dix fois une VIRTUAL ANALOG) : le mixer, les effets et le bus master jouent pour
+cela un bloc derrière les voix (2,9 ms de latence en sortie), pendant que les voix jouent le bloc suivant. Une voix silencieuse depuis un moment, sa note finie, se repose jusqu'à son
 trig suivant (elle ne coûte plus rien).
 
 **Le mode STEP** (REC) : les 16 touches blanches sont les pas de la page (allumés : un trig, celui qui joue
@@ -200,6 +203,13 @@ gauche et la droite et ne reçoivent que leur différence (le centre disparaît,
 canal droit inversé, ils reçoivent tout le mix, en mono (une oreille en opposition de phase : le son paraît un peu
 « dans la tête »). Pour la stéréo, un casque sans micro ou un adaptateur casque/micro. Le réglage reste quand on
 charge un autre projet.
+
+**Les couleurs** (GLO, SELECT, K4) : sept thèmes, chacun un fond sombre et trois couleurs pour l'état des modules
+(celles que les icônes et les anneaux prennent) et ALL : **Acid** (citron vert, violet, rouge orangé), **Ember**
+(or, orange, cramoisi sur un noir chaud), **Neon** (menthe, lavande, rose sur indigo), **Ice** (cyan, pervenche,
+magenta), **Rust** (vert-de-gris, rouille, jaune danger sur graphite), **Mono** (blanc, argent, rouge) et
+**Mutable** (le teal, l'orange et le rose des modules, ceux des versions 0.1 à 0.3.6). Comme la sortie et la
+qualité de Warps, le thème reste quand on charge un autre projet ; il est gardé avec le projet sauvegardé.
 
 **Le clavier** relance la note à chaque touche, même jouée legato, et une touche tapée très vite sonne quand même.
 

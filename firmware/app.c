@@ -3,8 +3,8 @@
 /* MIFM1: the screen and the panel. The sound is mi/engine.cc's (C++, compiled apart): this file edits its project
  * (eng_project) and shows what it plays.
  *
- * The screen is a module's face, dark, its lights in Mutable Instruments' colours (teal, orange, pink, as their
- * panels print them): at the top the module's icon in a lit ring, its name and a line on its state (Plaits shows
+ * The screen is a module's face, dark, its lights in three colours (a theme's: GLO's second face, K4; 0.1 to 0.3.6
+ * had Mutable Instruments' teal, orange and pink, as their panels print them): at the top the module's icon in a lit ring, its name and a line on its state (Plaits shows
  * the model alone, its logo and its name); then its four knobs in a row, as KNOB 1 to 4 sit on the FM-1, each a ring
  * lit from its start (or its middle) to its value, the value in it; at the bottom the four tracks, an LED each lit by
  * its gate (on Tides' pages: its outputs, lit as high as they are; on the steps' and the effects' pages: the steps).
@@ -56,18 +56,59 @@ int mi_res_check(const uint8_t *payload, uint32_t len);   /* mi/res_symbols.cc: 
 #define FOOT_Y 204
 #define FOOT_H 36
 
-/* the colours: a dark panel, Mutable Instruments' teal, orange and pink as lit LEDs */
-#define BG RGB(0, 0, 0)                  /* black: the LCD's darkest */
-#define TXT RGB(240, 239, 235)
-#define MUTED RGB(154, 151, 152)
-#define DIM RGB(107, 104, 105)
-#define TRACK RGB(60, 58, 59)            /* a ring's travel, unlit (1 px) */
-#define OFF RGB(48, 46, 47)              /* an LED off */
-#define RULE RGB(38, 36, 37)
-#define SEL RGB(46, 44, 45)              /* the chosen row */
-#define PINK RGB(255, 74, 125)
-#define TEAL RGB(24, 201, 212)
-#define ORANGE RGB(255, 178, 46)
+/* the colours: a theme (GLO's second face, K4), each a dark panel, its greys, three accents (the module's state as its
+ * icons print it: in Mutable Instruments' colours, teal, orange and pink) and the colour ALL fills the screen with */
+typedef struct {
+    const char *name;
+    uint16_t bg, txt, hi, muted, dim;
+    uint16_t track, off, rule, sel;      /* a ring's travel unlit (1 px), an LED off, a rule, the chosen row */
+    uint16_t a1, a2, a3, knock;
+} theme_t;
+#define NTHEMES 7
+static const theme_t THEMES[NTHEMES] = {
+    {"Acid",                             /* black; lime, violet, a red-orange */
+     RGB(0, 0, 0), RGB(236, 240, 228), RGB(255, 255, 255), RGB(150, 154, 146), RGB(102, 106, 98),
+     RGB(58, 62, 54), RGB(46, 50, 42), RGB(34, 38, 30), RGB(42, 46, 38),
+     RGB(184, 255, 46), RGB(160, 112, 255), RGB(255, 84, 46), RGB(200, 255, 0)},
+    {"Ember",                            /* a warm black; gold, orange, crimson */
+     RGB(18, 10, 6), RGB(244, 230, 207), RGB(255, 247, 232), RGB(170, 148, 126), RGB(118, 100, 82),
+     RGB(66, 52, 40), RGB(54, 42, 32), RGB(42, 31, 23), RGB(58, 42, 30),
+     RGB(255, 201, 74), RGB(255, 108, 44), RGB(230, 36, 78), RGB(255, 108, 44)},
+    {"Neon",                             /* indigo; mint, lavender, pink */
+     RGB(11, 8, 32), RGB(236, 232, 255), RGB(255, 255, 255), RGB(154, 147, 191), RGB(106, 99, 144),
+     RGB(50, 44, 86), RGB(40, 34, 72), RGB(30, 25, 58), RGB(44, 37, 84),
+     RGB(60, 242, 208), RGB(180, 140, 255), RGB(255, 79, 163), RGB(60, 242, 208)},
+    {"Ice",                              /* a blue black; cyan, periwinkle, magenta */
+     RGB(4, 9, 15), RGB(230, 241, 250), RGB(255, 255, 255), RGB(142, 163, 181), RGB(94, 113, 130),
+     RGB(38, 52, 64), RGB(30, 42, 52), RGB(22, 32, 41), RGB(30, 44, 57),
+     RGB(69, 224, 255), RGB(124, 140, 255), RGB(255, 79, 216), RGB(69, 224, 255)},
+    {"Rust",                             /* a graphite; verdigris, rust, a hazard yellow */
+     RGB(10, 12, 12), RGB(232, 228, 218), RGB(250, 247, 240), RGB(150, 148, 140), RGB(100, 98, 92),
+     RGB(54, 57, 55), RGB(43, 46, 44), RGB(32, 35, 34), RGB(42, 46, 44),
+     RGB(78, 196, 164), RGB(226, 100, 42), RGB(242, 196, 48), RGB(226, 100, 42)},
+    {"Mono",                             /* black; white, silver, red */
+     RGB(0, 0, 0), RGB(237, 237, 237), RGB(255, 255, 255), RGB(154, 154, 154), RGB(102, 102, 102),
+     RGB(58, 58, 58), RGB(46, 46, 46), RGB(36, 36, 36), RGB(46, 46, 46),
+     RGB(245, 245, 245), RGB(176, 176, 176), RGB(255, 42, 42), RGB(255, 42, 42)},
+    {"Mutable",                          /* 0.1 to 0.3.6: black; teal, orange, pink (the modules' LEDs), ALL yellow */
+     RGB(0, 0, 0), RGB(240, 239, 235), RGB(255, 255, 255), RGB(154, 151, 152), RGB(107, 104, 105),
+     RGB(60, 58, 59), RGB(48, 46, 47), RGB(38, 36, 37), RGB(46, 44, 45),
+     RGB(24, 201, 212), RGB(255, 178, 46), RGB(255, 74, 125), RGB(255, 214, 0)},
+};
+static const theme_t *th = &THEMES[0];
+#define BG (th->bg)
+#define TXT (th->txt)
+#define HI (th->hi)
+#define MUTED (th->muted)
+#define DIM (th->dim)
+#define TRACK (th->track)
+#define OFF (th->off)
+#define RULE (th->rule)
+#define SEL (th->sel)
+#define AC1 (th->a1)                     /* (Mutable's teal) */
+#define AC2 (th->a2)                     /* (orange) */
+#define AC3 (th->a3)                     /* (pink) */
+#define KNOCK (th->knock)
 
 /* ------------------------------------------------------------------ state --- */
 static int data_ok;                      /* the resource region holds this build's tables */
@@ -238,13 +279,13 @@ static const char *module_name(int page)
 
 static const char *const LANE_SHORT[ENG_LANES] = {"T1", "T2", "T3", "T4", "DL", "RV", "WP"};
 
-/* the colours of a module's state, as its icons print them: teal, orange, pink */
-static uint16_t accent3(int i) { return i <= 0 ? TEAL : i == 1 ? ORANGE : PINK; }
+/* the colours of a module's state, as its icons print them (in Mutable's: teal, orange, pink) */
+static uint16_t accent3(int i) { return i <= 0 ? AC1 : i == 1 ? AC2 : AC3; }
 
 static uint16_t model_accent(int m)      /* Plaits' banks: teal the classic models, pink the noisy and the drums,
                                           * orange the eight of 1.2 */
 {
-    return m < 8 ? ORANGE : m < 16 ? TEAL : PINK;
+    return m < 8 ? AC2 : m < 16 ? AC1 : AC3;
 }
 static uint16_t track_accent(int t) { return model_accent(eng_project()->algo[PG_TRACK(t, 0)]); }
 
@@ -252,12 +293,12 @@ static uint16_t warps_accent(void)      /* Warps' algorithm: the blends teal, th
                                           * orange, the frequency shifter pink; off, grey */
 {
     int a = eng_warps_algo();
-    return a < 0 ? MUTED : a <= 1 ? TEAL : a <= 5 ? ORANGE : PINK;
+    return a < 0 ? MUTED : a <= 1 ? AC1 : a <= 5 ? AC2 : AC3;
 }
 
 static uint16_t lane_accent(int l)      /* a lane's colour: its track's model's, or its effect's */
 {
-    return l < ENG_TRACKS ? track_accent(l) : l == LANE_DELAY ? ORANGE : l == LANE_REVERB ? PINK : warps_accent();
+    return l < ENG_TRACKS ? track_accent(l) : l == LANE_DELAY ? AC2 : l == LANE_REVERB ? AC3 : warps_accent();
 }
 
 static uint16_t page_accent(int page)
@@ -265,16 +306,16 @@ static uint16_t page_accent(int page)
     project_t *p = eng_project();
     switch (ptype(page)) {
     case PT_STEP: case PT_RND: case PT_ARP: return track_accent(ptrack(page));
-    case PT_PAN: case PT_GLOBAL: case PT_SYS: case PT_MIX: return TEAL;
+    case PT_PAN: case PT_GLOBAL: case PT_SYS: case PT_MIX: return AC1;
     case PT_DUCK: return track_accent(0);    /* T1's: it ducks the others */
-    case PT_COMP: return ORANGE;
-    case PT_OTT: return PINK;
+    case PT_COMP: return AC2;
+    case PT_OTT: return AC3;
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: return model_accent(p->algo[page_first(page)]);
     case PT_TIDES1: case PT_TIDES2: return accent3(p->algo[page_first(page)]);
     default: return lane_accent(eng_page_lane(page));
     }
 }
-static uint16_t mod_colour(uint16_t ac) { return ac == TEAL ? PINK : TEAL; }   /* where the cables take a knob */
+static uint16_t mod_colour(uint16_t ac) { return ac == AC1 ? AC3 : AC1; }   /* where the cables take a knob */
 
 /* Plaits' models in four letters or so (the tracks' row), its banks */
 static const char *const SHORT[24] = {"VCF", "PD", "6OP1", "6OP2", "6OP3", "TERR", "SMCH", "CHIP",
@@ -761,9 +802,9 @@ static void vicon(float cx, float cy, float s, float w, uint16_t c, int which, i
 }
 
 /* -------------------------------------------------------------- drawing --- */
-/* ALL (GLO held a moment, or with a knob): the screen yellow, everything on it knocked out in black, until GLO is let
- * go. Each canvas goes out through blit: its pixels by their brightness, from yellow (black) to black (white) */
-#define YELLOW RGB(255, 214, 0)
+/* ALL (GLO held a moment, or with a knob): the screen in the theme's KNOCK colour, everything on it knocked out in
+ * black, until GLO is let go. Each canvas goes out through blit: its pixels by their brightness, from KNOCK (black)
+ * to black (white) */
 static int knock;
 /* another face of the module (SELECT): its knobs slide in, pushing the others out (each row drawn shifted by slide_s
  * px, only its part on the screen sent); the module's display stays, its names written again (dec) */
@@ -777,8 +818,10 @@ static void blit(uint32_t x, uint32_t y)
             uint32_t c = swap16(cv_px[i]);
             uint32_t l = ((c >> 11) * 16u + ((c >> 5) & 63u) * 20u + (c & 31u) * 8u) / 8u;   /* 0..250 */
             l = l * 3u / 2u;
-            l = l > 255u ? 0u : 255u - l;   /* what is left of the yellow */
-            cv_px[i] = swap16((uint16_t)((31u * l / 255u) << 11 | (53u * l / 255u) << 5));
+            l = l > 255u ? 0u : 255u - l;   /* what is left of the colour */
+            cv_px[i] = swap16((uint16_t)(((uint32_t)(KNOCK >> 11) * l / 255u) << 11 |
+                                         ((uint32_t)((KNOCK >> 5) & 63u) * l / 255u) << 5 |
+                                         (uint32_t)(KNOCK & 31u) * l / 255u));
         }
     }
     if (slide_s && y >= KNOB_Y && y < FOOT_Y) {
@@ -881,26 +924,26 @@ static void draw_header(void)
         t[0] = 0;
         text_cat(t, "STEP ", sizeof t);
         text_cat(t, v, sizeof t);
-        text_pill(x + 26, 7, &FONT_T, t, C_WHITE, BG);
+        text_pill(x + 26, 7, &FONT_T, t, HI, BG);
     } else if (mode) {
         static const char *const M[7] = {"", "MOD", "REC", "ALL", "RND", "", "STEP"};
         if (mode == 3 && knock)          /* ALL in yellow and black: white on black here, black on yellow there */
-            text_pill(x + 20, 7, &FONT_T, M[mode], C_WHITE, BG);
+            text_pill(x + 20, 7, &FONT_T, M[mode], HI, BG);
         else
-            text_pill(x + 20, 7, &FONT_T, M[mode], mode == 3 ? TEAL : mode == 4 ? ORANGE : PINK,
-                      mode == 4 ? BG : C_WHITE);
+            text_pill(x + 20, 7, &FONT_T, M[mode], mode == 3 ? AC1 : mode == 4 ? AC2 : AC3,
+                      mode == 4 ? BG : HI);
     }
     t[0] = 0;
     int_text(load, v);
     text_cat(t, v, sizeof t);
     text_cat(t, "%", sizeof t);
     x = 232 - text_w(&FONT_XS, t);
-    cv_text(x, 6, &FONT_XS, t, load >= 80 ? PINK : load >= 60 ? ORANGE : DIM);
+    cv_text(x, 6, &FONT_XS, t, load >= 80 ? AC3 : load >= 60 ? AC2 : DIM);
     if (dirty)                           /* not saved */
-        disc((float)(x - 6), 14.0f, 2.2f, PINK);
+        disc((float)(x - 6), 14.0f, 2.2f, AC3);
     x -= 26;
     for (int y = -6; y <= 6; y++)
-        cv_rect(x, 14 + y, 11 - (iabs(y) * 11 + 3) / 6, 1, eng_playing() ? TEAL : DIM);
+        cv_rect(x, 14 + y, 11 - (iabs(y) * 11 + 3) / 6, 1, eng_playing() ? AC1 : DIM);
     if (tr >= 0 || ui.matrix || ui.grid) {   /* the track (STEP mode: the lane), ringed in its colour */
         int l = ui.grid ? ui.lane : ui.track;
         uint16_t tc = lane_accent(l);
@@ -927,7 +970,7 @@ static int hero_title(const char *name)  /* the name: one line of L, two cut at 
     char a[24], b[24];
     int n = 0;
     if (text_w(&FONT_L, name) <= 150) {
-        cv_text(84, 6, &FONT_L, dec(name, 1), C_WHITE);
+        cv_text(84, 6, &FONT_L, dec(name, 1), HI);
         return 44;
     }
     while (name[n])
@@ -941,12 +984,12 @@ static int hero_title(const char *name)  /* the name: one line of L, two cut at 
         b[0] = 0;
         text_cat(b, name + i + 1, sizeof b);
         if (text_w(&FONT_L, a) <= 150 && text_w(&FONT_L, b) <= 150) {
-            cv_text(84, -4, &FONT_L, dec(a, 1), C_WHITE);
-            cv_text(84, 22, &FONT_L, dec(b, 2), C_WHITE);
+            cv_text(84, -4, &FONT_L, dec(a, 1), HI);
+            cv_text(84, 22, &FONT_L, dec(b, 2), HI);
             return 55;
         }
     }
-    cv_text(84, 12, &FONT_M, dec(name, 1), C_WHITE);
+    cv_text(84, 12, &FONT_M, dec(name, 1), HI);
     return 44;
 }
 
@@ -1017,7 +1060,7 @@ static void panel_plaits(int t, int face, uint16_t ac)
         int pg = PG_TRACK(t, 2), on = (int)((eng_gates() >> t) & 1u), x;
         char v[12];
         note_text(eng_note(t), n);
-        x = cv_text(84, 6, &FONT_L, dec(n, 1), on ? C_WHITE : MUTED);
+        x = cv_text(84, 6, &FONT_L, dec(n, 1), on ? HI : MUTED);
         x = 84 + text_w(&FONT_L, n);
         led((float)(x + 12), 22.0f, 5.0f, ac, on ? 8 : 0);
         s[0] = 0;
@@ -1078,7 +1121,7 @@ static void panel_bus(int ott)           /* the master bus: this face's mode, on
     static const char *const M[3] = {"MASTER BUS OFF", "COMP ON", "OTT ON"};
     int m = bus_mode(), on = m == (ott ? MB_OTT : MB_COMP);
     char s[48];
-    hero_icon(ott ? IC_OTT : IC_COMP, on ? (ott ? PINK : ORANGE) : MUTED);
+    hero_icon(ott ? IC_OTT : IC_COMP, on ? (ott ? AC3 : AC2) : MUTED);
     int y = hero_title(ott ? "OTT" : "COMP");
     s[0] = 0;
     text_cat(s, on ? M[m] : m == MB_OFF ? M[0] : ott ? "COMP ON" : "OTT ON", sizeof s);
@@ -1088,13 +1131,13 @@ static void panel_bus(int ott)           /* the master bus: this face's mode, on
 
 static void panel_mixer(int pan)
 {
-    hero_icon(IC_MIX, TEAL);
+    hero_icon(IC_MIX, AC1);
     hero_line(hero_title(pan ? "PAN" : "MIXER"), "4 TRACKS");
     for (int t = 0; t < ENG_TRACKS; t++) {   /* a column of LEDs a track, in its colour */
         int lit = meter_lit(t), x = 180 + t * 15;
         char n[2] = {(char)('1' + t), 0};
         for (int k = 0; k < 7; k++) {
-            uint16_t c = k == 6 ? PINK : track_accent(t);
+            uint16_t c = k == 6 ? AC3 : track_accent(t);
             cv_rect(x, 56 - k * 7, 9, 5, k < lit ? c : OFF);
         }
         cv_text(x + 4 - text_w(&FONT_T, n) / 2, 63, &FONT_T, n, DIM);
@@ -1145,7 +1188,7 @@ static void panel_endless(int t)         /* Endless: recording, or how many note
     int len = p->endless_len[t], notes = 0;
     for (int i = 0; i < len; i++)
         notes += p->endless[t][i] != ENDLESS_REST;
-    hero_icon(IC_ENDLESS, ui.erec == t ? PINK : track_accent(t));
+    hero_icon(IC_ENDLESS, ui.erec == t ? AC3 : track_accent(t));
     int y = hero_title(ui.erec == t ? "RECORDING" : "ENDLESS");
     s[0] = 0;
     if (ui.erec == t) {
@@ -1171,7 +1214,7 @@ static void panel_global(void)           /* the tempo, the scale, the swing */
 {
     project_t *p = eng_project();
     char s[40], v[16];
-    hero_icon(IC_GLO, TEAL);
+    hero_icon(IC_GLO, AC1);
     eng_param_text(PG_GLOBAL * 4, p->val[PG_GLOBAL * 4], v, sizeof v);
     int y = hero_title(v);
     s[0] = 0;
@@ -1230,7 +1273,7 @@ static void panel_warps(void)            /* Warps: its algorithm, its marks, wha
 
 static void panel_reverb(void)
 {
-    hero_icon(IC_REV, PINK);
+    hero_icon(IC_REV, AC3);
     hero_line(hero_title("REVERB"), ui.page == PG_RSEND ? "FROM CLOUDS|THE SENDS" : "FROM CLOUDS");
 }
 
@@ -1238,7 +1281,7 @@ static void panel_delay(void)            /* the delay: its time, its mode, its r
 {
     project_t *p = eng_project();
     char s[48], v[16];
-    hero_icon(IC_DELAY, ORANGE);
+    hero_icon(IC_DELAY, AC2);
     int y = hero_title("DELAY");
     s[0] = 0;
     if (ui.page == PG_DSEND)
@@ -1282,15 +1325,15 @@ static void fx_meter(int force)
             cv_rect(2, 0, 6, h[0], track_accent(0));
         } else if (mode == MB_COMP) {    /* down from the top: the reduction (18 dB the whole bar) */
             cv_rect(2, 0, 6, 52, TRACK);
-            cv_rect(2, 0, 6, h[0], ORANGE);
+            cv_rect(2, 0, 6, h[0], AC2);
         } else if (mode == MB_OTT) {     /* low, mid, high: up raised, down squashed (24 dB half the bar) */
             for (int b = 0; b < 3; b++) {
                 cv_rect(b * 4, 0, 2, 52, TRACK);
                 if (h[b] > 0)
-                    cv_rect(b * 4, 26 - h[b], 2, h[b], PINK);
+                    cv_rect(b * 4, 26 - h[b], 2, h[b], AC3);
                 else if (h[b] < 0)
-                    cv_rect(b * 4, 26, 2, -h[b], TEAL);
-                cv_rect(b * 4, 25, 2, 2, C_WHITE);
+                    cv_rect(b * 4, 26, 2, -h[b], AC1);
+                cv_rect(b * 4, 25, 2, 2, HI);
             }
         }
         blit(226, PANEL_Y + 12);
@@ -1579,7 +1622,7 @@ static void draw_knob_at(int page, int k, int force)
         return;                          /* sliding, not on the screen */
     cv_begin(KNOB_W, KNOB_H, BG);
     {                                    /* its name (touched: white, underlined) */
-        uint16_t lc = hot ? C_WHITE : view != KV_VALUE ? vc : tk ? track_accent(k) : MUTED;
+        uint16_t lc = hot ? HI : view != KV_VALUE ? vc : tk ? track_accent(k) : MUTED;
         const felucca_font_t *lf = text_w(&FONT_S, lab) <= 58 ? &FONT_S : &FONT_XS;
         int w = text_w(lf, lab);
         if (act) {                       /* the active track: its name knocked out of a block of its colour */
@@ -1604,7 +1647,7 @@ static void draw_knob_at(int page, int k, int force)
                 arc(RX, RY, R0 + 0.5f, R1 - 0.5f, a, b, TRACK);
         }
         label_text(txt, nm, sizeof nm);
-        ring_text(ring_short(nm), idle ? DIM : C_WHITE, under, sizeof under);
+        ring_text(ring_short(nm), idle ? DIM : HI, under, sizeof under);
     } else {
         float lo = bip ? fm_minf(u, 0.5f) : 0.0f, hi = bip ? fm_maxf(u, 0.5f) : u;
         arc(RX, RY, R0 + 0.5f, R1 - 0.5f, 0.0f, 1.0f, TRACK);
@@ -1628,7 +1671,7 @@ static void draw_knob_at(int page, int k, int force)
             travel_xy(RX, RY, uf, (R0 + R1) * 0.5f, &x, &y);
             lit_disc(x, y, 2.0f, mc);
         }
-        ring_text(txt, ncab ? mc : (view == KV_RND && !rnd) || idle ? DIM : C_WHITE, under, sizeof under);
+        ring_text(txt, ncab ? mc : (view == KV_RND && !rnd) || idle ? DIM : HI, under, sizeof under);
     }
     if (ncab)                            /* under the ring: the cables, a lock, a random, else a unit, MOD's socket */
         cv_text(30 - text_w(&FONT_XS, c) / 2, 78, text_w(&FONT_XS, c) <= 58 ? &FONT_XS : &FONT_T, c, mc);
@@ -1647,7 +1690,7 @@ static void draw_lines(int y, int h, const char *const *lines, const uint16_t *c
         cv_begin(240, (uint32_t)h, BG);
         if (i == sel)
             pill(4, 1, 232, h - 2, SEL);
-        cv_text(10, (h - 15) / 2, &FONT_XS, lines[i], i == sel ? C_WHITE : colours[i]);
+        cv_text(10, (h - 15) / 2, &FONT_XS, lines[i], i == sel ? HI : colours[i]);
         blit(0, (uint32_t)(y + i * h));
     }
 }
@@ -1711,7 +1754,7 @@ static void draw_projects(void)          /* the projects REC held loads, in the 
                 pill(4, y, 232, 17, SEL);
             disc(16.0f, (float)y + 8.0f, 6.5f, accent3(i));
             vicon(16.0f, (float)y + 8.0f, 0.34f, 1.5f, BG, IC_NEW + i, 0);
-            cv_text(30, y + 1, &FONT_XS, P[i], sel ? C_WHITE : TXT);
+            cv_text(30, y + 1, &FONT_XS, P[i], sel ? HI : TXT);
         }
         blit(0, PANEL_Y);
     }
@@ -1720,48 +1763,48 @@ static void draw_projects(void)          /* the projects REC held loads, in the 
 static void draw_machine(int force)      /* the machine, where the knobs are */
 {
     static uint32_t at;
-    char v[24];
+    char v[32];
     if (!force && !ui.full && !ui.body_knobs && plat_ms() - at < 400u)
         return;
     at = plat_ms();
-    for (int i = 0; i < 6; i++) {        /* the machine, where the knobs are: two canvases of three rows (a 240 x 100
-                                          * one is more than gfx.c's canvas holds) */
+    project_t *p = eng_project();
+    for (int i = 0; i < 7; i++) {        /* seven rows, 14 px apart, in three canvases (a 240 x 100 one is more than
+                                          * gfx.c's canvas holds): 43, 43 and 14 px */
         const char *l = "";
         uint16_t c = TXT;
-        int y = i < 3 ? 4 + i * 15 : (i - 3) * 15;   /* a row every 15 px: rows 4..48, then 49..99 */
+        int y = i < 3 ? 1 + i * 14 : i < 6 ? (i - 3) * 14 : 0;
         if (i % 3 == 0) {
-            cv_begin(240, i ? 51 : 49, BG);
+            cv_begin(240, i < 6 ? 43 : 14, BG);
             if (!i)
-                cv_rect(8, 1, 224, 1, RULE);
+                cv_rect(8, 0, 224, 1, RULE);
         }
         v[0] = 0;
         switch (i) {
-        case 0:
-            l = "Core 0";
+        case 0: {                        /* the cores' loads */
+            char n[8];
+            l = "Cores 0 and 1";
             int_text((int32_t)((eng_load(0) + 5u) / 10u), v);
-            text_cat(v, "%", sizeof v);
-            break;
-        case 1:
-            l = "Core 1";
+            text_cat(v, "%  ", sizeof v);
             if (eng_core1_running()) {
-                int_text((int32_t)((eng_load(1) + 5u) / 10u), v);
+                int_text((int32_t)((eng_load(1) + 5u) / 10u), n);
+                text_cat(v, n, sizeof v);
                 text_cat(v, "%", sizeof v);
             } else {
-                text_cat(v, cpu2_ok ? "paused" : "off: all on core 0", sizeof v);
-                c = ORANGE;
+                text_cat(v, cpu2_ok ? "paused" : "off", sizeof v);
+                c = AC2;
             }
             break;
-        case 2:
+        }
+        case 1:
             l = "Peak over a second";
             int_text((int32_t)((eng_peak() + 5u) / 10u), v);
             text_cat(v, "%", sizeof v);
             if (eng_peak() >= 900u)
-                c = PINK;
+                c = AC3;
             break;
-        case 3: {                        /* what each costs: the four tracks (while they play), Warps, the effects
-                                          * and the master bus (the cores share them by it) */
+        case 2: {                        /* what each costs: the four tracks (while they play), Warps, the mix, the
+                                          * effects and the master bus (the cores share them by it) */
             char n[8];
-            n[0] = 0;
             l = "T1 T2 T3 T4 Warps FX";
             for (int t = 0; t <= ENG_TRACKS + 1; t++) {
                 if (t == ENG_TRACKS && !eng_task_load(t))
@@ -1769,30 +1812,43 @@ static void draw_machine(int force)      /* the machine, where the knobs are */
                 else
                     int_text((int32_t)((eng_task_load(t) + 5u) / 10u), n);
                 text_cat(v, n, sizeof v);
-                text_cat(v, t <= ENG_TRACKS ? " " : "%", sizeof v);
+                text_cat(v, t <= ENG_TRACKS ? "  " : "%", sizeof v);
             }
             break;
         }
-        case 4: {                        /* the output (K2): stereo; a headset with a mic (its 4-pole plug in the
+        case 3: {                        /* the output (K2): stereo; a headset with a mic (its 4-pole plug in the
                                           * 3-pole jack: its earpieces in series between left and right, they get
                                           * left minus right, so the right inverted gives them the whole mix); mono */
             static const char *const O[3] = {"Stereo", "Mic headset", "Mono"};
             l = "Output (K2)";
-            text_cat(v, O[eng_project()->out_mode % 3], sizeof v);
-            c = eng_project()->out_mode ? ORANGE : TXT;
+            text_cat(v, O[p->out_mode % 3], sizeof v);
+            c = p->out_mode ? AC2 : TXT;
             break;
         }
+        case 4:                          /* Warps (K3): ECO, its cross-modulations at 3x (half the work); HQ, 6x */
+            l = "Warps (K3)";
+            text_cat(v, p->warps_hq ? "HQ, 6x" : "Eco, 3x", sizeof v);
+            c = p->warps_hq ? AC2 : TXT;
+            break;
+        case 5:                          /* the colours (K4) */
+            l = "Colours (K4)";
+            text_cat(v, th->name, sizeof v);
+            break;
         default:
             l = dirty ? "MIFM1 " APP_VERSION ", not saved" : "MIFM1 " APP_VERSION;
             text_cat(v, data_ok ? "tables OK" : "tables MISSING", sizeof v);
             if (!data_ok)
-                c = PINK;
+                c = AC3;
             break;
         }
         cv_text(10, y, &FONT_XS, l, MUTED);
-        cv_text(230 - text_w(&FONT_XS, v), y, &FONT_XS, v, c);
-        if (i % 3 == 2)
-            blit(0, (uint32_t)(KNOB_Y + (i < 3 ? 0 : 49)));
+        int32_t x = 230 - text_w(&FONT_XS, v);
+        cv_text(x, y, &FONT_XS, v, c);
+        if (i == 5)                      /* the theme's three colours before its name */
+            for (int j = 0; j < 3; j++)
+                disc((float)(x - 38 + j * 11), (float)y + 6.5f, 4.0f, j == 0 ? AC1 : j == 1 ? AC2 : AC3);
+        if (i % 3 == 2 || i == 6)
+            blit(0, (uint32_t)(KNOB_Y + (i / 3) * 43));
     }
 }
 
@@ -1804,7 +1860,7 @@ static void draw_missing(void)
     if (!ui.full)
         return;
     for (int i = 0; i < 8; i++)
-        col[i] = i == 1 ? PINK : TXT;
+        col[i] = i == 1 ? AC3 : TXT;
     draw_lines(PANEL_Y + 4, 19, L, col, 8, -1);
 }
 
@@ -1859,7 +1915,7 @@ static void foot_steps(int t)            /* the steps of a page: a trig lit, a l
         cv_text(9 + (15 * 13 + 11 - text_w(&FONT_B, "HOLD")) / 2, 9, &FONT_B, "HOLD", BG);
         for (int i = 0; i < 16; i += 4)
             cv_rect(9 + i * 13, 28, 11, 1, DIM);   /* the beats */
-        cv_rect(231, 8, 3, 18, C_WHITE);
+        cv_rect(231, 8, 3, 18, HI);
         return;
     }
     for (int i = 0; i < 16; i++) {
@@ -1869,9 +1925,9 @@ static void foot_steps(int t)            /* the steps of a page: a trig lit, a l
             continue;
         }
         if (st == ui.held_step)
-            cv_rect(x, 8, 11, 18, C_WHITE);
+            cv_rect(x, 8, 11, 18, HI);
         else if (eng_trig(t, st))
-            cv_rect(x, 8, 11, 18, st == now ? C_WHITE : ac);
+            cv_rect(x, 8, 11, 18, st == now ? HI : ac);
         else
             cv_rect(x, 8, 11, 18, st == now ? MUTED : TRACK);
         if (eng_trig(t, st) && st == now)
@@ -1887,7 +1943,7 @@ static void foot_steps(int t)            /* the steps of a page: a trig lit, a l
     if (t >= ENG_TRACKS) {               /* an effect: how open its lane holds it */
         int o = (int)(eng_lane_open(t) * 18.0f + 0.5f);
         cv_rect(231, 8, 3, 18, TRACK);
-        cv_rect(231, 26 - o, 3, o, C_WHITE);
+        cv_rect(231, 26 - o, 3, o, HI);
     }
 }
 
@@ -1895,7 +1951,7 @@ static void foot_endless(int t)          /* Endless's notes, 16 at a time: a bar
 {
     project_t *p = eng_project();
     int len = p->endless_len[t], pos = eng_endless_pos(t), first, lo = 127, hi = 0;
-    uint16_t ac = ui.erec == t ? PINK : track_accent(t);
+    uint16_t ac = ui.erec == t ? AC3 : track_accent(t);
     if (!len) {
         cv_text(10, 11, &FONT_XS, ui.erec == t ? "PLAY THE NOTES, ONE BY ONE" : "NO NOTES YET", DIM);
         return;
@@ -1909,11 +1965,11 @@ static void foot_endless(int t)          /* Endless's notes, 16 at a time: a bar
     for (int i = 0; i < 16 && first + i < len; i++) {
         int x = 9 + i * 13, nt = p->endless[t][first + i], on = first + i == pos;
         if (nt == ENDLESS_REST) {
-            disc((float)x + 5.0f, 24.0f, 1.6f, on ? C_WHITE : DIM);
+            disc((float)x + 5.0f, 24.0f, 1.6f, on ? HI : DIM);
             continue;
         }
         int h = 5 + (hi > lo ? (nt - lo) * 15 / (hi - lo) : 8);
-        cv_rect(x, 27 - h, 11, h, on ? C_WHITE : ac);
+        cv_rect(x, 27 - h, 11, h, on ? HI : ac);
     }
 }
 
@@ -2115,23 +2171,23 @@ static void draw_footer(void)
     cv_begin(240, FOOT_H, BG);
     cv_rect(8, 2, 224, 1, RULE);
     if (hb >= 0) {                       /* a press held: what it will do, the time left in five squares */
-        cv_text(10, 8, &FONT_B, hl, C_WHITE);
-        squares(hsq, hb == B_SEL ? TEAL : PINK);
+        cv_text(10, 8, &FONT_B, hl, HI);
+        squares(hsq, hb == B_SEL ? AC1 : AC3);
     } else if (msg) {
         t[0] = 0;
         text_cat(t, ui.msg[0], sizeof t);
         text_cat(t, "  ", sizeof t);
         text_cat(t, ui.msg[1], sizeof t);
-        cv_text(120 - text_w(&FONT_B, t) / 2, 11, &FONT_B, t, C_WHITE);
+        cv_text(120 - text_w(&FONT_B, t) / 2, 11, &FONT_B, t, HI);
     } else if (und) {                    /* ALL: the time to undo it, or waiting for the bar */
         if (und == 1) {
-            cv_text(10, 8, &FONT_B, "GLO: UNDO ALL", YELLOW);
-            squares(usq, YELLOW);
+            cv_text(10, 8, &FONT_B, "GLO: UNDO ALL", KNOCK);
+            squares(usq, KNOCK);
         } else {
-            cv_text(120 - text_w(&FONT_B, "UNDONE AT THE BAR") / 2, 8, &FONT_B, "UNDONE AT THE BAR", YELLOW);
+            cv_text(120 - text_w(&FONT_B, "UNDONE AT THE BAR") / 2, 8, &FONT_B, "UNDONE AT THE BAR", KNOCK);
         }
     } else if (ui.mod) {
-        cv_text(10, 6, &FONT_XS, "MOD: HOLD A SOURCE KEY, TURN A KNOB", C_WHITE);
+        cv_text(10, 6, &FONT_XS, "MOD: HOLD A SOURCE KEY, TURN A KNOB", HI);
         cv_text(10, 21, &FONT_T, "KEYS 1-4 TIDES A  5-8 B  9, 10: A, B ON THE 4 KNOBS", MUTED);
     } else if (mode == 6) {
         foot_endless(ui.erec >= 0 ? ui.erec : ui.track);
@@ -2159,7 +2215,7 @@ static void draw_footer(void)
                 }
                 led((float)(x + 5), 19.0f, 3.6f, track_accent(i), lv[i]);
             }
-            cv_text(x + 13, 11, &FONT_XS, t, act ? C_WHITE : DIM);
+            cv_text(x + 13, 11, &FONT_XS, t, act ? HI : DIM);
         }
     }
     blit(0, FOOT_Y);
@@ -2195,13 +2251,19 @@ static void draw_row(int page, int32_t sh)
 static void draw(void)
 {
     int k = held(B_GLO) && !all.press && (ui.used[B_GLO] || plat_ms() - ui.down_at[B_GLO] >= 250u);
+    const theme_t *t = &THEMES[eng_project()->theme % NTHEMES];
     all_poll();
+    if (t != th) {                       /* the colours: another theme (K4 on GLO's second face, a project read) */
+        th = t;
+        ui.full = 1;
+    }
     if (k != knock) {                    /* ALL: in yellow and black while GLO is held, then as it was */
         knock = k;
         ui.full = 1;
     }
-    if (ui.full)
-        lcd_fill(0, 0, 240, 240, knock ? YELLOW : BG);
+    if (ui.full && (!data_ok || !engine_ok))
+        lcd_fill(0, 0, 240, 240, BG);    /* (every other screen covers it all, part by part, each in one go: drawn
+                                          * again over what was there, never through a blank frame) */
     int32_t sh = 0;
     anim_p = 1.0f;
     if (ui.anim) {                       /* the names written again */
@@ -2284,7 +2346,9 @@ static void go_page(int page) { go_page_dir(page, 0); }
  * transport stops; nothing is saved until SAVE is held */
 static void project_init(int which)
 {
-    uint8_t out = eng_project()->out_mode;   /* the output's setting stays (it is the FM-1's, not the music's) */
+    project_t *p = eng_project();        /* the machine's settings stay (the FM-1's, not the music's): the output,
+                                          * Warps' quality, the colours */
+    uint8_t out = p->out_mode, hq = p->warps_hq, theme = p->theme;
     eng_play(0);
     if (which == 2) {
         project_load();
@@ -2298,7 +2362,9 @@ static void project_init(int which)
         dirty = 1;
         app_say(which == 0 ? "NEW PROJECT" : "DEMO PATCH", which == 0 ? "4 PLAITS" : "LOADED");
     }
-    eng_project()->out_mode = out;
+    p->out_mode = out;
+    p->warps_hq = hq;
+    p->theme = theme;
     ui.track = 0;
     set_lane(0);
     go_page(PG_TRACK(0, 0));
@@ -2481,11 +2547,9 @@ static void button_down(int b)
         break;
     case B_GLO:                          /* ALL, or its undo */
         all_down();
-        ui.full = 1;
         break;
     case B_SEL: case B_SAVE: case B_REC: case B_ENV:
-        ui.full = 1;                     /* on release (a tap), held long, or held with a knob */
-        break;
+        break;                           /* on release (a tap), held long, or held with a knob */
     default:
         module_button(b);
         break;
@@ -2855,14 +2919,20 @@ static void input(void)
         e = plat_enc(EN_K1 + i);
         if (!e || !data_ok)
             continue;
-        if (ui.page == VP_SYS) {         /* K1 the project REC held loads, K2 the output */
+        if (ui.page == VP_SYS) {         /* K1 the project REC held loads, K2 the output, K3 Warps' quality, K4 the
+                                          * colours */
+            project_t *p = eng_project();
+            int d = e > 0 ? 1 : -1;
             if (i == 0)
-                ui.init_sel = clamp(ui.init_sel + (e > 0 ? 1 : -1), 0, 2);
-            if (i == 1) {
-                eng_project()->out_mode = (uint8_t)clamp(eng_project()->out_mode + (e > 0 ? 1 : -1), 0, 2);
-                dirty = 1;
-                ui.full = 1;
-            }
+                ui.init_sel = clamp(ui.init_sel + d, 0, 2);
+            else if (i == 1)
+                p->out_mode = (uint8_t)clamp(p->out_mode + d, 0, 2);
+            else if (i == 2)
+                p->warps_hq = (uint8_t)clamp(p->warps_hq + d, 0, 1);
+            else
+                p->theme = (uint8_t)clamp(p->theme % NTHEMES + d, 0, NTHEMES - 1);
+            if (i)
+                dirty = 1, ui.full = 1;
             continue;
         }
         if (ui.matrix) {

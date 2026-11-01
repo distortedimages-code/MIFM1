@@ -46,6 +46,15 @@
    algorithms' work at 6x. (0.3.5 and 0.3.6 tried to run the modulator's loops from RAM: the FM-1's clang has no
    `#pragma clang section`, and its 23-bit jumps do not reach between the flash and the RAM.)
 
+8. `warps/dsp/sample_rate_conversion_filters.h`, `modulator.h`, `modulator.cc` (`tools/warps_eco.py`): an ECO mode,
+   the cross-modulations oversampled 3 times instead of 6. A second pair of converters, made by the module's recipe
+   for that ratio and 44.1 kHz, `remez(33, [0, 12000 / (3 x 44100), 0.5 / 3, 0.5])`: flat to 12 kHz, -3.6 dB at
+   16 kHz, its images at -45 dB (the module's own 3x pair is 36 taps, for 96 kHz); `set_eco()` and `Process` take it
+   (the algorithms the same, on half the samples). Half the algorithms' work, 11 taps a phase instead of 12; what
+   the lower ratio lets through: the algorithms' harmonics over 66 kHz folding back (aliasing), audible on the
+   brightest (FOLD, XOR, COMPARATOR) up high (tests/native.cc 25: ECO against 6x, -36 to -47 dB apart, XOR -18).
+   MIFM1 plays ECO unless GLO's machine page (K3) says HQ.
+
 Not changed, but used differently from the modules: Marbles and Tides 2 run at the control rate (Marbles 8 frames
 per audio block, Tides one), their time constants given that rate; Clouds' granular processor (written for 32 kHz)
 is not played yet (Rings, measured at v0.0, is no longer part of the firmware: Plaits' MODAL and STRING models

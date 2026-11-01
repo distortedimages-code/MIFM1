@@ -223,11 +223,17 @@ float e_clk[ENG_TRACKS];
 int e_pos[ENG_TRACKS], e_dir[ENG_TRACKS], e_note[ENG_TRACKS];
 volatile int e_rec[ENG_TRACKS];
 
-float vbuf[ENG_TRACKS][kN];
+// the voices' blocks, two: the voices play this one (vbuf) while the mix takes the last one (mbuf), a block behind
+// with the effects, on either core
+float vbufs[2][ENG_TRACKS][kN];
+float (*vbuf)[kN] = vbufs[0];
+float (*mbuf)[kN] = vbufs[1];
 // Warps, one block behind: it plays the last block's carrier and modulator (w_car, w_mod, copied once the voices are
-// done) while the voices play this one; its output takes the place of a track's this block, crossfaded with that
-// track as it was (w_din, given with them; w_dry, as late as the output)
-float w_car[kN], w_mod[kN], w_din[kN], w_out[kN], w_dry[kN];
+// done) while the voices play this one; its output takes the place of a track's in the mix, crossfaded with that
+// track as it was (w_din, given with them; w_dry, as late as the output). Its outputs two blocks too: the one it
+// plays into (w_out, w_dry), the one the mix takes (m_out, m_dry)
+float w_car[kN], w_mod[kN], w_din[kN], w_outs[2][kN], w_drys[2][kN];
+float *w_out = w_outs[0], *w_dry = w_drys[0], *m_out = w_outs[1], *m_dry = w_drys[1];
 // ALL undone at the next bar (eng_back_at_bar): what to put back, taken in the block the bar starts in
 float back_val[ENG_NPARAMS];
 uint8_t back_algo[ENG_NPAGES];
@@ -582,15 +588,93 @@ void render_voice(int t, uint32_t n) {
   quiet[t] = !vgate[t] && pk < 3e-5f ? quiet[t] + 1 : 0;
 }
 
-// the effects and the master bus, a block behind (the output 2.9 ms later): they take the last block's mix (its dry
-// sum, its sends, its returns' gains) while the voices play this one, on either core: the mixer left to core 0 alone
-// is only the sums
+// the mix, the effects and the master bus, a block behind (the output 2.9 ms later): they take the last block's
+// voices (mbuf) while the voices play this one, on either core. What the mix needs was taken once the voices were
+// done (core 0 alone: only the gains, per track): MixJob
 float fx_dry_l[kN], fx_dry_r[kN], fx_rsend[kN], fx_dsend[kN], fx_out_l[kN], fx_out_r[kN];
 float fx_ret0, fx_ret1, fx_dret0, fx_dret1, fx_pk[2];
 uint32_t fx_n;                           // its frames (0: none yet)
 int fx_mode;                             // the output's mode, as the mix was taken
 
+struct MixJob {
+  int dst, mute, job;                    // Warps: the track its output replaces (-1: none), the one it silences, its
+  float o0, o1;                          // output there (0: silence, not yet run); its lane's opening over the block
+  float gl[ENG_TRACKS], gr[ENG_TRACKS], send[ENG_TRACKS], dsend[ENG_TRACKS];       // the gains from
+  float dgl[ENG_TRACKS], dgr[ENG_TRACKS], dsend_d[ENG_TRACKS], ddsend_d[ENG_TRACKS];   // and their steps a sample
+  float gain[ENG_TRACKS];                // the level (the meters')
+  float duck0[ENG_TRACKS], duck1[ENG_TRACKS], duck_rel;   // the duck: each track's depth from, to; DECAY a sample
+  uint8_t hit[kFrames];                  // T1's rises, frame by frame
+  float pk[ENG_TRACKS];                  // (out: each track's peak, the meters')
+};
+MixJob mj;
+
+void mix_job(uint32_t n) {
+  float inv = 1.0f / static_cast<float>(n);
+  if (mj.dst >= 0) {                     // Warps' output in its track's place, the modulator's track silenced
+    float o = mj.o0, d = (mj.o1 - mj.o0) * inv;
+    float* x = mbuf[mj.dst];
+    for (uint32_t i = 0; i < n; ++i) {
+      o += d;
+      x[i] = mj.job ? m_dry[i] + o * (m_out[i] - m_dry[i]) : 0.0f;   // (the first block of a new patching: silence,
+      if (mj.mute >= 0) mbuf[mj.mute][i] *= 1.0f - o;                // Warps not yet run)
+    }
+  }
+  {                                     // the duck: T1's rises (their frames), DECAY, each track's depth
+    float rel = mj.duck_rel;
+    uint32_t fr = n / kFrames;
+    for (uint32_t i = 0; i < n; ++i) {
+      if (i % fr == 0 && mj.hit[i / fr]) duck_d = 1.0f;
+      else duck_d *= rel;
+      duck_s += (duck_d - duck_s) * 0.03f;
+      duckv[i] = duck_s;
+    }
+    if (duck_s < 1e-5f && duck_d < 1e-5f) duck_s = duck_d = 0.0f;   // (never down into the subnormals: slow)
+    for (int t = 1; t < ENG_TRACKS; ++t) {   // (before the sends: what a track sends ducks with it)
+      float d0 = mj.duck0[t], d1 = mj.duck1[t], dd = (d1 - d0) * inv;
+      if (d0 <= 0.0f && d1 <= 0.0f) continue;
+      for (uint32_t i = 0; i < n; ++i) {
+        d0 += dd;
+        mbuf[t][i] *= 1.0f - d0 * duckv[i];
+      }
+    }
+  }
+  float pk[ENG_TRACKS] = {0, 0, 0, 0};
+  float sends[ENG_TRACKS], dsends[ENG_TRACKS], gl[ENG_TRACKS], gr[ENG_TRACKS];
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    sends[t] = mj.send[t];
+    dsends[t] = mj.dsend[t];
+    gl[t] = mj.gl[t];
+    gr[t] = mj.gr[t];
+  }
+  for (uint32_t i = 0; i < n; ++i) {
+    float s = 0.0f, ds = 0.0f;
+    for (int t = 0; t < ENG_TRACKS; ++t) {
+      sends[t] += mj.dsend_d[t];
+      dsends[t] += mj.ddsend_d[t];
+      s += sends[t] * mbuf[t][i];
+      ds += dsends[t] * mbuf[t][i];
+      float a = fm_fabsf(mbuf[t][i] * mj.gain[t]);
+      if (a > pk[t]) pk[t] = a;
+    }
+    fx_rsend[i] = s;
+    fx_dsend[i] = ds;
+  }
+  for (uint32_t i = 0; i < n; ++i) {
+    float dl = 0.0f, dr = 0.0f;
+    for (int t = 0; t < ENG_TRACKS; ++t) {
+      gl[t] += mj.dgl[t];
+      gr[t] += mj.dgr[t];
+      dl += gl[t] * mbuf[t][i];
+      dr += gr[t] * mbuf[t][i];
+    }
+    fx_dry_l[i] = dl;
+    fx_dry_r[i] = dr;
+  }
+  for (int t = 0; t < ENG_TRACKS; ++t) mj.pk[t] = pk[t];
+}
+
 void fx_job(uint32_t n) {
+  mix_job(n);
   float inv = 1.0f / static_cast<float>(n), ret = fx_ret0, dret = (fx_ret1 - fx_ret0) * inv, eret = fx_dret0;
   float deret = (fx_dret1 - fx_dret0) * inv, pr = 0.0f, pd = 0.0f;
   mrv_process(reverb, fx_rsend, wet_l, wet_r, n);
@@ -678,32 +762,32 @@ void set_warps() {
   float alg = E(LANE_WARPS, 0), level1 = E(LANE_WARPS, 2);
   mw_set(warps, shift ? alg : alg * kWarpsTravel, E(LANE_WARPS, 1), level1, E(LANE_WARPS, 3), osc,
          12.0f + 60.0f * level1, shift);   // the oscillator's note: LEVEL 1, as on the module
+  mw_eco(warps, !proj.warps_hq);        // ECO unless HQ: its cross-modulations at 3x
 }
 
 // after the voices: this block's carrier, modulator and the track Warps replaces, kept for the next block's job;
-// Warps' output (the last block's, warped) in its track's place, crossfaded with that track (as late) by Warps' lane
-// from o0 to o1 over the block; the modulator's track silenced as Warps opens, unless heard dry
+// the mix (mix_job) puts Warps' output (this block's, warped from the last) in its track's place, crossfaded with
+// that track (as late) by Warps' lane from o0 to o1 over the block, the modulator's track silenced as Warps opens,
+// unless heard dry
 void route_warps(uint32_t n, float o0, float o1) {
   int car = Pi(PG_WARPS(1), 0), mod = Pi(PG_WARPS(1), 1);
   mod = mod < 0 ? 0 : mod > 3 ? 3 : mod;
   if (car <= WC_OFF || car > WC_OSC3) {
-    w_last = w_dst = w_mute = -1;
+    w_last = w_dst = w_mute = mj.dst = -1;
     return;
   }
-  int ct = car <= WC_T4 ? car - WC_T1 : -1, dst = ct >= 0 ? ct : mod, job = w_job;
+  int ct = car <= WC_T4 ? car - WC_T1 : -1, dst = ct >= 0 ? ct : mod;
   int mute = mod != dst && !Pi(PG_WARPS(1), 2) ? mod : -1;
-  float o = o0, d = (o1 - o0) / static_cast<float>(n);
   for (uint32_t i = 0; i < n; ++i) {
-    float x = vbuf[dst][i];
     w_car[i] = ct >= 0 ? vbuf[ct][i] : 0.0f;
     w_mod[i] = vbuf[mod][i];
-    w_din[i] = x;
-    o += d;
-    vbuf[dst][i] = job ? w_dry[i] + o * (w_out[i] - w_dry[i]) : 0.0f;   // (the first block of a new patching:
-    if (mute >= 0) vbuf[mute][i] *= 1.0f - o;                          // silence, Warps not yet run)
+    w_din[i] = vbuf[dst][i];
   }
-  w_dst = dst;
-  w_mute = mute;
+  mj.dst = w_dst = dst;
+  mj.mute = w_mute = mute;
+  mj.job = w_job;
+  mj.o0 = o0;
+  mj.o1 = o1;
   w_last = car | mod << 4;
 }
 
@@ -716,6 +800,9 @@ uint32_t pct10(uint32_t ticks, uint32_t n) {   // ticks as tenths of a percent o
 }  // namespace
 
 extern "C" {
+#ifdef ENG_PROFILE
+uint32_t eng_prof[3];                    // (a computer's measure: the preparation, the mix, the whole render)
+#endif
 
 int eng_page_type(int page) { return page_type(page); }
 int eng_page_track(int page) {
@@ -1393,6 +1480,9 @@ void eng_render(float* l, float* r, uint32_t n) {
   if (fx_n) todo |= 1u << kTaskFx;
   for (int t = 0; t < ENG_TRACKS; ++t)
     if ((rest >> t) & 1u) render_voice(t, n);   // (silence: nothing to share)
+#ifdef ENG_PROFILE
+  eng_prof[0] += plat_ticks24() - t0;
+#endif
   uint32_t mask = split_tasks(todo);
   int on_core1 = use_core1 && plat_cpu2_on() ? plat_cpu2_run(core1_job, mask) : 0;
   for (int i = 0; i < kTasks; ++i)
@@ -1409,6 +1499,9 @@ void eng_render(float* l, float* r, uint32_t n) {
     c0 = plat_ticks24() - t0;
   }
   on_core1_last = on_core1;
+#ifdef ENG_PROFILE
+  uint32_t tj = plat_ticks24();
+#endif
   for (int i = 0; i < ENG_TRACKS; ++i)  // the costs: averaged over ~8 blocks (a voice's while it plays)
     if ((todo >> i) & 1u) task_cost[i] += (static_cast<float>(task_ticks[i]) - task_cost[i]) * 0.125f;
   if (w_job && warps_calls)
@@ -1420,93 +1513,63 @@ void eng_render(float* l, float* r, uint32_t n) {
     l[i] = fx_n == n ? fx_out_l[i] : 0.0f;
     r[i] = fx_n == n ? fx_out_r[i] : 0.0f;
   }
+  // 5. what this block's mix needs (the next block's task plays it, with the effects): Warps' input and routing, the
+  // gains and sends, the duck; then the blocks swap (the voices' and Warps' next ones where the mix took these)
+  float pk[ENG_TRACKS + 2];
+  for (int t = 0; t < ENG_TRACKS; ++t) pk[t] = fx_n ? mj.pk[t] : 0.0f;   // (the last block's mix's, before mj changes)
   const int fd = LANE_DELAY - ENG_TRACKS, fr = LANE_REVERB - ENG_TRACKS, fw = LANE_WARPS - ENG_TRACKS;
   route_warps(n, fx_open[fw], open[fw]);
-  // 5. this block's mix, for the next block's effects: the levels, the sums, the sends into the delay and Clouds'
-  // reverb
   uint32_t g = 0;
   for (int t = 0; t < ENG_TRACKS; ++t) g |= vgate[t] ? 1u << t : 0u;
   gates_now = g;
   // the gains: each block's targets, glided (a trig's random pan, a lock on the level, a cable), and reached sample by
   // sample over the block from the last block's: a gain that jumps at a block's edge is a click on what plays
-  float gain[ENG_TRACKS], gl[ENG_TRACKS], gr[ENG_TRACKS], sends[ENG_TRACKS], dsends[ENG_TRACKS];
-  float dgl[ENG_TRACKS], dgr[ENG_TRACKS], dsend_d[ENG_TRACKS], ddsend_d[ENG_TRACKS], inv = 1.0f / static_cast<float>(n);
+  float inv = 1.0f / static_cast<float>(n);
   for (int t = 0; t < ENG_TRACKS; ++t) {
     // the pan: equal power (a track as loud wherever it sits: 0.71 a side in the middle, 1 on one side)
     pan_s[t] += (E(t, TP_PAN) - pan_s[t]) * 0.5f;
     lev_s[t] += (E(t, TP_LEVEL) - lev_s[t]) * 0.5f;
     snd_s[t] += (E(t, TP_SEND) - snd_s[t]) * 0.5f;
     dsnd_s[t] += (E(t, TP_DSEND) - dsnd_s[t]) * 0.5f;
-    float a = (clampf(pan_s[t], -1.0f, 1.0f) + 1.0f) * 0.785398f, level = lev_s[t];
-    gain[t] = level * 0.7f;
+    float a = (clampf(pan_s[t], -1.0f, 1.0f) + 1.0f) * 0.785398f, level = lev_s[t], gain = level * 0.7f;
     float tl = level * 0.85f * fm_cosf(a), tr = level * 0.85f * fm_sinf(a);
     // the sends: post-fader, before the pan (both effects are stereo themselves), each through its lane's opening
-    float ts = snd_s[t] * gain[t] * open[fr], td = dsnd_s[t] * gain[t] * open[fd];
-    gl[t] = mix_gl[t];
-    gr[t] = mix_gr[t];
-    sends[t] = mix_send[t];
-    dsends[t] = mix_dsend[t];
-    dgl[t] = (tl - gl[t]) * inv;
-    dgr[t] = (tr - gr[t]) * inv;
-    dsend_d[t] = (ts - sends[t]) * inv;
-    ddsend_d[t] = (td - dsends[t]) * inv;
+    float ts = snd_s[t] * gain * open[fr], td = dsnd_s[t] * gain * open[fd];
+    mj.gain[t] = gain;
+    mj.gl[t] = mix_gl[t];
+    mj.gr[t] = mix_gr[t];
+    mj.send[t] = mix_send[t];
+    mj.dsend[t] = mix_dsend[t];
+    mj.dgl[t] = (tl - mix_gl[t]) * inv;
+    mj.dgr[t] = (tr - mix_gr[t]) * inv;
+    mj.dsend_d[t] = (ts - mix_send[t]) * inv;
+    mj.ddsend_d[t] = (td - mix_dsend[t]) * inv;
     mix_gl[t] = tl;
     mix_gr[t] = tr;
     mix_send[t] = ts;
     mix_dsend[t] = td;
+    mj.duck0[t] = duck_depth[t];        // the duck's depth (T2..T4)
+    mj.duck1[t] = duck_depth[t] = t ? E(t, TP_DUCK) : 0.0f;
   }
   for (int f = 0; f < kFx; ++f) fx_open[f] = open[f];
-  {                                     // the duck: T1's rises (their frames), DECAY, each track's depth
-    float rel = fm_exp2f(-1.442695f / (kSr * duck_tau(P(PG_DUCK, 0)))), step = static_cast<float>(n / kFrames);
-    for (uint32_t i = 0; i < n; ++i) {
-      if (i % (n / kFrames) == 0 && duck_hit[i / (n / kFrames)]) duck_d = 1.0f;
-      else duck_d *= rel;
-      duck_s += (duck_d - duck_s) * 0.03f;
-      duckv[i] = duck_s;
-    }
-    if (duck_s < 1e-5f && duck_d < 1e-5f) duck_s = duck_d = 0.0f;   // (never down into the subnormals: slow)
-    (void)step;
-    for (int t = 1; t < ENG_TRACKS; ++t) {   // (before the sends: what a track sends ducks with it)
-      float d0 = duck_depth[t], d1 = E(t, TP_DUCK), dd = (d1 - d0) * inv;
-      duck_depth[t] = d1;
-      if (d0 <= 0.0f && d1 <= 0.0f) continue;
-      for (uint32_t i = 0; i < n; ++i) {
-        d0 += dd;
-        vbuf[t][i] *= 1.0f - d0 * duckv[i];
-      }
-    }
-  }
+  mj.duck_rel = fm_exp2f(-1.442695f / (kSr * duck_tau(P(PG_DUCK, 0))));
+  for (uint32_t k = 0; k < kFrames; ++k) mj.hit[k] = duck_hit[k];
   float rv = E(LANE_REVERB, 3) * 1.6f, dv = E(LANE_DELAY, 7) * 1.2f;
-  float pk[ENG_TRACKS + 2] = {0, 0, 0, 0, 0, 0};
   fx_ret0 = mix_ret;                    // the returns' gains, from the last block's to this one's
   fx_ret1 = rv;
   fx_dret0 = mix_dret;
   fx_dret1 = dv;
   mix_ret = rv;
   mix_dret = dv;
-  for (uint32_t i = 0; i < n; ++i) {
-    float s = 0.0f, ds = 0.0f;
-    for (int t = 0; t < ENG_TRACKS; ++t) {
-      sends[t] += dsend_d[t];
-      dsends[t] += ddsend_d[t];
-      s += sends[t] * vbuf[t][i];
-      ds += dsends[t] * vbuf[t][i];
-      float a = fm_fabsf(vbuf[t][i] * gain[t]);
-      if (a > pk[t]) pk[t] = a;
-    }
-    fx_rsend[i] = s;
-    fx_dsend[i] = ds;
-  }
-  for (uint32_t i = 0; i < n; ++i) {
-    float dl = 0.0f, dr = 0.0f;
-    for (int t = 0; t < ENG_TRACKS; ++t) {
-      gl[t] += dgl[t];
-      gr[t] += dgr[t];
-      dl += gl[t] * vbuf[t][i];
-      dr += gr[t] * vbuf[t][i];
-    }
-    fx_dry_l[i] = dl;
-    fx_dry_r[i] = dr;
+  {
+    float(*v)[kN] = vbuf;               // the voices' next block where the mix takes this one
+    vbuf = mbuf;
+    mbuf = v;
+    float *o = w_out, *d = w_dry;       // and Warps'
+    w_out = m_out;
+    w_dry = m_dry;
+    m_out = o;
+    m_dry = d;
   }
   pk[ENG_TRACKS] = fx_pk[0];            // (the returns' peaks: the last block's, measured by its task)
   pk[ENG_TRACKS + 1] = fx_pk[1];
@@ -1522,6 +1585,10 @@ void eng_render(float* l, float* r, uint32_t n) {
     }
     hist_at = (hist_at + 1u) % ENG_HIST;
   }
+#ifdef ENG_PROFILE
+  eng_prof[1] += plat_ticks24() - tj;
+  eng_prof[2] += plat_ticks24() - t0;
+#endif
   // the load: one-pole averages, the worst total held a second
   uint32_t tot = plat_ticks24() - t0;
   uint32_t p0 = pct10(c0, n), p1 = pct10(c1, n), pt = pct10(tot, n);

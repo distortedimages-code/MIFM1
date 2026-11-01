@@ -486,6 +486,46 @@ int main(int argc, char** argv) {
     }
   }
 
+  // 25. Warps' ECO (its cross-modulations at 3x instead of 6x): each algorithm, a 220 Hz carrier by a 330 Hz
+  // modulator, plays as at 6x (what differs, the samples a little apart in time and what folds back from over 66 kHz,
+  // under it: -35 dB or so, XOR's bits the most, -18), in less time
+  {
+    static uint8_t wm[96 * 1024] __attribute__((aligned(8)));
+    static float c[44100], m[44100], o[2][44100], dry[128];
+    for (int i = 0; i < 44100; ++i)
+      c[i] = 0.4f * std::sin(2.0 * M_PI * 220.0 * i / 44100.0), m[i] = 0.4f * std::sin(2.0 * M_PI * 330.0 * i / 44100.0);
+    const int nb = 44100 / 128;
+    double us[2] = {0, 0}, worst = -200;
+    printf("warps ECO against 6x, the difference (dB):");
+    for (int a = 0; a < 6; ++a) {
+      for (int eco = 0; eco < 2; ++eco) {
+        mw_init(wm);
+        mw_eco(wm, eco);
+        double t0 = static_cast<double>(clock());
+        for (int b = 0; b < nb; ++b) {
+          mw_set(wm, a / 8.0f, 0.5f, 0.6f, 0.6f, 0, 48.0f, 0);
+          mw_render(wm, c + b * 128, m + b * 128, m + b * 128, o[eco] + b * 128, dry, 128);
+        }
+        us[eco] += (static_cast<double>(clock()) - t0) / CLOCKS_PER_SEC * 1e6 / nb;
+      }
+      double best = 1e30, ref = 0;
+      for (int i = 4410; i < nb * 128 - 8; ++i) ref += static_cast<double>(o[0][i]) * o[0][i];
+      for (int lag = -3; lag <= 3; ++lag) {                // (the two pairs of filters delay it a little differently)
+        double e = 0;
+        for (int i = 4410; i < nb * 128 - 8; ++i) {
+          double d = static_cast<double>(o[1][i + lag]) - o[0][i];
+          e += d * d;
+        }
+        if (e < best) best = e;
+      }
+      double db = 10.0 * std::log10(best / (ref + 1e-20) + 1e-20);
+      printf(" %s %.0f", eng_warps_name(a), db);
+      if (db > worst) worst = db;
+      if (ref <= 1e-6 || db > -15.0) ++failures, printf(" FAIL");
+    }
+    printf("; its time %.1f us a block, 6x %.1f\n", us[1] / 6, us[0] / 6);
+  }
+
   // 13. 0.1.9's project (version 4, 2644 bytes) read into this version's: all of it, Warps off
   {
     static uint8_t buf[sizeof(project_t)];

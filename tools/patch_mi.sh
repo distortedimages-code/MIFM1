@@ -36,4 +36,8 @@ python3 -I "$(dirname "$0")/warps_no_vocoder.py" "$T/warps"
 #    of 0 (tools/warps_fast.py)
 python3 -I "$(dirname "$0")/warps_fast.py" "$T/warps"
 grep -q "MIFM1: one algorithm on a mark" "$T/warps/dsp/modulator.h" || { echo "patch_mi: warps: one algorithm"; exit 1; }
+# 8. Warps' ECO mode: its cross-modulations oversampled 3 times instead of 6 (a second pair of converters, 3x at
+#    44.1 kHz, by the module's recipe), half the work; MIFM1 turns it on (tools/warps_eco.py)
+python3 -I "$(dirname "$0")/warps_eco.py" "$T/warps"
+grep -q "MIFM1: ECO" "$T/warps/dsp/modulator.cc" || { echo "patch_mi: warps: ECO"; exit 1; }
 echo "patched $T"

@@ -6,6 +6,8 @@
 // patch_mi.sh 5): the vocoder's filter bank, the frequency shifter's allpass poles and the oscillators' note table by
 // the module's own scripts; the cross-modulations' 6x oversampling filters by the recipe written above them, longer
 // (72 taps) to stay flat to 12 kHz. (0.2.0 and 0.2.1 ran it at 88.2 kHz: twice the cost, too much for the FM-1.)
+// ECO (mw_eco, MIFM1's default since 0.3.7): its cross-modulations at 3x, through a pair made by the same recipe
+// (tools/warps_eco.py, patch_mi.sh 8): half their work.
 //
 // Its inputs never reach exact zero on the module (its converters' noise): here they get a 1-LSB dither, so that in
 // a silence its filters' states stay ordinary numbers instead of sinking into subnormals (very slow on most FPUs).
@@ -68,6 +70,8 @@ void mw_set(void* v, float algorithm, float timbre, float level1, float level2, 
   p->carrier_shape = osc < 0 ? 0 : osc > 3 ? 3 : osc;
   p->note = note;
 }
+
+void mw_eco(void* v, int eco) { static_cast<WarpsMod*>(v)->modulator.set_eco(eco != 0); }
 
 uint32_t mw_calls(void* v, uint32_t n) {   // the Process calls n frames make
   (void)v;

@@ -115,7 +115,8 @@ typedef struct {
     float val[ENG_NPARAMS];
     uint8_t algo[ENG_NPAGES];            /* the page's ALGORITHM choice: Plaits' model, Tides' ramp */
     uint8_t out_mode;                    /* the output: 0 stereo, 1 a headset with a mic (the right inverted), 2 mono */
-    uint8_t rsv[2];
+    uint8_t warps_hq;                    /* Warps: 0 ECO (its cross-modulations at 3x), 1 HQ (6x, the module's) */
+    uint8_t theme;                       /* the screen's colours (app.c's THEMES) */
     cable_t cable[ENG_TRACKS + 1][ENG_CABLES];   /* the tracks' cables, then the global ones */
     uint8_t trig[ENG_LANES][ENG_STEPS / 8];      /* the steps with a trig, a bit each */
     int8_t rnd[ENG_LANES][ENG_NTP];      /* each lane parameter's random: > 0 new at each trig, < 0 looped, 0 none */

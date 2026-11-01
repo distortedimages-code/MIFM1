@@ -74,6 +74,7 @@ void mw_set(void *w, float algorithm, float timbre, float level1, float level2, 
 /* in calls of 64 frames, none late; dry: the input given as dry_in, as is (to mix with the output) */
 void mw_render(void *w, const float *carrier, const float *modulator, const float *dry_in, float *out, float *dry,
                uint32_t n);
+void mw_eco(void *w, int eco);           /* 1: the cross-modulations oversampled 3x instead of 6 (half the work) */
 uint32_t mw_calls(void *w, uint32_t n);  /* the modulator's Process calls the next n frames make (its cost goes by them) */
 
 /* ---- Tides 2 ---- */

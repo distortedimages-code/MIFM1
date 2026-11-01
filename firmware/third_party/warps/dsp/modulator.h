@@ -151,6 +151,7 @@ class Modulator {
 
   inline bool easter_egg() const { return easter_egg_; }
   inline void set_easter_egg(bool easter_egg) { easter_egg_ = easter_egg; }
+  inline void set_eco(bool eco) { eco_ = eco; }  // MIFM1: ECO, the cross-modulations at 3x
   
  private:
   template<XmodAlgorithm algorithm_1, XmodAlgorithm algorithm_2>
@@ -216,6 +217,7 @@ class Modulator {
   
   bool bypass_;
   bool easter_egg_;
+  bool eco_;  // MIFM1: ECO
   
   Parameters parameters_;
   Parameters previous_parameters_;
@@ -226,6 +228,8 @@ class Modulator {
   QuadratureOscillator quadrature_oscillator_;
   
   SampleRateConverter<SRC_UP, kOversampling, 72> src_up_[2];
+  SampleRateConverter<SRC_UP, 3, 33> src_up_eco_[2];  // MIFM1: ECO, the 3x pair (tools/warps_eco.py)
+  SampleRateConverter<SRC_DOWN, 3, 33> src_down_eco_;
   SampleRateConverter<SRC_DOWN, kOversampling, 72> src_down_;  // MIFM1: 72 taps (were 48), the 44.1 kHz pair
 
   // Vocoder vocoder_;  MIFM1: no vocoder (64 KB; not played)

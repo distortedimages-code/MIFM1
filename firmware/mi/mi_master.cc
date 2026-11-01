@@ -43,8 +43,8 @@ struct Master {
   // OTT
   float depth, time, drive, level;       // 0..1, x, linear, linear
   float env[3];                          // each band's level, dB
-  float bgain[3];                        // each band's gain (linear), the last sample's
-  float bdb[3];                          // the same in dB (the screen's)
+  float bk[3];                           // each band's weight out (its gain, DEPTH, LEVEL), the last sample's
+  float bdb[3];                          // its gain in dB (the screen's)
 };
 
 inline float coef(float seconds) {       // a one-pole's coefficient a chunk for a time constant
@@ -91,7 +91,9 @@ void ott(Master* m, float* l, float* r, uint32_t n) {
         for (int b = 0; b < 3; ++b) peak[b] = fm_maxf(peak[b], fm_fabsf(band[b][c][i]));
       }
     }
-    float g[3], dg[3];
+    // the output: the dry (the bands' sum: the split is complementary) and the wet (each band by its gain) mixed by
+    // DEPTH, then LEVEL: each band by one weight, k = LEVEL x (1 - DEPTH + DEPTH x gain), glided over the chunk
+    float k[3], dk[3];
     for (int b = 0; b < 3; ++b) {        // each band's level, then its gain: down from above, up from below
       float lv = 6.0206f * fm_log2f(peak[b]);
       m->env[b] += (lv - m->env[b]) * coef((lv > m->env[b] ? kAttack[b] : kRelease[b]) * m->time);
@@ -103,21 +105,18 @@ void ott(Master* m, float* l, float* r, uint32_t n) {
         db += up;
       }
       m->bdb[b] = db;
-      g[b] = fm_db2lin(db);
-      dg[b] = (g[b] - m->bgain[b]) / static_cast<float>(len);
+      k[b] = m->level * (1.0f + m->depth * (fm_db2lin(db) - 1.0f));
+      dk[b] = (k[b] - m->bk[b]) / static_cast<float>(len);
     }
+    float k0 = m->bk[0], k1 = m->bk[1], k2 = m->bk[2];
     for (uint32_t i = 0; i < len; ++i) {
-      float wet[2] = {0.0f, 0.0f};
-      for (int b = 0; b < 3; ++b) {
-        m->bgain[b] += dg[b];
-        wet[0] += band[b][0][i] * m->bgain[b];
-        wet[1] += band[b][1][i] * m->bgain[b];
-      }
-      float dl = l[at + i] * m->drive, dr = r[at + i] * m->drive;
-      l[at + i] = (dl + m->depth * (wet[0] - dl)) * m->level;
-      r[at + i] = (dr + m->depth * (wet[1] - dr)) * m->level;
+      k0 += dk[0];
+      k1 += dk[1];
+      k2 += dk[2];
+      l[at + i] = band[0][0][i] * k0 + band[1][0][i] * k1 + band[2][0][i] * k2;
+      r[at + i] = band[0][1][i] * k0 + band[1][1][i] * k1 + band[2][1][i] * k2;
     }
-    for (int b = 0; b < 3; ++b) m->bgain[b] = g[b];
+    for (int b = 0; b < 3; ++b) m->bk[b] = k[b];
   }
 }
 
@@ -148,7 +147,7 @@ void mms_init(void* mem) {
   m->drive = m->level = 1.0f;
   for (int b = 0; b < 3; ++b) {
     m->env[b] = -60.0f;
-    m->bgain[b] = 1.0f;
+    m->bk[b] = 1.0f;
     m->bdb[b] = 0.0f;
   }
 }
@@ -159,7 +158,7 @@ void mms_mode(void* v, int mode) {
   m->mode = mode;                        // (from where it is: the gains glide from 1)
   m->gr = 0.0f;
   m->gain = 1.0f;
-  for (int b = 0; b < 3; ++b) m->bgain[b] = 1.0f;
+  for (int b = 0; b < 3; ++b) m->bk[b] = m->level;   // (the gains at 1: the dry, at LEVEL)
 }
 
 void mms_comp(void* v, float threshold_db, float ratio, float release_s, float makeup_db) {

@@ -50,6 +50,10 @@ void Modulator::Init(float sample_rate) {
     quadrature_transform_[i].Init(lut_ap_poles, LUT_AP_POLES_SIZE);
   }
   src_down_.Init();
+  src_up_eco_[0].Init();  // MIFM1: ECO
+  src_up_eco_[1].Init();
+  src_down_eco_.Init();
+  eco_ = false;
   
   xmod_oscillator_.Init(sample_rate);
   vocoder_oscillator_.Init(sample_rate);
@@ -286,8 +290,14 @@ void Modulator::Process(ShortFrame* input, ShortFrame* output, size_t size) {
   }
   
   if (vocoder_amount < 0.5f) {
-    src_up_[0].Process(carrier, oversampled_carrier, size);
-    src_up_[1].Process(modulator, oversampled_modulator, size);
+    size_t oversampling = eco_ ? 3 : kOversampling;  // MIFM1: ECO, 3x
+    if (eco_) {
+      src_up_eco_[0].Process(carrier, oversampled_carrier, size);
+      src_up_eco_[1].Process(modulator, oversampled_modulator, size);
+    } else {
+      src_up_[0].Process(carrier, oversampled_carrier, size);
+      src_up_[1].Process(modulator, oversampled_modulator, size);
+    }
     
     float algorithm = min(parameters_.modulation_algorithm * 8.0f, 5.999f);
     float previous_algorithm = min(
@@ -308,9 +318,12 @@ void Modulator::Process(ShortFrame* input, ShortFrame* output, size_t size) {
         oversampled_modulator,
         oversampled_carrier,
         oversampled_output,
-        size * kOversampling);
+        size * oversampling);
 
-    src_down_.Process(oversampled_output, main_output, size * kOversampling);
+    if (eco_)
+      src_down_eco_.Process(oversampled_output, main_output, size * 3);
+    else
+      src_down_.Process(oversampled_output, main_output, size * kOversampling);
   } else {
     float release_time = 4.0f * (parameters_.modulation_algorithm - 0.75f);
     CONSTRAIN(release_time, 0.0f, 1.0f);

@@ -171,6 +171,38 @@ struct SRC_FIR<SRC_DOWN, 6, 72> {
   }
 };
 
+// MIFM1: ECO, 3x at 44.1 kHz (tools/warps_eco.py), with:
+// 3 * scipy.signal.remez(33, [0, 12000 / (3 * 44100), 0.5 / 3, 0.5], [1, 0], fs=1.0)
+template<>
+struct SRC_FIR<SRC_UP, 3, 33> {
+  template<int32_t i> inline float Read() const {
+    const float h[] = {
+       6.847375034e-03, -6.962151387e-03, -1.660930693e-02, -2.080082585e-02,
+      -9.170629041e-03,  1.891275309e-02,  4.833195207e-02,  5.358900511e-02,
+       1.578644684e-02, -5.776973597e-02, -1.261369368e-01, -1.293630438e-01,
+      -2.138269892e-02,  1.968299772e-01,  4.655577005e-01,  6.875523212e-01,
+       7.735521945e-01,
+    };
+    return h[i];
+  }
+};
+
+// MIFM1: ECO, 3x at 44.1 kHz (tools/warps_eco.py), with:
+// 1 * scipy.signal.remez(33, [0, 12000 / (3 * 44100), 0.5 / 3, 0.5], [1, 0], fs=1.0)
+template<>
+struct SRC_FIR<SRC_DOWN, 3, 33> {
+  template<int32_t i> inline float Read() const {
+    const float h[] = {
+       2.282458345e-03, -2.320717129e-03, -5.536435644e-03, -6.933608615e-03,
+      -3.056876347e-03,  6.304251030e-03,  1.611065069e-02,  1.786300170e-02,
+       5.262148948e-03, -1.925657866e-02, -4.204564560e-02, -4.312101461e-02,
+      -7.127566308e-03,  6.560999241e-02,  1.551859002e-01,  2.291841071e-01,
+       2.578507315e-01,
+    };
+    return h[i];
+  }
+};
+
 }  // namespace warps
 
 #endif  // WARPS_DSP_SAMPLE_RATE_CONVERSION_FILTERS_H_
