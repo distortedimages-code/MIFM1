@@ -991,8 +991,14 @@ void eng_render(float* l, float* r, uint32_t n) {
     float wl = ret * wet_l[i], wr = ret * wet_r[i];
     float a = fm_fabsf(wl) > fm_fabsf(wr) ? fm_fabsf(wl) : fm_fabsf(wr);
     if (a > pk[ENG_TRACKS]) pk[ENG_TRACKS] = a;
-    l[i] = sat(dl + wl);
-    r[i] = sat(dr + wr);
+    float ol = sat(dl + wl), orr = sat(dr + wr);
+    if (proj.out_mode == 1) {           // the right inverted: for an output whose right channel comes out inverted
+      orr = -orr;
+    } else if (proj.out_mode == 2) {    // mono
+      ol = orr = 0.5f * (ol + orr);
+    }
+    l[i] = ol;
+    r[i] = orr;
   }
   for (int t = 0; t <= ENG_TRACKS; ++t)    // the meters: up at once, down slowly
     meter[t] = pk[t] > meter[t] ? pk[t] : meter[t] * 0.985f;

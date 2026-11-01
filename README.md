@@ -108,6 +108,10 @@ les triolets), GATE (la longueur des notes), DIRECTION (avant, arrière, aller-r
 tenu** efface la boucle (la piste retrouve ses pas ou Marbles). Probabilité, ratchets, aléatoire et quantiseur
 s'appliquent aussi à ses notes. En bas, ses notes en barres, la note jouée en blanc.
 
+**La sortie** (GLO, SELECT, K2) : Stereo, Right inverted (le canal droit inversé, pour une sortie dont un canal
+arrive en opposition de phase : au casque, un son au centre paraît creux et plus faible que sur un côté) ou Mono.
+Le réglage reste quand on charge un autre projet.
+
 **Le clavier** relance la note à chaque touche, même jouée legato, et une touche tapée très vite sonne quand même.
 
 Un projet sauvegardé avec la 0.1 ou la 0.1.3 se recharge tel quel (ses réglages, ses modèles, ses câbles) ; le séquenceur pas à

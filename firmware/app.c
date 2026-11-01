@@ -1409,11 +1409,13 @@ static void draw_global(void)
             int_text((int32_t)plat_cpu_pct(), v);
             text_cat(v, "%", sizeof v);
             break;
-        case 4:
-            l = "Core 1's stack";
-            int_text((int32_t)plat_cpu2_stack(), v);
-            text_cat(v, " / 2816 B", sizeof v);
+        case 4: {                        /* the output (K2): stereo, the right inverted, mono */
+            static const char *const O[3] = {"Stereo", "Right inverted", "Mono"};
+            l = "Output (K2)";
+            text_cat(v, O[eng_project()->out_mode % 3], sizeof v);
+            c = eng_project()->out_mode ? ORANGE : TXT;
             break;
+        }
         default:
             l = dirty ? "MIFM1 " APP_VERSION ", not saved" : "MIFM1 " APP_VERSION;
             text_cat(v, data_ok ? "tables OK" : "tables MISSING", sizeof v);
@@ -1637,6 +1639,7 @@ static void go_page(int page)
  * transport stops; nothing is saved until SAVE is held */
 static void project_init(int which)
 {
+    uint8_t out = eng_project()->out_mode;   /* the output's setting stays (it is the FM-1's, not the music's) */
     eng_play(0);
     if (which == 2) {
         project_load();
@@ -1650,6 +1653,7 @@ static void project_init(int which)
         dirty = 1;
         app_say(which == 0 ? "NEW PROJECT" : "DEMO PATCH", which == 0 ? "4 PLAITS" : "LOADED");
     }
+    eng_project()->out_mode = out;
     ui.track = 0;
     go_page(PG_TRACK(0, 0));
 }
@@ -2096,9 +2100,14 @@ static void input(void)
         e = plat_enc(EN_K1 + i);
         if (!e || !data_ok)
             continue;
-        if (ui.page == VP_SYS) {         /* the project REC held loads */
+        if (ui.page == VP_SYS) {         /* K1 the project REC held loads, K2 the output */
             if (i == 0)
                 ui.init_sel = clamp(ui.init_sel + (e > 0 ? 1 : -1), 0, 2);
+            if (i == 1) {
+                eng_project()->out_mode = (uint8_t)clamp(eng_project()->out_mode + (e > 0 ? 1 : -1), 0, 2);
+                dirty = 1;
+                ui.full = 1;
+            }
             continue;
         }
         if (ui.matrix) {
