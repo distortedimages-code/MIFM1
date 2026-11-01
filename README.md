@@ -246,7 +246,8 @@ plus la dose monte, plus ses lettres se mettent à changer (une à quelques %, l
 est poussé d'un écart au hasard qui lui est propre, plus ou moins loin selon la dose : FREQ (jusqu'à ±6 demi-tons à
 100 %, dans la gamme), la transposition (±7), l'enveloppe de hauteur, HARMONICS, TIMBRE, MORPH, DECAY, COLOUR et les
 enveloppes de Plaits, le drive du grit, l'EQ, les envois vers le delay et la réverbe, le feedback, le filtre, le
-drive, la résonance et le pleurage du delay, la réverbe, l'algorithme, le timbre et les niveaux de Warps. Rien de ce
+drive, la résonance et le pleurage du delay, la réverbe, l'algorithme (d'un repère à un autre : entre deux, Warps
+calcule les deux algorithmes, deux fois plus de travail), le timbre et les niveaux de Warps. Rien de ce
 qui tient le temps (divisions, tempo, vitesses, longueurs, pas), ni les pans, les niveaux, la gamme ou le branchement :
 ça reste musical. On lâche : la dose reste (en bas, un trait de la largeur de la dose ; les potards montrent jusqu'où
 elle les emmène, RANDOM dessous). Revenir à 0 rend le son exact de départ, comme l'annulation d'ALL ; remonter depuis 0

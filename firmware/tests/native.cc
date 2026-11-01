@@ -1194,13 +1194,20 @@ int main(int argc, char** argv) {
     eng_render(l, r, n);
     int twice = 0, n2 = 0;
     for (int i = 0; i < ENG_NPARAMS; ++i) {
-      if (std::fabs(d50[i]) < 1e-3f) continue;
+      if (std::fabs(d50[i]) < 1e-3f || i == PG_WARPS(0) * 4 + 2) continue;   // (Warps' ALGORITHM: mark to mark)
       const eng_pdef_t* d = eng_pdef(i);
       float v = eng_final(i), lo = d->kind == K_UNI ? 0.0f : d->kind == K_BIP ? -1.0f : d->lo;
       float hi = d->kind == K_UNI || d->kind == K_BIP ? 1.0f : d->hi;
       if (v <= lo + 1e-4f || v >= hi - 1e-4f) continue;   // (clamped)
       ++n2;
       twice += std::fabs((v - base[i]) - 2.0f * d50[i]) < 1e-3f;
+    }
+    int marks = 0;                                        // Warps' ALGORITHM on a mark: on marks, for every seed
+    for (int sd = 0; sd < 32; ++sd) {
+      p->dice_seed = static_cast<uint8_t>(sd);
+      eng_render(l, r, n);
+      float m = eng_final(PG_WARPS(0) * 4 + 2) * 5.0f;
+      marks += std::fabs(m - std::floor(m + 0.5f)) < 1e-4f;
     }
     p->dice_seed = 8;
     eng_render(l, r, n);
@@ -1211,8 +1218,10 @@ int main(int argc, char** argv) {
     int back = 0;
     for (int i = 0; i < ENG_NPARAMS; ++i) back += eng_final(i) == base[i];
     printf("the random dose: %d parameters moved at 50 %% (as far as %.2f), %d of %d twice as far at 100 %%, "
-           "%d other with another seed, %d of %d back at 0\n", moved, far50, twice, n2, other, back, ENG_NPARAMS);
-    if (wrong || moved < 40 || twice != n2 || n2 < 20 || other < 40 || back != ENG_NPARAMS || same0 != ENG_NPARAMS)
+           "%d other with another seed, %d of %d back at 0, Warps' ALGORITHM on a mark %d times of 32\n", moved, far50,
+           twice, n2, other, back, ENG_NPARAMS, marks);
+    if (wrong || moved < 40 || twice != n2 || n2 < 20 || other < 40 || back != ENG_NPARAMS || same0 != ENG_NPARAMS ||
+        marks != 32)
       ++failures, printf("FAIL: the random dose\n");
     eng_defaults(p);
   }

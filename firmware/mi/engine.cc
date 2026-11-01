@@ -317,39 +317,49 @@ void make_dice() {
   dice_seed_made = proj.dice_seed;
 }
 
+// each parameter's bounds and its cables' scale (0: no cable; 1 a 0..1 knob, 2 a -1..1 one), in RAM: the render
+// clamps some 400 values a block, and eng_pdef's tables are in the flash (on the FM-1, a read there that misses the
+// cache costs as much as a few hundred instructions). Made again when the delay changes mode (its TIME's bounds)
+float p_lo[ENG_NPARAMS], p_hi[ENG_NPARAMS], p_cab[ENG_NPARAMS];
+int bounds_for = -1;
+void make_bounds() {
+  for (int i = 0; i < ENG_NPARAMS; ++i) {
+    const eng_pdef_t* d = eng_pdef(i);
+    p_lo[i] = d->kind == K_BIP ? -1.0f : d->kind == K_UNI ? 0.0f : static_cast<float>(d->lo);
+    p_hi[i] = d->kind == K_BIP || d->kind == K_UNI ? 1.0f : static_cast<float>(d->hi);
+    p_cab[i] = d->kind == K_BIP ? 2.0f : d->kind == K_UNI ? 1.0f : 0.0f;
+  }
+  bounds_for = proj.algo[PG_DELAY(0)];
+}
+inline float clamp_fast(int i, float v) { return v < p_lo[i] ? p_lo[i] : v > p_hi[i] ? p_hi[i] : v; }
+
 void apply_cables() {
+  if (bounds_for != proj.algo[PG_DELAY(0)]) make_bounds();
   for (int i = 0; i < ENG_NPARAMS; ++i) fin[i] = proj.val[i];
   if (proj.dice) {                      // the random dose, over the knobs (under the cables)
     if (dice_seed_made != proj.dice_seed) make_dice();
     float a = static_cast<float>(proj.dice > 100 ? 100 : proj.dice) * 0.01f;
     for (int i = 0; i < ENG_NPARAMS; ++i) fin[i] += a * dice_off[i];
+    // Warps' ALGORITHM on a mark (one cross-modulation): thrown to another mark, never between two (there Warps plays
+    // both algorithms, blended: twice its work)
+    const int wa = PG_WARPS(0) * 4 + 2;
+    float m = proj.val[wa] * 5.0f;
+    if (fm_fabsf(m - fm_floorf(m + 0.5f)) < 0.01f) fin[wa] = fm_floorf(fin[wa] * 5.0f + 0.5f) * 0.2f;
   }
   for (int g = 0; g <= ENG_TRACKS; ++g) {
     for (int c = 0; c < ENG_CABLES; ++c) {
       const cable_t& k = proj.cable[g][c];
       if (!k.depth || k.src == SRC_NONE || k.src >= NSRC || k.dst >= ENG_NPARAMS) continue;
-      const eng_pdef_t* d = eng_pdef(k.dst);
-      if (d->kind != K_UNI && d->kind != K_BIP) continue;
-      fin[k.dst] += static_cast<float>(k.depth) * 0.01f * src_value(k.src) * (d->kind == K_BIP ? 2.0f : 1.0f);
+      fin[k.dst] += static_cast<float>(k.depth) * 0.01f * src_value(k.src) * p_cab[k.dst];
     }
   }
-  for (int i = 0; i < ENG_NPARAMS; ++i) {
-    const eng_pdef_t* d = eng_pdef(i);
-    fin[i] = d->kind == K_BIP ? clampf(fin[i], -1.0f, 1.0f)
-           : d->kind == K_UNI ? clampf(fin[i], 0.0f, 1.0f)
-           : clampf(fin[i], static_cast<float>(d->lo), static_cast<float>(d->hi));
-  }
+  for (int i = 0; i < ENG_NPARAMS; ++i) fin[i] = clamp_fast(i, fin[i]);
 }
 
 inline float P(int page, int k) { return fin[page * 4 + k]; }
 inline int Pi(int page, int k) { return static_cast<int>(fin[page * 4 + k] + (fin[page * 4 + k] < 0 ? -0.5f : 0.5f)); }
 inline int iround(float v) { return static_cast<int>(v + (v < 0 ? -0.5f : 0.5f)); }
 
-float clamp_param(int param, float v) {
-  const eng_pdef_t* d = eng_pdef(param);
-  return d->kind == K_BIP ? clampf(v, -1.0f, 1.0f) : d->kind == K_UNI ? clampf(v, 0.0f, 1.0f)
-                                                    : clampf(v, static_cast<float>(d->lo), static_cast<float>(d->hi));
-}
 float to_u(int param, float v) {        // a value as 0..1 of its travel (a lock's byte)
   const eng_pdef_t* d = eng_pdef(param);
   if (d->kind == K_BIP) return (v + 1.0f) * 0.5f;
@@ -367,7 +377,7 @@ float from_u(int param, float u) {
 int16_t lane_param[ENG_LANES][ENG_NTP];  // eng_track_param's answers, made once (E is asked ~150 times a block)
 float E(int lane, int tp) {
   int param = lane_param[lane][tp];
-  return clamp_param(param, fin[param] + tdelta[lane][tp]);
+  return clamp_fast(param, fin[param] + tdelta[lane][tp]);
 }
 
 uint32_t rand_u32() {                   // xorshift32
