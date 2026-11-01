@@ -259,6 +259,10 @@ volatile int w_job;                     // Warps runs in this block's job
 int w_last = -1;                        // the routing w_car and w_mod were taken with: carrier | modulator << 4, -1
 int w_dst = -1, w_mute = -1;            // the track its output replaces; the modulator's track, silenced (-1: none)
 float w_mix = 1.0f;                     // MIX, the last block's
+// Warps' own oscillator (CARRIER Osc 1..3) sounds while the steps run or a key plays: stopped, it fades out in ~30 ms
+// (a saw left droning under nothing), and Warps does not run (its track plays dry: its tail, if it has one)
+float w_gate = 1.0f, w_gmix = 1.0f;     // its gain now; the one the last mix ended on (0: Warps left out)
+int w_idle;                             // its job left out: the gate shut
 float vaux[ENG_TRACKS][kN];
 float wet_l[kN], wet_r[kN], echo_l[kN], echo_r[kN];
 float meter[ENG_TRACKS + 2];
@@ -789,6 +793,7 @@ uint32_t fx_n;                           // its frames (0: none yet)
 int fx_mode;                             // the output's mode, as the mix was taken
 
 struct MixJob {
+  int idle;                              // Warps shut (its oscillator, stopped): the tracks as they are
   int dst, mute, job;                    // Warps: the track its output replaces (-1: none), the one it silences, its
   float o0, o1;                          // output there (0: silence, not yet run); its lane's opening over the block
   float gl[ENG_TRACKS], gr[ENG_TRACKS], send[ENG_TRACKS], dsend[ENG_TRACKS];       // the gains from
@@ -813,7 +818,7 @@ float eq_s[ENG_TRACKS];
 
 void mix_job(uint32_t n) {
   float inv = 1.0f / static_cast<float>(n);
-  if (mj.dst >= 0) {                     // Warps' output in its track's place, the modulator's track silenced
+  if (mj.dst >= 0 && !mj.idle) {         // Warps' output in its track's place, the modulator's track silenced
     float o = mj.o0, d = (mj.o1 - mj.o0) * inv;
     float* x = mbuf[mj.dst];
     for (uint32_t i = 0; i < n; ++i) {
@@ -1005,7 +1010,9 @@ void set_warps() {
   int car = Pi(PG_WARPS(0), 0), mod = Pi(PG_WARPS(0), 1), shift = Pi(PG_WARPS(1), 3) == WM_SHIFT;
   mod = mod < 0 ? 0 : mod > 3 ? 3 : mod;
   int osc = car >= WC_OSC1 ? car - WC_OSC1 + 1 : 0;
-  w_job = car > WC_OFF && car <= WC_OSC3 && w_last == (car | mod << 4);
+  int ready = car > WC_OFF && car <= WC_OSC3 && w_last == (car | mod << 4), shut = car >= WC_OSC1 && w_gate <= 0.0f;
+  w_job = ready && !shut;
+  w_idle = ready && shut;
   float alg = E(LANE_WARPS, 2), level1 = E(LANE_WARPS, 5);
   float note = scale_on() ? static_cast<float>(warps_note(level1)) : 12.0f + 60.0f * level1;
   mw_set(warps, shift ? alg : alg * kWarpsTravel, E(LANE_WARPS, 4), level1, E(LANE_WARPS, 6), osc, note,
@@ -1027,6 +1034,9 @@ void route_warps(uint32_t n, float o0, float o1) {
   int ct = car <= WC_T4 ? car - WC_T1 : -1, dst = ct >= 0 ? ct : mod;
   int mute = mod != dst && Pi(PG_WARPS(1), 3) != WM_DRY ? mod : -1;
   float mix = E(LANE_WARPS, 3);         // MIX: how much of Warps over its track (the lane's opening times it)
+  int on = car < WC_OSC1 || playing;    // its own oscillator: while the steps run, or a key plays
+  for (int t = 0; t < ENG_TRACKS; ++t) on |= key_on[t] || key_hold[t] > 0;
+  w_gate = on ? 1.0f : fm_maxf(w_gate - 0.1f, 0.0f);
   for (uint32_t i = 0; i < n; ++i) {
     w_car[i] = ct >= 0 ? vbuf[ct][i] : 0.0f;
     w_mod[i] = vbuf[mod][i];
@@ -1035,8 +1045,10 @@ void route_warps(uint32_t n, float o0, float o1) {
   mj.dst = w_dst = dst;
   mj.mute = w_mute = mute;
   mj.job = w_job;
-  mj.o0 = o0 * w_mix;
-  mj.o1 = o1 * mix;
+  mj.idle = w_idle;
+  mj.o0 = o0 * w_mix * w_gmix;          // (from where the last mix ended: back from shut, faded in over a block)
+  mj.o1 = o1 * mix * w_gate;
+  w_gmix = w_idle ? 0.0f : w_gate;
   w_mix = mix;
   w_last = car | mod << 4;
 }
@@ -1871,6 +1883,35 @@ int eng_init(void) {
   return 0;
 }
 
+// STOP twice (eng_cut): every sound cut. The block asked in fades its output out; the next one (core 1 idle: the
+// render waits for its job before it returns) makes the voices, Warps, the delay, the reverb and the master bus new,
+// their buffers silent: nothing sounds until the next trig (a drum ringing on a decay a cable holds at full, the
+// effects' tails: gone)
+volatile int cut_req;                   // 1: asked; 2: faded out, the modules next
+void cut_now() {
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    mp_init(voice[t]);
+    vgate[t] = 0;                       // (a key still held: a new trig)
+    quiet[t] = kQuiet;                  // (resting until then)
+    grit[t].hold = grit[t].cnt = 0.0f;
+    meter[t] = 0.0f;
+  }
+  mw_init(warps);
+  mrv_init(reverb);
+  mdl_init(delay);
+  mms_init(master);
+  for (int b = 0; b < 2; ++b) {
+    for (int t = 0; t < ENG_TRACKS; ++t)
+      for (uint32_t i = 0; i < kN; ++i) vbufs[b][t][i] = 0.0f;
+    for (uint32_t i = 0; i < kN; ++i) w_outs[b][i] = w_drys[b][i] = 0.0f;
+  }
+  w_last = -1;                          // (Warps from its first block again: silence, then its job)
+  w_job = 0;
+  w_gate = w_gmix = 0.0f;               // (its oscillator shut: the transport is stopped)
+  fx_n = 0;                             // (no mix to play: the next block's output silent)
+  meter[ENG_TRACKS] = meter[ENG_TRACKS + 1] = 0.0f;
+}
+
 void eng_play(int on) {
   if (on && !playing && ready) restart = 1;
   if (!on)
@@ -1907,9 +1948,21 @@ void eng_key(int track, int note, int on) {
 
 void eng_core1(int on) { use_core1 = on; }
 
+void eng_cut(void) {
+  eng_play(0);
+  if (!cut_req) cut_req = 1;
+}
+int eng_cut_pending(void) { return cut_req != 0; }
+
 void eng_render(float* l, float* r, uint32_t n) {
   if (!ready || n > kN || n < kFrames || !eng_check(&proj)) {
     for (uint32_t i = 0; i < n; ++i) l[i] = r[i] = 0.0f;
+    return;
+  }
+  if (cut_req == 2) {                   // STOP twice: the modules made new, this block silent
+    cut_now();
+    for (uint32_t i = 0; i < n; ++i) l[i] = r[i] = 0.0f;
+    cut_req = 0;
     return;
   }
   uint32_t t0 = plat_ticks24();
@@ -2029,6 +2082,15 @@ void eng_render(float* l, float* r, uint32_t n) {
   for (uint32_t i = 0; i < n; ++i) {
     l[i] = fx_n == n ? fx_out_l[i] : 0.0f;
     r[i] = fx_n == n ? fx_out_r[i] : 0.0f;
+  }
+  if (cut_req == 1) {                   // STOP twice: faded out over this block, the modules made new at the next
+    float g = 1.0f, dg = 1.0f / static_cast<float>(n);
+    for (uint32_t i = 0; i < n; ++i) {
+      g -= dg;
+      l[i] *= g;
+      r[i] *= g;
+    }
+    cut_req = 2;
   }
   // 5. what this block's mix needs (the next block's task plays it, with the effects): Warps' input and routing, the
   // gains and sends, the duck; then the blocks swap (the voices' and Warps' next ones where the mix took these)

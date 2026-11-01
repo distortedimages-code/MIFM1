@@ -1226,6 +1226,96 @@ int main(int argc, char** argv) {
     eng_defaults(p);
   }
 
+  // 30. STOP twice: the kick ringing on a decay held at full (an LFO on it), the delay and the reverb full of it; cut,
+  // all silent within three blocks (the fade, the modules made new); then a trig plays again
+  {
+    eng_play(0);
+    eng_defaults(p);
+    p->algo[PG_TRACK(0, 0)] = 21;                         // the kick
+    p->val[PG_TRACK(0, 0) * 4 + 3] = 1.0f;                // its decay (MORPH) at full
+    p->val[PG_TRACK(0, 1) * 4 + 0] = 1.0f;                // and Plaits' DECAY
+    p->val[PG_RSEND * 4 + 0] = 1.0f;
+    p->val[PG_DSEND * 4 + 0] = 1.0f;
+    p->val[PG_MIX * 4 + 0] = 1.0f;
+    eng_play(1);
+    for (int b = 0; b < 44100 / static_cast<int>(n); ++b) eng_render(l, r, n);
+    eng_play(0);
+    float ring = 0.0f;
+    for (int b = 0; b < 44100 / 4 / static_cast<int>(n); ++b) {
+      eng_render(l, r, n);
+      for (uint32_t i = 0; i < n; ++i) ring = std::max(ring, std::fabs(l[i]));
+    }
+    eng_cut();
+    float faded = 0.0f, after = 0.0f;
+    for (int b = 0; b < 3; ++b) eng_render(l, r, n);
+    int pending = eng_cut_pending();
+    for (int b = 0; b < 44100 / 2 / static_cast<int>(n); ++b) {
+      eng_render(l, r, n);
+      for (uint32_t i = 0; i < n; ++i) after = std::max(after, std::max(std::fabs(l[i]), std::fabs(r[i])));
+    }
+    (void)faded;
+    eng_key(0, 48, 1);                                    // a key: the kick again
+    float back = 0.0f;
+    for (int b = 0; b < 40; ++b) {
+      eng_render(l, r, n);
+      for (uint32_t i = 0; i < n; ++i) back = std::max(back, std::fabs(l[i]));
+    }
+    eng_key(0, 48, 0);
+    printf("STOP twice: %.3f stopped (the kick ringing, its echoes), %.6f after the cut, %.3f at the next key\n", ring,
+           after, back);
+    if (ring < 0.01f || after > 1e-6f || pending || back < 0.01f)
+      ++failures, printf("FAIL: STOP twice\n");
+    eng_defaults(p);
+  }
+
+  // 31. Warps on its own oscillator (a saw, CROSSFADE: the saw heard over T2): playing, it sounds; stopped, it fades
+  // out (~30 ms) and Warps stops running: what is left is T2's own tail, as loud as with Warps off; a key held, it
+  // sounds again; PLAY again, it is back
+  {
+    eng_play(0);
+    eng_defaults(p);
+    for (int t = 0; t < ENG_TRACKS; ++t) p->val[PG_MIX * 4 + t] = t == 1 ? 1.0f : 0.0f;   // T2 alone
+    for (int t = 0; t < ENG_TRACKS; ++t) p->val[PG_RSEND * 4 + t] = p->val[PG_DSEND * 4 + t] = 0.0f;
+    p->val[PG_WARPS(0) * 4 + 1] = 1.0f;                   // by T2 (its output in T2's place)
+    p->val[PG_WARPS(0) * 4 + 2] = 0.0f;                   // CROSSFADE
+    p->val[PG_WARPS(0) * 4 + 3] = 1.0f;
+    p->val[PG_WARPS(1) * 4 + 3] = static_cast<float>(WM_WARPS);
+    eng_steps_clear(LANE_WARPS);
+    auto loud = [&](int blocks) {
+      float m = 0.0f;
+      for (int b = 0; b < blocks; ++b) {
+        eng_render(l, r, n);
+        for (uint32_t i = 0; i < n; ++i) m = std::max(m, std::fabs(l[i]));
+      }
+      return m;
+    };
+    float play_pk[2], stop_pk[2];
+    uint32_t wl = 1;
+    for (int k = 0; k < 2; ++k) {                         // Warps off, then on its saw: the same from a cut
+      p->val[PG_WARPS(0) * 4] = k ? WC_OSC3 : WC_OFF;
+      eng_cut();
+      loud(3);
+      eng_play(1);
+      play_pk[k] = loud(300);
+      eng_play(0);
+      loud(40);                                           // (the fade)
+      stop_pk[k] = loud(100);
+      if (k) wl = eng_task_load(4);
+    }
+    eng_key(1, 48, 1);
+    float key_pk = loud(40);
+    eng_key(1, 48, 0);
+    eng_play(1);
+    float back_pk = loud(100);
+    eng_play(0);
+    printf("Warps' saw: playing %.3f (off %.3f), stopped %.6f (off %.6f, its load %u), a key held %.3f, playing again "
+           "%.3f\n", play_pk[1], play_pk[0], stop_pk[1], stop_pk[0], wl, key_pk, back_pk);
+    if (play_pk[1] < 0.01f || stop_pk[1] > stop_pk[0] * 1.2f + 1e-3f || wl != 0 || key_pk < 0.01f ||
+        back_pk < 0.01f)
+      ++failures, printf("FAIL: Warps' oscillator stopped\n");
+    eng_defaults(p);
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

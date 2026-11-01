@@ -30,7 +30,7 @@
  *               black keys the lanes (the four tracks, the delay, the reverb, Warps), OCT- OCT+ the pages; a step
  *               held and a knob turned: a lock (the lane's knobs); a step held and SEL: its locks cleared. Held: the
  *               lane erased (with GLO: all of them)
- *   PLAY        the clock runs or stops           SAVE     held: the project saved (stopped)
+ *   PLAY        the clock runs or stops (twice quickly: stopped, every sound cut)   SAVE  held: the project saved
  *   SEL         MOD mode: hold an LFO's key, turn a knob: a cable, as deep as turned (to the left: upside down).
  *               Held: the track's cables (MATRIX)
  *   keys        play the active track (MOD mode: the first three white keys are the LFOs, blinking at their rates)
@@ -50,6 +50,7 @@ int mi_res_check(const uint8_t *payload, uint32_t len);   /* mi/res_symbols.cc: 
 
 #define LONG_MS 600u                     /* a long press */
 #define SHOW_MS 1500u                    /* a message's time */
+#define CUT_MS 400u                      /* PLAY twice within it: every sound cut */
 #define HEAD_H 28                        /* the screen: the band and the header, the module's display, the knobs, */
 #define PANEL_Y 28                       /* the tracks */
 #define PANEL_H 76
@@ -152,6 +153,7 @@ static struct {
     int octave;                          /* the keyboard's */
     int dice;                            /* OCT- and OCT+ held: SELECT turns the random dose */
     int oct_was, spage_was;              /* the octave, the steps' page before an OCT press (both: put back) */
+    uint32_t play_at;                    /* PLAY's last press (again within CUT_MS: every sound cut) */
     uint32_t keys, btn;
     uint32_t down_at[NB];
     int long_done[NB];
@@ -2854,8 +2856,16 @@ static void button_down(int b)
 {
     ui.used[b] = 0;
     switch (b) {
-    case B_PLAY:
-        eng_play(!eng_playing());
+    case B_PLAY:                         /* the clock runs or stops; again at once (STOP twice): stopped, every sound
+                                          * cut, the effects' tails too */
+        if (ui.play_at && plat_ms() - ui.play_at < CUT_MS) {
+            eng_cut();
+            ui.play_at = 0;
+            app_say("ALL SOUND", "CUT");
+        } else {
+            eng_play(!eng_playing());
+            ui.play_at = plat_ms();
+        }
         break;
     case B_OCTDN: case B_OCTUP:          /* the keyboard's octave; STEP mode: the steps' page. Both held: SELECT turns
                                           * the random dose (the first one's octave put back) */

@@ -196,6 +196,9 @@ int eng_endless_pos(int t);              /* the note playing, -1 none */
 void eng_render(float *l, float *r, uint32_t n);   /* audio interrupt: the last block out (the effects and the master
                                           * bus play a block behind the voices: 2.9 ms) */
 void eng_play(int on);                   /* the transport: the steps run or stop (from their start) */
+void eng_cut(void);                      /* STOP twice: stopped, every sound cut (the voices, Warps, the effects' tails:
+                                          * silent until the next trig) */
+int eng_cut_pending(void);
 int eng_playing(void);
 /* ALL undone in time: these knobs, models and randoms put back as the next bar starts (16 sixteenths of the tempo from
  * PLAY; stopped: at once) */

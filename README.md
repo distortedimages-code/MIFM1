@@ -92,7 +92,7 @@ porte le numéro de sa piste dans sa couleur.
 | **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leurs filtres (EQ), le DUCK, puis le bus master (COMP, OTT) ; ALGORITHM sur COMP ou OTT : le mode du bus (OFF, COMP, OTT) |
 | **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps ; SELECT parcourt leurs faces (leurs potards, les envois des pistes, leurs pas) |
 | **ENV** | l'enveloppe de la piste (PLAITS 2/3 : DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV) |
-| **PLAY** | le séquenceur tourne ou s'arrête |
+| **PLAY** | le séquenceur tourne ou s'arrête ; **deux fois de suite** (STOP STOP, en moins de 0,4 s) : arrêté, et tout le son coupé, les queues du delay et de la réverbe comprises |
 | **REC** | **KEY** ↔ **STEP** (voir plus bas) ; sur la page d'Endless, l'enregistrement |
 | **clavier** | en KEY, joue la piste active, même à l'arrêt ; **OCT− / OCT+** pour l'octave (en STEP : la page de pas) ; en MOD, les trois premières touches blanches sont les LFO |
 | **OCT− et OCT+ tenus + SELECT** | la **dose d'aléatoire** (voir plus bas) |
@@ -238,7 +238,9 @@ sur le module (avec l'oscillateur interne, LEVEL 1 règle sa note, C0 à C5, dan
 **MODE** : Warps ; + Dry (on entend aussi la piste modulante telle quelle) ; ou Freq shift, l'easter egg du module,
 un décaleur de fréquence : ALGO fixe alors le décalage (au centre, rien ; jusqu'à ±2 kHz), TIMBRE la bande, LEVEL 1
 la réinjection, LEVEL 2 le mélange. Sa piste de pas locke ALGO, MIX, TIMBRE, LEVEL 1 et LEVEL 2 pas par pas (pas la
-porteuse, la modulante ni le mode) et l'ouvre ou la ferme sur la piste. Warps joue un bloc derrière les voix (~4 ms de latence sur la piste qu'il
+porteuse, la modulante ni le mode) et l'ouvre ou la ferme sur la piste. Son oscillateur interne ne sonne que quand
+le séquenceur tourne ou qu'on joue au clavier : à l'arrêt, il s'éteint en 30 ms (plus de dent de scie qui tourne
+sous rien) et Warps ne calcule plus rien. Warps joue un bloc derrière les voix (~4 ms de latence sur la piste qu'il
 remplace).
 
 **La dose d'aléatoire** (cachée) : tenir **OCT− et OCT+** ensemble et tourner **SELECT**. L'écran écrit RANDOM, et
