@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Yoann */
-/* MIFM1's sound: four Plaits voices played by a step sequencer (or the keys), two Tides as modulators, a matrix of
+/* MIFM1's sound: four Plaits voices played by a step sequencer (or the keys), three LFOs as modulators, a matrix of
  * cables, three effects with their own steps (a delay, Clouds' reverb, Warps between two tracks) and a mixer
  * (mi/engine.cc). The project (project_t) is what the screen edits and what is saved; the engine reads it at every
- * audio block (the control rate, 344 Hz), runs Tides, adds the cables to the knobs and plays the voices and Warps,
+ * audio block (the control rate, 344 Hz), runs the LFOs, adds the cables to the knobs and plays the voices and Warps,
  * shared between the two cores by what each costs.
  *
  * Parameters: pages of 4 knobs (a page per face of a module, as the screen shows them). A parameter is page * 4 +
@@ -35,7 +35,8 @@ extern "C" {
 
 /* the pages */
 #define PG_TRACK(t, p) ((t) * 3 + (p))   /* Plaits: its sound, its envelope, its pitch */
-#define PG_TIDES(i, p) (12 + (i) * 2 + (p))
+#define PG_LFO(i) (12 + (i))              /* the three LFOs (0.4: in Tides' place): WAVE, RATE, MODE (free, synced to the
+                                          * tempo, or started again at a track's trigs), SLEW (page 15: not used) */
 #define PG_MIX 16                        /* the levels */
 #define PG_PAN 17
 #define PG_REVERB 18                     /* Clouds' reverb: its knobs, then the tracks' sends */
@@ -46,7 +47,9 @@ extern "C" {
                                           * PROB, DEPTH, LENGTH */
 #define PG_GLOBAL 30
 #define PG_ARP(t) (31 + (t))             /* each track's Endless: its rate, gate, direction, transposition */
-#define PG_WARPS(p) (35 + (p))           /* Warps: its knobs (ALGORITHM, TIMBRE, LEVEL 1, LEVEL 2), its patching */
+#define PG_WARPS(p) (35 + (p))           /* Warps: what to play at once (CARRIER, MOD, ALGORITHM, MIX), then the rest of
+                                          * the module (TIMBRE, LEVEL 1, LEVEL 2, MODE: Warps, the modulator's track
+                                          * heard dry too, or the frequency shifter) */
 #define PG_DUCK 37                       /* the duck: its DECAY, then how deep T2, T3, T4 duck at T1's trigs */
 #define PG_COMP 38                       /* the master bus: the compressor (THRESHOLD, RATIO, RELEASE, GAIN), its
                                           * ALGORITHM the bus's mode (off, the compressor, OTT) */
@@ -58,14 +61,19 @@ extern "C" {
 #define PG_EUC(l) (45 + (l))             /* a lane's Euclidean rhythm (its steps' last face): FILLS spread as evenly
                                           * as they go over the lane's LENGTH, ROTATE; turning them writes its trigs
                                           * (the screen: its third and fourth knobs are the lane's LENGTH and PROB) */
-enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_TIDES1, PT_TIDES2, PT_MIX, PT_PAN, PT_REVERB, PT_RSEND, PT_DELAY1,
+enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_LFO, PT_MIX, PT_PAN, PT_REVERB, PT_RSEND, PT_DELAY1,
        PT_DELAY2, PT_DSEND, PT_STEP, PT_LANE, PT_GLOBAL, PT_ARP, PT_WARPS1, PT_WARPS2, PT_DUCK, PT_COMP, PT_OTT, PT_EQ,
        PT_GRIT, PT_EUC, NPT };
 enum { GS_SOFT, GS_HARD, GS_FOLD };    /* the grit's shapes */
 enum { MB_OFF, MB_COMP, MB_OTT };       /* the master bus's mode (PG_COMP's ALGORITHM) */
-/* Warps' carrier (PG_WARPS(1)'s first knob): none (Warps off), a track, or the module's internal oscillator, its three
+/* Warps' carrier (PG_WARPS(0)'s first knob): none (Warps off), a track, or the module's internal oscillator, its three
  * shapes (sine, triangle, saw) */
 enum { WC_OFF, WC_T1, WC_T2, WC_T3, WC_T4, WC_OSC1, WC_OSC2, WC_OSC3 };
+enum { WM_WARPS, WM_DRY, WM_SHIFT };    /* Warps' MODE: the modulator's track silenced as Warps opens, heard too, the
+                                         * frequency shifter (the module's easter egg) */
+enum { LW_SINE, LW_TRI, LW_SAW, LW_RAMP, LW_SQUARE, LW_SH, LW_SMOOTH, LW_N };   /* an LFO's waves */
+enum { LM_FREE, LM_SYNC, LM_T1 };       /* an LFO's MODE: free, synced to the tempo, started at T1's (..T4's) trigs */
+enum { DL_SYNC, DL_FREE };              /* the delay's ALGORITHM: its time in divisions of the tempo, or in ms */
 
 /* a track's parameters as a trig sees them (a lock, a random): its Plaits' 12, its level, sends and pan, its step
  * page's note, probability and ratchets, its duck, its filter. An effect lane's are its effect's knobs
@@ -100,8 +108,8 @@ int eng_model_enveloped(int model);      /* 1: a Plaits model with its own envel
 int eng_param_mod(int param);            /* 1: a cable may move it */
 void eng_param_text(int param, float v, char *b, int n);   /* its value as the screen writes it */
 
-/* the modulation sources: Tides A's four outputs, Tides B's */
-enum { SRC_NONE, SRC_A1, SRC_A2, SRC_A3, SRC_A4, SRC_B1, SRC_B2, SRC_B3, SRC_B4, NSRC };
+/* the modulation sources: the three LFOs (-1..1) */
+enum { SRC_NONE, SRC_L1, SRC_L2, SRC_L3, NSRC };   /* (0.3's were Tides' A1..A4, B1..B4) */
 const char *eng_src_name(int src);
 
 typedef struct {
@@ -119,7 +127,9 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 9u               /* (8: 0.3.8's, without the grit and the Euclidean rhythms; 7: 0.3.3's to
+#define PROJECT_VERSION 10u              /* (9: 0.3.9's and 0.3.10's, with Tides, Warps' faces as they were, no random
+                                          * dose; 8: 0.3.8's,
+                                          * without the grit and the Euclidean rhythms either; 7: 0.3.3's to
                                           * 0.3.7's, without the filter either; 6: 0.3.0's to 0.3.2's, without
                                           * the duck and the master bus; 5: 0.2's, with Marbles; 4: 0.1.4's to 0.1.9's:
                                           * eng_upgrade reads them) */
@@ -127,10 +137,13 @@ typedef struct {
     uint32_t magic;
     uint16_t version, size;
     float val[ENG_NPARAMS];
-    uint8_t algo[ENG_NPAGES];            /* the page's ALGORITHM choice: Plaits' model, Tides' ramp */
+    uint8_t algo[ENG_NPAGES];            /* the page's ALGORITHM choice: Plaits' model, the delay's mode, the bus' */
     uint8_t out_mode;                    /* the output: 0 stereo, 1 a headset with a mic (the right inverted), 2 mono */
     uint8_t warps_hq;                    /* Warps: 0 ECO (its cross-modulations at 3x), 1 HQ (6x, the module's) */
     uint8_t theme;                       /* the screen's colours (app.c's THEMES) */
+    uint8_t dice;                        /* the random dose (OCT- and OCT+ held, SELECT): 0..100 % of a random offset on
+                                          * the sound's knobs (eng_dice), 0 the sound as set */
+    uint8_t dice_seed;                   /* which random: a new one each time the dose leaves 0 */
     cable_t cable[ENG_TRACKS + 1][ENG_CABLES];   /* the tracks' cables, then the global ones */
     uint8_t trig[ENG_LANES][ENG_STEPS / 8];      /* the steps with a trig, a bit each */
     int8_t rnd[ENG_LANES][ENG_NTP];      /* each lane parameter's random: > 0 new at each trig, < 0 looped, 0 none */
@@ -141,6 +154,7 @@ typedef struct {
     int8_t endless_key[ENG_TRACKS];      /* the transposition the last key set */
 } project_t;
 int eng_algo_count(int page);            /* 0: the page has no ALGORITHM choice */
+float eng_dice_span(int param);          /* how far the random dose moves a parameter at 100 % (0: not at all) */
 const char *eng_algo_name(int page, int a);
 
 /* Warps as it plays: its algorithm (0..5 the cross-modulations, 6 the frequency shifter; -1 off), its name, the track
@@ -194,10 +208,12 @@ void eng_core1(int on);                  /* the second core takes its share when
 /* what the screen shows */
 float eng_final(int param);              /* the value after the cables */
 float eng_src(int src);                  /* a source's value: -1..1 */
+float eng_lfo_phase(int i);              /* an LFO's phase now, 0..1 (MOD mode: its key blinks with it) */
 uint32_t eng_gates(void);                /* bit t: track t's gate now */
 int eng_note(int track);                 /* its note now (MIDI number) */
 uint32_t eng_load(int core);             /* the render's time on core 0 or 1, in tenths of % of the block (smoothed) */
-uint32_t eng_prep_load(void);            /* core 0's preparation of a block (the sequencer, the cables, Tides), the same */
+void eng_delay_mode(int mode);           /* the delay's ALGORITHM (DL_SYNC, DL_FREE), its TIME kept */
+uint32_t eng_prep_load(void);            /* core 0's preparation of a block (the sequencer, the LFOs, the cables), the same */
 uint32_t eng_peak(void);                 /* the worst total of the last second, same unit */
 uint32_t eng_task_load(int task);        /* a voice's (0..3, while it plays), Warps' (4) or the effects' and the
                                           * master bus's (5) time, averaged, same unit */

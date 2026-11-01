@@ -12,11 +12,16 @@ la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
 - sur chaque trig : **probabilité**, **ratchets**, **longueur**, et un **aléatoire** sur n'importe quel réglage de la
   piste (à droite nouveau à chaque trig, à gauche en boucle) ; un **swing** global ; des **rythmes euclidiens** sur
   chaque piste de pas ;
-- un **quantiseur global** (15 gammes et la tonique) : aucune fausse note, sur toutes les pistes et au clavier ;
-- **deux Tides 2** comme modulateurs (8 sorties), déclenchables par les trigs d'une piste ou calés sur le tempo ;
-- une **matrice de câbles** : les 8 sorties de Tides vers presque tous les paramètres, 8 câbles par piste et 8 globaux ;
+- un **quantiseur global** (15 gammes et la tonique) : aucune fausse note, sur toutes les pistes et au clavier, FREQ,
+  la transposition et l'oscillateur de Warps compris ;
+- **trois LFO** comme modulateurs (sinus, triangle, dent de scie, rampe, carré, S&H, aléatoire lissé), chacun libre,
+  calé sur le tempo ou relancé par les trigs d'une piste, avec un **slew** ;
+- une **matrice de câbles** : les 3 LFO vers presque tous les paramètres, 8 câbles par piste et 8 globaux, posés en
+  tenant la touche d'un LFO et en tournant un potard (en atténuverteur) ;
+- une **dose d'aléatoire** cachée (OCT− et OCT+ tenus, SELECT) qui pousse tout le son à la fois (hauteurs, timbres,
+  filtres, envois), plus ou moins, et le rend tel quel à 0 ;
 - **trois effets, chacun avec sa propre piste de pas** : un **delay** inspiré des potards du Zen Delay (temps en
-  divisions du tempo, feedback, filtre passe-bas / passe-haut avec résonance, drive, mono ou ping-pong, une légère
+  divisions du tempo ou libre en millisecondes, feedback, filtre passe-bas / passe-haut avec résonance, drive, mono ou ping-pong, une légère
   modulation de bande), la **réverbe de Clouds** et **Warps**. Sans pas, l'effet est toujours ouvert ; avec des pas,
   chaque trig l'ouvre et il se referme avec son DECAY (jusqu'à 1 − DEPTH), et ses P-locks changent ses réglages pas
   par pas (le temps du delay, l'algorithme de Warps…) ;
@@ -50,8 +55,8 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 
 ## Jouer
 
-Un projet neuf joue déjà (PLAY) : piste 1 une grosse caisse sur chaque temps, piste 2 une basse VA dont Tides A
-(déclenché par ses notes) ouvre le MORPH, piste 3 un FM 2 opérateurs en mélodie aléatoire bouclée, jetée dans le delay
+Un projet neuf joue déjà (PLAY) : piste 1 une grosse caisse sur chaque temps, piste 2 une basse VA dont le LFO 1
+(une rampe relancée par ses notes) ouvre le MORPH, piste 3 un FM 2 opérateurs en mélodie aléatoire bouclée, jetée dans le delay
 sur deux de ses notes (la piste de pas du delay), piste 4 un résonateur MODAL dans la réverbe. 120 BPM, do mineur.
 
 **Repartir de zéro (INIT)** : GLO, SELECT (la page PROJECT), puis **K1** choisit le projet et **REC tenu** le
@@ -64,7 +69,8 @@ icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en g
 les quatre potards côte à côte, dans l'ordre des KNOB 1 à 4 : un anneau fin allumé de son début (ou de son milieu,
 avec « − + ») jusqu'à la valeur, la valeur dedans, un câble en pointillé et son point d'arrivée dans l'autre couleur,
 la source écrite dessous. En bas les quatre pistes, une LED chacune allumée par sa gate dans la couleur de son modèle,
-celle qu'on joue en défonce (chaque case sous son potard, le modèle en 4 lettres : KICK, VA, 6OP1, WTBL…) ; sur les pages de Tides, ses sorties ; en mode STEP, sur les pages des pas et sur celles
+celle qu'on joue en défonce (chaque case sous son potard, le modèle en 4 lettres : KICK, VA, 6OP1, WTBL…) ; sur les pages des LFO, les trois
+LFO, allumés à leur hauteur ; en mode STEP, sur les pages des pas et sur celles
 des effets, les 16 pas de la piste (allumés : un trig ; un point : des locks ; cerclé : celui qui joue ; pour un effet,
 à droite, à quel point il est ouvert). Quand on change de face dans un même module (SELECT), la nouvelle page glisse
 depuis le côté vers lequel on tourne : les potards de la page suivante poussent les autres, l'icône du module
@@ -77,10 +83,10 @@ porte le numéro de sa piste dans sa couleur.
 | --- | --- |
 | **KNOB 1 à 4** | les 4 paramètres de la page affichée |
 | **SELECT** | l'autre face du module (PLAITS 1/3, 2/3, 3/3…), en glissant |
-| **ALGORITHM** | le modèle de Plaits, le mode de rampe de Tides ; sur Warps, d'un repère au suivant ; sur le delay, son temps |
+| **ALGORITHM** | le modèle de Plaits ; sur Warps, d'un repère d'ALGO au suivant ; sur le delay, SYNC (vers la gauche) ou FREE (vers la droite) |
 | **PRESETS** | la piste active, de 1 à 4 |
 | **EDIT** | Plaits de la piste active (appuis suivants : ses trois faces, puis GRIT) |
-| **LFO** | Tides A, puis Tides B |
+| **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
 | **SEQ** | les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) |
 | **ARP** | Endless, celui de la piste (voir plus bas) |
 | **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leurs filtres (EQ), le DUCK, puis le bus master (COMP, OTT) ; ALGORITHM sur COMP ou OTT : le mode du bus (OFF, COMP, OTT) |
@@ -88,7 +94,8 @@ porte le numéro de sa piste dans sa couleur.
 | **ENV** | l'enveloppe de la piste (PLAITS 2/3 : DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV) |
 | **PLAY** | le séquenceur tourne ou s'arrête |
 | **REC** | **KEY** ↔ **STEP** (voir plus bas) ; sur la page d'Endless, l'enregistrement |
-| **clavier** | en KEY, joue la piste active, même à l'arrêt ; **OCT− / OCT+** pour l'octave (en STEP : la page de pas) |
+| **clavier** | en KEY, joue la piste active, même à l'arrêt ; **OCT− / OCT+** pour l'octave (en STEP : la page de pas) ; en MOD, les trois premières touches blanches sont les LFO |
+| **OCT− et OCT+ tenus + SELECT** | la **dose d'aléatoire** (voir plus bas) |
 | **SEL** | le mode MOD (voir plus bas) ; **tenu** : la matrice de la piste |
 | **SAVE tenu** | sauvegarde le projet (à l'arrêt) |
 | **GLO** | TEMPO, SCALE, ROOT, SWING ; SELECT : le projet (INIT) et la machine ; GLO encore : retour |
@@ -104,8 +111,8 @@ détaille ce que coûte chaque piste, Warps et les effets (FX : le mixer, le del
 quatre voix, Warps et les effets se répartissent entre les deux cœurs selon ce que chacun coûte, mesuré bloc après
 bloc (une voix MODAL ou STRING coûte dix fois une VIRTUAL ANALOG) : le mixer, les effets et le bus master jouent pour
 cela un bloc derrière les voix (2,9 ms de latence en sortie), pendant que les voix jouent le bloc suivant : le cœur 1
-les commence dès le début du bloc, pendant que le cœur 0 le prépare (le séquenceur, les câbles, Tides : « prep » sur
-la page machine), puis les deux cœurs se partagent les voix. Une voix silencieuse depuis un moment, sa note finie, se repose jusqu'à son
+les commence dès le début du bloc, pendant que le cœur 0 le prépare (le séquenceur, les LFO, les câbles : « prep »
+sur la page machine), puis les deux cœurs se partagent les voix. Une voix silencieuse depuis un moment, sa note finie, se repose jusqu'à son
 trig suivant (elle ne coûte plus rien).
 
 **Le mode STEP** (REC) : les 16 touches blanches sont les pas de la page (allumés : un trig, celui qui joue
@@ -131,7 +138,9 @@ pour Warps, c'est un fondu entre la piste telle quelle et la sortie de Warps. Se
 pas : le temps du delay (avec la glissade de bande), son feedback, l'algorithme et le TIMBRE de Warps, la taille de la
 réverbe…
 
-**Le delay** (FX) : **TIME** en divisions du tempo (1/32 à 1/1, triolets et pointées), **FEEDBACK** (au bout, il peut
+**Le delay** (FX) : **TIME** en divisions du tempo (1/32 à 1/1, triolets et pointées) ; ou, ALGORITHM tourné vers la
+droite, **FREE** : TIME en millisecondes (1 ms à 1,2 s), détaché de l'horloge (vers la gauche : SYNC, la division la
+plus proche ; le temps est gardé d'un mode à l'autre). **FEEDBACK** (au bout, il peut
 s'emballer, le drive le retient), **FILTER** (à gauche passe-bas, à droite passe-haut, au milieu rien), **DRIVE** ;
 puis **RESONANCE**, **MODE** (Mono ou Ping-pong : gauche au temps, droite au double), **MOD** (un pleurage lent) et
 **RETURN**. Le filtre est celui des modules Mutable (le SVF de stmlib) et la saturation sa SoftClip, dans une ligne
@@ -142,7 +151,7 @@ de 1,2 s. Quand le temps change, la lecture glisse jusqu'au nouveau, comme une b
 monte de 20 Hz à 8 kHz (on enlève les graves), en 24 dB/octave (deux SVF de stmlib, Butterworth), une octave par
 pas de potard sur toute la course : un peu de potard enlève un peu, au bout c'est un mur. Le filtre est avant le
 duck et les envois (ce qui part au delay et à la réverbe est filtré aussi) ; il se locke pas par pas, il a son
-aléatoire (ENV) et Tides peut le moduler. L'écran trace les quatre courbes, chacune dans la couleur de sa piste, la
+aléatoire (ENV) et un LFO peut le moduler. L'écran trace les quatre courbes, chacune dans la couleur de sa piste, la
 piste active par-dessus.
 
 **Le duck** (HOME, quatrième face) : DECAY (20 ms à 2,6 s), puis la profondeur de T2, T3 et T4. À chaque trig de
@@ -160,17 +169,21 @@ Sur les pages des quatre pistes (niveaux, pans, EQ, envois, duck), le nom de la 
 haut à droite, toujours au même endroit, quatre carrés numérotés : celui de la piste que joue le clavier est rempli
 de sa couleur (en mode STEP, la piste de pas éditée ; sur une piste d'effet, son nom à la place des carrés).
 
-**Le mode MOD** (SEL) : le clavier devient une rangée de sources. On tient une touche et on tourne un potard : le
-câble est posé, le sens et la quantité de rotation fixent la profondeur ; revenir à 0 le retire. Touches 1-4 :
-Tides A1-A4 ; 5-8 : Tides B1-B4 ; 9 et 10 : Tides A ou B en éventail (A n sur le potard n). Les touches des sources
-qui modulent la page s'allument.
+**Le mode MOD** (SEL) : les trois premières touches blanches (fa, sol, la) deviennent les trois LFO, et clignotent
+chacune à la vitesse de son LFO. On tient la touche d'un LFO et on tourne un potard : le câble est posé, comme un
+atténuverteur : vers la droite le LFO pousse plus, vers la gauche il agit à l'envers ; revenir à 0 le retire. Le
+potard montre en pointillé jusqu'où le câble l'emmène, le LFO écrit dessous.
 
 **La matrice** (SEL tenu) : les 8 câbles de la piste puis les 8 globaux. K1 choisit le câble, K2 sa source, K3 sa
 cible, K4 sa profondeur.
 
-**Tides** : TRIGGER choisit ce qui le déclenche : Free, les trigs d'une piste (T1 à T4 : une enveloppe AD à chaque
-note de la basse, par exemple) ou Clock (calé sur le tempo, FREQUENCY devient un rapport : 4 par temps à 1 pour 16
-mesures).
+**Les LFO** (LFO, trois faces : LFO 1, 2, 3) : **WAVE** (Sine, Triangle, Saw qui monte, Ramp qui descend, Square,
+S&H : une valeur au hasard par cycle, Smooth : un aléatoire lissé), **RATE**, **MODE** et **SLEW**. MODE : Free
+(RATE de 0,02 à 20 Hz), Sync (calé sur la mesure, RATE devient un rapport : 4 par temps à 1 pour 16 mesures) ou
+T1 à T4 (relancé au début à chaque trig de la piste : une rampe qui descend fait une enveloppe à chaque note). SLEW
+lisse la sortie (1 ms à 2 s : un carré arrondi, un S&H qui glisse). L'écran trace ce que le LFO a fait ces 1,4
+dernières secondes ; en bas, les trois LFO, chacun dans sa couleur, allumés à leur hauteur. Les LFO remplacent les
+deux Tides des 0.3 : ils coûtent à peu près pareil (presque rien), mais se règlent d'un coup d'œil.
 
 **PLAITS 1/3** : FREQ, puis HARMONICS, TIMBRE et MORPH sous le nom (court) que leur donne le manuel de Plaits pour
 le modèle choisi (le KICK : ATTACK, BRIGHT, DECAY ; le FM 2-OP : RATIO, INDEX, FDBK ; le WAVETABLE : BANK, ROW,
@@ -184,7 +197,7 @@ aléatoire. Un potard grisé tourne toujours, mais ne change rien au son dans l'
 **SHAPE** : Soft (une saturation douce), Hard (écrêtée) ou Fold (ce qui dépasse repart dans l'autre sens, comme un
 wavefolder). **RATE** garde chaque échantillon un moment (un sample & hold : de 44,1 kHz jusqu'à 689 Hz, le repliement
 voulu) et **BITS** arrondit les échantillons (de 16 bits à 2 : à fond, une voix discrète disparaît dans le premier
-pas). Chacun n'agit que relevé ; le tout se locke pas par pas, a son aléatoire et Tides peut le moduler. L'écran
+pas). Chacun n'agit que relevé ; le tout se locke pas par pas, a son aléatoire et un LFO peut le moduler. L'écran
 montre ce que les réglages font d'une sinusoïde.
 
 **Les rythmes euclidiens** (SEQ, troisième face ; sur les effets, la dernière face) : **FILLS** coups répartis aussi
@@ -201,7 +214,10 @@ d'autre ; RATCHET : jusqu'à 7 coups de plus). Au centre, rien : le réglage ret
 **Le quantiseur et le swing** (GLO) : TEMPO, SCALE et ROOT (chaque note, des pas, de l'aléatoire ou du clavier, va
 à la note de la gamme la plus proche : Off, Major, Minor, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Harmonic et
 Melodic minor, Major et Minor pentatonic, Blues, Whole tone, Hirajoshi), SWING (50 % : droit ; 75 % : les
-contretemps retardés d'une demi-double croche).
+contretemps retardés d'une demi-double croche). Quand une gamme est choisie, tout ce qui fait une hauteur y reste :
+FREQ (et ce que les câbles et la dose d'aléatoire en font : un LFO sur FREQ joue en escalier dans la gamme), la
+transposition, la note de l'oscillateur de Warps. Seul P.ENV glisse encore d'une note à l'autre : c'est l'enveloppe
+interne de Plaits, un glissando voulu.
 
 **Endless** (ARP, comme sur l'OP-1) : sur sa page, **REC** lance l'enregistrement (la frise passe en REC, le bouton
 clignote) ; chaque touche ajoute une note (on l'entend), **SEL** ajoute un silence, jusqu'à 64 pas. **REC** à
@@ -211,19 +227,30 @@ les triolets), GATE (la longueur des notes), DIRECTION (avant, arrière, aller-r
 tenu** efface la boucle (la piste retrouve ses pas). Probabilité, ratchets, aléatoire et quantiseur s'appliquent aussi
 à ses notes. En bas, ses notes en barres, la note jouée en blanc.
 
-**Warps** (FX, troisième effet) : le module de modulation croisée de Mutable, entre deux pistes. Sa deuxième page
-(SELECT) le branche : **CARRIER**, la porteuse (Off : Warps éteint ; une piste T1-T4 ; ou son oscillateur interne,
-trois formes), **MOD**, la piste modulante, **DRY** (On : on entend aussi la piste modulante telle quelle ;
-Off, elle ne passe que par Warps) et **MODE** (Warps, ou Freq shift : l'easter egg du module, un décaleur de
-fréquence). La sortie de Warps prend la place de la piste porteuse (ou de la modulante avec l'oscillateur), avec son
-niveau, son pan et ses envois. Sa première page, ce sont les potards du module : **ALGORITHM** balaie ses six
-modulations croisées (crossfade, cross-folding, anneau à diodes, anneau numérique, XOR, comparateur), en fondu de
-l'une à l'autre comme sur le module ; le sélecteur ALGORITHM saute d'un repère au suivant. **TIMBRE**, **LEVEL 1** et
-**LEVEL 2** comme sur le module : avec l'oscillateur interne, LEVEL 1 règle sa note (C0 à C5). En Freq shift :
-ALGORITHM fixe le décalage (au centre, rien ; jusqu'à ±2 kHz), TIMBRE la bande, LEVEL 1 la réinjection, LEVEL 2 le
-mélange. Sa piste de pas locke ALGORITHM, TIMBRE, LEVEL 1 et LEVEL 2 pas par pas (pas la porteuse ni la modulante)
-et l'ouvre ou la ferme sur la piste. Warps joue un bloc derrière les voix (~4 ms de latence sur la piste qu'il
+**Warps** (FX, troisième effet) : le module de modulation croisée de Mutable, entre deux pistes. Sa première page
+suffit pour jouer : **CARRIER**, la porteuse (Off : Warps éteint ; une piste T1-T4 ; ou son oscillateur interne,
+trois formes), **MOD**, la piste modulante, **ALGO**, qui balaie ses six modulations croisées (crossfade,
+cross-folding, anneau à diodes, anneau numérique, XOR, comparateur) en fondu de l'une à l'autre comme sur le module
+(le sélecteur ALGORITHM saute d'un repère au suivant), et **MIX**, le dosage : à 0 la piste telle quelle, à 100 %
+Warps seul. La sortie de Warps prend la place de la piste porteuse (ou de la modulante avec l'oscillateur), avec son
+niveau, son pan et ses envois. Sa deuxième page (SELECT) va plus loin : **TIMBRE**, **LEVEL 1** et **LEVEL 2** comme
+sur le module (avec l'oscillateur interne, LEVEL 1 règle sa note, C0 à C5, dans la gamme quand il y en a une), et
+**MODE** : Warps ; + Dry (on entend aussi la piste modulante telle quelle) ; ou Freq shift, l'easter egg du module,
+un décaleur de fréquence : ALGO fixe alors le décalage (au centre, rien ; jusqu'à ±2 kHz), TIMBRE la bande, LEVEL 1
+la réinjection, LEVEL 2 le mélange. Sa piste de pas locke ALGO, MIX, TIMBRE, LEVEL 1 et LEVEL 2 pas par pas (pas la
+porteuse, la modulante ni le mode) et l'ouvre ou la ferme sur la piste. Warps joue un bloc derrière les voix (~4 ms de latence sur la piste qu'il
 remplace).
+
+**La dose d'aléatoire** (cachée) : tenir **OCT− et OCT+** ensemble et tourner **SELECT**. L'écran écrit RANDOM, et
+plus la dose monte, plus ses lettres se mettent à changer (une à quelques %, les six à 100 %). Chaque réglage du son
+est poussé d'un écart au hasard qui lui est propre, plus ou moins loin selon la dose : FREQ (jusqu'à ±6 demi-tons à
+100 %, dans la gamme), la transposition (±7), l'enveloppe de hauteur, HARMONICS, TIMBRE, MORPH, DECAY, COLOUR et les
+enveloppes de Plaits, le drive du grit, l'EQ, les envois vers le delay et la réverbe, le feedback, le filtre, le
+drive, la résonance et le pleurage du delay, la réverbe, l'algorithme, le timbre et les niveaux de Warps. Rien de ce
+qui tient le temps (divisions, tempo, vitesses, longueurs, pas), ni les pans, les niveaux, la gamme ou le branchement :
+ça reste musical. On lâche : la dose reste (en bas, un trait de la largeur de la dose ; les potards montrent jusqu'où
+elle les emmène, RANDOM dessous). Revenir à 0 rend le son exact de départ, comme l'annulation d'ALL ; remonter depuis 0
+tire un autre hasard. Pendant le geste, l'octave du clavier ne bouge pas.
 
 **La sortie** (GLO, SELECT, K2) : Stereo, Mic headset ou Mono. **Mic headset** est pour un casque à micro (fiche à
 4 contacts) branché à fond dans la prise du FM-1 (3 contacts) : ses écouteurs se retrouvent en série entre la
@@ -244,12 +271,15 @@ qualité de Warps, le thème reste quand on charge un autre projet ; il est gard
 Un projet sauvegardé avec les 0.1.4 à 0.2.6 se recharge : ses réglages, ses modèles, ses câbles (sauf ceux qui
 partaient de Marbles), ses pas, ses locks et Endless ; le tempo de Marbles devient le tempo, et les effets nouveaux
 démarrent neutres (rien vers le delay, aucune piste de pas d'effet). Ceux des 0.3 aussi (l'EQ y est à plat, le grit
-coupé).
+coupé). En 0.4, les deux Tides laissent la place aux trois LFO : les câbles qui partaient de Tides A1, A2 et A3
+partent des LFO 1, 2 et 3, les autres sont retirés, et les LFO démarrent comme ceux d'un projet neuf ; les potards de
+Warps passent sur leurs nouvelles faces (MIX à 100 %, DRY et Freq shift dans MODE), avec leurs locks et leurs
+aléatoires ; le delay est en SYNC.
 
 ## Le dépôt
 
 - `firmware/` : le firmware (fm1-base `tools/build.py ../firmware`)
-  - `app.c` : l'écran et les contrôles ; `mi/engine.cc` : le son (les pistes, les pas et leurs trigs, Tides, la
+  - `app.c` : l'écran et les contrôles ; `mi/engine.cc` : le son (les pistes, les pas et leurs trigs, les LFO, la
     matrice, le quantiseur, les effets et leurs pistes de pas, le mixer ; les voix et Warps partagés entre les deux
     cœurs) ; `mi/mi_*.cc` : un pont C par module Mutable ; `mi/mi_reverb.h` : la réverbe de Clouds, ses lignes de
     retard en flottants ; `mi/mi_delay.h` : le delay (le SVF et la saturation de stmlib dans une ligne 16 bits)

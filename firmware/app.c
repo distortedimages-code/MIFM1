@@ -7,12 +7,13 @@
  * had Mutable Instruments' teal, orange and pink, as their panels print them): at the top the module's icon in a lit ring, its name and a line on its state (Plaits shows
  * the model alone, its logo and its name); then its four knobs in a row, as KNOB 1 to 4 sit on the FM-1, each a ring
  * lit from its start (or its middle) to its value, the value in it; at the bottom the four tracks, an LED each lit by
- * its gate (on Tides' pages: its outputs, lit as high as they are; on the steps' and the effects' pages: the steps).
+ * its gate (on the LFOs' pages: the three LFOs, lit as high as they are; on the steps' and the effects' pages: the
+ * steps).
  * A module's faces slide in from the side SELECT turns to.
  *
  *   KNOB 1..4   the page's four parameters        SELECT   the module's other face (1/3, 2/3...)
- *   ALGORITHM   the page's model or mode (the delay: its time)   PRESETS  the active track, 1 to 4
- *   EDIT        Plaits, the active track          LFO      Tides A, then B
+ *   ALGORITHM   the page's model or mode (the delay: SYNC or FREE)   PRESETS  the active track, 1 to 4
+ *   EDIT        Plaits, the active track          LFO      the three LFOs, one after the other
  *   SEQ         the lane's steps (a track's: NOTE, PROB, RATCHET, LENGTH, then its RANDOM; an effect's: DECAY,
  *               PROB, DEPTH, LENGTH)
  *   ARP         Endless, the track's: REC records (a key a note, SEL a rest), REC again plays it, a key transposes
@@ -30,9 +31,11 @@
  *               held and a knob turned: a lock (the lane's knobs); a step held and SEL: its locks cleared. Held: the
  *               lane erased (with GLO: all of them)
  *   PLAY        the clock runs or stops           SAVE     held: the project saved (stopped)
- *   SEL         MOD mode: hold a source key, turn a knob: a cable. Held: the track's cables (MATRIX)
- *   keys        play the active track (MOD mode: Tides A's and B's outputs, then each fanned over the 4 knobs)
- *   OCT- OCT+   the keyboard's octave (STEP mode: the steps' page)
+ *   SEL         MOD mode: hold an LFO's key, turn a knob: a cable, as deep as turned (to the left: upside down).
+ *               Held: the track's cables (MATRIX)
+ *   keys        play the active track (MOD mode: the first three white keys are the LFOs, blinking at their rates)
+ *   OCT- OCT+   the keyboard's octave (STEP mode: the steps' page). Both held, SELECT: the random dose, the sound's
+ *               knobs (pitches, timbres, filters, sends) thrown aside, more or less; 0 the sound as set
  *
  * Part of the unity build (base/device/unity.c, base/host/plat_host.c), after the platform: gfx.c is in scope.
  * The modules' biggest tables are in the resource region (app.h), which the installer writes after the firmware:
@@ -147,6 +150,8 @@ static struct {
     int msel;                            /* MATRIX: the cable chosen (0..7 the track's, 8..15 the global ones) */
     int init_sel;                        /* GLO: the project REC held loads (0 new, 1 the demo, 2 the saved one) */
     int octave;                          /* the keyboard's */
+    int dice;                            /* OCT- and OCT+ held: SELECT turns the random dose */
+    int oct_was, spage_was;              /* the octave, the steps' page before an OCT press (both: put back) */
     uint32_t keys, btn;
     uint32_t down_at[NB];
     int long_done[NB];
@@ -179,10 +184,9 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
         f[2] = PG_TRACK(t, 2);
         f[3] = PG_GRIT(t);
         return 4;
-    case PT_TIDES1: case PT_TIDES2:
-        f[0] = page >= PG_TIDES(1, 0) ? PG_TIDES(1, 0) : PG_TIDES(0, 0);
-        f[1] = f[0] + 1;
-        return 2;
+    case PT_LFO:                         /* the three LFOs */
+        f[0] = PG_LFO(0), f[1] = PG_LFO(1), f[2] = PG_LFO(2);
+        return 3;
     case PT_MIX: case PT_PAN: case PT_EQ: case PT_DUCK: case PT_COMP: case PT_OTT:   /* the mixer: the levels, the
                                                                           * pans, the filters, the duck, the master bus
                                                                           * (its two modes) */
@@ -280,7 +284,10 @@ static const char *module_name(int page)
 {
     switch (ptype(page)) {
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_GRIT: return "Plaits";
-    case PT_TIDES1: case PT_TIDES2: return page >= PG_TIDES(1, 0) ? "Tides B" : "Tides A";
+    case PT_LFO: {
+        static const char *const N[3] = {"LFO 1", "LFO 2", "LFO 3"};
+        return N[clamp(page - PG_LFO(0), 0, 2)];
+    }
     case PT_MIX: case PT_PAN: case PT_EQ: case PT_DUCK: case PT_COMP: case PT_OTT: return "Mixer";
     case PT_STEP: case PT_RND: return "Steps";
     case PT_EUC: {
@@ -331,7 +338,7 @@ static uint16_t page_accent(int page)
     case PT_OTT: return AC3;
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_GRIT: return model_accent(p->algo[page_first(page)]);
     case PT_EUC: return lane_accent(eng_page_lane(page));
-    case PT_TIDES1: case PT_TIDES2: return accent3(p->algo[page_first(page)]);
+    case PT_LFO: return accent3(page - PG_LFO(0));   /* LFO 1, 2, 3: the three colours */
     default: return lane_accent(eng_page_lane(page));
     }
 }
@@ -426,7 +433,10 @@ static void param_name(int param, char *b, uint32_t max)
         int_text(t + 1, n);
         text_cat(b, n, max);
     } else if (page < PG_MIX) {
-        text_cat(b, page >= PG_TIDES(1, 0) ? "TB" : "TA", max);
+        n[0] = 'L';
+        n[1] = (char)('1' + clamp(page - PG_LFO(0), 0, 2));
+        n[2] = 0;
+        text_cat(b, n, max);
     } else {
         int l = eng_page_lane(page);
         text_cat(b, l == LANE_DELAY ? "Dl" : l == LANE_REVERB ? "Rv" : l == LANE_WARPS ? "Wp" : "Gl", max);
@@ -723,13 +733,13 @@ static void led(float cx, float cy, float r, uint16_t c, int lvl)   /* an LED: l
     disc(cx, cy, r, col);
 }
 
-/* the icons, as strokes in a 32-unit box: Plaits' 24 models, Tides' ramps, the mixer, the reverb, the global page,
+/* the icons, as strokes in a 32-unit box: Plaits' 24 models, the LFOs' waves, the mixer, the reverb, the global page,
  * the projects, the steps, Warps' algorithms, the delay. L a line, C a circle, D a dot, R a rectangle (x y w h) */
 typedef struct {
     char op;
     int8_t a, b, c, d;
 } vop_t;
-enum { IC_MODEL = 0, IC_RAMP = 24, IC_MIX = 27, IC_REV, IC_GLO, IC_NEW, IC_DEMO, IC_SAVED, IC_STEPS, IC_DICE,
+enum { IC_MODEL = 0, IC_WAVE = 24, IC_MIX = IC_WAVE + LW_N, IC_REV, IC_GLO, IC_NEW, IC_DEMO, IC_SAVED, IC_STEPS, IC_DICE,
        IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, IC_EQ, IC_GRIT, IC_EUC, NICON };
 #define IOPS 10
 static const vop_t ICONS[NICON][IOPS] = {
@@ -765,9 +775,17 @@ static const vop_t ICONS[NICON][IOPS] = {
     {{'C', 16, 16, 9, 0}, {'D', 16, 16, 3, 0}},
     {{'R', 6, 11, 20, 12}, {'L', 6, 15, 26, 15}, {'L', 9, 4, 15, 9}, {'L', 23, 4, 17, 9}},
     {{'L', 5, 13, 16, 8}, {'L', 16, 8, 27, 13}, {'L', 5, 16, 16, 20}, {'L', 16, 20, 27, 16}, {'L', 16, 20, 16, 28}},
-    {{'L', 5, 24, 16, 8}, {'L', 16, 8, 27, 24}},                                                    /* AD */
-    {{'L', 4, 22, 9, 10}, {'L', 9, 10, 14, 22}, {'L', 14, 22, 19, 10}, {'L', 19, 10, 24, 22}, {'L', 24, 22, 28, 15}},
-    {{'L', 4, 24, 10, 9}, {'L', 10, 9, 22, 9}, {'L', 22, 9, 28, 24}},                               /* AR */
+    {{'L', 4, 16, 7, 10}, {'L', 7, 10, 10, 7}, {'L', 10, 7, 13, 10}, {'L', 13, 10, 16, 16}, {'L', 16, 16, 19, 22},
+     {'L', 19, 22, 22, 25}, {'L', 22, 25, 25, 22}, {'L', 25, 22, 28, 16}},                          /* sine */
+    {{'L', 4, 16, 10, 7}, {'L', 10, 7, 22, 25}, {'L', 22, 25, 28, 16}},                             /* triangle */
+    {{'L', 4, 24, 16, 8}, {'L', 16, 8, 16, 24}, {'L', 16, 24, 28, 8}},                              /* saw (up) */
+    {{'L', 4, 8, 16, 24}, {'L', 16, 24, 16, 8}, {'L', 16, 8, 28, 24}},                              /* ramp (down) */
+    {{'L', 4, 24, 4, 8}, {'L', 4, 8, 16, 8}, {'L', 16, 8, 16, 24}, {'L', 16, 24, 28, 24}, {'L', 28, 24, 28, 8}},
+                                                                                                     /* square */
+    {{'L', 4, 18, 10, 18}, {'L', 10, 18, 10, 9}, {'L', 10, 9, 16, 9}, {'L', 16, 9, 16, 23}, {'L', 16, 23, 22, 23},
+     {'L', 22, 23, 22, 13}, {'L', 22, 13, 28, 13}},                                                  /* S&H */
+    {{'L', 4, 19, 8, 13}, {'L', 8, 13, 12, 10}, {'L', 12, 10, 16, 13}, {'L', 16, 13, 20, 21}, {'L', 20, 21, 24, 22},
+     {'L', 24, 22, 28, 15}},                                                                         /* smooth */
     {{'L', 8, 6, 8, 26}, {'L', 16, 6, 16, 26}, {'L', 24, 6, 24, 26}, {'L', 5, 20, 11, 20}, {'L', 13, 10, 19, 10},
      {'L', 21, 16, 27, 16}},                                                                         /* mixer */
     {{'D', 7, 16, 2, 0}, {'L', 11, 10, 13, 16}, {'L', 13, 16, 11, 22}, {'L', 16, 7, 19, 16}, {'L', 19, 16, 16, 25},
@@ -1131,21 +1149,56 @@ static void enum_cat(char *s, int param, uint32_t max)   /* a choice's name, in 
     text_cat(s, u, max);
 }
 
-static void panel_tides(int tide)
+/* an LFO: its wave in the ring, what it did these 1.4 s on a scope (lfo_scope, drawn live), its rate, how it runs */
+static void panel_lfo(int i)
 {
     project_t *p = eng_project();
-    int ramp = p->algo[PG_TIDES(tide, 0)], pg = PG_TIDES(tide, 1);
-    static const char *const R[3] = {"X1/8", "X1", "X8"};
-    char s[40];
-    hero_icon(IC_RAMP + ramp, accent3(ramp));
-    int y = hero_title(eng_algo_name(PG_TIDES(tide, 0), ramp));
+    int pg = PG_LFO(i), w = clamp((int)(p->val[pg * 4] + 0.5f), 0, LW_N - 1), m = (int)(p->val[pg * 4 + 2] + 0.5f);
+    char s[48], v[16], u[16];
+    hero_icon(IC_WAVE + w, accent3(i));
     s[0] = 0;
-    text_cat(s, R[(int)(p->val[pg * 4 + 2] + 0.5f) % 3], sizeof s);
-    text_cat(s, "|", sizeof s);
-    enum_cat(s, pg * 4 + 1, sizeof s);
-    text_cat(s, "|", sizeof s);
-    enum_cat(s, pg * 4 + 3, sizeof s);
-    hero_line(y, s);
+    eng_param_text(pg * 4 + 1, eng_final(pg * 4 + 1), v, sizeof v);
+    label_text(v, u, sizeof u);
+    text_cat(s, u, sizeof s);
+    text_cat(s, m == LM_FREE ? "|FREE" : m == LM_SYNC ? "|ON THE TEMPO" : "|AGAIN AT T", sizeof s);
+    if (m >= LM_T1) {
+        v[0] = (char)('1' + clamp(m - LM_T1, 0, ENG_TRACKS - 1));
+        v[1] = 0;
+        text_cat(s, v, sizeof s);
+    }
+    hero_line(48, s);
+}
+
+#define SCOPE_W 148                      /* the LFO's scope, right of its ring */
+#define SCOPE_H 42
+static void lfo_scope(int force)         /* the LFO these 1.4 s (eng_hist), the newest at the right */
+{
+    static int32_t shown;
+    int i = clamp(ui.page - PG_LFO(0), 0, 2), h[ENG_HIST];
+    int32_t key = i + 1;
+    for (int j = 0; j < ENG_HIST; j++) {
+        h[j] = eng_hist(SRC_L1 + i, j);
+        key = key * 31 + h[j];
+    }
+    if (!force && key == shown)
+        return;
+    shown = key;
+    uint16_t ac = accent3(i), glow = tint(ac, BG, 2);
+    float px = 0.0f, py = 0.0f;
+    cv_begin(SCOPE_W, SCOPE_H, BG);
+    for (int x = 0; x < SCOPE_W - 4; x += 4)   /* 0, dotted */
+        cv_rect(x, SCOPE_H / 2, 2, 1, RULE);
+    for (int pass = 0; pass < 2; pass++)
+        for (int j = 0; j < ENG_HIST; j++) {
+            float x = 2.0f + (float)j * (float)(SCOPE_W - 8) / (float)(ENG_HIST - 1);
+            float y = (float)(SCOPE_H / 2) - (float)h[j] * (float)(SCOPE_H / 2 - 4) / 127.0f;
+            if (j)
+                seg(px, py, x, y, pass ? 2.0f : 5.0f, pass ? ac : glow);
+            px = x;
+            py = y;
+        }
+    lit_disc(px, py, 3.0f, HI);           /* now */
+    blit(84, PANEL_Y + 2);
 }
 
 static int meter_lit(int t) { return (int)(fm_clampf(eng_meter(t) * 1.25f, 0.0f, 1.0f) * 7.0f + 0.5f); }
@@ -1415,19 +1468,19 @@ static void panel_global(void)           /* the tempo, the scale, the swing */
 static void panel_warps(void)            /* Warps: its algorithm, its marks, what it takes and where it goes */
 {
     project_t *p = eng_project();
-    int a = eng_warps_algo(), car = (int)(p->val[PG_WARPS(1) * 4] + 0.5f), mod = (int)(p->val[PG_WARPS(1) * 4 + 1] + 0.5f);
-    float alg = eng_final(PG_WARPS(0) * 4);
+    int a = eng_warps_algo(), car = (int)(p->val[PG_WARPS(0) * 4] + 0.5f), mod = (int)(p->val[PG_WARPS(0) * 4 + 1] + 0.5f);
+    float alg = eng_final(PG_WARPS(0) * 4 + 2);
     uint16_t ac = warps_accent();
     char s[48], v[16], u[16];
     hero_icon(IC_WARPS + (a < 0 ? clamp((int)(alg * 5.0f + 0.5f), 0, 5) : a), ac);
     int y = hero_title(eng_warps_name(a));
     if (a < 0) {
-        hero_line(y, "OFF|A CARRIER ON PAGE 2");
+        hero_line(y, "OFF|K1: A CARRIER");
         return;
     }
     s[0] = 0;
     if (a != 6 || car < WC_OSC1) {       /* the carrier: a track, or the oscillator's shape */
-        eng_param_text(PG_WARPS(1) * 4, (float)car, v, sizeof v);
+        eng_param_text(PG_WARPS(0) * 4, (float)car, v, sizeof v);
         label_text(v, u, sizeof u);
         text_cat(s, u, sizeof s);
         text_cat(s, car >= WC_OSC1 ? " OSC " : " ", sizeof s);
@@ -1465,15 +1518,19 @@ static void panel_delay(void)            /* the delay: its time, its mode, its r
     if (ui.page == PG_DSEND)
         text_cat(s, "THE SENDS|", sizeof s);
     eng_param_text(PG_DELAY(0) * 4, eng_final(PG_DELAY(0) * 4), v, sizeof v);
+    label_text(v, v, sizeof v);
     text_cat(s, v, sizeof s);
+    if (p->algo[PG_DELAY(0)] == DL_FREE)  /* FREE: in ms, off the tempo */
+        text_cat(s, ", FREE", sizeof s);
     if (ui.page != PG_DSEND) {
         text_cat(s, "|", sizeof s);
         enum_cat(s, PG_DELAY(1) * 4 + 1, sizeof s);
+    }
+    if (ui.page != PG_DSEND && p->algo[PG_DELAY(0)] != DL_FREE) {
         text_cat(s, "|FB ", sizeof s);
         eng_param_text(PG_DELAY(0) * 4 + 1, eng_final(PG_DELAY(0) * 4 + 1), v, sizeof v);
         text_cat(s, v, sizeof s);
     }
-    (void)p;
     hero_line(y, s);
 }
 
@@ -1528,6 +1585,42 @@ static void fx_meter(int force)
     blit(226, PANEL_Y + 12);
 }
 
+/* OCT- and OCT+ held: the random dose (SELECT), in the module's display. RANDOM, as many of its letters thrown as
+ * the dose is high (one at a few %, all six at 100 %), thrown again every 60 ms; under it the dose, a bar */
+static void draw_dice(void)
+{
+    static int32_t shown[2];
+    static const uint8_t ORDER[6] = {3, 0, 5, 2, 4, 1};   /* the letters thrown, first to last */
+    static const char G[] = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789#%&?*+";
+    static const char W[7] = "RANDOM";
+    project_t *p = eng_project();
+    int d = p->dice > 100 ? 100 : p->dice, n = (d * 6 + 99) / 100;
+    uint32_t tick = plat_ms() / 60u, r = tick * 2654435761u ^ 0x5bd1e995u;
+    int32_t s[2] = {d, n ? (int32_t)tick : 0};
+    char c[2] = {0, 0}, line[40], v[8];
+    int thrown[6] = {0, 0, 0, 0, 0, 0};
+    if (!ui.full && !ui.body_panel && !memcmp(s, shown, sizeof s))
+        return;
+    memcpy(shown, s, sizeof s);
+    for (int i = 0; i < n; i++)
+        thrown[ORDER[i]] = 1;
+    cv_begin(240, PANEL_H, BG);
+    hero_icon(IC_DICE, d ? AC3 : DIM);
+    for (int i = 0; i < 6; i++) {        /* a letter a cell (24 px): the word stays put while its letters change */
+        r = r * 1664525u + 1013904223u;
+        c[0] = thrown[i] ? G[(r >> 24) % (sizeof G - 1u)] : W[i];
+        cv_text(84 + i * 24 + 12 - text_w(&FONT_L, c) / 2, 6, &FONT_L, c, !d ? MUTED : thrown[i] ? AC3 : HI);
+    }
+    line[0] = 0;
+    int_text(d, v);
+    text_cat(line, v, sizeof line);
+    text_cat(line, d ? " %|PITCH, TONE, FX" : " %|THE SOUND AS SET", sizeof line);
+    hero_line(44, line);
+    cv_rect(85, 66, 147, 2, TRACK);
+    cv_rect(85, 65, (147 * d + 50) / 100, 4, AC3);
+    blit(0, PANEL_Y);
+}
+
 static void draw_panel(void)
 {
     project_t *p = eng_project();
@@ -1544,11 +1637,10 @@ static void draw_panel(void)
     case PT_PLAITS3: s[2] = eng_note(tr) | (int)((eng_gates() >> tr) & 1u) << 8 |
                             (int)(eng_final(ui.page * 4) * 50.0f + 50.0f) << 9 | (int)(eng_final(ui.page * 4 + 1) * 100.0f) << 16;
         break;
-    case PT_TIDES1: case PT_TIDES2: {
-        int pg = PG_TIDES(ui.page >= PG_TIDES(1, 0), 1);
-        s[2] = (int)p->val[pg * 4 + 1] | (int)p->val[pg * 4 + 2] << 4 | (int)p->val[pg * 4 + 3] << 8;
+    case PT_LFO:
+        s[2] = (int)p->val[ui.page * 4] | (int)p->val[ui.page * 4 + 2] << 4 |
+               (int)(eng_final(ui.page * 4 + 1) * 1000.0f) << 8;
         break;
-    }
     case PT_STEP: case PT_LANE: {
         int l = eng_page_lane(ui.page);
         for (int i = 0; i < ENG_STEPS / 8; i++)
@@ -1591,21 +1683,23 @@ static void draw_panel(void)
             s[2] |= meter_lit(t) << (t * 3) | (int)(p->algo[PG_TRACK(t, 0)] / 8) << (12 + t * 2);
         break;
     case PT_WARPS1: case PT_WARPS2:
-        s[2] = (int)(eng_final(PG_WARPS(0) * 4) * 64.0f) | (int)p->val[PG_WARPS(1) * 4] << 7 |
-               (int)p->val[PG_WARPS(1) * 4 + 1] << 11 | (int)p->val[PG_WARPS(1) * 4 + 3] << 13;
+        s[2] = (int)(eng_final(PG_WARPS(0) * 4 + 2) * 64.0f) | (int)p->val[PG_WARPS(0) * 4] << 7 |
+               (int)p->val[PG_WARPS(0) * 4 + 1] << 11 | (int)p->val[PG_WARPS(1) * 4 + 3] << 13;
         break;
     default: break;
     }
     if (!ui.full && !ui.body_panel && !memcmp(s, ui.panel_shown, sizeof s)) {
         if (fx)
             fx_meter(0);
+        if (pt == PT_LFO)
+            lfo_scope(0);
         return;
     }
     memcpy(ui.panel_shown, s, sizeof s);
     cv_begin(240, PANEL_H, BG);
     switch (pt) {
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: panel_plaits(tr, page_face(ui.page), page_accent(ui.page)); break;
-    case PT_TIDES1: case PT_TIDES2: panel_tides(ui.page >= PG_TIDES(1, 0)); break;
+    case PT_LFO: panel_lfo(ui.page - PG_LFO(0)); break;
     case PT_MIX: case PT_PAN: panel_mixer(pt == PT_PAN); break;
     case PT_EQ: panel_eq(); break;
     case PT_GRIT: panel_grit(tr); break;
@@ -1623,6 +1717,8 @@ static void draw_panel(void)
     blit(0, PANEL_Y);
     if (fx)
         fx_meter(1);
+    if (pt == PT_LFO)
+        lfo_scope(1);
 }
 
 /* the knobs: a ring each, lit from its start (or its middle) to its value ---------------------------------------- */
@@ -1797,6 +1893,12 @@ static void draw_knob_at(int page, int k, int force)
             text_cat(under, "LOCK", sizeof under);
     } else {
         ncab = cables_on(param, c, sizeof c, &hash);
+        if (!ncab && p->dice && (f - v > 0.0005f || v - f > 0.0005f)) {   /* the random dose: where it takes it */
+            c[0] = 0;
+            text_cat(c, "RANDOM", sizeof c);
+            ncab = 1;
+            hash = 0x5EED;
+        }
         eng_param_text(param, ncab ? f : v, txt, sizeof txt);
     }
     int idle = view == KV_VALUE && knob_idle(param);
@@ -1931,7 +2033,7 @@ static void draw_matrix(void)
         return;
     shown = h;
     cv_begin(240, 24, BG);
-    cv_text(10, 0, &FONT_XS, g < ENG_TRACKS ? "THE TRACK'S CABLES" : "GLOBAL CABLES (TIDES, THE EFFECTS)", TXT);
+    cv_text(10, 0, &FONT_XS, g < ENG_TRACKS ? "THE TRACK'S CABLES" : "GLOBAL CABLES (THE LFOS, THE EFFECTS)", TXT);
     cv_text(10, 12, &FONT_T, "K1 CABLE   K2 SOURCE   K3 TARGET   K4 DEPTH", DIM);
     blit(0, PANEL_Y);
     draw_lines(PANEL_Y + 24, 19, lines, col, 8, ui.msel - first);
@@ -1991,7 +2093,7 @@ static void draw_machine(int force)      /* the machine, where the knobs are */
                 text_cat(v, cpu2_ok ? "paused" : "off", sizeof v);
                 c = AC2;
             }
-            text_cat(v, "  prep ", sizeof v);   /* core 0's preparation of a block (the sequencer, the cables, Tides) */
+            text_cat(v, "  prep ", sizeof v);   /* core 0's preparation of a block (the sequencer, the LFOs, the cables) */
             int_text((int32_t)((eng_prep_load() + 5u) / 10u), n);
             text_cat(v, n, sizeof v);
             text_cat(v, "%", sizeof v);
@@ -2066,9 +2168,9 @@ static void draw_missing(void)
     draw_lines(PANEL_Y + 4, 19, L, col, 8, -1);
 }
 
-/* the row at the bottom: the four tracks (an LED lit by its gate or its trig, in its model's colour); on Tides' pages
- * its outputs, lit as much as they are high; the steps of the lane in STEP mode, and on the steps' and the effects'
- * pages theirs */
+/* the row at the bottom: the four tracks (an LED lit by its gate or its trig, in its model's colour); on the LFOs'
+ * pages the three LFOs, lit as high as they are; the steps of the lane in STEP mode, and on the steps' and the effects'
+ * pages theirs. Its rule lit as far as the random dose goes (OCT- and OCT+ held, SELECT) */
 static int foot_lane(void)               /* the lane whose steps the row shows, -1 none */
 {
     int pt = ptype(ui.page);
@@ -2090,7 +2192,7 @@ static int foot_mode(void)
     if (foot_lane() >= 0)
         return 5;
     switch (ptype(ui.page)) {
-    case PT_TIDES1: case PT_TIDES2: return ui.page >= PG_TIDES(1, 0) ? 2 : 1;
+    case PT_LFO: return 1;
     default: return 0;
     }
 }
@@ -2331,7 +2433,7 @@ static void squares(int32_t left, uint16_t c)
 
 static void draw_footer(void)
 {
-    static const char *const OUT[2][4] = {{"A1", "A2", "A3", "A4"}, {"B1", "B2", "B3", "B4"}};
+    static const char *const LFO_N[3] = {"LFO 1", "LFO 2", "LFO 3"};
     project_t *p = eng_project();
     char t[40], n[8];
     uint32_t now = plat_ms();
@@ -2342,8 +2444,8 @@ static void draw_footer(void)
     int hb = hold_now(hl, sizeof hl, &hdone);
     uint16_t ac = page_accent(ui.page);
     for (int i = 0; i < 4; i++) {        /* each LED's level, 0..8 */
-        int src = mode == 1 ? SRC_A1 + i : SRC_B1 + i, v = mode && mode < 3 ? eng_hist(src, ENG_HIST - 1) : 0;
-        lv[i] = mode && mode < 3 ? (iabs(v) * 8 + 63) / 127 : track_lit(i) * 8;
+        int v = mode == 1 && i < 3 ? eng_hist(SRC_L1 + i, ENG_HIST - 1) : 0;   /* an LFO: -1 off .. 1 full */
+        lv[i] = mode == 1 ? (i < 3 ? ((v + 127) * 8 + 127) / 254 : 0) : track_lit(i) * 8;
         lh = lh * 9 + lv[i];
     }
     if (mode == 6) {                     /* Endless: its notes, the one playing */
@@ -2364,8 +2466,8 @@ static void draw_footer(void)
     int32_t s[6] = {lh, mode | ui.mod << 4 | msg << 5 | und << 6 | (hb + 1) << 8 |
                         ((hb >= 0 ? hsq : und == 1 ? usq : 0) / 50) << 12,
                     (int32_t)(track_accent(0) ^ track_accent(1) << 1 ^
-                    track_accent(2) << 2 ^ track_accent(3) << 3) ^ ui.track << 20 ^ (int32_t)ac << 4,
-                    eng_note(0) | eng_note(1) << 8 | eng_note(2) << 16,
+                    track_accent(2) << 2 ^ track_accent(3) << 3) ^ ui.track << 20 ^ (int32_t)ac << 4 ^ ui.page << 25,
+                    eng_note(0) | eng_note(1) << 8 | eng_note(2) << 16 | p->dice << 24,
                     p->algo[PG_TRACK(0, 0)] | p->algo[PG_TRACK(1, 0)] << 5 | p->algo[PG_TRACK(2, 0)] << 10 |
                     p->algo[PG_TRACK(3, 0)] << 15, msg ? text_hash(ui.msg[0]) : 0};
     if (!ui.full && !memcmp(s, ui.foot_shown, sizeof s))
@@ -2373,6 +2475,8 @@ static void draw_footer(void)
     memcpy(ui.foot_shown, s, sizeof s);
     cv_begin(240, FOOT_H, BG);
     cv_rect(8, 2, 224, 1, RULE);
+    if (p->dice)                         /* the random dose */
+        cv_rect(8, 1, (224 * p->dice + 50) / 100, 3, AC3);
     if (hb >= 0) {                       /* a press held: what it will do, the time left in five squares */
         cv_text(10, 8, &FONT_B, hl, HI);
         squares(hsq, hb == B_SEL ? AC1 : AC3);
@@ -2390,19 +2494,21 @@ static void draw_footer(void)
             cv_text(120 - text_w(&FONT_B, "UNDONE AT THE BAR") / 2, 8, &FONT_B, "UNDONE AT THE BAR", KNOCK);
         }
     } else if (ui.mod) {
-        cv_text(10, 6, &FONT_XS, "MOD: HOLD A SOURCE KEY, TURN A KNOB", HI);
-        cv_text(10, 21, &FONT_T, "KEYS 1-4 TIDES A  5-8 B  9, 10: A, B ON THE 4 KNOBS", MUTED);
+        cv_text(10, 6, &FONT_XS, "MOD: HOLD AN LFO'S KEY, TURN A KNOB", HI);
+        cv_text(10, 21, &FONT_T, "THE FIRST 3 WHITE KEYS: LFO 1, 2, 3 (BLINKING)", MUTED);
     } else if (mode == 6) {
         foot_endless(ui.erec >= 0 ? ui.erec : ui.track);
     } else if (mode == 5) {
         foot_steps(fl);
     } else {
         for (int i = 0; i < 4; i++) {    /* a cell under each knob (60 px), the LED and the name from its left */
-            int x = i * 60 + 8, act = mode ? lv[i] > 0 : i == ui.track;
+            int x = i * 60 + 8, act = mode ? i == ui.page - PG_LFO(0) : i == ui.track;
             t[0] = 0;
-            if (mode) {
-                text_cat(t, OUT[mode - 1][i], sizeof t);
-                led((float)(x + 5), 19.0f, 3.6f, ac, lv[i]);
+            if (mode) {                  /* the LFOs: each in its colour, the page's in white */
+                if (i >= 3)
+                    continue;
+                text_cat(t, LFO_N[i], sizeof t);
+                led((float)(x + 5), 19.0f, 3.6f, accent3(i), lv[i]);
             } else {
                 n[0] = (char)('1' + i);
                 n[1] = ' ';
@@ -2491,6 +2597,9 @@ static void draw(void)
     poll_keys();
     if (!data_ok || !engine_ok) {
         draw_missing();
+    } else if (ui.dice) {                /* OCT- and OCT+ held: the random dose, over any page */
+        draw_dice();
+        draw_row(ui.page, sh);
     } else if (ui.page == VP_SYS) {
         draw_projects();
         draw_row(VP_SYS, sh);
@@ -2694,17 +2803,14 @@ static void cable_turn(int s, int param, int32_t e)
     dirty = 1;
 }
 
-static int held_source(void)             /* MOD mode: the source key held (1..8), 9 / 10 the fans, 0 none */
+static const uint8_t WHITE[16] = PLAT_WHITE_KEYS;
+static int held_source(void)             /* MOD mode: the LFO whose key is held (the first three white keys: F, G, A),
+                                          * SRC_NONE none */
 {
-    for (int k = 0; k < 10; k++)
-        if (ui.keys & (1u << k))
-            return k + 1;
-    return 0;
-}
-
-static int key_source(int key)           /* the first eight keys: A1-A4, B1-B4 */
-{
-    return key >= 1 && key <= 8 ? SRC_A1 + key - 1 : SRC_NONE;
+    for (int i = 0; i < 3; i++)
+        if (ui.keys & (1u << WHITE[i]))
+            return SRC_L1 + i;
+    return SRC_NONE;
 }
 
 /* the module buttons: their first page, and where a second press goes */
@@ -2715,11 +2821,8 @@ static void module_button(int b)
     case B_EDIT:
         go_page(here && (pt <= PT_PLAITS3 || pt == PT_GRIT) ? next : PG_TRACK(ui.track, 0));
         break;
-    case B_LFO:
-        if (here && (pt == PT_TIDES1 || pt == PT_TIDES2))
-            go_page(ui.page >= PG_TIDES(1, 0) ? PG_TIDES(0, 0) : PG_TIDES(1, 0));
-        else
-            go_page(PG_TIDES(0, 0));
+    case B_LFO:                          /* the LFOs: 1, then 2, 3 */
+        go_page(here && pt == PT_LFO ? next : PG_LFO(0));
         break;
     case B_SEQ:                          /* the lane's steps (a track's: then its RANDOM face, its Euclidean one) */
         if (here && (pt == PT_STEP || pt == PT_RND || (pt == PT_EUC && ptrack(ui.page) >= 0)))
@@ -2754,7 +2857,21 @@ static void button_down(int b)
     case B_PLAY:
         eng_play(!eng_playing());
         break;
-    case B_OCTDN: case B_OCTUP:          /* the keyboard's octave; STEP mode: the steps' page */
+    case B_OCTDN: case B_OCTUP:          /* the keyboard's octave; STEP mode: the steps' page. Both held: SELECT turns
+                                          * the random dose (the first one's octave put back) */
+        if (held(b == B_OCTUP ? B_OCTDN : B_OCTUP)) {
+            if (!ui.dice) {
+                ui.octave = ui.oct_was;
+                ui.spage = ui.spage_was;
+            }
+            ui.dice = 1;
+            ui.body_panel = 1;
+            if (ui.matrix || ui.page == VP_SYS)   /* (the knobs over the matrix; the machine's row stays) */
+                ui.full = 1;
+            break;
+        }
+        ui.oct_was = ui.octave;
+        ui.spage_was = ui.spage;
         if (ui.grid)
             ui.spage = clamp(ui.spage + (b == B_OCTUP ? 1 : -1), 0, (lane_len(ui.lane) - 1) / 16);
         else
@@ -2912,6 +3029,14 @@ static void button_up(int b)
         if (!ui.used[b])
             go_page(PG_TRACK(ui.track, 1));
         ui.full = 1;
+        break;
+    case B_OCTDN: case B_OCTUP:          /* the random dose: it stays as turned */
+        if (ui.dice) {
+            ui.dice = 0;
+            ui.body_panel = 1;
+            if (ui.matrix)               /* (the knobs drawn over the matrix) */
+                ui.full = 1;
+        }
         break;
     default:
         break;
@@ -3093,12 +3218,18 @@ static void input(void)
         }
     }
     e = plat_enc(EN_SELECT);
-    if (e && !ui.matrix && page_count(ui.page) > 1)
+    if (e && ui.dice) {                  /* the random dose: 2 % a step (5 turned fast); from 0, another throw */
+        project_t *p = eng_project();
+        if (!p->dice && e > 0)
+            p->dice_seed++;
+        p->dice = (uint8_t)clamp((int32_t)p->dice + e * (e > 1 || e < -1 ? 5 : 2), 0, 100);
+        dirty = 1;
+    } else if (e && !ui.matrix && page_count(ui.page) > 1)
         go_page_dir(page_at(ui.page, page_face(ui.page) + (e > 0 ? 1 : -1)), e > 0 ? 1 : -1);
     e = plat_enc(EN_ALGO);
     if (e && !ui.matrix && (ptype(ui.page) == PT_WARPS1 || ptype(ui.page) == PT_WARPS2)) {
         /* Warps: ALGORITHM from mark to mark (its six cross-modulations, a fifth of the knob apart) */
-        float *v = &eng_project()->val[PG_WARPS(0) * 4];
+        float *v = &eng_project()->val[PG_WARPS(0) * 4 + 2];
         int i;
         if (e > 0)
             for (i = 0; i < 5 && (float)i * 0.2f <= *v + 0.001f; i++)
@@ -3110,7 +3241,8 @@ static void input(void)
         dirty = 1;
     } else if (e && !ui.matrix && (ptype(ui.page) == PT_DELAY1 || ptype(ui.page) == PT_DELAY2 ||
                                    ptype(ui.page) == PT_DSEND)) {
-        edit_param(PG_DELAY(0) * 4, e > 0 ? 1 : -1);   /* the delay: its time, a division at a time */
+        eng_delay_mode(e > 0 ? DL_FREE : DL_SYNC);   /* the delay: on the tempo, or free (in ms), its time kept */
+        dirty = 1;
         ui.touched_at[0] = now;
         ui.touched_k = ui.page == PG_DELAY(0) ? 0 : -1;
     } else if (e && !ui.matrix && (ptype(ui.page) == PT_COMP || ptype(ui.page) == PT_OTT)) {
@@ -3159,7 +3291,7 @@ static void input(void)
             matrix_turn(i, e);
             continue;
         }
-        int param = knob_param(ui.page, i), h = ui.mod ? held_source() : 0;
+        int param = knob_param(ui.page, i), h = ui.mod ? held_source() : SRC_NONE;
         if (held(B_GLO))
             ui.used[B_GLO] = 1;
         if (ptype(ui.page) == PT_RND) {
@@ -3172,10 +3304,8 @@ static void input(void)
             edit_rnd(param, e);
         } else if (ui.held_step >= 0) {
             edit_lock(param, e);
-        } else if (h >= 1 && h <= 8) {
-            cable_turn(key_source(h), param, e);
-        } else if (h == 9 || h == 10) {  /* the fans: A n (or B n) on knob n */
-            cable_turn((h == 9 ? SRC_A1 : SRC_B1) + i, param, e);
+        } else if (h != SRC_NONE) {      /* an LFO's key held: its cable, deeper (or upside down) */
+            cable_turn(h, param, e);
         } else if (!held(B_GLO) || !edit_all(param, e)) {
             edit_param(param, e);
         }
@@ -3184,18 +3314,18 @@ static void input(void)
         ui.touched_at[i] = now;
         ui.touched_k = i;
     }
-    /* lights: the page's button, PLAY, SEL in MOD mode, REC with the steps; the keys: the steps (the one playing
-     * blinks), or held, or the sources on this page */
+    /* lights: the page's button, PLAY, SEL in MOD mode, REC with the steps, OCT- and OCT+ turning the random dose;
+     * the keys: the steps (the one playing blinks), or held; MOD mode: the LFOs' keys blinking at their rates */
     {
         static const uint8_t PAGE_BTN[PT_SYS + 1] = {
-            [PT_PLAITS1] = B_EDIT, [PT_PLAITS2] = B_ENV, [PT_PLAITS3] = B_EDIT, [PT_TIDES1] = B_LFO, [PT_TIDES2] = B_LFO,
+            [PT_PLAITS1] = B_EDIT, [PT_PLAITS2] = B_ENV, [PT_PLAITS3] = B_EDIT, [PT_LFO] = B_LFO,
             [PT_MIX] = B_HOME, [PT_PAN] = B_HOME, [PT_REVERB] = B_FX, [PT_RSEND] = B_FX, [PT_DELAY1] = B_FX,
             [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
             [PT_ARP] = B_ARP, [PT_WARPS1] = B_FX, [PT_WARPS2] = B_FX, [PT_DUCK] = B_HOME, [PT_COMP] = B_HOME,
             [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_GRIT] = B_EDIT, [PT_EUC] = B_SEQ, [PT_RND] = B_SEQ,
             [PT_SYS] = B_GLO};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
-        uint32_t bb = 0, kk = ui.keys;
+        uint32_t bb = ui.dice ? 1u << B_OCTDN | 1u << B_OCTUP : 0, kk = ui.keys;
         int pt = ptype(ui.page);
         if (!ui.matrix)
             bb |= 1u << (pt == PT_EUC && ptrack(ui.page) < 0 ? B_FX : PAGE_BTN[pt]);
@@ -3221,13 +3351,9 @@ static void input(void)
             if ((ui.spage + 1) * 16 < len)
                 bb |= 1u << B_OCTUP;
         } else if (ui.mod) {
-            project_t *p = eng_project();
-            for (int g = 0; g <= ENG_TRACKS; g++)
-                for (int c = 0; c < ENG_CABLES; c++) {
-                    const cable_t *q = &p->cable[g][c];
-                    if (q->depth && q->src != SRC_NONE && q->dst / 4 == ui.page)
-                        kk |= 1u << (q->src - SRC_A1);
-                }
+            for (int i = 0; i < 3; i++)
+                if (eng_lfo_phase(i) < 0.5f)
+                    kk |= 1u << W[i];
         }
         plat_leds(bb, kk);
         plat_glow(1);

@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 // Copyright (C) 2026 Yoann
-// MIFM1's sound (mi/engine.h): four Plaits voices played by a step sequencer (or the keys), two Tides as modulators,
-// a matrix of cables, three effects (a delay, Clouds' reverb, Warps) with their own steps, a mixer. Only bridge.h's C
-// functions reach the modules: no module's header meets another's here.
+// MIFM1's sound (mi/engine.h): four Plaits voices played by a step sequencer (or the keys), three LFOs as modulators
+// (0.3 had two Tides), a matrix of cables, three effects (a delay, Clouds' reverb, Warps) with their own steps, a
+// mixer. Only bridge.h's C functions reach the modules: no module's header meets another's here.
 //
 // One audio block (128 frames, 2.9 ms) is one control step:
-//   1. Tides takes its knobs as the cables left them at the last block, its trigger the tracks' gates of the last
-//      block, and runs one frame;
-//   2. the sources are read, and every parameter is its knob plus its cables;
+//   1. the LFOs move a block (on the tempo, or free, or from a track's trigs), through their slew;
+//   2. every parameter is its knob, plus the random dose (OCT- and OCT+ held, SELECT), plus its cables;
 //   3. the trigs, frame by frame (8 a block), on the tempo's sixteenths (swung): each lane's step; a track's trig
 //      takes its locks and its randoms (over the knobs, until the next trig), its probability, its ratchets, its
 //      length; an effect's opens it (its locks and randoms the same); the keyboard plays over, a new key a new trig;
@@ -31,10 +30,8 @@ extern "C" {
 namespace {
 
 // ---------------------------------------------------------------- parameters ---
-const char* const kTidesOut[4] = {"Gates", "Amplitude", "Phase", "Frequency"};
-const char* const kTidesRange[3] = {"Slow", "Medium", "Fast"};
-const char* const kTidesTrig[6] = {"Free", "T1", "T2", "T3", "T4", "Clock"};
-const int kTidesClock = 5;
+const char* const kLfoWaves[LW_N] = {"Sine", "Triangle", "Saw", "Ramp", "Square", "S&H", "Smooth"};
+const char* const kLfoModes[6] = {"Free", "Sync", "T1", "T2", "T3", "T4"};
 const char* const kOnOff[2] = {"Off", "On"};
 const char* const kScaleNames[15] = {"Off", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
                                      "Locrian", "Harm. minor", "Mel. minor", "Maj. penta", "Min. penta", "Blues",
@@ -47,7 +44,7 @@ const float kArpMult[6] = {0.5f, 2.0f / 3.0f, 1.0f, 4.0f / 3.0f, 2.0f, 4.0f};   
 const char* const kArpDir[4] = {"Forward", "Backward", "Ping-pong", "Random"};
 const char* const kWarpsCarrier[8] = {"Off", "T1", "T2", "T3", "T4", "Osc 1", "Osc 2", "Osc 3"};
 const char* const kTrackNames[4] = {"T1", "T2", "T3", "T4"};
-const char* const kWarpsMode[2] = {"Warps", "Freq shift"};
+const char* const kWarpsMode[3] = {"Warps", "+ Dry", "Freq shift"};
 // the delay's times: divisions of the tempo, shortest first
 const int kDivs = 13;
 const char* const kDivNames[kDivs] = {"1/32", "1/16T", "1/16", "1/8T", "1/16D", "1/8", "1/4T", "1/8D", "1/4", "1/4D",
@@ -62,9 +59,8 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Freq", K_BIP, 0, 0, 0}, {"Harmo", K_UNI, 0, 0, 0}, {"Timbre", K_UNI, 0, 0, 0}, {"Morph", K_UNI, 0, 0, 0}},
   {{"Decay", K_UNI, 0, 0, 0}, {"Colour", K_UNI, 0, 0, 0}, {"T.Env", K_BIP, 0, 0, 0}, {"M.Env", K_BIP, 0, 0, 0}},
   {{"P.Env", K_BIP, 0, 0, 0}, {"Gate", K_UNI, 0, 0, 0}, {"Transp", K_INT, -12, 12, 0}, {"Octave", K_INT, -3, 3, 0}},
-  {{"Freq", K_UNI, 0, 0, 0}, {"Shape", K_UNI, 0, 0, 0}, {"Slope", K_UNI, 0, 0, 0}, {"Smooth", K_UNI, 0, 0, 0}},
-  {{"Shift", K_UNI, 0, 0, 0}, {"Output", K_ENUM, 0, 3, kTidesOut}, {"Range", K_ENUM, 0, 2, kTidesRange},
-   {"Trig", K_ENUM, 0, 5, kTidesTrig}},
+  {{"Wave", K_ENUM, 0, LW_N - 1, kLfoWaves}, {"Rate", K_UNI, 0, 0, 0}, {"Mode", K_ENUM, 0, 5, kLfoModes},
+   {"Slew", K_UNI, 0, 0, 0}},
   {{"Level", K_UNI, 0, 0, 0}, {"Level", K_UNI, 0, 0, 0}, {"Level", K_UNI, 0, 0, 0}, {"Level", K_UNI, 0, 0, 0}},
   {{"Pan", K_BIP, 0, 0, 0}, {"Pan", K_BIP, 0, 0, 0}, {"Pan", K_BIP, 0, 0, 0}, {"Pan", K_BIP, 0, 0, 0}},
   {{"Time", K_UNI, 0, 0, 0}, {"Damp", K_UNI, 0, 0, 0}, {"Diffuse", K_UNI, 0, 0, 0}, {"Return", K_UNI, 0, 0, 0}},
@@ -79,9 +75,10 @@ const eng_pdef_t kPages[NPT][4] = {
    {"Swing", K_UNI, 0, 0, 0}},
   {{"Rate", K_ENUM, 0, 5, kArpRates}, {"Gate", K_UNI, 0, 0, 0}, {"Dir", K_ENUM, 0, 3, kArpDir},
    {"Transp", K_INT, -24, 24, 0}},
-  {{"Algo", K_UNI, 0, 0, 0}, {"Timbre", K_UNI, 0, 0, 0}, {"Level 1", K_UNI, 0, 0, 0}, {"Level 2", K_UNI, 0, 0, 0}},
-  {{"Carrier", K_ENUM, 0, 7, kWarpsCarrier}, {"Mod", K_ENUM, 0, 3, kTrackNames}, {"Dry", K_ENUM, 0, 1, kOnOff},
-   {"Mode", K_ENUM, 0, 1, kWarpsMode}},
+  {{"Carrier", K_ENUM, 0, 7, kWarpsCarrier}, {"Mod", K_ENUM, 0, 3, kTrackNames}, {"Algo", K_UNI, 0, 0, 0},
+   {"Mix", K_UNI, 0, 0, 0}},
+  {{"Timbre", K_UNI, 0, 0, 0}, {"Level 1", K_UNI, 0, 0, 0}, {"Level 2", K_UNI, 0, 0, 0},
+   {"Mode", K_ENUM, 0, 2, kWarpsMode}},
   {{"Decay", K_UNI, 0, 0, 0}, {"Duck", K_UNI, 0, 0, 0}, {"Duck", K_UNI, 0, 0, 0}, {"Duck", K_UNI, 0, 0, 0}},
   {{"Thresh", K_UNI, 0, 0, 0}, {"Ratio", K_UNI, 0, 0, 0}, {"Release", K_UNI, 0, 0, 0}, {"Gain", K_BIP, 0, 0, 0}},
   {{"Depth", K_UNI, 0, 0, 0}, {"Time", K_UNI, 0, 0, 0}, {"Drive", K_BIP, 0, 0, 0}, {"Level", K_BIP, 0, 0, 0}},
@@ -90,9 +87,11 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Fills", K_INT, 0, 64, 0}, {"Rotate", K_INT, 0, 63, 0}, {"Length", K_INT, 1, 64, 0}, {"Prob", K_UNI, 0, 0, 0}},
 };
 const char* const kBusModes[3] = {"OFF", "COMP", "OTT"};
+const char* const kDelayAlgos[2] = {"SYNC", "FREE"};
+const eng_pdef_t kDelayFreeTime = {"Time", K_UNI, 0, 0, 0};   // the delay's TIME when FREE: 1 ms..1.2 s
 
 // an effect lane's parameters: its effect's knobs, then its step page's DECAY, PROB and DEPTH
-const int kLaneKnobs[ENG_LANES] = {0, 0, 0, 0, 8, 4, 4};
+const int kLaneKnobs[ENG_LANES] = {0, 0, 0, 0, 8, 4, 8};
 inline int lane_page0(int lane) {        // its effect's first page
   return lane == LANE_DELAY ? PG_DELAY(0) : lane == LANE_REVERB ? PG_REVERB : PG_WARPS(0);
 }
@@ -120,16 +119,16 @@ const char* const kModels[24] = {
   "VIRTUAL ANALOG", "WAVESHAPER", "FM 2-OP", "FORMANT", "HARMONIC", "WAVETABLE", "CHORDS", "SPEECH",
   "SWARM", "NOISE", "PARTICLES", "STRING", "MODAL", "KICK", "SNARE", "HI-HAT",
 };
-const char* const kRamps[3] = {"AD", "LOOPING", "AR"};
-const char* const kSrcNames[NSRC] = {"-", "A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4"};
+const char* const kSrcNames[NSRC] = {"-", "L1", "L2", "L3"};
 
-const float kTidesRatios[9] = {4.0f, 2.0f, 1.0f, 0.5f, 0.25f, 0.125f, 1.0f / 16.0f, 1.0f / 32.0f, 1.0f / 64.0f};
-const char* const kTidesRatioNames[9] = {"4 / beat", "2 / beat", "1 / beat", "1 / 2 beats", "1 / bar",
+// a synced LFO's rate: cycles a beat
+const float kLfoRatios[9] = {4.0f, 2.0f, 1.0f, 0.5f, 0.25f, 0.125f, 1.0f / 16.0f, 1.0f / 32.0f, 1.0f / 64.0f};
+const char* const kLfoRatioNames[9] = {"4 / beat", "2 / beat", "1 / beat", "1 / 2 beats", "1 / bar",
                                          "1 / 2 bars", "1 / 4 bars", "1 / 8 bars", "1 / 16 bars"};
 
 int page_type(int page) {
   if (page < 12) return PT_PLAITS1 + page % 3;
-  if (page < 16) return PT_TIDES1 + (page - 12) % 2;
+  if (page < 16) return PT_LFO;
   if (page < PG_STEP(0)) {
     static const uint8_t kT[7] = {PT_MIX, PT_PAN, PT_REVERB, PT_RSEND, PT_DELAY1, PT_DELAY2, PT_DSEND};
     return kT[page - PG_MIX];
@@ -160,10 +159,9 @@ inline float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ?
 inline int i_of(float v) { return static_cast<int>(v + 0.5f); }
 
 float bpm_of(float v) { return 30.0f * fm_exp2f(v * 3.321928f); }          // 0..1: 30..300 BPM
-float tides_hz(float v, int range) {                                          // 0..1: 0.02..20 Hz, the range / 8, x 8
-  float hz = 0.02f * fm_exp2f(v * 9.965784f);
-  return range == 0 ? hz * 0.125f : range == 2 ? hz * 8.0f : hz;
-}
+float lfo_hz(float v) { return 0.02f * fm_exp2f(v * 9.965784f); }          // an LFO's RATE: 0.02..20 Hz
+float lfo_tau(float v) { return 0.001f * fm_exp2f(v * 11.0f); }             // its SLEW: 1 ms..2 s
+float delay_ms(float v) { return fm_exp2f(v * 10.228819f); }                // the delay's FREE time: 1..1200 ms
 float gate_frac(float v) { return 0.05f + 0.9f * v; }                         // LENGTH: 5..95 % of the sixteenth
 float lane_tau(float v) { return 0.01f * fm_exp2f(v * 9.0f); }                // an effect lane's DECAY: 10 ms..5.1 s
 float duck_tau(float v) { return 0.02f * fm_exp2f(v * 7.0f); }                // the duck's DECAY: 20 ms..2.6 s
@@ -187,14 +185,13 @@ float src[NSRC];
 #ifndef ENG_ARENA_BYTES
 #if UINTPTR_MAX > 0xFFFFFFFFu           /* a computer's 64-bit pointers: a little more */
 #define ENG_ARENA_BYTES (292u * 1024u)
-#else                                   /* the FM-1: 4 Plaits 100 KB, the reverb in floats 64, the delay 103, Warps 10,
-                                         * Tides 0.6 (284528 bytes) */
+#else                                   /* the FM-1: 4 Plaits 100 KB, the reverb in floats 64, the delay 103, Warps 10
+                                         * (283 KB) */
 #define ENG_ARENA_BYTES (280u * 1024u)
 #endif
 #endif
 uint8_t arena[ENG_ARENA_BYTES] __attribute__((aligned(8))) PLAT_POOL;
 void* voice[ENG_TRACKS];
-void* tides[2];
 void* reverb;
 void* delay;
 void* master;
@@ -206,12 +203,11 @@ volatile int key_note[ENG_TRACKS], key_on[ENG_TRACKS];
 
 volatile int key_retrig[ENG_TRACKS], key_hold[ENG_TRACKS];   // a key pressed since the last block; its frames left
 
-float tout[2][4];
 int vgate[ENG_TRACKS];                  // each voice's gate as last set
 float vnote[ENG_TRACKS];                // its note (latched at the gate's rise)
 volatile uint32_t vrises[ENG_TRACKS];   // the trigs it played
 uint32_t gates_now;
-int gate_seen[ENG_TRACKS];              // its gate was high in the last block (Tides' triggers)
+int gate_seen[ENG_TRACKS];              // its gate was high in the last block
 // the duck: T1's gate rising, frame by frame (this block's), then the envelope it starts (sample by sample: its jump
 // to 1, its fall with DECAY, a ~1 ms glide over both) and each track's depth, glided
 uint8_t duck_hit[kFrames];
@@ -262,6 +258,7 @@ volatile int back_pending;
 volatile int w_job;                     // Warps runs in this block's job
 int w_last = -1;                        // the routing w_car and w_mod were taken with: carrier | modulator << 4, -1
 int w_dst = -1, w_mute = -1;            // the track its output replaces; the modulator's track, silenced (-1: none)
+float w_mix = 1.0f;                     // MIX, the last block's
 float vaux[ENG_TRACKS][kN];
 float wet_l[kN], wet_r[kN], echo_l[kN], echo_r[kN];
 float meter[ENG_TRACKS + 2];
@@ -282,8 +279,51 @@ float sat(float x) {                    // a soft limit: tanh's shape up to |x| 
 
 float src_value(int s) { return s > SRC_NONE && s < NSRC ? src[s] : 0.0f; }
 
+// the random dose (proj.dice, OCT- and OCT+ held on the panel): each sound parameter moved by its own random offset
+// (one draw a seed: the same each block), at most its span: the pitches (FREQ, TRANSP, the pitch envelope), the
+// timbres (Plaits' HARMONICS, TIMBRE, MORPH, the envelope's knobs, the grit's DRIVE), the filters, the sends, the
+// effects' colours (the delay's feedback, filter, drive, resonance, wow; the reverb's; Warps' ALGORITHM, TIMBRE and
+// levels). Not the time (divisions, rates, lengths, tempo), the pans, the levels, the scale, the patching
+float dice_span(int param) {
+  if (param < 0 || param >= ENG_NPARAMS) return 0.0f;
+  int pt = page_type(param / 4), k = param % 4;
+  switch (pt) {
+    case PT_PLAITS1: return k == 0 ? 0.25f : 0.5f;            // FREQ: +/-6 semitones (in the scale when it is on)
+    case PT_PLAITS2: return k < 2 ? 0.5f : 1.0f;
+    case PT_PLAITS3: return k == 0 ? 1.0f : k == 2 ? 7.0f : 0.0f;   // the pitch envelope, TRANSP: +/-7
+    case PT_GRIT: return k == 0 ? 0.5f : 0.0f;
+    case PT_EQ: return 0.35f;                                  // (to keep the track: a third of the way)
+    case PT_RSEND: case PT_DSEND: return 0.5f;
+    case PT_DELAY1: return k == 1 ? 0.2f : k == 2 ? 0.6f : k == 3 ? 0.5f : 0.0f;
+    case PT_DELAY2: return k == 0 || k == 2 ? 0.5f : 0.0f;
+    case PT_REVERB: return k < 3 ? 0.4f : 0.0f;
+    case PT_WARPS1: return k == 2 ? 0.4f : 0.0f;
+    case PT_WARPS2: return k < 3 ? 0.4f : 0.0f;
+    default: return 0.0f;
+  }
+}
+
+float dice_off[ENG_NPARAMS];            // each parameter's offset at 100 % (its span times its random, -1..1)
+int dice_seed_made = -1;
+void make_dice() {
+  for (int i = 0; i < ENG_NPARAMS; ++i) {
+    uint32_t h = (static_cast<uint32_t>(proj.dice_seed) + 1u) * 0x9E3779B9u ^ static_cast<uint32_t>(i) * 0x85EBCA6Bu;
+    h ^= h >> 15;
+    h *= 0x2C1B3C6Du;
+    h ^= h >> 12;
+    float r = static_cast<float>(h & 0xFFFFu) * (2.0f / 65535.0f) - 1.0f;
+    dice_off[i] = r * dice_span(i);
+  }
+  dice_seed_made = proj.dice_seed;
+}
+
 void apply_cables() {
   for (int i = 0; i < ENG_NPARAMS; ++i) fin[i] = proj.val[i];
+  if (proj.dice) {                      // the random dose, over the knobs (under the cables)
+    if (dice_seed_made != proj.dice_seed) make_dice();
+    float a = static_cast<float>(proj.dice > 100 ? 100 : proj.dice) * 0.01f;
+    for (int i = 0; i < ENG_NPARAMS; ++i) fin[i] += a * dice_off[i];
+  }
   for (int g = 0; g <= ENG_TRACKS; ++g) {
     for (int c = 0; c < ENG_CABLES; ++c) {
       const cable_t& k = proj.cable[g][c];
@@ -360,6 +400,13 @@ int quantize(int n) {                   // the nearest note of the global scale 
   return n;
 }
 
+int scale_on() {                        // SCALE not Off: every pitch in it
+  int sc = Pi(PG_GLOBAL, 1);
+  return sc > 0 && sc < 15;
+}
+
+int warps_note(float level1) { return quantize(iround(12.0f + 60.0f * level1)); }   // its oscillator's (LEVEL 1)
+
 int lock_find(int lane, int step, int tp) {
   for (int i = 0; i < ENG_PLOCKS; ++i)
     if (proj.lock[i].lane == lane && proj.lock[i].step == step && proj.lock[i].tp == tp) return i;
@@ -372,28 +419,72 @@ float six_len(float sl) {               // the sixteenth playing's length, swung
   return 2.0f * sl * ((tick & 1) ? 1.0f - sw : sw);
 }
 
-void run_tides(uint32_t n) {
-  float block_hz = kSr / static_cast<float>(n);
-  float beat_hz = bpm_of(P(PG_GLOBAL, 0)) / 60.0f;
-  for (int i = 0; i < 2; ++i) {
-    int trig = Pi(PG_TIDES(i, 1), 3);
-    float hz = tides_hz(P(PG_TIDES(i, 0), 0), Pi(PG_TIDES(i, 1), 2));
-    if (trig == kTidesClock) {          // CLOCK: a ratio of the beat
-      int r = static_cast<int>(P(PG_TIDES(i, 0), 0) * 8.999f);
-      hz = beat_hz * kTidesRatios[r < 0 ? 0 : r > 8 ? 8 : r];
-    }
-    mt_set(tides[i], proj.algo[PG_TIDES(i, 0)], Pi(PG_TIDES(i, 1), 1), 0, hz, P(PG_TIDES(i, 0), 1),
-           P(PG_TIDES(i, 0), 2), P(PG_TIDES(i, 0), 3), P(PG_TIDES(i, 1), 0));
-    mt_gate(tides[i], trig >= 1 && trig <= ENG_TRACKS ? gate_seen[trig - 1] : 0);   // T1..T4: the track's gate
-    mt_render(tides[i], tout[i], 1, block_hz);
-  }
+// the three LFOs, at the control rate (a value a block): WAVE; RATE, 0.02..20 Hz (synced: a ratio of the beat, its
+// phase from the bar, in time with the steps); MODE, free, synced, or started again at a track's trigs (a block
+// after, the trig seen); SLEW, a glide on what comes out (none, up to 2 s). S&H takes a random value a cycle, Smooth
+// glides from one to the next. Out: -1..1, the cables' sources L1..L3
+struct Lfo {
+  float phase, out, a, b;               // its phase (0..1), what comes out, the random's last value and the next
+  uint32_t rises, seed;                 // its track's trigs seen; its own random (the steps' stays theirs)
+};
+Lfo lfo[3];
+
+float lfo_rand(Lfo& o) {
+  o.seed = o.seed * 1664525u + 1013904223u;
+  return static_cast<float>(o.seed >> 8) * (2.0f / 16777216.0f) - 1.0f;
 }
 
-void read_sources() {
-  // Tides' outputs are volts: 0..8 V for AD and AR, +/-5 V for a loop (its gates 0 / 8 V): as -1..1
-  for (int i = 0; i < 2; ++i) {
-    float k = proj.algo[PG_TIDES(i, 0)] == 1 ? 0.2f : 0.125f;
-    for (int c = 0; c < 4; ++c) src[(i ? SRC_B1 : SRC_A1) + c] = clampf(tout[i][c] * k, -1.0f, 1.0f);
+void run_lfos(uint32_t n) {
+  float block_hz = kSr / static_cast<float>(n), beat_hz = bpm_of(P(PG_GLOBAL, 0)) / 60.0f;
+  for (int i = 0; i < 3; ++i) {
+    Lfo& o = lfo[i];
+    int wave = Pi(PG_LFO(i), 0), mode = Pi(PG_LFO(i), 2), cycle = 0;
+    float rate = P(PG_LFO(i), 1);
+    if (!o.seed) o.seed = 0x9E3779B9u * static_cast<uint32_t>(i + 1);
+    if (mode == LM_SYNC) {
+      int r = static_cast<int>(rate * 8.999f);
+      float ratio = kLfoRatios[r < 0 ? 0 : r > 8 ? 8 : r];
+      if (playing) {                    // the phase from the bar: the beats since PLAY (the sixteenth, swung)
+        float beats = (static_cast<float>(tick) + step_clk / six_len(step_len_now())) * 0.25f * ratio;
+        float ph = beats - fm_floorf(beats);
+        cycle = ph < o.phase;           // (wrapped)
+        o.phase = ph;
+      } else {
+        o.phase += beat_hz * ratio / block_hz;
+      }
+    } else {
+      if (mode >= LM_T1 && mode < LM_T1 + ENG_TRACKS) {
+        uint32_t r = vrises[mode - LM_T1];
+        if (r != o.rises) {             // a trig: from the start
+          o.rises = r;
+          o.phase = 0.0f;
+          cycle = 1;
+        }
+      }
+      o.phase += lfo_hz(rate) / block_hz;
+    }
+    if (o.phase >= 1.0f) {
+      o.phase -= fm_floorf(o.phase);
+      cycle = 1;
+    }
+    if (cycle) {                        // a new cycle: the random's next value
+      o.a = o.b;
+      o.b = lfo_rand(o);
+    }
+    float ph = o.phase, v;
+    switch (wave) {
+      case LW_SINE: v = fm_sinf(6.2831853f * ph); break;
+      case LW_TRI: v = ph < 0.25f ? 4.0f * ph : ph < 0.75f ? 2.0f - 4.0f * ph : 4.0f * ph - 4.0f; break;
+      case LW_SAW: v = 2.0f * ph - 1.0f; break;
+      case LW_RAMP: v = 1.0f - 2.0f * ph; break;
+      case LW_SQUARE: v = ph < 0.5f ? 1.0f : -1.0f; break;
+      case LW_SH: v = o.b; break;
+      default: v = o.a + (o.b - o.a) * (0.5f - 0.5f * fm_cosf(3.14159265f * ph)); break;
+    }
+    float slew = P(PG_LFO(i), 3);
+    if (slew < 0.005f) o.out = v;
+    else o.out += (v - o.out) * (1.0f - fm_expf(-1.0f / (lfo_tau(slew) * block_hz)));
+    src[SRC_L1 + i] = o.out;
   }
 }
 
@@ -568,7 +659,9 @@ void set_voice(int t) {
   int m = proj.algo[PG_TRACK(t, 0)];
   float morph = E(t, 3);
   if (m >= 19) morph = clampf(morph + E(t, 4) - 0.5f, 0.0f, 1.0f);
-  mp_set(voice[t], m, vnote[t] + 24.0f * E(t, 0), E(t, 1), E(t, 2), morph, E(t, 4), E(t, 5));
+  float note = vnote[t] + 24.0f * E(t, 0);   // FREQ (its cables, its locks) over the note: with SCALE on, in it too
+  if (scale_on()) note = static_cast<float>(quantize(iround(note)));
+  mp_set(voice[t], m, note, E(t, 1), E(t, 2), morph, E(t, 4), E(t, 5));
   mp_amounts(voice[t], E(t, TP_PITCHENV), E(t, 6), E(t, 7));   // the envelope on the pitch (Plaits' FM attenuverter)
 }
 
@@ -899,13 +992,14 @@ uint32_t split_early(uint32_t early, uint32_t voices) {
 // Warps' knobs for this block (its lane's locks over them), and whether it runs: a carrier (a track or its
 // oscillator), its modulator a track
 void set_warps() {
-  int car = Pi(PG_WARPS(1), 0), mod = Pi(PG_WARPS(1), 1), shift = Pi(PG_WARPS(1), 3);
+  int car = Pi(PG_WARPS(0), 0), mod = Pi(PG_WARPS(0), 1), shift = Pi(PG_WARPS(1), 3) == WM_SHIFT;
   mod = mod < 0 ? 0 : mod > 3 ? 3 : mod;
   int osc = car >= WC_OSC1 ? car - WC_OSC1 + 1 : 0;
   w_job = car > WC_OFF && car <= WC_OSC3 && w_last == (car | mod << 4);
-  float alg = E(LANE_WARPS, 0), level1 = E(LANE_WARPS, 2);
-  mw_set(warps, shift ? alg : alg * kWarpsTravel, E(LANE_WARPS, 1), level1, E(LANE_WARPS, 3), osc,
-         12.0f + 60.0f * level1, shift);   // the oscillator's note: LEVEL 1, as on the module
+  float alg = E(LANE_WARPS, 2), level1 = E(LANE_WARPS, 5);
+  float note = scale_on() ? static_cast<float>(warps_note(level1)) : 12.0f + 60.0f * level1;
+  mw_set(warps, shift ? alg : alg * kWarpsTravel, E(LANE_WARPS, 4), level1, E(LANE_WARPS, 6), osc, note,
+         shift);   // the oscillator's note: LEVEL 1, as on the module (with SCALE on, in it)
   mw_eco(warps, !proj.warps_hq);        // ECO unless HQ: its cross-modulations at 3x
 }
 
@@ -914,14 +1008,15 @@ void set_warps() {
 // that track (as late) by Warps' lane from o0 to o1 over the block, the modulator's track silenced as Warps opens,
 // unless heard dry
 void route_warps(uint32_t n, float o0, float o1) {
-  int car = Pi(PG_WARPS(1), 0), mod = Pi(PG_WARPS(1), 1);
+  int car = Pi(PG_WARPS(0), 0), mod = Pi(PG_WARPS(0), 1);
   mod = mod < 0 ? 0 : mod > 3 ? 3 : mod;
   if (car <= WC_OFF || car > WC_OSC3) {
     w_last = w_dst = w_mute = mj.dst = -1;
     return;
   }
   int ct = car <= WC_T4 ? car - WC_T1 : -1, dst = ct >= 0 ? ct : mod;
-  int mute = mod != dst && !Pi(PG_WARPS(1), 2) ? mod : -1;
+  int mute = mod != dst && Pi(PG_WARPS(1), 3) != WM_DRY ? mod : -1;
+  float mix = E(LANE_WARPS, 3);         // MIX: how much of Warps over its track (the lane's opening times it)
   for (uint32_t i = 0; i < n; ++i) {
     w_car[i] = ct >= 0 ? vbuf[ct][i] : 0.0f;
     w_mod[i] = vbuf[mod][i];
@@ -930,8 +1025,9 @@ void route_warps(uint32_t n, float o0, float o1) {
   mj.dst = w_dst = dst;
   mj.mute = w_mute = mute;
   mj.job = w_job;
-  mj.o0 = o0;
-  mj.o1 = o1;
+  mj.o0 = o0 * w_mix;
+  mj.o1 = o1 * mix;
+  w_mix = mix;
   w_last = car | mod << 4;
 }
 
@@ -1018,9 +1114,9 @@ int eng_param_tp(int param, int* lane) {
   } else if (page == PG_REVERB) {
     l = LANE_REVERB;
     tp = k;
-  } else if (page == PG_WARPS(0)) {
+  } else if (page == PG_WARPS(0) || page == PG_WARPS(1)) {
     l = LANE_WARPS;
-    tp = k;
+    tp = (page - PG_WARPS(0)) * 4 + k;
   } else if (page == PG_DUCK && k > 0) {
     l = k;
     tp = TP_DUCK;
@@ -1035,8 +1131,9 @@ int eng_param_tp(int param, int* lane) {
   return tp;
 }
 
-int eng_tp_lockable(int lane, int tp) {
-  return tp >= 0 && tp < eng_lane_params(lane) && !(lane == 0 && tp == TP_DUCK);
+int eng_tp_lockable(int lane, int tp) {   // (not Warps' patching: CARRIER, MOD, MODE)
+  return tp >= 0 && tp < eng_lane_params(lane) && !(lane == 0 && tp == TP_DUCK) &&
+         !(lane == LANE_WARPS && (tp == 0 || tp == 1 || tp == 7));
 }
 
 // Plaits' HARMONICS, TIMBRE and MORPH by model, after its manual (1.2's eight from its release notes), short
@@ -1063,6 +1160,7 @@ int eng_model_enveloped(int m) { return (m >= 2 && m <= 4) || m >= 19; }
 const eng_pdef_t* eng_pdef(int param) {   // (a table, made once: the render asks it hundreds of times a block)
   static const eng_pdef_t* table[ENG_NPARAMS];
   if (param < 0 || param >= ENG_NPARAMS) param = 0;
+  if (param == PG_DELAY(0) * 4 && proj.algo[PG_DELAY(0)] == DL_FREE) return &kDelayFreeTime;   // (FREE: in ms)
   if (!table[param]) table[param] = &kPages[page_type(param / 4)][param % 4];
   return table[param];
 }
@@ -1110,13 +1208,13 @@ static void put_end(char* b, int n, const char* s) {   // s after what b holds
 void eng_param_text(int param, float v, char* b, int n) {
   const eng_pdef_t* d = eng_pdef(param);
   int pt = page_type(param / 4), k = param % 4;
-  if (pt == PT_WARPS2 && k == 0 && i_of(v) >= WC_OSC1) {   // the oscillator's shape, as the algorithm uses it
+  if (pt == PT_WARPS1 && k == 0 && i_of(v) >= WC_OSC1) {   // the oscillator's shape, as the algorithm uses it
     int o = i_of(v) > WC_OSC3 ? 2 : i_of(v) - WC_OSC1;
-    put(b, n, Pi(PG_WARPS(1), 3) ? kWarpsCarrier[WC_OSC1 + o] : kOscXmod[o]);
+    put(b, n, Pi(PG_WARPS(1), 3) == WM_SHIFT ? kWarpsCarrier[WC_OSC1 + o] : kOscXmod[o]);
   } else if (d->kind == K_ENUM) {
     int i = static_cast<int>(v + 0.5f);
     put(b, n, d->names[i < d->lo ? d->lo : i > d->hi ? d->hi : i]);
-  } else if (pt == PT_WARPS1 && k == 0 && Pi(PG_WARPS(1), 3)) {   // the frequency shifter: its shift
+  } else if (pt == PT_WARPS1 && k == 2 && Pi(PG_WARPS(1), 3) == WM_SHIFT) {   // the frequency shifter: its shift
     float hz = warps_shift_hz(v), a = hz < 0 ? -hz : hz;
     if (a >= 1000.0f) {
       put_num(b, n, static_cast<int32_t>(hz * 0.01f + (hz < 0 ? -0.5f : 0.5f)), 1, 1);
@@ -1125,10 +1223,10 @@ void eng_param_text(int param, float v, char* b, int n) {
       put_num(b, n, static_cast<int32_t>(hz + (hz < 0 ? -0.5f : 0.5f)), 0, 1);
       put_end(b, n, " Hz");
     }
-  } else if (pt == PT_WARPS1 && k == 0) {
+  } else if (pt == PT_WARPS1 && k == 2) {
     put(b, n, kWarpsShort[warps_pos(v)]);
-  } else if (pt == PT_WARPS1 && k == 2 && !Pi(PG_WARPS(1), 3) && Pi(PG_WARPS(1), 0) >= WC_OSC1) {
-    int nt = static_cast<int>(12.0f + 60.0f * v + 0.5f), l = 0;   // LEVEL 1: the oscillator's note (C0..C5)
+  } else if (pt == PT_WARPS2 && k == 1 && Pi(PG_WARPS(1), 3) != WM_SHIFT && Pi(PG_WARPS(0), 0) >= WC_OSC1) {
+    int nt = warps_note(v), l = 0;      // LEVEL 1: the oscillator's note (C0..C5, in the scale)
     put(b, n, kNoteName[nt % 12]);
     while (b[l]) ++l;
     put_num(b + l, n - l, nt / 12 - 1, 0, 0);
@@ -1226,7 +1324,8 @@ void eng_param_text(int param, float v, char* b, int n) {
     put_num(b, n, static_cast<int32_t>(50.0f + 25.0f * v + 0.5f), 0, 0);
     put_end(b, n, "%");
   } else if ((pt == PT_STEP && k == 1) || (pt == PT_ARP && k == 1) || (pt == PT_LANE && (k == 1 || k == 2)) ||
-             (pt == PT_DUCK && k > 0) || (pt == PT_OTT && k == 0) || (pt == PT_GRIT && k == 0)) {
+             (pt == PT_DUCK && k > 0) || (pt == PT_OTT && k == 0) || (pt == PT_GRIT && k == 0) ||
+             (pt == PT_WARPS1 && k == 3)) {
     put_num(b, n, static_cast<int32_t>(v * 100.0f + 0.5f), 0, 0);
     put_end(b, n, "%");
   } else if (pt == PT_GLOBAL && k == 0) {
@@ -1234,14 +1333,35 @@ void eng_param_text(int param, float v, char* b, int n) {
     put_end(b, n, " BPM");
   } else if (pt == PT_PLAITS1 && k == 0) {
     put_num(b, n, static_cast<int32_t>(v * 240.0f + (v < 0 ? -0.5f : 0.5f)), 1, 1);   // semitones, 1 decimal
-  } else if (pt == PT_TIDES1 && k == 0 && Pi(PG_TIDES(param / 4 == PG_TIDES(1, 0) ? 1 : 0, 1), 3) == kTidesClock) {
+  } else if (pt == PT_LFO && k == 1 && Pi(param / 4, 2) == LM_SYNC) {   // RATE, synced: a ratio of the beat
     int r = static_cast<int>(v * 8.999f);
-    put(b, n, kTidesRatioNames[r < 0 ? 0 : r > 8 ? 8 : r]);
-  } else if (pt == PT_TIDES1 && k == 0) {
-    int tide = param / 4 == PG_TIDES(1, 0) ? 1 : 0;
-    float hz = tides_hz(v, static_cast<int>(proj.val[PG_TIDES(tide, 1) * 4 + 2] + 0.5f));
-    put_num(b, n, static_cast<int32_t>(hz * 100.0f + 0.5f), 2, 0);
+    put(b, n, kLfoRatioNames[r < 0 ? 0 : r > 8 ? 8 : r]);
+  } else if (pt == PT_LFO && k == 1) {
+    float hz = lfo_hz(v);
+    put_num(b, n, static_cast<int32_t>(hz * (hz < 10.0f ? 100.0f : 10.0f) + 0.5f), hz < 10.0f ? 2 : 1, 0);
     put_end(b, n, " Hz");
+  } else if (pt == PT_LFO && k == 3) {   // SLEW: its time
+    if (v < 0.005f) {
+      put(b, n, "Off");
+    } else {
+      float t = lfo_tau(v);
+      if (t < 1.0f) {
+        put_num(b, n, static_cast<int32_t>(t * 1000.0f + 0.5f), 0, 0);
+        put_end(b, n, " ms");
+      } else {
+        put_num(b, n, static_cast<int32_t>(t * 100.0f + 0.5f), 2, 0);
+        put_end(b, n, " s");
+      }
+    }
+  } else if (pt == PT_DELAY1 && k == 0) {   // the delay's TIME, FREE: ms
+    float ms = delay_ms(v);
+    if (ms < 1000.0f) {
+      put_num(b, n, static_cast<int32_t>(ms + 0.5f), 0, 0);
+      put_end(b, n, " ms");
+    } else {
+      put_num(b, n, static_cast<int32_t>(ms * 0.1f + 0.5f), 2, 0);
+      put_end(b, n, " s");
+    }
   } else if (d->kind == K_BIP) {
     put_num(b, n, static_cast<int32_t>(v * 100.0f + (v < 0 ? -0.5f : 0.5f)), 0, 1);
   } else {
@@ -1254,7 +1374,7 @@ const char* eng_src_name(int s) { return s >= 0 && s < NSRC ? kSrcNames[s] : "?"
 int eng_algo_count(int page) {
   switch (page_type(page)) {
     case PT_PLAITS1: return 24;
-    case PT_TIDES1: return 3;
+    case PT_DELAY1: return 2;
     case PT_COMP: return 3;
     default: return 0;
   }
@@ -1264,7 +1384,7 @@ const char* eng_algo_name(int page, int a) {
   int n = eng_algo_count(page);
   if (!n) return "";
   a = a < 0 ? 0 : a >= n ? n - 1 : a;
-  return page_type(page) == PT_PLAITS1 ? kModels[a] : page_type(page) == PT_COMP ? kBusModes[a] : kRamps[a];
+  return page_type(page) == PT_PLAITS1 ? kModels[a] : page_type(page) == PT_COMP ? kBusModes[a] : kDelayAlgos[a];
 }
 
 project_t* eng_project(void) { return &proj; }
@@ -1294,6 +1414,17 @@ static void set_lock(project_t* p, int lane, int step, int tp, float v) {
 
 // INIT: four Plaits on VIRTUAL ANALOG (the first model of the classic bank), every knob at noon; no steps, nothing
 // patched, nothing sent to the effects (the delay set to an eighth, ready), Warps off, C major, 120 BPM
+// the LFOs as a new project has them: a sine (~0.7 Hz), a triangle a bar, a smooth random (~1 Hz, a little slewed)
+static void lfo_blank(project_t* p) {
+  static const float kLfo[3][4] = {{static_cast<float>(LW_SINE), 0.45f, static_cast<float>(LM_FREE), 0.0f},
+                                   {static_cast<float>(LW_TRI), 4.5f / 9.0f, static_cast<float>(LM_SYNC), 0.0f},
+                                   {static_cast<float>(LW_SMOOTH), 0.55f, static_cast<float>(LM_FREE), 0.3f}};
+  for (int i = 0; i < 3; ++i)
+    for (int k = 0; k < 4; ++k) p->val[PG_LFO(i) * 4 + k] = kLfo[i][k];
+  for (int k = 0; k < 4; ++k) p->val[15 * 4 + k] = 0.0f;   // (page 15: not used)
+  for (int pg = 12; pg < 16; ++pg) p->algo[pg] = 0;
+}
+
 void eng_blank(project_t* p) {
   uint8_t* raw = reinterpret_cast<uint8_t*>(p);
   for (uint32_t i = 0; i < sizeof(project_t); ++i) raw[i] = 0;
@@ -1320,20 +1451,15 @@ void eng_blank(project_t* p) {
     p->val[PG_STEP(l) * 4 + 1] = 1.0f;
     p->val[PG_STEP(l) * 4 + 2] = 1.0f;
   }
-  // Tides A: AD triggered by track 1, Tides B: a loop on the clock (one cycle a bar)
-  p->algo[PG_TIDES(0, 0)] = 0;
-  p->algo[PG_TIDES(1, 0)] = 1;
-  static const float kTides[2][8] = {{0.55f, 0.3f, 0.2f, 0.5f, 0.5f, 2.0f, 1.0f, 1.0f},
-                                     {4.5f / 9.0f, 0.5f, 0.5f, 0.5f, 0.5f, 2.0f, 1.0f, 5.0f}};
-  for (int i = 0; i < 2; ++i)
-    for (int k = 0; k < 8; ++k) p->val[PG_TIDES(i, k / 4) * 4 + k % 4] = kTides[i][k];
+  lfo_blank(p);
   // the reverb: a medium room, a little dark, its return at 60; the delay: an eighth, a few repeats, flat
   static const float kRev[4] = {0.6f, 0.4f, 0.6f, 0.6f};
   static const float kDelay[8] = {5.0f, 0.4f, 0.0f, 0.1f, 0.2f, 0.0f, 0.1f, 0.6f};
   for (int k = 0; k < 4; ++k) p->val[PG_REVERB * 4 + k] = kRev[k];
   for (int k = 0; k < 8; ++k) p->val[PG_DELAY(k / 4) * 4 + k % 4] = kDelay[k];
-  // Warps: off (no carrier), ready on the diode ring modulator, track 2 as the modulator
-  static const float kW[8] = {0.4f, 0.5f, 0.6f, 0.6f, static_cast<float>(WC_OFF), 1.0f, 0.0f, 0.0f};
+  // Warps: off (no carrier), ready on the diode ring modulator, track 2 as the modulator, all of it (MIX)
+  static const float kW[8] = {static_cast<float>(WC_OFF), 1.0f, 0.4f, 1.0f, 0.5f, 0.6f, 0.6f,
+                              static_cast<float>(WM_WARPS)};
   for (int k = 0; k < 8; ++k) p->val[PG_WARPS(k / 4) * 4 + k % 4] = kW[k];
   // the duck: off (its DECAY ~180 ms); the master bus: a gentle compressor (-10 dB, 3:1, 160 ms, +4 dB); OTT ready at
   // half its depth
@@ -1350,7 +1476,7 @@ void eng_blank(project_t* p) {
   for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i].lane = 0xFF;
 }
 
-// the demo: a kick, a bass whose MORPH Tides A opens at each of its notes, an FM line in a looped random tune thrown
+// the demo: a kick, a bass whose MORPH LFO 1 opens at each of its notes, an FM line in a looped random tune thrown
 // into the delay on two steps (its lane), a resonator (modal) in the reverb; C minor, 120 BPM
 void eng_defaults(project_t* p) {
   eng_blank(p);
@@ -1370,10 +1496,15 @@ void eng_defaults(project_t* p) {
     p->val[PG_RSEND * 4 + t] = kRSend[t];
     p->val[PG_DSEND * 4 + t] = kDSend[t];
   }
-  p->val[PG_TRACK(1, 0) * 4 + 3] = 0.3f;                 // the bass: MORPH low, opened by Tides A
+  p->val[PG_TRACK(1, 0) * 4 + 3] = 0.3f;                 // the bass: MORPH low, opened by LFO 1
   p->val[PG_TRACK(1, 2) * 4 + 1] = 0.3f;                 // short notes
   p->val[PG_TRACK(2, 2) * 4 + 1] = 0.2f;
-  p->val[PG_TIDES(0, 1) * 4 + 3] = 2.0f;                 // Tides A: triggered by T2
+  // LFO 1: a ramp down at each of T2's trigs (an envelope), 2.5 Hz; LFO 2: a sine a bar; LFO 3: a smooth random
+  static const float kLfo[3][4] = {{static_cast<float>(LW_RAMP), 0.7f, static_cast<float>(LM_T1 + 1), 0.05f},
+                                   {static_cast<float>(LW_SINE), 4.5f / 9.0f, static_cast<float>(LM_SYNC), 0.0f},
+                                   {static_cast<float>(LW_SMOOTH), 3.5f / 9.0f, static_cast<float>(LM_SYNC), 0.2f}};
+  for (int i = 0; i < 3; ++i)
+    for (int k = 0; k < 4; ++k) p->val[PG_LFO(i) * 4 + k] = kLfo[i][k];
   p->val[PG_DUCK * 4 + 1] = 0.6f;                        // the kick ducks the bass, a little the others
   p->val[PG_DUCK * 4 + 2] = 0.3f;
   p->val[PG_DUCK * 4 + 3] = 0.3f;
@@ -1386,9 +1517,9 @@ void eng_defaults(project_t* p) {
   p->val[PG_STEP(LANE_DELAY) * 4 + 0] = 0.45f;           // its lane: open on two of the line's notes, ~170 ms to
   set_trigs(p, LANE_DELAY, 0x1010);                      // close
   p->val[PG_GLOBAL * 4 + 1] = 2.0f;                      // minor
-  cable(p, 1, 0, SRC_A1, PG_TRACK(1, 0) * 4 + 3, 50);    // track 2: A1 -> MORPH (the AD envelope)
-  cable(p, 2, 0, SRC_B1, PG_TRACK(2, 0) * 4 + 2, 40);    // track 3: B1 -> TIMBRE (the loop)
-  cable(p, 3, 0, SRC_B2, PG_TRACK(3, 0) * 4 + 2, 30);    // track 4: B2 -> TIMBRE (brightness)
+  cable(p, 1, 0, SRC_L1, PG_TRACK(1, 0) * 4 + 3, 50);    // track 2: L1 -> MORPH (the envelope)
+  cable(p, 2, 0, SRC_L2, PG_TRACK(2, 0) * 4 + 2, 40);    // track 3: L2 -> TIMBRE (the loop)
+  cable(p, 3, 0, SRC_L3, PG_TRACK(3, 0) * 4 + 2, 30);    // track 4: L3 -> TIMBRE (brightness)
   static const uint16_t kPat[4] = {0x1111, 0x6444, 0x1090, 0x4A49};   // bit s: step s
   for (int t = 0; t < ENG_TRACKS; ++t) set_trigs(p, t, kPat[t]);
   set_lock(p, 0, 12, TP_RATCHET, 2.0f);
@@ -1483,10 +1614,29 @@ struct project_v7 {
   int8_t endless_key[ENG_TRACKS];
 };
 
-// versions 7 and 8: their pages first, their lane parameters first (what came after is new)
+// 0.3.9's and 0.3.10's (version 9): all of it, without the random dose (remap_v9 then moves Tides' and Warps')
+struct project_v9 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[52 * 4];
+  uint8_t algo[52];
+  uint8_t out_mode, warps_hq, theme;
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+  int8_t rnd[ENG_LANES][25];
+  uint16_t seed[ENG_LANES];
+  plock_t lock[ENG_PLOCKS];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+};
+
+// versions 7 to 9: their pages first, their lane parameters first (what came after is new)
+void blank_v9(project_t* p);
+
 template <class P, int NP, int NTP>
 void upgrade_78(project_t* p, const P& o) {
-  eng_blank(p);
+  blank_v9(p);
   for (int i = 0; i < NP * 4; ++i) p->val[i] = o.val[i];
   for (int i = 0; i < NP; ++i) p->algo[i] = o.algo[i];
   p->out_mode = o.out_mode;
@@ -1508,7 +1658,7 @@ void upgrade_78(project_t* p, const P& o) {
 }
 
 void upgrade_v6(project_t* p, const project_v6& o) {
-  eng_blank(p);
+  blank_v9(p);
   for (int i = 0; i < 37 * 4; ++i) p->val[i] = o.val[i];
   for (int i = 0; i < 37; ++i) p->algo[i] = o.algo[i];
   p->out_mode = o.out_mode;
@@ -1525,6 +1675,66 @@ void upgrade_v6(project_t* p, const project_v6& o) {
     p->endless_len[t] = o.endless_len[t];
     p->endless_key[t] = o.endless_key[t];
   }
+}
+
+// a project of 0.3 (version 9, or an older one read as version 9) into 0.4's: Tides' four pages are the LFOs' (as a
+// new project has them), the cables from Tides A1, A2, A3 come from the LFOs 1, 2, 3 (the others go, and those to
+// Tides' knobs); Warps' knobs move to their faces (CARRIER, MOD, ALGORITHM, MIX full; TIMBRE, LEVEL 1, LEVEL 2,
+// MODE: DRY and the frequency shifter in one), its lane's locks and randoms with them
+void blank_v9(project_t* p) {           // a new project, but Warps' knobs where 0.3 had them (an older version without
+  eng_blank(p);                         // Warps keeps these; remap_v9 then moves them)
+  static const float kW[8] = {0.4f, 0.5f, 0.6f, 0.6f, static_cast<float>(WC_OFF), 1.0f, 0.0f, 0.0f};
+  for (int k = 0; k < 8; ++k) p->val[PG_WARPS(k / 4) * 4 + k % 4] = kW[k];
+}
+
+int remap_v9_param(int q) {             // an old parameter's place (-1: gone)
+  int pg = q / 4, k = q % 4;
+  if (pg >= 12 && pg < 16) return -1;
+  if (pg == PG_WARPS(0)) {
+    static const int16_t kW0[4] = {PG_WARPS(0) * 4 + 2, PG_WARPS(1) * 4 + 0, PG_WARPS(1) * 4 + 1, PG_WARPS(1) * 4 + 2};
+    return kW0[k];
+  }
+  if (pg == PG_WARPS(1)) return k < 2 ? PG_WARPS(0) * 4 + k : -1;   // (DRY and MODE: choices, never cabled)
+  return q;
+}
+
+void remap_v9(project_t* p) {
+  float* w0 = &p->val[PG_WARPS(0) * 4];
+  float* w1 = &p->val[PG_WARPS(1) * 4];
+  float algo = w0[0], timbre = w0[1], l1 = w0[2], l2 = w0[3], car = w1[0], mod = w1[1], dry = w1[2], mode = w1[3];
+  w0[0] = car;
+  w0[1] = mod;
+  w0[2] = algo;
+  w0[3] = 1.0f;
+  w1[0] = timbre;
+  w1[1] = l1;
+  w1[2] = l2;
+  w1[3] = static_cast<float>(mode >= 0.5f ? WM_SHIFT : dry >= 0.5f ? WM_DRY : WM_WARPS);
+  static const int8_t kTp[7] = {2, 4, 5, 6, 8, 9, 10};   // the Warps lane's: ALGORITHM, TIMBRE, LEVEL 1, LEVEL 2, its
+  int8_t r[ENG_NTP];                                     // steps' DECAY, PROB, DEPTH
+  for (int i = 0; i < ENG_NTP; ++i) r[i] = 0;
+  for (int i = 0; i < 7; ++i) r[kTp[i]] = p->rnd[LANE_WARPS][i];
+  for (int i = 0; i < ENG_NTP; ++i) p->rnd[LANE_WARPS][i] = r[i];
+  for (int i = 0; i < ENG_PLOCKS; ++i) {
+    plock_t& l = p->lock[i];
+    if (l.lane != LANE_WARPS) continue;
+    if (l.tp < 7) l.tp = static_cast<uint8_t>(kTp[l.tp]);
+    else l.lane = 0xFF;
+  }
+  for (int g = 0; g <= ENG_TRACKS; ++g)
+    for (int c = 0; c < ENG_CABLES; ++c) {
+      cable_t& k = p->cable[g][c];
+      int dst = remap_v9_param(k.dst);
+      if (!k.depth || k.src == SRC_NONE || k.src > 3 || dst < 0) {   // (Tides A1..A3 were 1..3: the LFOs' numbers)
+        k.src = SRC_NONE;
+        k.dst = 0;
+        k.depth = 0;
+      } else {
+        k.dst = static_cast<uint8_t>(dst);
+      }
+    }
+  lfo_blank(p);
+  p->algo[PG_DELAY(0)] = DL_SYNC;
 }
 
 // an old page's place now (-1: gone, Marbles' four)
@@ -1545,16 +1755,12 @@ int old_param(int op) {          // an old parameter's place now (-1: gone)
 
 template <int NP>
 void upgrade_from(project_t* p, const project_old<NP>& o) {
-  eng_blank(p);
+  blank_v9(p);
   for (int i = 0; i < NP * 4; ++i) {
     int q = old_param(i);
     if (q >= 0) p->val[q] = o.val[i];
   }
   p->val[PG_GLOBAL * 4 + 0] = o.val[16 * 4 + 0];         // the tempo: Marbles' RATE
-  for (int i = 0; i < 2; ++i) {                          // Tides' TRIGGER: Marbles' t gone, the clock moved
-    float& tr = p->val[PG_TIDES(i, 1) * 4 + 3];
-    tr = tr > 3.5f ? static_cast<float>(kTidesClock) : 0.0f;
-  }
   for (int i = 0; i < 16; ++i) p->algo[i] = o.algo[i];
   p->out_mode = o.out_mode;
   for (int g = 0; g <= ENG_TRACKS; ++g)
@@ -1587,6 +1793,8 @@ void upgrade_from(project_t* p, const project_old<NP>& o) {
 
 extern "C" {
 
+float eng_dice_span(int param) { return dice_span(param); }
+
 int eng_upgrade(project_t* p, int bytes) {
   static union {
     project_old<33> v4;
@@ -1594,26 +1802,29 @@ int eng_upgrade(project_t* p, int bytes) {
     project_v6 v6;
     project_v7 v7;
     project_v8 v8;
+    project_v9 v9;
   } u;
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
-  uint32_t size = v == 8 ? sizeof u.v8 : v == 7 ? sizeof u.v7 : v == 6 ? sizeof u.v6 : v == 5 ? sizeof u.v5
+  uint32_t size = v == 9 ? sizeof u.v9 : v == 8 ? sizeof u.v8 : v == 7 ? sizeof u.v7 : v == 6 ? sizeof u.v6 : v == 5 ? sizeof u.v5
                 : v == 4 ? sizeof u.v4 : 0;
   if (!size || bytes != static_cast<int>(size) || p->size != size) return 0;
   const uint8_t* from = reinterpret_cast<const uint8_t*>(p);
   uint8_t* to = reinterpret_cast<uint8_t*>(&u);
   for (uint32_t i = 0; i < size; ++i) to[i] = from[i];
-  if (v == 8) upgrade_78<project_v8, 41, 21>(p, u.v8);
+  if (v == 9) upgrade_78<project_v9, 52, 25>(p, u.v9);
+  else if (v == 8) upgrade_78<project_v8, 41, 21>(p, u.v8);
   else if (v == 7) upgrade_78<project_v7, 40, 20>(p, u.v7);
   else if (v == 6) upgrade_v6(p, u.v6);
   else if (v == 5) upgrade_from(p, u.v5);
   else upgrade_from(p, u.v4);
+  remap_v9(p);                          // (read as 0.3's: then into 0.4's)
   return 1;
 }
 
 int eng_init(void) {
   uint32_t need = 0, a = 0;
-  need = 4u * ((mp_size() + 7u) & ~7u) + 2u * ((mt_size() + 7u) & ~7u) + ((mrv_size() + 7u) & ~7u) +
+  need = 4u * ((mp_size() + 7u) & ~7u) + ((mrv_size() + 7u) & ~7u) +
          ((mw_size() + 7u) & ~7u) + ((mdl_size() + 7u) & ~7u) + ((mms_size() + 7u) & ~7u);
   if (need > sizeof(arena)) return -1;
   for (int t = 0; t < ENG_TRACKS; ++t) {
@@ -1623,11 +1834,6 @@ int eng_init(void) {
     vgate[t] = 0;
     vnote[t] = 48.0f;
     key_on[t] = 0;
-  }
-  for (int i = 0; i < 2; ++i) {
-    tides[i] = arena + a;
-    a += (mt_size() + 7u) & ~7u;
-    mt_init(tides[i]);
   }
   reverb = arena + a;
   a += (mrv_size() + 7u) & ~7u;
@@ -1723,10 +1929,9 @@ void eng_render(float* l, float* r, uint32_t n) {
       back_pending = 0;
     }
   }
-  // 1. the modulators, with the knobs and cables of the last block
-  run_tides(n);
-  // 2. the sources, then every parameter
-  read_sources();
+  // 1. the LFOs, with the knobs and cables of the last block
+  run_lfos(n);
+  // 2. every parameter, the cables over the knobs
   apply_cables();
   // 3. the trigs
   sequence(n);
@@ -1869,9 +2074,11 @@ void eng_render(float* l, float* r, uint32_t n) {
   // play this block's mix)
   set_warps();
   mrv_set(reverb, E(LANE_REVERB, 0), E(LANE_REVERB, 1), E(LANE_REVERB, 2));
-  int div = iround(E(LANE_DELAY, 0));
-  mdl_set(delay, step_len_now() * kDivMult[div < 0 ? 0 : div >= kDivs ? kDivs - 1 : div], E(LANE_DELAY, 1),
-          E(LANE_DELAY, 2), E(LANE_DELAY, 4), E(LANE_DELAY, 3), iround(E(LANE_DELAY, 5)), E(LANE_DELAY, 6));
+  int div = iround(E(LANE_DELAY, 0));   // its time: a division of the tempo, or (FREE) in ms
+  float dtime = proj.algo[PG_DELAY(0)] == DL_FREE ? delay_ms(E(LANE_DELAY, 0)) * kSr * 0.001f
+                                                  : step_len_now() * kDivMult[div < 0 ? 0 : div >= kDivs ? kDivs - 1 : div];
+  mdl_set(delay, dtime, E(LANE_DELAY, 1), E(LANE_DELAY, 2), E(LANE_DELAY, 4), E(LANE_DELAY, 3),
+          iround(E(LANE_DELAY, 5)), E(LANE_DELAY, 6));
   mms_mode(master, proj.algo[PG_COMP] > MB_OTT ? static_cast<int>(MB_COMP) : proj.algo[PG_COMP]);
   mms_comp(master, comp_threshold(P(PG_COMP, 0)), comp_ratio(P(PG_COMP, 1)), comp_release(P(PG_COMP, 2)),
            P(PG_COMP, 3) * 12.0f);
@@ -1917,9 +2124,32 @@ void eng_render(float* l, float* r, uint32_t n) {
 
 float eng_final(int param) { return param >= 0 && param < ENG_NPARAMS ? fin[param] : 0.0f; }
 float eng_src(int s) { return src_value(s); }
+float eng_lfo_phase(int i) { return i >= 0 && i < 3 ? lfo[i].phase : 0.0f; }
 uint32_t eng_gates(void) { return gates_now; }
 int eng_note(int t) { return t >= 0 && t < ENG_TRACKS ? static_cast<int>(vnote[t] + 0.5f) : 0; }
 uint32_t eng_load(int core) { return core ? load1 : load0; }
+
+// the delay's ALGORITHM, SYNC or FREE: its TIME the same (the division's length now in ms, or the nearest division)
+void eng_delay_mode(int mode) {
+  mode = mode == DL_FREE ? DL_FREE : DL_SYNC;
+  if (mode == proj.algo[PG_DELAY(0)]) return;
+  float& v = proj.val[PG_DELAY(0) * 4];
+  float sl_ms = step_len_now() * 1000.0f / kSr;
+  if (mode == DL_FREE) {
+    int d = iround(v);
+    float ms = sl_ms * kDivMult[d < 0 ? 0 : d >= kDivs ? kDivs - 1 : d];
+    v = clampf(fm_log2f(ms > 1.0f ? ms : 1.0f) / 10.228819f, 0.0f, 1.0f);
+  } else {
+    float ms = delay_ms(v), best = 1e30f;
+    int pick = 0;
+    for (int d = 0; d < kDivs; ++d) {
+      float e = fm_fabsf(fm_log2f(sl_ms * kDivMult[d]) - fm_log2f(ms));
+      if (e < best) best = e, pick = d;
+    }
+    v = static_cast<float>(pick);
+  }
+  proj.algo[PG_DELAY(0)] = static_cast<uint8_t>(mode);
+}
 uint32_t eng_prep_load(void) { return ready ? pct10(static_cast<uint32_t>(prep_cost), kN) : 0u; }
 uint32_t eng_peak(void) { return peak; }
 float eng_meter(int t) { return t >= 0 && t < ENG_TRACKS + 2 ? meter[t] : 0.0f; }
@@ -1936,9 +2166,9 @@ uint32_t eng_task_load(int task) {
 }
 
 int eng_warps_algo(void) {
-  int car = Pi(PG_WARPS(1), 0);
+  int car = Pi(PG_WARPS(0), 0);
   if (car <= WC_OFF || car > WC_OSC3) return -1;
-  return Pi(PG_WARPS(1), 3) ? 6 : warps_pos(E(LANE_WARPS, 0));
+  return Pi(PG_WARPS(1), 3) == WM_SHIFT ? 6 : warps_pos(E(LANE_WARPS, 2));
 }
 const char* eng_warps_name(int algo) { return algo >= 0 && algo < 7 ? kWarpsNames[algo] : "WARPS"; }
 int eng_warps_track(void) { return w_dst; }

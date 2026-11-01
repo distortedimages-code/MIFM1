@@ -1,6 +1,7 @@
 # MIFM1 in fm1-base's host simulator: the default patch playing, the pages (a face sliding in), a knob turned, a
-# track's grit, a Euclidean rhythm, the mixer's filters, the effects (the delay, the reverb, Warps, their steps), a cable made in MOD mode (hold a source key, turn a knob), the
-# matrix, the global page (the machine: Warps HQ, another theme), STEP mode (REC: a step held and locked, the lanes on
+# track's grit, a Euclidean rhythm, the three LFOs, the mixer's filters, the effects (the delay, FREE too, the reverb,
+# Warps, their steps), a cable made in MOD mode (hold an LFO's key, turn a knob), the random dose (OCT- and OCT+ held,
+# SELECT), the matrix, the global page (the machine: Warps HQ, another theme), STEP mode (REC: a step held and locked, the lanes on
 # the black keys, the delay's lane and a lock on its time, the pages on OCT- OCT+), the RANDOM page, ENV held, GLO
 # held: ALL, Endless (recorded, played,
 # transposed by a key), Warps (off, patched, its algorithms, its oscillator, the frequency shifter), a save kept across
@@ -39,13 +40,13 @@ turn K3 -20
 turn K4 -20
 tap LFO
 wait 300
-shot 06_tides_a.png
-tap LFO
-wait 300
-shot 07_tides_b.png
+shot 06_lfo1.png
 turn SELECT 1
 wait 400
-shot 08_tides_b2.png
+shot 07_lfo2.png
+tap LFO
+wait 400
+shot 08_lfo3.png
 tap SEQ
 wait 300
 shot 09_steps_t2.png
@@ -74,6 +75,11 @@ wait 300
 tap FX
 wait 300
 shot 11b_delay.png
+turn ALGO 1
+wait 400
+shot 11b2_delay_free.png
+turn ALGO -1
+wait 300
 turn SELECT 1
 wait 400
 shot 11c_delay2.png
@@ -101,8 +107,30 @@ key 4 down
 turn K4 8
 key 4 up
 wait 300
-shot 13_cable_b1_morph.png
+shot 13_cable_lfo3_morph.png
 tap SEL
+wait 300
+press OCT-
+press OCT+
+turn SELECT 10
+wait 200
+shot 13b_random_dose.png
+wait 60
+shot 13b2_random_thrown.png
+turn SELECT 40
+wait 200
+shot 13c_random_full.png
+release OCT+
+release OCT-
+wait 300
+shot 13d_random_kept.png
+press OCT-
+press OCT+
+turn SELECT -50
+wait 200
+shot 13e_random_zero.png
+release OCT+
+release OCT-
 wait 300
 press SEL
 wait 900
@@ -254,30 +282,30 @@ shot 16y_fx_back.png
 tap HOME
 tap FX
 wait 300
-turn SELECT 1
-wait 400
 turn K1 3
-wait 400
-shot 17a_warps_patch.png
-turn SELECT -1
 wait 600
+shot 17a_warps_patch.png
+turn K4 -4
+wait 400
 shot 17b_warps_diode.png
+turn K4 4
 turn ALGO 4
 wait 600
 shot 17c_warps_comparator.png
-turn SELECT 1
 turn K1 2
-turn SELECT -1
 wait 600
 shot 17d_warps_osc.png
 turn SELECT 1
-turn K4 1
+turn K4 2
+wait 400
+shot 17d2_warps_face2.png
 turn SELECT -1
 wait 600
 shot 17e_warps_shift.png
 turn SELECT 1
+turn K4 -2
+turn SELECT -1
 turn K1 -5
-turn K4 -1
 turn PRESET -1
 tap ENV
 wait 300
