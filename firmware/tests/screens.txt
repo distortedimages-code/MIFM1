@@ -1,7 +1,7 @@
 # MIFM1 in fm1-base's host simulator: the default patch playing, the pages (a face sliding in), a knob turned, a
 # track's grit, a Euclidean rhythm, the three LFOs, the mixer's filters, the effects (the delay, FREE too, the reverb,
 # Warps, their steps), a cable made in MOD mode (hold an LFO's key, turn a knob), the random dose (OCT- and OCT+ held,
-# SELECT), the matrix, the global page (the machine: Warps HQ, another theme), STEP mode (REC: a step held and locked, the lanes on
+# SELECT), the matrix, every cable erased (REC and SEL held), the global page (the machine: Warps HQ, another theme), STEP mode (REC: a step held and locked, the lanes on
 # the black keys, the delay's lane and a lock on its time, the pages on OCT- OCT+), the RANDOM page, ENV held, GLO
 # held: ALL, Endless (recorded, played,
 # transposed by a key), Warps (off, patched, its algorithms, its oscillator, the frequency shifter), a save kept across
@@ -143,6 +143,15 @@ shot 15_matrix_2.png
 press SEL
 release SEL
 wait 300
+press SEL
+press REC
+wait 600
+shot 15b_hold_erase_cables.png
+wait 1100
+release REC
+release SEL
+wait 300
+shot 15c_cables_erased.png
 tap GLO
 wait 600
 shot 16_global.png
@@ -239,7 +248,7 @@ press GLO
 press REC
 wait 500
 shot 16s_hold_erase_all.png
-wait 700
+wait 2700
 release REC
 release GLO
 wait 300

@@ -101,7 +101,9 @@ porte le numéro de sa piste dans sa couleur.
 | **GLO** | TEMPO, SCALE, ROOT, SWING ; SELECT : le projet (INIT) et la machine ; GLO encore : retour |
 | **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en noir sur la couleur du thème. Les réglages restent ; pendant 4 s (cinq carrés jaunes en bas), **GLO** les remet comme avant ALL au début de la mesure suivante (GLO encore avant la mesure : ils restent) |
 | **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage (avec GLO tenu aussi : sur les 4 pistes) |
-| **REC tenu** (pas) | efface la piste de pas affichée : ses trigs, ses locks, ses aléatoires (et les câbles d'une piste) ; avec **GLO tenu** : toutes, et les câbles globaux |
+| **REC tenu** (pas) | efface la piste de pas affichée : ses trigs, ses locks, ses aléatoires (et les câbles d'une piste) |
+| **GLO + REC tenus 3 s** | **ERASE ALL**, depuis n'importe quelle page : toutes les pistes de pas, tous les aléatoires, tous les câbles, les pans au centre, les envois vers le delay et la réverbe à 0, la dose d'aléatoire à 0 (les niveaux, les sons et les réglages des effets restent) |
+| **REC + SEL tenus 1,5 s** | efface **tous les câbles** (les modulations des LFO, de toutes les pistes et globales) |
 
 Les appuis tenus (SAVE, REC pour effacer ou charger, SEL pour la matrice) affichent en bas ce qu'ils vont faire et
 cinq carrés qui se vident un à un : lâcher avant le dernier annule. Ceux qui effacent ou écrasent durent une seconde.
@@ -171,7 +173,8 @@ de sa couleur (en mode STEP, la piste de pas éditée ; sur une piste d'effet, s
 
 **Le mode MOD** (SEL) : les trois premières touches blanches (fa, sol, la) deviennent les trois LFO, et clignotent
 chacune à la vitesse de son LFO. On tient la touche d'un LFO et on tourne un potard : le câble est posé, comme un
-atténuverteur : vers la droite le LFO pousse plus, vers la gauche il agit à l'envers ; revenir à 0 le retire. Le
+atténuverteur : vers la droite le LFO pousse plus, vers la gauche il agit à l'envers ; revenir à 0 le retire (en
+passant par 0, le potard s'y arrête). Le
 potard montre en pointillé jusqu'où le câble l'emmène, le LFO écrit dessous.
 
 **La matrice** (SEL tenu) : les 8 câbles de la piste puis les 8 globaux. K1 choisit le câble, K2 sa source, K3 sa

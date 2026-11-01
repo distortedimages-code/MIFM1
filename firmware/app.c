@@ -29,7 +29,8 @@
  *   REC         KEY mode (the keys play the track) or STEP mode: the white keys a page's 16 steps, the first seven
  *               black keys the lanes (the four tracks, the delay, the reverb, Warps), OCT- OCT+ the pages; a step
  *               held and a knob turned: a lock (the lane's knobs); a step held and SEL: its locks cleared. Held: the
- *               lane erased (with GLO: all of them)
+ *               lane erased (with GLO, 3 s: all of them, the pans to the middle, the sends, the cables, the random
+ *               dose to 0). REC and SEL held: every cable erased (the modulations)
  *   PLAY        the clock runs or stops (twice quickly: stopped, every sound cut)   SAVE  held: the project saved
  *   SEL         MOD mode: hold an LFO's key, turn a knob: a cable, as deep as turned (to the left: upside down).
  *               Held: the track's cables (MATRIX)
@@ -152,6 +153,7 @@ static struct {
     int init_sel;                        /* GLO: the project REC held loads (0 new, 1 the demo, 2 the saved one) */
     int octave;                          /* the keyboard's */
     int dice;                            /* OCT- and OCT+ held: SELECT turns the random dose */
+    int combo;                           /* REC and SEL held together: every cable erased (REC's hold) */
     int oct_was, spage_was;              /* the octave, the steps' page before an OCT press (both: put back) */
     uint32_t play_at;                    /* PLAY's last press (again within CUT_MS: every sound cut) */
     uint32_t keys, btn;
@@ -2294,7 +2296,15 @@ static uint32_t hold_ms(int b, char *label, uint32_t max)
     uint32_t ms = LONG_MS;
     int pt = ptype(ui.page);
     l[0] = 0;
-    if (b == B_SEL && ui.held_step < 0 && !ui.matrix) {
+    if (b == B_SEL && held(B_REC)) {      /* REC and SEL: REC's hold */
+        ms = 0xFFFFFFFFu;
+    } else if (b == B_REC && held(B_SEL)) {
+        text_cat(l, "ERASE ALL CABLES", sizeof l);
+        ms = 1500u;
+    } else if (b == B_REC && held(B_GLO) && ui.erec < 0 && ui.page != VP_SYS) {
+        text_cat(l, "ERASE ALL", sizeof l);   /* the patterns, randoms, cables, pans, sends, the random dose */
+        ms = 3000u;
+    } else if (b == B_SEL && ui.held_step < 0 && !ui.matrix) {
         text_cat(l, "MATRIX", sizeof l);
     } else if (b == B_SAVE) {
         text_cat(l, eng_playing() ? "SAVE: STOP FIRST" : "SAVE PROJECT", sizeof l);
@@ -2309,9 +2319,7 @@ static uint32_t hold_ms(int b, char *label, uint32_t max)
                                              pt == PT_EUC)) {
         int e = erase_lane();             /* the lane erased: its steps, locks, randoms (a track: its cables); GLO
                                            * held: all of them */
-        if (held(B_GLO)) {
-            text_cat(l, "ERASE ALL", sizeof l);
-        } else if (e >= ENG_TRACKS) {
+        if (e >= ENG_TRACKS) {
             text_cat(l, FX[e - ENG_TRACKS], sizeof l);
         } else {
             char n[2] = {(char)('1' + e), 0};
@@ -2795,7 +2803,9 @@ static void cable_turn(int s, int param, int32_t e)
         k->dst = (uint8_t)param;
         k->depth = 0;
     }
-    int32_t d = clamp((int32_t)k->depth + e * (e > 1 || e < -1 ? 10 : 4), -100, 100);
+    int32_t old = k->depth, d = clamp(old + e * (e > 1 || e < -1 ? 10 : 4), -100, 100);
+    if ((old > 0 && d < 0) || (old < 0 && d > 0))   /* through 0: it stops there, the cable gone (+2 went to -2) */
+        d = 0;
     if (d == 0) {
         k->src = SRC_NONE;
         k->depth = 0;
@@ -2890,7 +2900,16 @@ static void button_down(int b)
     case B_GLO:                          /* ALL, or its undo */
         all_down();
         break;
-    case B_SEL: case B_SAVE: case B_REC: case B_ENV:
+    case B_SEL: case B_REC:              /* both held: every cable erased, on REC's hold from the second press (SEL
+                                          * neither opens the matrix nor toggles MOD, REC not STEP) */
+        if (held(b == B_SEL ? B_REC : B_SEL)) {
+            ui.combo = 1;
+            ui.long_done[B_SEL] = 1;
+            ui.down_at[B_REC] = plat_ms();
+            ui.long_done[B_REC] = 0;
+        }
+        break;
+    case B_SAVE: case B_ENV:
         break;                           /* on release (a tap), held long, or held with a knob */
     default:
         module_button(b);
@@ -2918,9 +2937,41 @@ static void lane_erase(int l)            /* its pattern, its randoms; a track's 
         cables_erase(l);
 }
 
+static void erase_all(void)              /* GLO and REC held 3 s: every lane's pattern and randoms, every cable, the
+                                          * pans to the middle, the sends and the random dose to 0 (the levels, the
+                                          * sounds, the effects' knobs stay) */
+{
+    project_t *p = eng_project();
+    for (int i = 0; i < ENG_LANES; i++)
+        lane_erase(i);
+    cables_erase(ENG_TRACKS);
+    for (int t = 0; t < ENG_TRACKS; t++) {
+        p->val[PG_PAN * 4 + t] = 0.0f;
+        p->val[PG_RSEND * 4 + t] = 0.0f;
+        p->val[PG_DSEND * 4 + t] = 0.0f;
+    }
+    p->dice = 0;
+}
+
 static void button_long(int b)
 {
-    if (b == B_SEL && ui.held_step < 0) {
+    if (b == B_REC && held(B_SEL)) {     /* REC and SEL: every cable, the tracks' and the global ones */
+        for (int g = 0; g <= ENG_TRACKS; g++)
+            cables_erase(g);
+        ui.held_step = -1;
+        dirty = 1;
+        ui.full = 1;
+        app_say("ALL CABLES", "ERASED");
+    } else if (b == B_REC && held(B_GLO) && ui.erec < 0 && ui.page != VP_SYS) {
+        erase_all();
+        ui.used[B_GLO] = 1;
+        all.press = 1;                   /* (not an ALL to undo) */
+        ui.held_step = -1;
+        dirty = 1;
+        ui.full = 1;
+        app_say("ALL", "ERASED");
+    } else if (b == B_SEL && held(B_REC)) {
+    } else if (b == B_SEL && ui.held_step < 0) {
         ui.matrix = 1;
         ui.mod = 0;
         ui.grid = 0;
@@ -2947,14 +2998,7 @@ static void button_long(int b)
             static const char *const FX[3] = {"DELAY STEPS", "REVERB STEPS", "WARPS STEPS"};
             char n[16];
             int l = erase_lane();
-            if (held(B_GLO)) {
-                for (int i = 0; i < ENG_LANES; i++)
-                    lane_erase(i);
-                cables_erase(ENG_TRACKS);
-                ui.used[B_GLO] = 1;
-                all.press = 1;                /* (not an ALL to undo) */
-                app_say("ALL", "ERASED");
-            } else if (l >= 0) {
+            if (l >= 0) {
                 lane_erase(l);
                 n[0] = 0;
                 if (l < ENG_TRACKS) {
@@ -2980,6 +3024,8 @@ static void button_up(int b)
     int pt = ptype(ui.page);
     switch (b) {
     case B_SEL:
+        if (ui.combo && !held(B_REC))
+            ui.combo = 0;
         if (ui.long_done[b])
             break;
         if (ui.erec >= 0) {              /* Endless recording: a rest */
@@ -3000,6 +3046,11 @@ static void button_up(int b)
         ui.full = 1;
         break;
     case B_REC:                          /* KEY or STEP mode; on Endless' page it records, then plays */
+        if (ui.combo) {                  /* (REC and SEL: let go, nothing else) */
+            if (!held(B_SEL))
+                ui.combo = 0;
+            break;
+        }
         if (ui.long_done[b])
             break;
         if (ui.erec >= 0) {              /* Endless: recorded, it plays */
@@ -3076,7 +3127,8 @@ static void matrix_turn(int k, int32_t e)
         } while ((!eng_param_mod(d) || cable_group(d) != g) && ++tries < ENG_NPARAMS);
         c->dst = (uint8_t)d;
     } else {
-        c->depth = (int8_t)clamp(c->depth + e * 2, -100, 100);
+        int32_t old = c->depth, d = clamp(old + e * 2, -100, 100);
+        c->depth = (int8_t)((old > 0 && d < 0) || (old < 0 && d > 0) ? 0 : d);   /* (through 0: it stops there) */
         if (!c->depth)
             c->src = SRC_NONE;
     }
