@@ -27,6 +27,11 @@ la base de [fm1-base](https://github.com/charlesvestal/fm1-base) :
   qu'elle soit dans l'image ; ses gains glissent échantillon par échantillon, un pan ou un niveau aléatoire ou locké
   ne claque pas), un envoi par piste vers le delay et un vers la réverbe (ses lignes de retard en flottants : la
   réverbe du module les stockait sur 12 bits, d'où un grain et un souffle).
+- un **duck** : T2, T3 et T4 baissent à chaque trig de T1 (sa profondeur par piste, un DECAY commun), avant leurs
+  envois : ce qu'elles envoient au delay et à la réverbe baisse avec elles ;
+- un **bus master** : un compresseur (seuil, ratio, release, gain) ou un mode **OTT** (trois bandes compressées vers
+  le haut et vers le bas, d'après le preset d'Ableton que le plug-in de Xfer a rendu célèbre : DEPTH, TIME, DRIVE,
+  LEVEL), puis le limiteur de stmlib (celui de Rings et d'Elements).
 
 Marbles a été retiré en 0.3 (le séquenceur pas à pas fait tout, plus vite), Rings après le banc d'essai v0.0 (les
 modèles MODAL et STRING de Plaits en reprennent le code, en plus léger).
@@ -72,7 +77,7 @@ porte le numéro de sa piste dans sa couleur.
 | **LFO** | Tides A, puis Tides B |
 | **SEQ** | les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) |
 | **ARP** | Endless, celui de la piste (voir plus bas) |
-| **HOME** | le mixer : les niveaux des 4 pistes, puis leurs pans |
+| **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, le DUCK, puis le bus master (COMP, OTT) ; ALGORITHM sur COMP ou OTT : le mode du bus (OFF, COMP, OTT) |
 | **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps ; SELECT parcourt leurs faces (leurs potards, les envois des pistes, leurs pas) |
 | **ENV** | l'enveloppe de la piste (PLAITS 2/3 : DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV) |
 | **PLAY** | le séquenceur tourne ou s'arrête |
@@ -120,6 +125,19 @@ s'emballer, le drive le retient), **FILTER** (à gauche passe-bas, à droite pas
 puis **RESONANCE**, **MODE** (Mono ou Ping-pong : gauche au temps, droite au double), **MOD** (un pleurage lent) et
 **RETURN**. Le filtre est celui des modules Mutable (le SVF de stmlib) et la saturation sa SoftClip, dans une ligne
 de 1,2 s. Quand le temps change, la lecture glisse jusqu'au nouveau, comme une bande.
+
+**Le duck** (HOME, troisième face) : DECAY (20 ms à 2,6 s), puis la profondeur de T2, T3 et T4. À chaque trig de
+T1 (un pas, un ratchet, une touche), ces pistes baissent d'autant et remontent avec DECAY. Le duck agit sur la piste
+avant ses envois : ses échos et sa réverbe partent baissés avec elle (les queues déjà dans les effets continuent).
+Sa profondeur se locke pas par pas, comme le reste de la piste.
+
+**Le bus master** (HOME, quatrième et cinquième faces) : ALGORITHM choisit le mode, OFF, **COMP** ou **OTT** ; les
+potards de la face qui ne joue pas sont grisés. COMP : THRESH (0 à −36 dB), RATIO (1:1 à 20:1), RELEASE (20 ms à 1,3 s),
+GAIN (±12 dB) ; à droite, la réduction de gain. OTT : DEPTH (le mélange avec le son direct), TIME (les temps d'attaque
+et de release, ×1 au milieu, de ×1/4 à ×4), DRIVE (l'entrée) et LEVEL (la sortie) ; à droite, ses trois bandes,
+montées (rose) ou écrasées (bleu). Après les deux, toujours, le limiteur de stmlib.
+
+Sur les pages des quatre pistes (niveaux, pans, envois, duck), le nom de la piste active est en défonce.
 
 **Le mode MOD** (SEL) : le clavier devient une rangée de sources. On tient une touche et on tourne un potard : le
 câble est posé, le sens et la quantité de rotation fixent la profondeur ; revenir à 0 le retire. Touches 1-4 :

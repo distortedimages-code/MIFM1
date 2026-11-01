@@ -723,6 +723,100 @@ int main(int argc, char** argv) {
     eng_defaults(p);
   }
 
+  // 22. the duck: T1 on every beat, T2 a held note (VIRTUAL ANALOG, its gate the whole step); T2's level just after
+  // T1's trigs against just before them: down as deep as T2's DUCK (0.8: -14 dB), none at 0
+  {
+    double ratio[2];
+    for (int k = 0; k < 2; ++k) {
+      eng_play(0);
+      eng_blank(p);
+      p->algo[PG_COMP] = MB_OFF;
+      p->algo[PG_TRACK(0, 0)] = 21;
+      p->val[eng_track_param(0, TP_LEVEL)] = 0.0f;         // (T1 itself silent: T2 alone heard)
+      for (int st = 0; st < 16; st += 4) eng_trig_set(0, st, 1);
+      for (int st = 0; st < 16; ++st) eng_trig_set(1, st, 1);
+      p->val[eng_track_param(1, TP_LENGTH)] = 1.0f;
+      p->val[PG_TRACK(1, 1) * 4 + 0] = 1.0f;               // a long LPG decay: a steady note
+      p->val[PG_DUCK * 4 + 0] = 0.3f;                      // ~85 ms
+      p->val[eng_track_param(1, TP_DUCK)] = k ? 0.8f : 0.0f;
+      for (int b = 0; b < 400; ++b) eng_render(l, r, n);
+      eng_play(1);
+      double after = 0, before = 0;
+      for (int b = 0; b < 689 * 2; ++b) {                  // two bars: a beat every 172 blocks
+        eng_render(l, r, n);
+        int ph = b % 172;
+        double e = 0;
+        for (uint32_t i = 0; i < n; ++i) e += static_cast<double>(l[i]) * l[i];
+        if (b < 172) continue;
+        if (ph >= 3 && ph < 8) after += e;                 // 9..23 ms after the trig
+        if (ph >= 160 && ph < 165) before += e;            // the end of the beat: back up
+      }
+      ratio[k] = 10.0 * std::log10((after + 1e-12) / (before + 1e-12));
+      eng_play(0);
+    }
+    printf("duck: T2 just after T1's trigs %+.1f dB against just before (duck 0.8), %+.1f dB (duck 0)\n", ratio[1],
+           ratio[0]);
+    if (ratio[1] > -9.0 || std::fabs(ratio[0]) > 3.0) ++failures, printf("FAIL: the duck\n");
+  }
+
+  // 23. the master bus: the compressor brings a loud patch down (its reduction seen), OTT keeps it as loud at its
+  // depth's middle, every mode's peak under full scale (the limiter: 0.8 at most, the soft limit after)
+  {
+    double rms[3];
+    float pk[3], gr = 0;
+    for (int m = 0; m < 3; ++m) {
+      eng_play(0);
+      eng_defaults(p);
+      p->algo[PG_COMP] = static_cast<uint8_t>(m);
+      for (int t = 0; t < ENG_TRACKS; ++t) p->val[eng_track_param(t, TP_LEVEL)] = 1.0f;
+      p->val[PG_COMP * 4 + 0] = 0.6f;                      // -22 dB, 3:1
+      for (int b = 0; b < 400; ++b) eng_render(l, r, n);
+      eng_play(1);
+      double e = 0;
+      pk[m] = 0;
+      for (int b = 0; b < 1378; ++b) {
+        eng_render(l, r, n);
+        for (uint32_t i = 0; i < n; ++i) {
+          e += static_cast<double>(l[i]) * l[i];
+          pk[m] = std::fmax(pk[m], std::fabs(l[i]));
+        }
+        if (m == MB_COMP) gr = std::fmin(gr, eng_gr(0));
+      }
+      rms[m] = std::sqrt(e / (1378.0 * n));
+      eng_play(0);
+    }
+    printf("master bus: off rms %.3f peak %.2f; comp (-22 dB, 3:1, +4 dB) rms %.3f peak %.2f, %.1f dB at most; OTT rms %.3f "
+           "peak %.2f\n", rms[0], pk[0], rms[1], pk[1], gr, rms[2], pk[2]);
+    if (gr > -6.0f || pk[0] > 1.0f || pk[1] > 1.0f || pk[2] > 1.0f || rms[2] < rms[0] * 0.6 || rms[2] > rms[0] * 1.7)
+      ++failures, printf("FAIL: the master bus\n");
+    eng_defaults(p);
+  }
+
+  // 24. 0.3's project (version 6, 2804 bytes): all of it, the duck off, the master bus INIT's
+  {
+    static uint8_t buf[sizeof(project_t)];
+    project_t* q = reinterpret_cast<project_t*>(buf);
+    for (uint32_t i = 0; i < sizeof buf; ++i) buf[i] = 0;
+    q->magic = PROJECT_MAGIC;
+    q->version = 6;
+    q->size = 2804;
+    float* val = reinterpret_cast<float*>(buf + 8);
+    for (int i = 0; i < 148; ++i) val[i] = 0.25f;
+    uint8_t* algo = buf + 8 + 148 * 4;
+    algo[PG_TRACK(3, 0)] = 23;                            // track 4 on HI-HAT
+    uint8_t* trig = buf + 8 + 592 + 37 + 3 + 160;
+    trig[LANE_DELAY * 8] = 0x05;                          // the delay's lane: steps 1 and 3
+    int8_t* rnd = reinterpret_cast<int8_t*>(trig + 56);
+    rnd[2 * 19 + TP_DSEND] = -40;                         // track 3's delay send, looped
+    int ok = eng_upgrade(q, 2804);
+    printf("a version 6 project: %s, track 4 model %d, a knob %.2f, the delay's lane %d%d, a random %d, duck %.2f, bus %d\n",
+           ok ? "read" : "REFUSED", q->algo[PG_TRACK(3, 0)], q->val[100], q->trig[LANE_DELAY][0] & 1,
+           (q->trig[LANE_DELAY][0] >> 2) & 1, q->rnd[2][TP_DSEND], q->val[PG_DUCK * 4 + 2], q->algo[PG_COMP]);
+    if (!ok || !eng_check(q) || q->algo[PG_TRACK(3, 0)] != 23 || q->val[100] != 0.25f || q->trig[LANE_DELAY][0] != 0x05 ||
+        q->rnd[2][TP_DSEND] != -40 || q->val[PG_DUCK * 4 + 2] != 0.0f || q->algo[PG_COMP] != MB_COMP)
+      ++failures, printf("FAIL: the version 6 project\n");
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

@@ -79,7 +79,11 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Algo", K_UNI, 0, 0, 0}, {"Timbre", K_UNI, 0, 0, 0}, {"Level 1", K_UNI, 0, 0, 0}, {"Level 2", K_UNI, 0, 0, 0}},
   {{"Carrier", K_ENUM, 0, 7, kWarpsCarrier}, {"Mod", K_ENUM, 0, 3, kTrackNames}, {"Dry", K_ENUM, 0, 1, kOnOff},
    {"Mode", K_ENUM, 0, 1, kWarpsMode}},
+  {{"Decay", K_UNI, 0, 0, 0}, {"Duck", K_UNI, 0, 0, 0}, {"Duck", K_UNI, 0, 0, 0}, {"Duck", K_UNI, 0, 0, 0}},
+  {{"Thresh", K_UNI, 0, 0, 0}, {"Ratio", K_UNI, 0, 0, 0}, {"Release", K_UNI, 0, 0, 0}, {"Gain", K_BIP, 0, 0, 0}},
+  {{"Depth", K_UNI, 0, 0, 0}, {"Time", K_UNI, 0, 0, 0}, {"Drive", K_BIP, 0, 0, 0}, {"Level", K_BIP, 0, 0, 0}},
 };
+const char* const kBusModes[3] = {"OFF", "COMP", "OTT"};
 
 // an effect lane's parameters: its effect's knobs, then its step page's DECAY, PROB and DEPTH
 const int kLaneKnobs[ENG_LANES] = {0, 0, 0, 0, 8, 4, 4};
@@ -128,7 +132,8 @@ int page_type(int page) {
   if (page < PG_GLOBAL) return PT_LANE;
   if (page == PG_GLOBAL) return PT_GLOBAL;
   if (page < PG_WARPS(0)) return PT_ARP;
-  return page == PG_WARPS(0) ? PT_WARPS1 : PT_WARPS2;
+  if (page < PG_DUCK) return page == PG_WARPS(0) ? PT_WARPS1 : PT_WARPS2;
+  return page == PG_DUCK ? PT_DUCK : page == PG_COMP ? PT_COMP : PT_OTT;
 }
 
 inline float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -141,6 +146,13 @@ float tides_hz(float v, int range) {                                          //
 }
 float gate_frac(float v) { return 0.05f + 0.9f * v; }                         // LENGTH: 5..95 % of the sixteenth
 float lane_tau(float v) { return 0.01f * fm_exp2f(v * 9.0f); }                // an effect lane's DECAY: 10 ms..5.1 s
+float duck_tau(float v) { return 0.02f * fm_exp2f(v * 7.0f); }                // the duck's DECAY: 20 ms..2.6 s
+// the master bus's knobs: the compressor's threshold (0..-36 dB), ratio (1..20), release (20 ms..1.3 s), gain
+// (+/-12 dB); OTT's time (x1/4..x4, x1 in the middle), drive and level (+/-12 dB)
+float comp_threshold(float v) { return -36.0f * v; }
+float comp_ratio(float v) { return 1.0f + 19.0f * v * v; }
+float comp_release(float v) { return 0.02f * fm_exp2f(v * 6.0f); }
+float ott_time(float v) { return fm_exp2f((v - 0.5f) * 4.0f); }
 
 // ------------------------------------------------------------------ engine ---
 const uint32_t kN = 128;                // app.h APP_BLOCK
@@ -165,6 +177,7 @@ void* voice[ENG_TRACKS];
 void* tides[2];
 void* reverb;
 void* delay;
+void* master;
 void* warps;
 int ready;
 
@@ -179,6 +192,11 @@ float vnote[ENG_TRACKS];                // its note (latched at the gate's rise)
 volatile uint32_t vrises[ENG_TRACKS];   // the trigs it played
 uint32_t gates_now;
 int gate_seen[ENG_TRACKS];              // its gate was high in the last block (Tides' triggers)
+// the duck: T1's gate rising, frame by frame (this block's), then the envelope it starts (sample by sample: its jump
+// to 1, its fall with DECAY, a ~1 ms glide over both) and each track's depth, glided
+uint8_t duck_hit[kFrames];
+int duck_prev;
+float duck_d, duck_s, duck_depth[ENG_TRACKS], duckv[kN];
 
 // the trigs: the step clock, then per lane what its trig decided
 int restart;                            // PLAY: the steps from the first
@@ -354,7 +372,7 @@ void new_trig(int lane, int step, int locks) {
   int np = eng_lane_params(lane);
   for (int tp = 0; tp < ENG_NTP; ++tp) {
     tdelta[lane][tp] = 0.0f;
-    if (tp >= np) continue;
+    if (tp >= np || !eng_tp_lockable(lane, tp)) continue;
     int param = eng_track_param(lane, tp), i;
     const eng_pdef_t* d = eng_pdef(param);
     float base = proj.val[param], v = base;
@@ -480,6 +498,10 @@ void sequence(uint32_t n) {
       }
       fg[t][k] = static_cast<uint8_t>(g);
       last_g[t] = g;
+      if (t == 0) {                     // T1: a rise ducks the others
+        duck_hit[k] = static_cast<uint8_t>(g && !duck_prev);
+        duck_prev = g;
+      }
       gate_seen[t] |= g;
     }
   }
@@ -661,6 +683,7 @@ int eng_track_param(int lane, int tp) {
   if (tp == TP_SEND) return PG_RSEND * 4 + lane;
   if (tp == TP_PAN) return PG_PAN * 4 + lane;
   if (tp == TP_DSEND) return PG_DSEND * 4 + lane;
+  if (tp == TP_DUCK) return PG_DUCK * 4 + lane;   // (T1's: the duck's DECAY, not a parameter of T1's: not lockable)
   return PG_STEP(lane) * 4 + (tp - TP_NOTE);
 }
 
@@ -686,12 +709,17 @@ int eng_param_tp(int param, int* lane) {
   } else if (page == PG_WARPS(0)) {
     l = LANE_WARPS;
     tp = k;
+  } else if (page == PG_DUCK && k > 0) {
+    l = k;
+    tp = TP_DUCK;
   }
   if (lane) *lane = l;
   return tp;
 }
 
-int eng_tp_lockable(int lane, int tp) { return tp >= 0 && tp < eng_lane_params(lane); }
+int eng_tp_lockable(int lane, int tp) {
+  return tp >= 0 && tp < eng_lane_params(lane) && !(lane == 0 && tp == TP_DUCK);
+}
 
 // Plaits' HARMONICS, TIMBRE and MORPH by model, after its manual (1.2's eight from its release notes), short
 const char* const kModelKnobs[24][3] = {
@@ -819,13 +847,37 @@ void eng_param_text(int param, float v, char* b, int n) {
       put_num(b, n, static_cast<int32_t>(s * 10.0f + 0.5f), 1, 0);
       put_end(b, n, " s");
     }
+  } else if ((pt == PT_DUCK && k == 0) || (pt == PT_COMP && k == 2)) {   // the duck's DECAY, the release: times
+    float t = pt == PT_DUCK ? duck_tau(v) : comp_release(v);
+    if (t < 1.0f) {
+      put_num(b, n, static_cast<int32_t>(t * 1000.0f + 0.5f), 0, 0);
+      put_end(b, n, " ms");
+    } else {
+      put_num(b, n, static_cast<int32_t>(t * 10.0f + 0.5f), 1, 0);
+      put_end(b, n, " s");
+    }
+  } else if (pt == PT_COMP && k == 0) {   // the threshold
+    put_num(b, n, static_cast<int32_t>(comp_threshold(v) - 0.5f), 0, 0);
+    put_end(b, n, " dB");
+  } else if (pt == PT_COMP && k == 1) {   // the ratio
+    float r = comp_ratio(v);
+    if (r < 10.0f) put_num(b, n, static_cast<int32_t>(r * 10.0f + 0.5f), 1, 0);
+    else put_num(b, n, static_cast<int32_t>(r + 0.5f), 0, 0);
+    put_end(b, n, ":1");
+  } else if ((pt == PT_COMP && k == 3) || (pt == PT_OTT && k >= 2)) {   // gains: +/-12 dB
+    put_num(b, n, static_cast<int32_t>(v * 12.0f + (v < 0 ? -0.5f : 0.5f)), 0, 1);
+    put_end(b, n, " dB");
+  } else if (pt == PT_OTT && k == 1) {    // OTT's time: x1 its own
+    put(b, n, "x");
+    put_num(b + 1, n - 1, static_cast<int32_t>(ott_time(v) * 100.0f + 0.5f), 2, 0);
   } else if (pt == PT_PLAITS3 && k == 1) {   // LENGTH: the gate, in % of the sixteenth
     put_num(b, n, static_cast<int32_t>(gate_frac(v) * 100.0f + 0.5f), 0, 0);
     put_end(b, n, "%");
   } else if (pt == PT_GLOBAL && k == 3) {    // SWING: the on-beat's share of two sixteenths
     put_num(b, n, static_cast<int32_t>(50.0f + 25.0f * v + 0.5f), 0, 0);
     put_end(b, n, "%");
-  } else if ((pt == PT_STEP && k == 1) || (pt == PT_ARP && k == 1) || (pt == PT_LANE && (k == 1 || k == 2))) {
+  } else if ((pt == PT_STEP && k == 1) || (pt == PT_ARP && k == 1) || (pt == PT_LANE && (k == 1 || k == 2)) ||
+             (pt == PT_DUCK && k > 0) || (pt == PT_OTT && k == 0)) {
     put_num(b, n, static_cast<int32_t>(v * 100.0f + 0.5f), 0, 0);
     put_end(b, n, "%");
   } else if (pt == PT_GLOBAL && k == 0) {
@@ -854,6 +906,7 @@ int eng_algo_count(int page) {
   switch (page_type(page)) {
     case PT_PLAITS1: return 24;
     case PT_TIDES1: return 3;
+    case PT_COMP: return 3;
     default: return 0;
   }
 }
@@ -862,7 +915,7 @@ const char* eng_algo_name(int page, int a) {
   int n = eng_algo_count(page);
   if (!n) return "";
   a = a < 0 ? 0 : a >= n ? n - 1 : a;
-  return page_type(page) == PT_PLAITS1 ? kModels[a] : kRamps[a];
+  return page_type(page) == PT_PLAITS1 ? kModels[a] : page_type(page) == PT_COMP ? kBusModes[a] : kRamps[a];
 }
 
 project_t* eng_project(void) { return &proj; }
@@ -933,6 +986,16 @@ void eng_blank(project_t* p) {
   // Warps: off (no carrier), ready on the diode ring modulator, track 2 as the modulator
   static const float kW[8] = {0.4f, 0.5f, 0.6f, 0.6f, static_cast<float>(WC_OFF), 1.0f, 0.0f, 0.0f};
   for (int k = 0; k < 8; ++k) p->val[PG_WARPS(k / 4) * 4 + k % 4] = kW[k];
+  // the duck: off (its DECAY ~180 ms); the master bus: a gentle compressor (-10 dB, 3:1, 160 ms, +4 dB); OTT ready at
+  // half its depth
+  p->val[PG_DUCK * 4 + 0] = 0.45f;
+  static const float kComp[4] = {0.28f, 0.32f, 0.5f, 4.0f / 12.0f};
+  static const float kOtt[4] = {0.5f, 0.5f, 0.0f, 0.0f};
+  for (int k = 0; k < 4; ++k) {
+    p->val[PG_COMP * 4 + k] = kComp[k];
+    p->val[PG_OTT * 4 + k] = kOtt[k];
+  }
+  p->algo[PG_COMP] = MB_COMP;
   p->val[PG_GLOBAL * 4 + 0] = 0.60206f;                  // 30 x 2^(0.60206 x 3.3219) = 120 BPM
   p->val[PG_GLOBAL * 4 + 1] = 1.0f;                      // major
   for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i].lane = 0xFF;
@@ -962,6 +1025,9 @@ void eng_defaults(project_t* p) {
   p->val[PG_TRACK(1, 2) * 4 + 1] = 0.3f;                 // short notes
   p->val[PG_TRACK(2, 2) * 4 + 1] = 0.2f;
   p->val[PG_TIDES(0, 1) * 4 + 3] = 2.0f;                 // Tides A: triggered by T2
+  p->val[PG_DUCK * 4 + 1] = 0.6f;                        // the kick ducks the bass, a little the others
+  p->val[PG_DUCK * 4 + 2] = 0.3f;
+  p->val[PG_DUCK * 4 + 3] = 0.3f;
   p->rnd[2][TP_NOTE] = -40;                              // the FM line: a looped random tune
   p->rnd[3][TP_NOTE] = -60;                              // the resonator too, its decay new at each trig
   p->rnd[3][TP_DECAY] = 25;
@@ -1015,6 +1081,44 @@ struct project_old {
   uint8_t endless_len[ENG_TRACKS];
   int8_t endless_key[ENG_TRACKS];
 };
+
+// 0.3.0's to 0.3.2's (version 6): all of it, without the duck and the master bus (theirs: INIT's)
+struct project_v6 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[37 * 4];
+  uint8_t algo[37];
+  uint8_t out_mode;
+  uint8_t rsv[2];
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+  int8_t rnd[ENG_LANES][19];
+  uint16_t seed[ENG_LANES];
+  plock_t lock[ENG_PLOCKS];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+};
+
+void upgrade_v6(project_t* p, const project_v6& o) {
+  eng_blank(p);
+  for (int i = 0; i < 37 * 4; ++i) p->val[i] = o.val[i];
+  for (int i = 0; i < 37; ++i) p->algo[i] = o.algo[i];
+  p->out_mode = o.out_mode;
+  for (int g = 0; g <= ENG_TRACKS; ++g)
+    for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c] = o.cable[g][c];
+  for (int l = 0; l < ENG_LANES; ++l) {
+    for (int i = 0; i < ENG_STEPS / 8; ++i) p->trig[l][i] = o.trig[l][i];
+    for (int i = 0; i < 19; ++i) p->rnd[l][i] = o.rnd[l][i];
+    p->seed[l] = o.seed[l];
+  }
+  for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i] = o.lock[i];
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    for (int i = 0; i < ENG_ENDLESS; ++i) p->endless[t][i] = o.endless[t][i];
+    p->endless_len[t] = o.endless_len[t];
+    p->endless_key[t] = o.endless_key[t];
+  }
+}
 
 // an old page's place now (-1: gone, Marbles' four)
 int old_page(int op) {
@@ -1080,15 +1184,17 @@ int eng_upgrade(project_t* p, int bytes) {
   static union {
     project_old<33> v4;
     project_old<35> v5;
+    project_v6 v6;
   } u;
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
-  uint32_t size = v == 5 ? sizeof u.v5 : v == 4 ? sizeof u.v4 : 0;
+  uint32_t size = v == 6 ? sizeof u.v6 : v == 5 ? sizeof u.v5 : v == 4 ? sizeof u.v4 : 0;
   if (!size || bytes != static_cast<int>(size) || p->size != size) return 0;
   const uint8_t* from = reinterpret_cast<const uint8_t*>(p);
   uint8_t* to = reinterpret_cast<uint8_t*>(&u);
   for (uint32_t i = 0; i < size; ++i) to[i] = from[i];
-  if (v == 5) upgrade_from(p, u.v5);
+  if (v == 6) upgrade_v6(p, u.v6);
+  else if (v == 5) upgrade_from(p, u.v5);
   else upgrade_from(p, u.v4);
   return 1;
 }
@@ -1096,7 +1202,7 @@ int eng_upgrade(project_t* p, int bytes) {
 int eng_init(void) {
   uint32_t need = 0, a = 0;
   need = 4u * ((mp_size() + 7u) & ~7u) + 2u * ((mt_size() + 7u) & ~7u) + ((mrv_size() + 7u) & ~7u) +
-         ((mw_size() + 7u) & ~7u) + ((mdl_size() + 7u) & ~7u);
+         ((mw_size() + 7u) & ~7u) + ((mdl_size() + 7u) & ~7u) + ((mms_size() + 7u) & ~7u);
   if (need > sizeof(arena)) return -1;
   for (int t = 0; t < ENG_TRACKS; ++t) {
     voice[t] = arena + a;
@@ -1120,6 +1226,9 @@ int eng_init(void) {
   delay = arena + a;
   a += (mdl_size() + 7u) & ~7u;
   mdl_init(delay);
+  master = arena + a;
+  a += (mms_size() + 7u) & ~7u;
+  mms_init(master);
   if (!eng_check(&proj)) eng_defaults(&proj);
   apply_cables();
   ready = 1;
@@ -1256,6 +1365,26 @@ void eng_render(float* l, float* r, uint32_t n) {
   int div = iround(E(LANE_DELAY, 0));
   mdl_set(delay, step_len_now() * kDivMult[div < 0 ? 0 : div >= kDivs ? kDivs - 1 : div], E(LANE_DELAY, 1),
           E(LANE_DELAY, 2), E(LANE_DELAY, 4), E(LANE_DELAY, 3), iround(E(LANE_DELAY, 5)), E(LANE_DELAY, 6));
+  {                                     // the duck: T1's rises (their frames), DECAY, each track's depth
+    float rel = fm_exp2f(-1.442695f / (kSr * duck_tau(P(PG_DUCK, 0)))), step = static_cast<float>(n / kFrames);
+    for (uint32_t i = 0; i < n; ++i) {
+      if (i % (n / kFrames) == 0 && duck_hit[i / (n / kFrames)]) duck_d = 1.0f;
+      else duck_d *= rel;
+      duck_s += (duck_d - duck_s) * 0.03f;
+      duckv[i] = duck_s;
+    }
+    if (duck_s < 1e-5f && duck_d < 1e-5f) duck_s = duck_d = 0.0f;   // (never down into the subnormals: slow)
+    (void)step;
+    for (int t = 1; t < ENG_TRACKS; ++t) {   // (before the sends: what a track sends ducks with it)
+      float d0 = duck_depth[t], d1 = E(t, TP_DUCK), dd = (d1 - d0) * inv;
+      duck_depth[t] = d1;
+      if (d0 <= 0.0f && d1 <= 0.0f) continue;
+      for (uint32_t i = 0; i < n; ++i) {
+        d0 += dd;
+        vbuf[t][i] *= 1.0f - d0 * duckv[i];
+      }
+    }
+  }
   float rv = E(LANE_REVERB, 3) * 1.6f, dv = E(LANE_DELAY, 7) * 1.2f;
   float ret = mix_ret, dret = (rv - mix_ret) * inv, eret = mix_dret, deret = (dv - mix_dret) * inv;
   float pk[ENG_TRACKS + 2] = {0, 0, 0, 0, 0, 0};
@@ -1291,7 +1420,18 @@ void eng_render(float* l, float* r, uint32_t n) {
     if (a > pk[ENG_TRACKS]) pk[ENG_TRACKS] = a;
     a = fm_fabsf(el) > fm_fabsf(er) ? fm_fabsf(el) : fm_fabsf(er);
     if (a > pk[ENG_TRACKS + 1]) pk[ENG_TRACKS + 1] = a;
-    float ol = sat(dl + wl + el), orr = sat(dr + wr + er);
+    l[i] = dl + wl + el;
+    r[i] = dr + wr + er;
+  }
+  // the master bus: the compressor or OTT, the limiter; then a soft limit, the output's mode
+  int mb = proj.algo[PG_COMP] > MB_OTT ? MB_COMP : proj.algo[PG_COMP];
+  mms_mode(master, mb);
+  mms_comp(master, comp_threshold(P(PG_COMP, 0)), comp_ratio(P(PG_COMP, 1)), comp_release(P(PG_COMP, 2)),
+           P(PG_COMP, 3) * 12.0f);
+  mms_ott(master, P(PG_OTT, 0), ott_time(P(PG_OTT, 1)), P(PG_OTT, 2) * 12.0f, P(PG_OTT, 3) * 12.0f);
+  mms_process(master, l, r, n);
+  for (uint32_t i = 0; i < n; ++i) {
+    float ol = sat(l[i]), orr = sat(r[i]);
     if (proj.out_mode == 1) {           // the right inverted: a headset with a mic (a 4-pole plug in the 3-pole jack)
                                         // has its earpieces in series between left and right, they get left minus
                                         // right: the centre vanishes. Left plus right then reaches them: the whole mix
@@ -1330,6 +1470,8 @@ int eng_note(int t) { return t >= 0 && t < ENG_TRACKS ? static_cast<int>(vnote[t
 uint32_t eng_load(int core) { return core ? load1 : load0; }
 uint32_t eng_peak(void) { return peak; }
 float eng_meter(int t) { return t >= 0 && t < ENG_TRACKS + 2 ? meter[t] : 0.0f; }
+float eng_duck(void) { return duck_s; }
+float eng_gr(int band) { return ready ? mms_gain(master, band) : 0.0f; }
 int eng_hist(int s, int i) {
   if (s <= SRC_NONE || s >= NSRC || i < 0 || i >= ENG_HIST) return 0;
   return hist[s][(hist_at + static_cast<uint32_t>(i)) % ENG_HIST];

@@ -28,7 +28,7 @@ td:first-child {{ white-space: nowrap; font-weight: 700; color: #ffb22e; }}
 <p>Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient du code open source de Mutable Instruments :
 Plaits sur chaque piste (ses 24 modèles), un séquenceur pas à pas avec P-locks (modes KEY et STEP), un Endless par
 piste, probabilités, ratchets, longueurs, aléatoire et swing, un quantiseur global, deux Tides pour moduler, une
-matrice de câbles, et trois effets avec chacun sa piste de pas : un delay (filtre, drive, ping-pong), la réverbe de
+matrice de câbles, un duck sur T1, un bus master (compresseur ou OTT, puis limiteur), et trois effets avec chacun sa piste de pas : un delay (filtre, drive, ping-pong), la réverbe de
 Clouds et Warps entre deux pistes.</p>
 <div class="card"><b>Installer</b><br><a href="install/">Installer MIFM1 {version}</a>
 <p>Dans Chrome ou Edge, le FM-1 branché en USB et à l'arrêt. Laisser la page aller jusqu'au bout : le firmware, puis
@@ -44,7 +44,7 @@ les tables des modules.</p></div>
 d'un effet : DECAY, PROB, DEPTH, LENGTH</td></tr>
 <tr><td>ARP</td><td>Endless : REC enregistre (une touche = une note, SEL = un silence), REC à nouveau le joue, une touche le
 transpose, REC tenu l'efface</td></tr>
-<tr><td>HOME</td><td>le mixer : les niveaux, les pans</td></tr>
+<tr><td>HOME</td><td>le mixer : les niveaux, les pans, le DUCK (T2-T4 baissées à chaque trig de T1, son DECAY), le bus master : COMP (THRESH, RATIO, RELEASE, GAIN) ou OTT (DEPTH, TIME, DRIVE, LEVEL), choisi avec ALGORITHM</td></tr>
 <tr><td>FX</td><td>les effets l'un après l'autre : le delay (TIME, FDBK, FILTER, DRIVE ; RESO, MODE, MOD,
 RETURN), la réverbe, Warps (ALGO, TIMBRE, LEVEL 1, LEVEL 2 ; CARRIER, MOD, DRY, MODE) ; SELECT : leurs
 faces, les envois des pistes, leurs pas</td></tr>

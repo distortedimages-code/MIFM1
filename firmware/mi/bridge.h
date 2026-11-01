@@ -53,6 +53,17 @@ void mdl_set(void *d, float time, float feedback, float filter, float resonance,
              float mod);
 void mdl_process(void *d, const float *in, float *out_l, float *out_r, uint32_t n);
 
+/* ---- the master bus (mi_master.cc): a compressor or OTT's three bands, then stmlib's limiter on each side ---- */
+uint32_t mms_size(void);
+void mms_init(void *mem);
+void mms_mode(void *m, int mode);        /* 0 off (the limiter alone), 1 the compressor, 2 OTT */
+/* the compressor: threshold in dB (0 and under), ratio (1: none), release in seconds, makeup in dB */
+void mms_comp(void *m, float threshold_db, float ratio, float release_s, float makeup_db);
+/* OTT: depth (its mix with the dry, 0..1), time (its attacks and releases scaled: 1 OTT's own), drive and level dB */
+void mms_ott(void *m, float depth, float time, float drive_db, float level_db);
+void mms_process(void *m, float *l, float *r, uint32_t n);   /* in place */
+float mms_gain(void *m, int band);       /* the gain now, dB: the compressor's (- its reduction), OTT's bands' */
+
 /* ---- Warps, at the FM-1's 44.1 kHz (its tables made again for it: mi_warps.cc) ---- */
 uint32_t mw_size(void);
 void mw_init(void *mem);

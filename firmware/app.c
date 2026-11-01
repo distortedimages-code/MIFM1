@@ -127,7 +127,7 @@ static int ptrack(int page)              /* the track a page belongs to, -1: non
     return page >= VP_SYS ? -1 : page >= VP_RND(0) ? page - VP_RND(0) : eng_page_track(page);
 }
 
-#define MAXFACES 4
+#define MAXFACES 5
 static int module_pages(int page, int *f)   /* its module's pages (its faces), in order; how many */
 {
     int t = ptrack(page);
@@ -141,7 +141,10 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
         f[0] = page >= PG_TIDES(1, 0) ? PG_TIDES(1, 0) : PG_TIDES(0, 0);
         f[1] = f[0] + 1;
         return 2;
-    case PT_MIX: case PT_PAN: f[0] = PG_MIX; f[1] = PG_PAN; return 2;
+    case PT_MIX: case PT_PAN: case PT_DUCK: case PT_COMP: case PT_OTT:   /* the mixer: the levels, the pans, the
+                                                                          * duck, the master bus (its two modes) */
+        f[0] = PG_MIX, f[1] = PG_PAN, f[2] = PG_DUCK, f[3] = PG_COMP, f[4] = PG_OTT;
+        return 5;
     case PT_STEP: case PT_RND: f[0] = PG_STEP(t); f[1] = VP_RND(t); return 2;
     case PT_ARP: f[0] = PG_ARP(t); return 1;
     case PT_DELAY1: case PT_DELAY2: case PT_DSEND: case PT_LANE: case PT_REVERB: case PT_RSEND:
@@ -222,7 +225,7 @@ static const char *module_name(int page)
     switch (ptype(page)) {
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: return "Plaits";
     case PT_TIDES1: case PT_TIDES2: return page >= PG_TIDES(1, 0) ? "Tides B" : "Tides A";
-    case PT_MIX: case PT_PAN: return "Mixer";
+    case PT_MIX: case PT_PAN: case PT_DUCK: case PT_COMP: case PT_OTT: return "Mixer";
     case PT_STEP: case PT_RND: return "Steps";
     case PT_ARP: return "Endless";
     case PT_GLOBAL: case PT_SYS: return "Global";
@@ -263,6 +266,9 @@ static uint16_t page_accent(int page)
     switch (ptype(page)) {
     case PT_STEP: case PT_RND: case PT_ARP: return track_accent(ptrack(page));
     case PT_PAN: case PT_GLOBAL: case PT_SYS: case PT_MIX: return TEAL;
+    case PT_DUCK: return track_accent(0);    /* T1's: it ducks the others */
+    case PT_COMP: return ORANGE;
+    case PT_OTT: return PINK;
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: return model_accent(p->algo[page_first(page)]);
     case PT_TIDES1: case PT_TIDES2: return accent3(p->algo[page_first(page)]);
     default: return lane_accent(eng_page_lane(page));
@@ -615,7 +621,7 @@ typedef struct {
     int8_t a, b, c, d;
 } vop_t;
 enum { IC_MODEL = 0, IC_RAMP = 24, IC_MIX = 27, IC_REV, IC_GLO, IC_NEW, IC_DEMO, IC_SAVED, IC_STEPS, IC_DICE,
-       IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, NICON };
+       IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, NICON };
 #define IOPS 10
 static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 4, 24, 12, 8}, {'L', 12, 8, 12, 24}, {'L', 12, 24, 20, 8}, {'L', 20, 8, 20, 24}, {'L', 20, 24, 28, 16}},
@@ -675,6 +681,10 @@ static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 8, 7, 24, 16}, {'L', 24, 16, 8, 25}},                                                    /* comparator */
     {{'C', 9, 16, 4, 0}, {'L', 15, 16, 27, 16}, {'L', 22, 11, 27, 16}, {'L', 27, 16, 22, 21}},      /* freq shifter */
     {{'L', 5, 6, 5, 26}, {'L', 12, 9, 12, 23}, {'L', 19, 12, 19, 20}, {'L', 26, 14, 26, 18}},       /* the delay */
+    {{'L', 4, 7, 9, 7}, {'L', 9, 7, 9, 25}, {'L', 9, 25, 14, 15}, {'L', 14, 15, 20, 10}, {'L', 20, 10, 28, 7}},
+                                                                                                     /* the duck */
+    {{'L', 5, 27, 27, 27}, {'L', 5, 27, 5, 5}, {'L', 5, 27, 16, 14}, {'L', 16, 14, 27, 10}},        /* a knee */
+    {{'R', 4, 14, 6, 12}, {'R', 13, 8, 6, 18}, {'R', 22, 12, 6, 14}, {'L', 4, 6, 28, 6}},            /* OTT: 3 bands */
 };
 
 static void vicon(float cx, float cy, float s, float w, uint16_t c, int which, int glow)
@@ -1001,6 +1011,33 @@ static void panel_tides(int tide)
 
 static int meter_lit(int t) { return (int)(fm_clampf(eng_meter(t) * 1.25f, 0.0f, 1.0f) * 7.0f + 0.5f); }
 
+static int bus_mode(void) { return eng_project()->algo[PG_COMP] % 3; }   /* MB_OFF, MB_COMP, MB_OTT */
+
+static void panel_duck(void)             /* the duck: T1's trigs, its decay */
+{
+    char s[40], v[16];
+    hero_icon(IC_DUCK, track_accent(0));
+    int y = hero_title("DUCK");
+    s[0] = 0;
+    text_cat(s, "AT T1'S TRIGS|DECAY ", sizeof s);
+    eng_param_text(PG_DUCK * 4, eng_final(PG_DUCK * 4), v, sizeof v);
+    text_cat(s, v, sizeof s);
+    hero_line(y, s);
+}
+
+static void panel_bus(int ott)           /* the master bus: this face's mode, on or not */
+{
+    static const char *const M[3] = {"MASTER BUS OFF", "COMP ON", "OTT ON"};
+    int m = bus_mode(), on = m == (ott ? MB_OTT : MB_COMP);
+    char s[48];
+    hero_icon(ott ? IC_OTT : IC_COMP, on ? (ott ? PINK : ORANGE) : MUTED);
+    int y = hero_title(ott ? "OTT" : "COMP");
+    s[0] = 0;
+    text_cat(s, on ? M[m] : m == MB_OFF ? M[0] : ott ? "COMP ON" : "OTT ON", sizeof s);
+    text_cat(s, on ? "|LIMITER" : "|ALGO: THIS ONE", sizeof s);
+    hero_line(y, s);
+}
+
 static void panel_mixer(int pan)
 {
     hero_icon(IC_MIX, TEAL);
@@ -1171,12 +1208,46 @@ static void panel_delay(void)            /* the delay: its time, its mode, its r
     hero_line(y, s);
 }
 
-/* an effect's return meter (the delay's, the reverb's), alone: the rest is not drawn again for it (how open its lane
- * holds it: the row at the bottom) */
+/* a page's meter, alone (the rest is not drawn again for it): an effect's return (the delay's, the reverb's; how open
+ * its lane holds it: the row at the bottom), the duck (how deep now), the master bus (the compressor's reduction, from
+ * the top; OTT's three bands, each up or down from the middle) */
 static void fx_meter(int force)
 {
     static int shown = -1;
-    int l = eng_page_lane(ui.page), m;
+    int pt = ptype(ui.page), l = ui.page < ENG_NPAGES ? eng_page_lane(ui.page) : -1, m;
+    if (pt == PT_DUCK || pt == PT_COMP || pt == PT_OTT) {
+        int mode = bus_mode(), h[3] = {0, 0, 0}, key;
+        if (pt == PT_DUCK)
+            h[0] = (int)(eng_duck() * 52.0f + 0.5f);
+        else if (mode == MB_COMP)
+            h[0] = (int)(fm_clampf(-eng_gr(0) / 18.0f, 0.0f, 1.0f) * 52.0f + 0.5f);
+        else if (mode == MB_OTT)
+            for (int b = 0; b < 3; b++)
+                h[b] = (int)(fm_clampf(eng_gr(b) / 24.0f, -1.0f, 1.0f) * 26.0f);
+        key = (h[0] + 64) | (h[1] + 64) << 7 | (h[2] + 64) << 14 | pt << 21 | mode << 26;
+        if (!force && key == shown)
+            return;
+        shown = key;
+        cv_begin(10, 52, BG);
+        if (pt == PT_DUCK) {             /* down from the top: how much the tracks are ducked */
+            cv_rect(2, 0, 6, 52, TRACK);
+            cv_rect(2, 0, 6, h[0], track_accent(0));
+        } else if (mode == MB_COMP) {    /* down from the top: the reduction (18 dB the whole bar) */
+            cv_rect(2, 0, 6, 52, TRACK);
+            cv_rect(2, 0, 6, h[0], ORANGE);
+        } else if (mode == MB_OTT) {     /* low, mid, high: up raised, down squashed (24 dB half the bar) */
+            for (int b = 0; b < 3; b++) {
+                cv_rect(b * 4, 0, 2, 52, TRACK);
+                if (h[b] > 0)
+                    cv_rect(b * 4, 26 - h[b], 2, h[b], PINK);
+                else if (h[b] < 0)
+                    cv_rect(b * 4, 26, 2, -h[b], TEAL);
+                cv_rect(b * 4, 25, 2, 2, C_WHITE);
+            }
+        }
+        blit(226, PANEL_Y + 12);
+        return;
+    }
     if (l != LANE_DELAY && l != LANE_REVERB)
         return;
     m = (int)(fm_clampf(eng_meter(l == LANE_DELAY ? ENG_TRACKS + 1 : ENG_TRACKS) * 2.0f, 0.0f, 1.0f) * 52.0f);
@@ -1194,7 +1265,11 @@ static void draw_panel(void)
     int pt = ptype(ui.page), tr = ptrack(ui.page);
     int32_t s[3] = {ui.page, eng_algo_count(page_first(ui.page)) ? p->algo[page_first(ui.page)] : -1, 0};
     int fx = pt == PT_DELAY1 || pt == PT_DELAY2 || pt == PT_DSEND || pt == PT_REVERB || pt == PT_RSEND ||
-             pt == PT_WARPS1 || pt == PT_WARPS2 || pt == PT_LANE;
+             pt == PT_WARPS1 || pt == PT_WARPS2 || pt == PT_LANE || pt == PT_DUCK || pt == PT_COMP || pt == PT_OTT;
+    if (pt == PT_COMP || pt == PT_OTT)
+        s[1] = bus_mode();
+    if (pt == PT_DUCK)
+        s[2] = (int)(p->val[PG_DUCK * 4] * 1000.0f);
     switch (pt) {                        /* what the display shows, to draw it again only when it changes */
     case PT_PLAITS2: s[2] = (int)(eng_final(ui.page * 4) * 200.0f) | (int)(eng_final(ui.page * 4 + 1) * 8.0f) << 8; break;
     case PT_PLAITS3: s[2] = eng_note(tr) | (int)((eng_gates() >> tr) & 1u) << 8 |
@@ -1246,6 +1321,8 @@ static void draw_panel(void)
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: panel_plaits(tr, page_face(ui.page), page_accent(ui.page)); break;
     case PT_TIDES1: case PT_TIDES2: panel_tides(ui.page >= PG_TIDES(1, 0)); break;
     case PT_MIX: case PT_PAN: panel_mixer(pt == PT_PAN); break;
+    case PT_DUCK: panel_duck(); break;
+    case PT_COMP: case PT_OTT: panel_bus(pt == PT_OTT); break;
     case PT_STEP: case PT_LANE: panel_steps(eng_page_lane(ui.page)); break;
     case PT_RND: panel_random(tr); break;
     case PT_ARP: panel_endless(tr); break;
@@ -1369,6 +1446,8 @@ static int knob_idle(int param)
     int page = param / 4, k = param % 4;
     if (page < 12 && page % 3 == 1 && k == 1)
         return eng_model_enveloped(eng_project()->algo[page - 1]);
+    if (page == PG_COMP || page == PG_OTT)
+        return bus_mode() != (page == PG_OTT ? MB_OTT : MB_COMP);
     if (ptype(page) == PT_LANE && k != 3)
         return !eng_lane_has_trigs(eng_page_lane(page));
     return 0;
@@ -1395,7 +1474,7 @@ static const char *ring_short(const char *s)
 static int track_knobs(int page)
 {
     int pt = ptype(page);
-    return pt == PT_MIX || pt == PT_PAN || pt == PT_RSEND || pt == PT_DSEND;
+    return pt == PT_MIX || pt == PT_PAN || pt == PT_RSEND || pt == PT_DSEND || pt == PT_DUCK;
 }
 
 static void draw_knob_at(int page, int k, int force)
@@ -1435,14 +1514,15 @@ static void draw_knob_at(int page, int k, int force)
     if (idle)
         ac = mc = DIM;
     vc = view == KV_RND ? (rnd < 0 ? mc : ac) : locked ? mc : ac;
-    int tk = track_knobs(page) && view == KV_VALUE;
+    int tk = track_knobs(page) && view == KV_VALUE && !(ptype(page) == PT_DUCK && k == 0);
+    int act = tk && k == (ui.grid && ui.lane < ENG_TRACKS ? ui.lane : ui.track);   /* the track played: knocked out */
     if (tk)
         lab[0] = 0, text_cat(lab, LANE_SHORT[k], sizeof lab);
     else
         label_text(ptype(page) == PT_RND ? RND_NAME[k] : eng_param_name(param), lab, sizeof lab);
     int32_t s[4] = {(int32_t)(view == KV_RND ? (float)(rnd + 100) : knob_u(param, v) * 270.0f) |
                     (int32_t)(knob_u(param, f) * 270.0f) << 10 | view << 20 | locked << 22,
-                    text_hash(txt) * 31 + text_hash(lab), hash, hot | ui.mod << 1 | (int32_t)ac << 2};
+                    text_hash(txt) * 31 + text_hash(lab), hash, hot | ui.mod << 1 | (int32_t)ac << 2 | act << 18};
     if (!force && !ui.full && !ui.body_knobs && !memcmp(s, ui.knob_shown[k], sizeof s))
         return;
     if (page == ui.page)
@@ -1454,6 +1534,10 @@ static void draw_knob_at(int page, int k, int force)
         uint16_t lc = hot ? C_WHITE : view != KV_VALUE ? vc : tk ? track_accent(k) : MUTED;
         const felucca_font_t *lf = text_w(&FONT_S, lab) <= 58 ? &FONT_S : &FONT_XS;
         int w = text_w(lf, lab);
+        if (act) {                       /* the active track: its name knocked out of a block of its colour */
+            cv_rect(30 - w / 2 - 5, 0, w + 10, 17, track_accent(k));
+            lc = BG;
+        }
         cv_text(30 - w / 2, 0, lf, lab, lc);
         if (hot)
             cv_rect(30 - w / 2, 17, w, 1, ac);
@@ -2318,7 +2402,7 @@ static void module_button(int b)
         go_page(PG_ARP(ui.track));
         break;
     case B_HOME:
-        go_page(here && pt == PT_MIX ? PG_PAN : PG_MIX);
+        go_page(here && (pt == PT_MIX || pt == PT_PAN || pt == PT_DUCK || pt == PT_COMP || pt == PT_OTT) ? next : PG_MIX);
         break;
     case B_FX: {                         /* the effect shown last; on an effect: the next one (delay, reverb, Warps) */
         int l = ui.page < ENG_NPAGES ? eng_page_lane(ui.page) : -1;
@@ -2696,6 +2780,13 @@ static void input(void)
         edit_param(PG_DELAY(0) * 4, e > 0 ? 1 : -1);   /* the delay: its time, a division at a time */
         ui.touched_at[0] = now;
         ui.touched_k = ui.page == PG_DELAY(0) ? 0 : -1;
+    } else if (e && !ui.matrix && (ptype(ui.page) == PT_COMP || ptype(ui.page) == PT_OTT)) {
+        int m = clamp(bus_mode() + (e > 0 ? 1 : -1), MB_OFF, MB_OTT);   /* the master bus: off, COMP, OTT (its face) */
+        eng_project()->algo[PG_COMP] = (uint8_t)m;
+        dirty = 1;
+        if (m != MB_OFF && ui.page != (m == MB_OTT ? PG_OTT : PG_COMP))
+            go_page_dir(m == MB_OTT ? PG_OTT : PG_COMP, e > 0 ? 1 : -1);
+        ui.full = ui.slide_dir ? ui.full : 1;
     } else if (e && !ui.matrix && ui.page < ENG_NPAGES) {
         project_t *p = eng_project();
         int first = page_first(ui.page), n = eng_algo_count(first);
@@ -2756,7 +2847,8 @@ static void input(void)
             [PT_PLAITS1] = B_EDIT, [PT_PLAITS2] = B_ENV, [PT_PLAITS3] = B_EDIT, [PT_TIDES1] = B_LFO, [PT_TIDES2] = B_LFO,
             [PT_MIX] = B_HOME, [PT_PAN] = B_HOME, [PT_REVERB] = B_FX, [PT_RSEND] = B_FX, [PT_DELAY1] = B_FX,
             [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
-            [PT_ARP] = B_ARP, [PT_WARPS1] = B_FX, [PT_WARPS2] = B_FX, [PT_RND] = B_SEQ, [PT_SYS] = B_GLO};
+            [PT_ARP] = B_ARP, [PT_WARPS1] = B_FX, [PT_WARPS2] = B_FX, [PT_DUCK] = B_HOME, [PT_COMP] = B_HOME,
+            [PT_OTT] = B_HOME, [PT_RND] = B_SEQ, [PT_SYS] = B_GLO};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
         uint32_t bb = 0, kk = ui.keys;
         int pt = ptype(ui.page);

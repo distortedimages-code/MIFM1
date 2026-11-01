@@ -26,7 +26,7 @@ extern "C" {
 #define LANE_REVERB 5
 #define LANE_WARPS 6
 #define ENG_CABLES 8                     /* per track, and as many global */
-#define ENG_NPAGES 37
+#define ENG_NPAGES 40
 #define ENG_NPARAMS (ENG_NPAGES * 4)
 #define ENG_STEPS 64                     /* the steps a lane: four pages of 16 */
 #define ENG_PLOCKS 384                   /* parameter locks, for all the lanes' steps */
@@ -47,8 +47,13 @@ extern "C" {
 #define PG_GLOBAL 30
 #define PG_ARP(t) (31 + (t))             /* each track's Endless: its rate, gate, direction, transposition */
 #define PG_WARPS(p) (35 + (p))           /* Warps: its knobs (ALGORITHM, TIMBRE, LEVEL 1, LEVEL 2), its patching */
+#define PG_DUCK 37                       /* the duck: its DECAY, then how deep T2, T3, T4 duck at T1's trigs */
+#define PG_COMP 38                       /* the master bus: the compressor (THRESHOLD, RATIO, RELEASE, GAIN), its
+                                          * ALGORITHM the bus's mode (off, the compressor, OTT) */
+#define PG_OTT 39                        /* OTT (three bands squashed up and down): DEPTH, TIME, DRIVE, LEVEL */
 enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_TIDES1, PT_TIDES2, PT_MIX, PT_PAN, PT_REVERB, PT_RSEND, PT_DELAY1,
-       PT_DELAY2, PT_DSEND, PT_STEP, PT_LANE, PT_GLOBAL, PT_ARP, PT_WARPS1, PT_WARPS2, NPT };
+       PT_DELAY2, PT_DSEND, PT_STEP, PT_LANE, PT_GLOBAL, PT_ARP, PT_WARPS1, PT_WARPS2, PT_DUCK, PT_COMP, PT_OTT, NPT };
+enum { MB_OFF, MB_COMP, MB_OTT };       /* the master bus's mode (PG_COMP's ALGORITHM) */
 /* Warps' carrier (PG_WARPS(1)'s first knob): none (Warps off), a track, or the module's internal oscillator, its three
  * shapes (sine, triangle, saw) */
 enum { WC_OFF, WC_T1, WC_T2, WC_T3, WC_T4, WC_OSC1, WC_OSC2, WC_OSC3 };
@@ -56,7 +61,7 @@ enum { WC_OFF, WC_T1, WC_T2, WC_T3, WC_T4, WC_OSC1, WC_OSC2, WC_OSC3 };
 /* a track's parameters as a trig sees them (a lock, a random): its Plaits' 12, its level, sends and pan, its step
  * page's note, probability and ratchets. An effect lane's are its effect's knobs (eng_lane_params) */
 enum { TP_DECAY = 4, TP_PITCHENV = 8, TP_LENGTH, TP_TRANSPOSE, TP_OCTAVE, TP_LEVEL, TP_SEND, TP_PAN, TP_NOTE, TP_PROB,
-       TP_RATCHET, TP_DSEND, ENG_NTP };
+       TP_RATCHET, TP_DSEND, TP_DUCK, ENG_NTP };   /* (T1 has no TP_DUCK: it ducks the others) */
 int eng_track_param(int lane, int tp);   /* its parameter (an effect lane: its effect's knob tp) */
 int eng_param_tp(int param, int *lane);  /* a parameter's tp and lane, -1 if none */
 int eng_tp_lockable(int lane, int tp);   /* 1: a lock or a random may move it */
@@ -102,7 +107,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 6u               /* (5: 0.2's, with Marbles; 4: 0.1.4's to 0.1.9's: eng_upgrade reads them) */
+#define PROJECT_VERSION 7u               /* (6: 0.3.0's to 0.3.2's, without the duck and the master bus; 5: 0.2's, with
+                                          * Marbles; 4: 0.1.4's to 0.1.9's: eng_upgrade reads them) */
 typedef struct {
     uint32_t magic;
     uint16_t version, size;
@@ -179,6 +185,9 @@ uint32_t eng_peak(void);                 /* the worst total of the last second, 
 uint32_t eng_task_load(int task);        /* a voice's (0..3) or Warps' (4) time, averaged, same unit */
 float eng_meter(int t);                  /* track t's output (4: the reverb's return, 5: the delay's), its peak,
                                           * falling slowly */
+float eng_duck(void);                    /* the duck now, 0..1 (1: T1's trig, as deep as each track's knob) */
+float eng_gr(int band);                  /* the master bus's gain now, dB (- reduced, + raised): the compressor's
+                                          * (band 0), or OTT's low, mid and high bands (0, 1, 2) */
 #define ENG_HIST 120                     /* the sources' recent past: one value every 4 blocks (1.4 s) */
 int eng_hist(int src, int i);            /* -127..127, i 0 the oldest .. ENG_HIST - 1 the newest */
 int eng_core1_running(void);
