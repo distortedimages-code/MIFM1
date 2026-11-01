@@ -221,6 +221,9 @@ uint32_t eng_load(int core);             /* the render's time on core 0 or 1, in
 void eng_delay_mode(int mode);           /* the delay's ALGORITHM (DL_SYNC, DL_FREE), its TIME kept */
 uint32_t eng_prep_load(void);            /* core 0's preparation of a block (the sequencer, the LFOs, the cables), the same */
 uint32_t eng_peak(void);                 /* the worst total of the last second, same unit */
+uint32_t eng_peak_part(int i);           /* that worst block's own figures, same unit: 0..3 the voices (0: resting), 4
+                                          * Warps, 5 the effects, 6 core 0's preparation, 7 core 0's total, 8 core 1's,
+                                          * 9 the whole render */
 uint32_t eng_task_load(int task);        /* a voice's (0..3, while it plays), Warps' (4) or the effects' and the
                                           * master bus's (5) time, averaged, same unit */
 float eng_meter(int t);                  /* track t's output (4: the reverb's return, 5: the delay's), its peak,

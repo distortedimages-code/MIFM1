@@ -274,6 +274,9 @@ int8_t hist[NSRC][ENG_HIST];
 uint32_t hist_at, hist_div;
 
 volatile uint32_t load0, load1, peak, peak_hold_blocks;
+// the worst block of the last second, its own figures (what made the peak): each task's ticks (0: not played), core
+// 0's preparation, core 0's and core 1's totals, the whole render; its frames
+volatile uint32_t peak_of[ENG_TRACKS + 2 + 4], peak_n = 128u;
 volatile uint32_t c1_job_ticks[2];      // core 1's time on the block's first and second job (written by it alone)
 float prep_cost = 1.0f;                 // core 0's preparation of a block (ticks, averaged): the sequencer, the cables
 volatile int on_core1_last;
@@ -2103,7 +2106,8 @@ void eng_render(float* l, float* r, uint32_t n) {
   for (int t = 0; t < ENG_TRACKS; ++t)
     if ((rest >> t) & 1u) render_voice(t, n);   // (silence: nothing to share)
   last_voices = v;
-  prep_cost += (static_cast<float>(plat_ticks24() - t0) - prep_cost) * 0.125f;
+  uint32_t prep_t = plat_ticks24() - t0;
+  prep_cost += (static_cast<float>(prep_t) - prep_cost) * 0.125f;
 #ifdef ENG_PROFILE
   eng_prof[0] += plat_ticks24() - t0;
 #endif
@@ -2280,6 +2284,12 @@ void eng_render(float* l, float* r, uint32_t n) {
   if (pt > peak || ++peak_hold_blocks > 344u) {
     peak = pt;
     peak_hold_blocks = 0;
+    for (int i = 0; i < kTasks; ++i) peak_of[i] = (todo >> i) & 1u ? task_ticks[i] : 0u;
+    peak_of[kTasks] = prep_t;
+    peak_of[kTasks + 1] = c0;
+    peak_of[kTasks + 2] = c1;
+    peak_of[kTasks + 3] = tot;
+    peak_n = n;
   }
 }
 
@@ -2310,6 +2320,9 @@ void eng_delay_mode(int mode) {
     v = static_cast<float>(pick);
   }
   proj.algo[PG_DELAY(0)] = static_cast<uint8_t>(mode);
+}
+uint32_t eng_peak_part(int i) {         // the worst block's: 0..3 the voices, 4 Warps, 5 the effects, 6 the
+  return i >= 0 && i < kTasks + 4 ? pct10(peak_of[i], peak_n) : 0u;   // preparation, 7 core 0, 8 core 1, 9 all
 }
 uint32_t eng_prep_load(void) { return ready ? pct10(static_cast<uint32_t>(prep_cost), kN) : 0u; }
 uint32_t eng_peak(void) { return peak; }
