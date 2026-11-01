@@ -36,17 +36,17 @@ les tables des modules.</p></div>
 <h2>Les commandes</h2>
 <table>
 <tr><td>KNOB 1 à 4</td><td>les 4 paramètres de la page</td></tr>
-<tr><td>SELECT</td><td>l'autre face du module (1/3, 2/3…), qui glisse</td></tr>
+<tr><td>SELECT</td><td>l'autre face du module (1/3, 2/3…) : ses potards glissent, les noms se réécrivent</td></tr>
 <tr><td>ALGORITHM</td><td>le modèle de Plaits, le mode de Tides ; Warps : d'un repère au suivant ; le delay : son temps</td></tr>
 <tr><td>PRESETS</td><td>la piste active, de 1 à 4</td></tr>
 <tr><td>EDIT · LFO</td><td>Plaits · Tides A puis B</td></tr>
-<tr><td>SEQ</td><td>les pas de la piste : NOTE, PROB, RATCHET, LENGTH, puis RANDOM (PAN, DECAY, TUNE, RATCHET) ;
+<tr><td>SEQ</td><td>les pas de la piste : NOTE, PROB, RATCH, LENGTH, puis RANDOM (PAN, DECAY, TUNE, RATCH) ;
 d'un effet : DECAY, PROB, DEPTH, LENGTH</td></tr>
 <tr><td>ARP</td><td>Endless : REC enregistre (une touche = une note, SEL = un silence), REC à nouveau le joue, une touche le
 transpose, REC tenu l'efface</td></tr>
 <tr><td>HOME</td><td>le mixer : les niveaux, les pans</td></tr>
-<tr><td>FX</td><td>les effets l'un après l'autre : le delay (TIME, FEEDBACK, FILTER, DRIVE ; RESONANCE, MODE, MOD,
-RETURN), la réverbe, Warps (ALGORITHM, TIMBRE, LEVEL 1, LEVEL 2 ; CARRIER, MODULATOR, MOD DRY, MODE) ; SELECT : leurs
+<tr><td>FX</td><td>les effets l'un après l'autre : le delay (TIME, FDBK, FILTER, DRIVE ; RESO, MODE, MOD,
+RETURN), la réverbe, Warps (ALGO, TIMBRE, LEVEL 1, LEVEL 2 ; CARRIER, MOD, DRY, MODE) ; SELECT : leurs
 faces, les envois des pistes, leurs pas</td></tr>
 <tr><td>PLAY</td><td>le séquenceur tourne ou s'arrête</td></tr>
 <tr><td>REC</td><td>KEY (le clavier joue la piste active, même à l'arrêt, OCT− OCT+ pour l'octave) ou STEP : les

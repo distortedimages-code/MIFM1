@@ -93,9 +93,12 @@ static struct {
     int lane;                            /* the lane the steps show: a track, the delay, the reverb, Warps */
     int spage;                           /* the steps' page on the keys (16 each) */
     int fx_page;                         /* the effect's page FX goes back to */
-    int body;                            /* the module's display and the knobs again (a slide) */
-    uint32_t slide_at;                   /* a face sliding in: since when, from which side (+1 the right, -1 the left) */
-    int slide_dir;
+    int body_panel, body_knobs;          /* the module's display, the knobs: again (an animation) */
+    uint32_t slide_at;                   /* the knobs of another face sliding in: since when, from which side (+1 the
+                                          * right, -1 the left), the page they push out */
+    int slide_dir, slide_from;
+    uint32_t anim_at;                    /* a page changed: its names written again, letters at random first */
+    int anim;
     int held_step, step_new, step_edit;  /* a step held (-1: none), made by this press, locked meanwhile */
     int erec;                            /* the track Endless records (-1: none) */
     int used[NB];                        /* a knob turned while that button was held: no tap when it is let go */
@@ -316,6 +319,13 @@ static void note_text(int note, char *b)
     text_cat(b, N[note % 12], 8);
     int_text(note / 12 - 1, o);
     text_cat(b, o, 8);
+}
+
+static int text_eq(const char *a, const char *b)
+{
+    while (*a && *a == *b)
+        a++, b++;
+    return *a == *b;
 }
 
 static int text_hash(const char *s)
@@ -697,9 +707,10 @@ static void vicon(float cx, float cy, float s, float w, uint16_t c, int which, i
  * go. Each canvas goes out through blit: its pixels by their brightness, from yellow (black) to black (white) */
 #define YELLOW RGB(255, 214, 0)
 static int knock;
-/* a face sliding in (SELECT within a module): the module's display and the knobs drawn shifted by slide_s px, over
- * what the screen shows (only their part on the screen goes out) */
+/* another face of the module (SELECT): its knobs slide in, pushing the others out (each row drawn shifted by slide_s
+ * px, only its part on the screen sent); the module's display stays, its names written again (dec) */
 #define SLIDE_MS 250u
+#define DECODE_MS 340u
 static int32_t slide_s;
 static void blit(uint32_t x, uint32_t y)
 {
@@ -712,7 +723,7 @@ static void blit(uint32_t x, uint32_t y)
             cv_px[i] = swap16((uint16_t)((31u * l / 255u) << 11 | (53u * l / 255u) << 5));
         }
     }
-    if (slide_s && y >= PANEL_Y && y < FOOT_Y) {
+    if (slide_s && y >= KNOB_Y && y < FOOT_Y) {
         int32_t sx = (int32_t)x + slide_s, c0 = sx < 0 ? -sx : 0, c1 = (int32_t)cv_w;
         if (sx + c1 > 240)
             c1 = 240 - sx;
@@ -727,6 +738,43 @@ static void blit(uint32_t x, uint32_t y)
         return;
     }
     cv_blit(x, y);
+}
+
+/* the names of a page that changed (the module's, the display's title and line) written again: each letter at random
+ * a moment, then the right one, left to right. A name that did not change stays. Slots: 0 the module's name, 1 and 2
+ * the title's lines, 3 the line under it */
+#define NSLOT 4
+static float anim_p = 1.0f;              /* how far the names are (1: written) */
+static char slot_was[NSLOT][28], slot_from[NSLOT][28];
+static uint32_t dec_seed = 0x6D2B79F5u;
+static const char *dec(const char *s, int slot)
+{
+    static char b[NSLOT][40];
+    static const char G[] = "ABCDEFGHJKLMNPRSTUVWXYZ0123456789#%/*+";
+    int n = 0;
+    if (anim_p >= 1.0f || text_eq(s, slot_from[slot])) {
+        if (anim_p >= 1.0f) {
+            slot_was[slot][0] = 0;
+            text_cat(slot_was[slot], s, sizeof slot_was[slot]);
+        }
+        return s;
+    }
+    while (s[n])
+        n++;
+    for (int i = 0; i < n && i < 39; i++) {
+        float land = 0.25f + 0.7f * (float)(i + 1) / (float)n;   /* when this letter lands */
+        dec_seed = dec_seed * 1664525u + 1013904223u;
+        b[slot][i] = anim_p >= land || s[i] == ' ' || s[i] == '|' ? s[i] : G[(dec_seed >> 24) % (sizeof G - 1u)];
+    }
+    b[slot][n < 39 ? n : 39] = 0;
+    return b[slot];
+}
+
+static void anim_start(void)             /* a page changed: its names again */
+{
+    memcpy(slot_from, slot_was, sizeof slot_from);
+    ui.anim_at = plat_ms();
+    ui.anim = 1;
 }
 
 void app_say(const char *a, const char *b)
@@ -758,12 +806,13 @@ static void draw_header(void)
     }
     int32_t s[5] = {ui.page | ui.matrix << 8 | mode << 10 | (ui.held_step & 127) << 13 | ui.lane << 20, load,
                     eng_playing() | dirty << 1, ui.track | lane_accent(ui.grid ? ui.lane : ui.track) << 4, ac};
-    if (!ui.full && !memcmp(s, ui.head_shown, sizeof s))
+    if (!ui.full && !ui.anim && !memcmp(s, ui.head_shown, sizeof s))
         return;
     memcpy(ui.head_shown, s, sizeof s);
     cv_begin(240, HEAD_H, BG);
     label_text(ui.matrix ? "Matrix" : module_name(ui.page), t, sizeof t);
-    x = cv_text(10, 6, &FONT_B, t, TXT);
+    x = cv_text(10, 6, &FONT_B, dec(t, 0), TXT);
+    x = 10 + text_w(&FONT_B, t);         /* (its place: the name's, not the letters' on the way) */
     if (!ui.matrix && page_count(ui.page) > 1) {   /* the faces: an LED each, the one shown lit */
         for (int f = 0; f < page_count(ui.page); f++)
             led((float)(x + 8 + f * 11), 14.0f, 3.0f, ac, f == page_face(ui.page) ? 8 : 0);
@@ -820,7 +869,7 @@ static int hero_title(const char *name)  /* the name: one line of L, two cut at 
     char a[24], b[24];
     int n = 0;
     if (text_w(&FONT_L, name) <= 150) {
-        cv_text(84, 6, &FONT_L, name, C_WHITE);
+        cv_text(84, 6, &FONT_L, dec(name, 1), C_WHITE);
         return 44;
     }
     while (name[n])
@@ -834,12 +883,12 @@ static int hero_title(const char *name)  /* the name: one line of L, two cut at 
         b[0] = 0;
         text_cat(b, name + i + 1, sizeof b);
         if (text_w(&FONT_L, a) <= 150 && text_w(&FONT_L, b) <= 150) {
-            cv_text(84, -4, &FONT_L, a, C_WHITE);
-            cv_text(84, 22, &FONT_L, b, C_WHITE);
+            cv_text(84, -4, &FONT_L, dec(a, 1), C_WHITE);
+            cv_text(84, 22, &FONT_L, dec(b, 2), C_WHITE);
             return 55;
         }
     }
-    cv_text(84, 12, &FONT_M, name, C_WHITE);
+    cv_text(84, 12, &FONT_M, dec(name, 1), C_WHITE);
     return 44;
 }
 
@@ -847,6 +896,7 @@ static void hero_line(int y, const char *s)   /* the line under the name: its pa
 {
     char part[40];
     int x = 85, n = 0;
+    s = dec(s, 3);
     for (;; s++) {
         if (*s && *s != '|' && n < (int)sizeof part - 1) {
             part[n++] = *s;
@@ -889,10 +939,11 @@ static void panel_plaits(int t, int face, uint16_t ac)
             hero_line(y, m >= 19 ? "NO LPG|DECAY: ITS DECAY" : "NO LPG|IN ITS PRESET");
             return;
         }
-        cv_text(84, 0, &FONT_XS, "LOW-PASS GATE", MUTED);
+        cv_text(84, 0, &FONT_XS, dec("LOW-PASS GATE", 1), MUTED);
         cv_text(232 - text_w(&FONT_XS, colour < 0.5f ? "VCFA" : "VCA"), 0, &FONT_XS,
                 colour < 0.5f ? "VCFA" : "VCA", DIM);
-        for (int x = 0; x < 146; x++) {
+        int reveal = anim_p >= 1.0f ? 146 : (int)(146.0f * (1.0f - (1.0f - anim_p) * (1.0f - anim_p)));
+        for (int x = 0; x < reveal; x++) {   /* (a page changed: the curve drawn in) */
             float env = x < 3 ? (float)x / 3.0f : fm_exp2f(-(float)(x - 3) * k * 1.4427f);
             float y = (float)y0 - env * (float)h;
             if (!(x % 3) && y < (float)y0 - 2.0f)
@@ -908,10 +959,11 @@ static void panel_plaits(int t, int face, uint16_t ac)
         int pg = PG_TRACK(t, 2), on = (int)((eng_gates() >> t) & 1u), x;
         char v[12];
         note_text(eng_note(t), n);
-        x = cv_text(84, 6, &FONT_L, n, on ? C_WHITE : MUTED);
+        x = cv_text(84, 6, &FONT_L, dec(n, 1), on ? C_WHITE : MUTED);
+        x = 84 + text_w(&FONT_L, n);
         led((float)(x + 12), 22.0f, 5.0f, ac, on ? 8 : 0);
         s[0] = 0;
-        text_cat(s, "LENGTH ", sizeof s);
+        text_cat(s, "GATE ", sizeof s);
         eng_param_text(pg * 4 + 1, eng_final(pg * 4 + 1), v, sizeof v);
         text_cat(s, v, sizeof s);
         text_cat(s, "|PITCH ENV ", sizeof s);
@@ -998,7 +1050,7 @@ static void panel_steps(int l)            /* a lane's steps: how many, how many 
 static void panel_random(int t)
 {
     hero_icon(IC_DICE, track_accent(t));
-    hero_line(hero_title("RANDOM"), "RIGHT: NEW|LEFT: LOOPED|0: NONE");
+    hero_line(hero_title("RANDOM"), "RIGHT: NEW|LEFT: LOOP");
 }
 
 static void panel_endless(int t)         /* Endless: recording, or how many notes, the key's transposition */
@@ -1183,7 +1235,7 @@ static void draw_panel(void)
         break;
     default: break;
     }
-    if (!ui.full && !ui.body && !memcmp(s, ui.panel_shown, sizeof s)) {
+    if (!ui.full && !ui.body_panel && !memcmp(s, ui.panel_shown, sizeof s)) {
         if (fx)
             fx_meter(0);
         return;
@@ -1296,10 +1348,10 @@ static void ring_text(const char *t, uint16_t c, char *under, uint32_t max)
 
 /* what a knob shows: its value (and where the cables take it), or a held step's lock, or a random's depth */
 enum { KV_VALUE, KV_LOCK, KV_RND };
-static int knob_view(int param, int *t, int *tp)
+static int knob_view(int page, int param, int *t, int *tp)
 {
     *tp = eng_param_tp(param, t);
-    if (ptype(ui.page) == PT_RND)
+    if (ptype(page) == PT_RND)
         return KV_RND;
     if (*tp < 0 || !eng_tp_lockable(*t, *tp))
         return KV_VALUE;
@@ -1322,17 +1374,41 @@ static int knob_idle(int param)
     return 0;
 }
 
-static void draw_knob(int k)
+/* a choice's name in the ring, short (a word, or three or four letters) */
+static const char *ring_short(const char *s)
 {
-    static const char *const RND_NAME[4] = {"Pan", "Decay", "Tune", "Ratchet"};
+    static const char *const M[][2] = {
+        {"PING-PONG", "PING"}, {"FORWARD", "FWD"}, {"BACKWARD", "BWD"}, {"RANDOM", "RND"}, {"AMPLITUDE", "AMP"},
+        {"FREQUENCY", "FREQ"}, {"MEDIUM", "MED"}, {"WARPS", "XMOD"}, {"FREQ SHIFT", "SHIFT"}, {"TRIANGLE", "TRI"},
+        {"MAJOR", "MAJ"}, {"MINOR", "MIN"}, {"DORIAN", "DOR"}, {"PHRYGIAN", "PHR"}, {"LYDIAN", "LYD"},
+        {"MIXOLYDIAN", "MIX"}, {"LOCRIAN", "LOC"}, {"HARM. MINOR", "HMIN"}, {"MEL. MINOR", "MMIN"},
+        {"MAJ. PENTA", "PMAJ"}, {"MIN. PENTA", "PMIN"}, {"WHOLE TONE", "WHOLE"}, {"HIRAJOSHI", "HIRA"},
+        {"DIGITAL", "DIGI"}, {"COMPAR", "COMP"}};
+    for (uint32_t i = 0; i < sizeof M / sizeof M[0]; i++)
+        if (text_eq(s, M[i][0]))
+            return M[i][1];
+    return s;
+}
+
+/* a knob's name: the module's, short (fm1's FONT_S, 52 px at most: the knobs apart); on the pages of the four
+ * tracks' (the levels, the pans, the sends) the track, in its colour */
+static int track_knobs(int page)
+{
+    int pt = ptype(page);
+    return pt == PT_MIX || pt == PT_PAN || pt == PT_RSEND || pt == PT_DSEND;
+}
+
+static void draw_knob_at(int page, int k, int force)
+{
+    static const char *const RND_NAME[4] = {"Pan", "Decay", "Tune", "Ratch"};
     project_t *p = eng_project();
-    int param = knob_param(ui.page, k), t, tp, view = knob_view(param, &t, &tp), locked = 0, rnd = 0;
+    int param = knob_param(page, k), t, tp, view = knob_view(page, param, &t, &tp), locked = 0, rnd = 0;
     const eng_pdef_t *d = eng_pdef(param);
     float v = p->val[param], f = eng_final(param), u, uf;
     char txt[32], c[32], lab[24], under[32];
-    int hash = 0, hot = ui.touched_k == k && plat_ms() - ui.touched_at[k] < 1200u, ncab = 0;
+    int hash = 0, hot = page == ui.page && ui.touched_k == k && plat_ms() - ui.touched_at[k] < 1200u, ncab = 0;
     int bip = d->kind == K_BIP || (d->kind == K_INT && d->lo < 0);
-    uint16_t ac = page_accent(ui.page), mc = mod_colour(ac), vc;
+    uint16_t ac = page_accent(page), mc = mod_colour(ac), vc;
     under[0] = 0;
     if (view == KV_RND) {                /* the random's depth: right new at each trig, left a loop */
         rnd = p->rnd[t][tp];
@@ -1362,20 +1438,25 @@ static void draw_knob(int k)
     int32_t s[4] = {(int32_t)(view == KV_RND ? (float)(rnd + 100) : knob_u(param, v) * 270.0f) |
                     (int32_t)(knob_u(param, f) * 270.0f) << 10 | view << 20 | locked << 22,
                     text_hash(txt), hash, hot | ui.mod << 1 | (int32_t)ac << 2};
-    if (!ui.full && !ui.body && !memcmp(s, ui.knob_shown[k], sizeof s))
+    if (!force && !ui.full && !ui.body_knobs && !memcmp(s, ui.knob_shown[k], sizeof s))
         return;
-    memcpy(ui.knob_shown[k], s, sizeof s);
+    if (page == ui.page)
+        memcpy(ui.knob_shown[k], s, sizeof s);
     if (slide_s && (k * KNOB_W + slide_s >= 240 || k * KNOB_W + KNOB_W + slide_s <= 0))
-        return;                          /* sliding in, not on the screen yet */
+        return;                          /* sliding, not on the screen */
     cv_begin(KNOB_W, KNOB_H, BG);
-    label_text(ptype(ui.page) == PT_RND ? RND_NAME[k] : eng_param_name(param), lab, sizeof lab);   /* touched: white,
-                                                                                                * underlined */
-    {
-        const felucca_font_t *lf = text_w(&FONT_XS, lab) <= 58 ? &FONT_XS : &FONT_T;
+    {                                    /* its name (touched: white, underlined) */
+        int tk = track_knobs(page) && view == KV_VALUE;
+        uint16_t lc = hot ? C_WHITE : view != KV_VALUE ? vc : tk ? track_accent(k) : MUTED;
+        if (tk)
+            lab[0] = 0, text_cat(lab, LANE_SHORT[k], sizeof lab);
+        else
+            label_text(ptype(page) == PT_RND ? RND_NAME[k] : eng_param_name(param), lab, sizeof lab);
+        const felucca_font_t *lf = text_w(&FONT_S, lab) <= 58 ? &FONT_S : &FONT_XS;
         int w = text_w(lf, lab);
-        cv_text(30 - w / 2, lf == &FONT_XS ? 0 : 2, lf, lab, hot ? C_WHITE : view != KV_VALUE ? vc : MUTED);
+        cv_text(30 - w / 2, 0, lf, lab, lc);
         if (hot)
-            cv_rect(30 - w / 2, 15, w, 1, ac);
+            cv_rect(30 - w / 2, 17, w, 1, ac);
     }
     u = view == KV_RND ? ((float)rnd + 100.0f) / 200.0f : fm_clampf(knob_u(param, v), 0.0f, 1.0f);
     uf = view == KV_RND ? u : fm_clampf(knob_u(param, f), 0.0f, 1.0f);
@@ -1391,7 +1472,7 @@ static void draw_knob(int k)
                 arc(RX, RY, R0 + 0.5f, R1 - 0.5f, a, b, TRACK);
         }
         label_text(txt, nm, sizeof nm);
-        ring_text(nm, idle ? DIM : C_WHITE, under, sizeof under);
+        ring_text(ring_short(nm), idle ? DIM : C_WHITE, under, sizeof under);
     } else {
         float lo = bip ? fm_minf(u, 0.5f) : 0.0f, hi = bip ? fm_maxf(u, 0.5f) : u;
         arc(RX, RY, R0 + 0.5f, R1 - 0.5f, 0.0f, 1.0f, TRACK);
@@ -1425,6 +1506,7 @@ static void draw_knob(int k)
         ring(30.0f, 85.0f, 4.5f, 1.4f, DIM);
     blit((uint32_t)(k * KNOB_W), KNOB_Y);
 }
+static void draw_knob(int k) { draw_knob_at(ui.page, k, 0); }
 
 /* lists: the matrix, the global page, the missing tables --------------------------------------------------- */
 static void draw_lines(int y, int h, const char *const *lines, const uint16_t *colours, int n, int sel)
@@ -1472,7 +1554,7 @@ static void draw_matrix(void)
         lines[i] = rows[i];
     }
     h = h * 17 + ui.msel + g * 1000;
-    if (!ui.full && !ui.body && h == shown)
+    if (!ui.full && !ui.body_panel && h == shown)
         return;
     shown = h;
     cv_begin(240, 24, BG);
@@ -1482,13 +1564,11 @@ static void draw_matrix(void)
     draw_lines(PANEL_Y + 24, 19, lines, col, 8, ui.msel - first);
 }
 
-static void draw_global(void)
+static void draw_projects(void)          /* the projects REC held loads, in the module's display */
 {
-    static uint32_t at;
     static int shown = -1;
     static const char *const P[3] = {"New: 4 Plaits, nothing patched", "The demo patch", "The saved project"};
-    char v[24];
-    if (ui.full || ui.body || shown != ui.init_sel) {   /* the projects REC held loads, in the module's display */
+    if (ui.full || ui.body_panel || shown != ui.init_sel) {
         shown = ui.init_sel;
         cv_begin(240, PANEL_H, BG);
         cv_text(10, 0, &FONT_B, "PROJECT", TXT);
@@ -1503,7 +1583,13 @@ static void draw_global(void)
         }
         blit(0, PANEL_Y);
     }
-    if (!ui.full && !ui.body && plat_ms() - at < 400u)
+}
+
+static void draw_machine(int force)      /* the machine, where the knobs are */
+{
+    static uint32_t at;
+    char v[24];
+    if (!force && !ui.full && !ui.body_knobs && plat_ms() - at < 400u)
         return;
     at = plat_ms();
     for (int i = 0; i < 6; i++) {        /* the machine, where the knobs are: two canvases of three rows (a 240 x 100
@@ -1939,6 +2025,31 @@ static void draw_footer(void)
 
 static void poll_keys(void);             /* (input, below): the keys read between the screen's parts too */
 
+/* the knobs' row of a page (the machine's on GLO's second face), sh px aside: sliding, the page it pushes out too */
+static void draw_row1(int page, int force)
+{
+    if (page == VP_SYS) {
+        draw_machine(force);
+        return;
+    }
+    for (int k = 0; k < 4; k++) {
+        poll_keys();
+        draw_knob_at(page, k, force);
+    }
+}
+static void draw_row(int page, int32_t sh)
+{
+    if (sh) {
+        slide_s = sh - ui.slide_dir * 240;
+        draw_row1(ui.slide_from, 1);
+        slide_s = sh;
+        draw_row1(page, 1);
+        slide_s = 0;
+    } else {
+        draw_row1(page, 0);
+    }
+}
+
 static void draw(void)
 {
     int k = held(B_GLO) && !all.press && (ui.used[B_GLO] || plat_ms() - ui.down_at[B_GLO] >= 250u);
@@ -1950,7 +2061,16 @@ static void draw(void)
     if (ui.full)
         lcd_fill(0, 0, 240, 240, knock ? YELLOW : BG);
     int32_t sh = 0;
-    if (ui.slide_dir) {                  /* a face sliding in: quick, then slowing (an ease out), its edge lit */
+    anim_p = 1.0f;
+    if (ui.anim) {                       /* the names written again */
+        uint32_t t = plat_ms() - ui.anim_at;
+        if (t >= DECODE_MS)
+            ui.anim = 0;                 /* the last frame: written */
+        else
+            anim_p = (float)t / (float)DECODE_MS;
+        ui.body_panel = 1;
+    }
+    if (ui.slide_dir) {                  /* the knobs of another face: quick, then slowing (an ease out) */
         uint32_t t = plat_ms() - ui.slide_at;
         if (t >= SLIDE_MS) {
             ui.slide_dir = 0;            /* the last frame: in place */
@@ -1958,33 +2078,25 @@ static void draw(void)
             float u = 1.0f - (float)t / (float)SLIDE_MS;
             sh = (int32_t)((float)ui.slide_dir * 240.0f * u * u * u);
         }
-        ui.body = 1;
+        ui.body_knobs = 1;
     }
     draw_header();
     poll_keys();
-    slide_s = sh;
     if (!data_ok || !engine_ok) {
         draw_missing();
     } else if (ui.page == VP_SYS) {
-        draw_global();
+        draw_projects();
+        draw_row(VP_SYS, sh);
     } else if (ui.matrix) {
         draw_matrix();
     } else {
         draw_panel();
-        for (int k = 0; k < 4; k++) {
-            poll_keys();
-            draw_knob(k);
-        }
+        draw_row(ui.page, sh);
     }
-    slide_s = 0;
-    if (sh > 2)                          /* the edge, on the side it comes from */
-        lcd_fill((uint32_t)(sh - 2), PANEL_Y, 2, FOOT_Y - PANEL_Y, knock ? BG : page_accent(ui.page));
-    else if (sh < -2)
-        lcd_fill((uint32_t)(240 + sh), PANEL_Y, 2, FOOT_Y - PANEL_Y, knock ? BG : page_accent(ui.page));
     poll_keys();
     draw_footer();
     ui.full = 0;
-    ui.body = 0;
+    ui.body_panel = ui.body_knobs = 0;
 }
 
 /* ---------------------------------------------------------------- input --- */
@@ -2006,6 +2118,7 @@ static void go_page_dir(int page, int dir)
         ui.prev_page = ui.page;          /* GLO again goes back there */
     if (!ui.matrix && page != ui.page && page_first(page) == page_first(ui.page) && data_ok && engine_ok) {
         ui.slide_dir = dir ? dir : page_face(page) > page_face(ui.page) ? 1 : -1;
+        ui.slide_from = ui.page;
         ui.slide_at = plat_ms();
         ui.head_shown[0] = -1;
         ui.foot_shown[0] = -1;
@@ -2013,6 +2126,8 @@ static void go_page_dir(int page, int dir)
         ui.slide_dir = 0;
         ui.full = 1;
     }
+    if (page != ui.page || ui.matrix)
+        anim_start();
     if (l >= 0 && l != ui.lane)
         set_lane(l);
     if (page < ENG_NPAGES && eng_page_lane(page) >= ENG_TRACKS)
@@ -2439,8 +2554,8 @@ static void select_lane(int l)
             go_page(PG_STEP(l));
         else if (pl >= ENG_TRACKS)
             go_page(PG_TRACK(l, 0));
-        else
-            ui.page = track_page(ui.page, l), ui.full = 1;
+        else if (track_page(ui.page, l) != ui.page)
+            ui.page = track_page(ui.page, l), ui.full = 1, anim_start();
     } else if (pl != l) {
         go_page(steps ? PG_STEP(l) : l == LANE_DELAY ? PG_DELAY(0) : l == LANE_REVERB ? PG_REVERB : PG_WARPS(0));
     }
@@ -2543,6 +2658,8 @@ static void input(void)
         int t = clamp(ui.track + e, 0, ENG_TRACKS - 1);
         if (t != ui.track) {
             set_track(t);
+            if (track_page(ui.page, t) != ui.page)
+                anim_start();
             ui.page = track_page(ui.page, t);
             if (ui.lane < ENG_TRACKS)
                 set_lane(t);
@@ -2713,7 +2830,7 @@ void app_frame(void)
         ui.msg_until = 0;
         ui.foot_shown[0] = -1;
     }
-    if (ui.full || ui.slide_dir || now - ui.drawn_at >= 20u) {   /* 50 frames a second at most (a slide: all it can):
+    if (ui.full || ui.slide_dir || ui.anim || now - ui.drawn_at >= 20u) {   /* 50 frames a second at most (a slide: all it can):
                                                                    * what changed */
         ui.drawn_at = now;
         draw();

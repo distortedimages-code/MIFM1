@@ -56,7 +56,11 @@ la source écrite dessous. En bas les quatre pistes, une LED chacune allumée pa
 celle qu'on joue en défonce ; sur les pages de Tides, ses sorties ; en mode STEP, sur les pages des pas et sur celles
 des effets, les 16 pas de la piste (allumés : un trig ; un point : des locks ; cerclé : celui qui joue ; pour un effet,
 à droite, à quel point il est ouvert). Quand on change de face dans un même module (SELECT), la nouvelle page glisse
-depuis le côté vers lequel on tourne.
+depuis le côté vers lequel on tourne : les potards de la page suivante poussent les autres, l'icône du module
+reste, et les noms (le module, le titre, la ligne dessous) se réécrivent, leurs lettres au hasard un instant avant
+de retomber sur les bons. Les noms des potards sont courts (FREQ, HARMO, T.ENV, FDBK, RATCH…) pour qu'ils soient
+écrits plus gros et que l'écran respire ; sur les pages des quatre pistes (niveaux, pans, envois), chaque potard
+porte le numéro de sa piste dans sa couleur.
 
 | Contrôle | Effet |
 | --- | --- |
@@ -66,7 +70,7 @@ depuis le côté vers lequel on tourne.
 | **PRESETS** | la piste active, de 1 à 4 |
 | **EDIT** | Plaits de la piste active (appuis suivants : 1/3, 2/3, 3/3) |
 | **LFO** | Tides A, puis Tides B |
-| **SEQ** | les pas de la piste (NOTE, PROB, RATCHET, LENGTH ; puis RANDOM) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) |
+| **SEQ** | les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) |
 | **ARP** | Endless, celui de la piste (voir plus bas) |
 | **HOME** | le mixer : les niveaux des 4 pistes, puis leurs pans |
 | **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps ; SELECT parcourt leurs faces (leurs potards, les envois des pistes, leurs pas) |
@@ -97,10 +101,10 @@ son niveau, ses envois, son pan, sa note…) ; pour un effet, sur ses potards. L
 (LOCK dessous). Tenir un pas et taper SEL efface ses locks. La piste de pas suit la page : aller sur le delay (FX)
 montre les pas du delay. **REC** à nouveau : retour au mode KEY.
 
-**Les pas d'une piste** (SEQ) : **NOTE**, **PROB** (probabilité), **RATCHET** (1 à 8 coups dans le pas) et
-**LENGTH** (le nombre de pas) ; les trois premiers se lockent aussi pas par pas. PLAITS 3/3 donne la **LENGTH** de la
-note (5 à 95 % du pas, lockable : des notes courtes et longues dans le même pattern), le **PITCH ENV** (l'enveloppe
-interne de Plaits sur la hauteur, pour des toms, des kicks qui plongent, des bulles), la transposition et l'octave.
+**Les pas d'une piste** (SEQ) : **NOTE**, **PROB** (probabilité), **RATCH** (les ratchets : 1 à 8 coups dans le pas) et
+**LENGTH** (le nombre de pas) ; les trois premiers se lockent aussi pas par pas. PLAITS 3/3 donne le **P.ENV**
+(l'enveloppe interne de Plaits sur la hauteur, pour des toms, des kicks qui plongent, des bulles), la **GATE** de la
+note (5 à 95 % du pas, lockable : des notes courtes et longues dans le même pattern), la transposition et l'octave.
 
 **Les pas d'un effet** (SEQ sur un effet, ou sa dernière face) : **DECAY** (10 ms à 5 s), **PROB**, **DEPTH** et
 **LENGTH**. Sans aucun trig, l'effet est toujours là (mode hold) ; dès qu'il y a des trigs, chaque trig ouvre l'effet
@@ -128,8 +132,8 @@ cible, K4 sa profondeur.
 note de la basse, par exemple) ou Clock (calé sur le tempo, FREQUENCY devient un rapport : 4 par temps à 1 pour 16
 mesures).
 
-**PLAITS 1/3** : FREQUENCY, puis HARMONICS, TIMBRE et MORPH sous le nom que leur donne le manuel de Plaits pour le
-modèle choisi (le KICK : ATTACK, BRIGHTNESS, DECAY ; le FM 2-OP : RATIO, INDEX, FEEDBACK ; le WAVETABLE : BANK, ROW,
+**PLAITS 1/3** : FREQ, puis HARMONICS, TIMBRE et MORPH sous le nom (court) que leur donne le manuel de Plaits pour
+le modèle choisi (le KICK : ATTACK, BRIGHT, DECAY ; le FM 2-OP : RATIO, INDEX, FDBK ; le WAVETABLE : BANK, ROW,
 COLUMN…). **PLAITS 2/3** (ENV) : l'enveloppe. Les modèles qui ont la leur (STRING, MODAL, KICK, SNARE, HI-HAT, et les
 6-OP FM dans leur preset) contournent le LPG de Plaits : LPG COLOUR est alors grisé, et pour STRING, MODAL et les trois
 batteries, DECAY s'ajoute à leur decay (leur MORPH) : il marche sur toutes les pistes, avec ses locks et son
@@ -156,7 +160,7 @@ tenu** efface la boucle (la piste retrouve ses pas). Probabilité, ratchets, al�
 
 **Warps** (FX, troisième effet) : le module de modulation croisée de Mutable, entre deux pistes. Sa deuxième page
 (SELECT) le branche : **CARRIER**, la porteuse (Off : Warps éteint ; une piste T1-T4 ; ou son oscillateur interne,
-trois formes), **MODULATOR**, la piste modulante, **MOD DRY** (On : on entend aussi la piste modulante telle quelle ;
+trois formes), **MOD**, la piste modulante, **DRY** (On : on entend aussi la piste modulante telle quelle ;
 Off, elle ne passe que par Warps) et **MODE** (Warps, ou Freq shift : l'easter egg du module, un décaleur de
 fréquence). La sortie de Warps prend la place de la piste porteuse (ou de la modulante avec l'oscillateur), avec son
 niveau, son pan et ses envois. Sa première page, ce sont les potards du module : **ALGORITHM** balaie ses six

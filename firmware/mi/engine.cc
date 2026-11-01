@@ -54,34 +54,31 @@ const float kDivMult[kDivs] = {0.5f, 2.0f / 3.0f, 1.0f, 4.0f / 3.0f, 1.5f, 2.0f,
                                12.0f, 16.0f};   // in sixteenths
 const char* const kDelayMode[2] = {"Mono", "Ping-pong"};
 
-// the names are the modules' own, as their panels print them (sentence case: Mutable's)
+// the knobs' names: the modules' own, short (a word, 52 px at most on the screen: the knobs apart)
 const eng_pdef_t kPages[NPT][4] = {
-  {{"Frequency", K_BIP, 0, 0, 0}, {"Harmonics", K_UNI, 0, 0, 0}, {"Timbre", K_UNI, 0, 0, 0}, {"Morph", K_UNI, 0, 0, 0}},
-  {{"Decay", K_UNI, 0, 0, 0}, {"LPG colour", K_UNI, 0, 0, 0}, {"Timbre env", K_BIP, 0, 0, 0},
-   {"Morph env", K_BIP, 0, 0, 0}},
-  {{"Pitch env", K_BIP, 0, 0, 0}, {"Length", K_UNI, 0, 0, 0}, {"Transpose", K_INT, -12, 12, 0},
-   {"Octave", K_INT, -3, 3, 0}},
-  {{"Frequency", K_UNI, 0, 0, 0}, {"Shape", K_UNI, 0, 0, 0}, {"Slope", K_UNI, 0, 0, 0}, {"Smoothness", K_UNI, 0, 0, 0}},
-  {{"Shift/level", K_UNI, 0, 0, 0}, {"Outputs", K_ENUM, 0, 3, kTidesOut}, {"Range", K_ENUM, 0, 2, kTidesRange},
-   {"Trigger", K_ENUM, 0, 5, kTidesTrig}},
-  {{"Level 1", K_UNI, 0, 0, 0}, {"Level 2", K_UNI, 0, 0, 0}, {"Level 3", K_UNI, 0, 0, 0}, {"Level 4", K_UNI, 0, 0, 0}},
-  {{"Pan 1", K_BIP, 0, 0, 0}, {"Pan 2", K_BIP, 0, 0, 0}, {"Pan 3", K_BIP, 0, 0, 0}, {"Pan 4", K_BIP, 0, 0, 0}},
-  {{"Time", K_UNI, 0, 0, 0}, {"Damping", K_UNI, 0, 0, 0}, {"Diffusion", K_UNI, 0, 0, 0}, {"Return", K_UNI, 0, 0, 0}},
-  {{"Send 1", K_UNI, 0, 0, 0}, {"Send 2", K_UNI, 0, 0, 0}, {"Send 3", K_UNI, 0, 0, 0}, {"Send 4", K_UNI, 0, 0, 0}},
-  {{"Time", K_ENUM, 0, kDivs - 1, kDivNames}, {"Feedback", K_UNI, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0},
+  {{"Freq", K_BIP, 0, 0, 0}, {"Harmo", K_UNI, 0, 0, 0}, {"Timbre", K_UNI, 0, 0, 0}, {"Morph", K_UNI, 0, 0, 0}},
+  {{"Decay", K_UNI, 0, 0, 0}, {"Colour", K_UNI, 0, 0, 0}, {"T.Env", K_BIP, 0, 0, 0}, {"M.Env", K_BIP, 0, 0, 0}},
+  {{"P.Env", K_BIP, 0, 0, 0}, {"Gate", K_UNI, 0, 0, 0}, {"Transp", K_INT, -12, 12, 0}, {"Octave", K_INT, -3, 3, 0}},
+  {{"Freq", K_UNI, 0, 0, 0}, {"Shape", K_UNI, 0, 0, 0}, {"Slope", K_UNI, 0, 0, 0}, {"Smooth", K_UNI, 0, 0, 0}},
+  {{"Shift", K_UNI, 0, 0, 0}, {"Output", K_ENUM, 0, 3, kTidesOut}, {"Range", K_ENUM, 0, 2, kTidesRange},
+   {"Trig", K_ENUM, 0, 5, kTidesTrig}},
+  {{"Level", K_UNI, 0, 0, 0}, {"Level", K_UNI, 0, 0, 0}, {"Level", K_UNI, 0, 0, 0}, {"Level", K_UNI, 0, 0, 0}},
+  {{"Pan", K_BIP, 0, 0, 0}, {"Pan", K_BIP, 0, 0, 0}, {"Pan", K_BIP, 0, 0, 0}, {"Pan", K_BIP, 0, 0, 0}},
+  {{"Time", K_UNI, 0, 0, 0}, {"Damp", K_UNI, 0, 0, 0}, {"Diffuse", K_UNI, 0, 0, 0}, {"Return", K_UNI, 0, 0, 0}},
+  {{"Reverb", K_UNI, 0, 0, 0}, {"Reverb", K_UNI, 0, 0, 0}, {"Reverb", K_UNI, 0, 0, 0}, {"Reverb", K_UNI, 0, 0, 0}},
+  {{"Time", K_ENUM, 0, kDivs - 1, kDivNames}, {"Fdbk", K_UNI, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0},
    {"Drive", K_UNI, 0, 0, 0}},
-  {{"Resonance", K_UNI, 0, 0, 0}, {"Mode", K_ENUM, 0, 1, kDelayMode}, {"Mod", K_UNI, 0, 0, 0},
-   {"Return", K_UNI, 0, 0, 0}},
-  {{"Send 1", K_UNI, 0, 0, 0}, {"Send 2", K_UNI, 0, 0, 0}, {"Send 3", K_UNI, 0, 0, 0}, {"Send 4", K_UNI, 0, 0, 0}},
-  {{"Note", K_INT, -24, 24, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Ratchet", K_INT, 1, 8, 0}, {"Length", K_INT, 1, 64, 0}},
+  {{"Reso", K_UNI, 0, 0, 0}, {"Mode", K_ENUM, 0, 1, kDelayMode}, {"Mod", K_UNI, 0, 0, 0}, {"Return", K_UNI, 0, 0, 0}},
+  {{"Delay", K_UNI, 0, 0, 0}, {"Delay", K_UNI, 0, 0, 0}, {"Delay", K_UNI, 0, 0, 0}, {"Delay", K_UNI, 0, 0, 0}},
+  {{"Note", K_INT, -24, 24, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Ratch", K_INT, 1, 8, 0}, {"Length", K_INT, 1, 64, 0}},
   {{"Decay", K_UNI, 0, 0, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Depth", K_UNI, 0, 0, 0}, {"Length", K_INT, 1, 64, 0}},
   {{"Tempo", K_UNI, 0, 0, 0}, {"Scale", K_ENUM, 0, 14, kScaleNames}, {"Root", K_ENUM, 0, 11, kNoteName},
    {"Swing", K_UNI, 0, 0, 0}},
-  {{"Rate", K_ENUM, 0, 5, kArpRates}, {"Gate", K_UNI, 0, 0, 0}, {"Direction", K_ENUM, 0, 3, kArpDir},
-   {"Transpose", K_INT, -24, 24, 0}},
-  {{"Algorithm", K_UNI, 0, 0, 0}, {"Timbre", K_UNI, 0, 0, 0}, {"Level 1", K_UNI, 0, 0, 0}, {"Level 2", K_UNI, 0, 0, 0}},
-  {{"Carrier", K_ENUM, 0, 7, kWarpsCarrier}, {"Modulator", K_ENUM, 0, 3, kTrackNames},
-   {"Mod dry", K_ENUM, 0, 1, kOnOff}, {"Mode", K_ENUM, 0, 1, kWarpsMode}},
+  {{"Rate", K_ENUM, 0, 5, kArpRates}, {"Gate", K_UNI, 0, 0, 0}, {"Dir", K_ENUM, 0, 3, kArpDir},
+   {"Transp", K_INT, -24, 24, 0}},
+  {{"Algo", K_UNI, 0, 0, 0}, {"Timbre", K_UNI, 0, 0, 0}, {"Level 1", K_UNI, 0, 0, 0}, {"Level 2", K_UNI, 0, 0, 0}},
+  {{"Carrier", K_ENUM, 0, 7, kWarpsCarrier}, {"Mod", K_ENUM, 0, 3, kTrackNames}, {"Dry", K_ENUM, 0, 1, kOnOff},
+   {"Mode", K_ENUM, 0, 1, kWarpsMode}},
 };
 
 // an effect lane's parameters: its effect's knobs, then its step page's DECAY, PROB and DEPTH
@@ -95,7 +92,7 @@ inline int lane_page0(int lane) {        // its effect's first page
 // as much as the four voices), then its easter egg
 const char* const kWarpsNames[7] = {"CROSSFADE", "CROSS-FOLD", "DIODE RING", "DIGITAL RING", "XOR", "COMPARATOR",
                                     "FREQ SHIFTER"};
-const char* const kWarpsShort[6] = {"Xfade", "Fold", "Diode", "Digital", "Xor", "Compar"};
+const char* const kWarpsShort[6] = {"Xfade", "Fold", "Diode", "Digi", "Xor", "Comp"};
 const char* const kOscXmod[3] = {"Sine", "Triangle", "Saw"};        // modulator.cc: xmod_shape
 const float kWarpsTravel = 0.625f;      // ALGORITHM's 0..1 on the module's 0..0.625
 int warps_pos(float a) {                // the knob's nearest mark: 0..5
@@ -696,17 +693,15 @@ int eng_param_tp(int param, int* lane) {
 
 int eng_tp_lockable(int lane, int tp) { return tp >= 0 && tp < eng_lane_params(lane); }
 
-// Plaits' HARMONICS, TIMBRE and MORPH by model, as its manual names them (1.2's eight from its release notes)
+// Plaits' HARMONICS, TIMBRE and MORPH by model, after its manual (1.2's eight from its release notes), short
 const char* const kModelKnobs[24][3] = {
-  {"Resonance", "Cutoff", "Waveform"}, {"Dist freq", "Distortion", "Asymmetry"}, {"Preset", "Mod level", "Stretch"},
-  {"Preset", "Mod level", "Stretch"}, {"Preset", "Mod level", "Stretch"}, {"Terrain", "Radius", "Offset"},
-  {"Chord", "Chorus", "Waveform"}, {"Chord", "Arpeggio", "PW / sync"},
-  {"Detune", "Square", "Saw"}, {"Waveshape", "Fold", "Asymmetry"}, {"Ratio", "Index", "Feedback"},
-  {"Ratio", "Formant", "Width"}, {"Bumps", "Harmonic", "Shape"}, {"Bank", "Row", "Column"},
-  {"Chord", "Inversion", "Waveform"}, {"Synthesis", "Species", "Phoneme"},
-  {"Detune", "Density", "Grain"}, {"Filter", "Clock", "Resonance"}, {"Random", "Density", "Filter"},
-  {"Material", "Brightness", "Decay"}, {"Material", "Brightness", "Decay"}, {"Attack", "Brightness", "Decay"},
-  {"Noise", "Modes", "Decay"}, {"Metal", "High-pass", "Decay"},
+  {"Reso", "Cutoff", "Wave"}, {"Dist F", "Amount", "Asym"}, {"Preset", "Mod", "Time"}, {"Preset", "Mod", "Time"},
+  {"Preset", "Mod", "Time"}, {"Terrain", "Radius", "Offset"}, {"Chord", "Chorus", "Wave"}, {"Chord", "Arp", "PW"},
+  {"Detune", "Square", "Saw"}, {"Shape", "Fold", "Asym"}, {"Ratio", "Index", "Fdbk"}, {"Ratio", "Form", "Width"},
+  {"Bumps", "Peak", "Shape"}, {"Bank", "Row", "Column"}, {"Chord", "Invert", "Wave"}, {"Synth", "Species", "Vowel"},
+  {"Detune", "Density", "Grain"}, {"Filter", "Clock", "Reso"}, {"Random", "Density", "Filter"},
+  {"Struct", "Bright", "Decay"}, {"Struct", "Bright", "Decay"}, {"Attack", "Bright", "Decay"},
+  {"Noise", "Tone", "Decay"}, {"Metal", "HPF", "Decay"},
 };
 
 const char* eng_param_name(int param) {
