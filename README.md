@@ -71,7 +71,7 @@ les 16 pas de la piste (allumés : un trig ; un point : des locks ; cerclé : ce
 | **SEL** | le mode MOD (voir plus bas) ; **tenu** : la matrice de la piste |
 | **SAVE tenu** | sauvegarde le projet (à l'arrêt) |
 | **GLO** | SEQUENCER (Marbles ou Steps), TEMPO, SCALE, ROOT ; SELECT : le projet (INIT) et la machine ; GLO encore : retour |
-| **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en jaune et noir |
+| **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en jaune et noir ; en lâchant GLO, tout revient comme avant (SEL tapé pendant ALL : on garde) |
 | **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage sur la piste (avec GLO tenu aussi : sur les 4) |
 | **REC** | avec STEPS : les touches blanches deviennent les 16 pas, les 4 premières noires les pages |
 | **REC tenu** (pas à pas) | efface le pattern de la piste (ses trigs et ses locks) ; avec **GLO tenu** : celui des 4 pistes |

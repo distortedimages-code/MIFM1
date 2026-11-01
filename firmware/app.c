@@ -18,7 +18,8 @@
  *   HOME        the mixer: the levels, the pans   FX       the sends, the reverb, then Warps (ALGORITHM, TIMBRE,
  *               LEVEL 1 and 2; its carrier, modulator, MOD DRY, the frequency shifter)
  *   GLO         SEQUENCER, TEMPO, SCALE, ROOT; then the project (K1, REC held: INIT) and the machine. Held with a
- *               knob: ALL, the same parameter on the four tracks (with ALGORITHM: the same model)
+ *               knob: ALL, the same parameter on the four tracks (with ALGORITHM: the same model), the screen
+ *               yellow, all of it back as it was when GLO is let go (SEL tapped meanwhile: kept)
  *   ENV         the track's envelope (PLAITS 2/3: DECAY, LPG COLOUR, the internal envelope's TIMBRE and MORPH).
  *               Held with a knob: that parameter's random (right new at each trig, left looped, 0 none)
  *   REC         with the steps: the white keys are a page's 16 steps, the first black keys the pages; a step held
@@ -1745,6 +1746,36 @@ static void draw(void)
 }
 
 /* ---------------------------------------------------------------- input --- */
+/* ALL is a gesture: the knobs, models and randoms as GLO was pressed, put back when it is let go (unless SEL was
+ * tapped meanwhile: kept). A pattern cleared with GLO held stays cleared (not part of it) */
+static struct {
+    float val[ENG_NPARAMS];
+    uint8_t algo[ENG_NPAGES];
+    int8_t rnd[ENG_TRACKS][ENG_NTP];
+    int dirty, keep;
+} all;
+
+static void all_take(void)
+{
+    project_t *p = eng_project();
+    memcpy(all.val, p->val, sizeof all.val);
+    memcpy(all.algo, p->algo, sizeof all.algo);
+    memcpy(all.rnd, p->rnd, sizeof all.rnd);
+    all.dirty = dirty;
+    all.keep = 0;
+}
+
+static void all_back(void)
+{
+    project_t *p = eng_project();
+    if (all.keep)
+        return;
+    memcpy(p->val, all.val, sizeof all.val);
+    memcpy(p->algo, all.algo, sizeof all.algo);
+    memcpy(p->rnd, all.rnd, sizeof all.rnd);
+    dirty = all.dirty;
+}
+
 static void go_page(int page)
 {
     int g = ptype(page) == PT_GLOBAL || ptype(page) == PT_SYS;
@@ -1955,7 +1986,11 @@ static void button_down(int b)
     case B_OCTUP:
         ui.octave = clamp(ui.octave + 1, -3, 3);
         break;
-    case B_SEL: case B_SAVE: case B_REC: case B_GLO: case B_ENV:
+    case B_GLO:                          /* ALL: what it changes comes back when GLO is let go */
+        all_take();
+        ui.full = 1;
+        break;
+    case B_SEL: case B_SAVE: case B_REC: case B_ENV:
         ui.full = 1;                     /* on release (a tap), held long, or held with a knob */
         break;
     default:
@@ -2019,6 +2054,12 @@ static void button_up(int b)
     case B_SEL:
         if (ui.long_done[b])
             break;
+        if (held(B_GLO)) {               /* GLO held: what ALL changed is kept */
+            all.keep = 1;
+            ui.used[B_GLO] = 1;
+            app_say("ALL", "KEPT");
+            break;
+        }
         if (ui.erec >= 0) {              /* Endless recording: a rest */
             if (eng_endless_add(ui.erec, ENDLESS_REST) != 0)
                 app_say("ENDLESS", "64 STEPS, FULL");
@@ -2067,9 +2108,11 @@ static void button_up(int b)
         ui.held_step = -1;
         ui.full = 1;
         break;
-    case B_GLO:                          /* a tap: the global page, and back; held with a knob: ALL */
+    case B_GLO:                          /* a tap: the global page, and back; held with a knob: ALL, undone here */
         if (!ui.used[b])
             go_page(pt == PT_GLOBAL || pt == PT_SYS ? ui.prev_page : PG_GLOBAL);
+        else
+            all_back();
         ui.full = 1;
         break;
     case B_ENV:                          /* a tap: the track's envelope (PLAITS 2/3); held with a knob: its random */

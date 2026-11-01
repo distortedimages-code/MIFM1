@@ -52,7 +52,7 @@ LEVEL 1, LEVEL 2, puis CARRIER (une piste ou l'oscillateur), MODULATOR, MOD DRY,
 <tr><td>SEL tenu</td><td>la matrice de la piste : K1 le câble, K2 la source, K3 la cible, K4 la dose</td></tr>
 <tr><td>SAVE tenu</td><td>sauvegarde le projet (à l'arrêt)</td></tr>
 <tr><td>GLO</td><td>SEQUENCER (Marbles ou Steps), TEMPO, SCALE, ROOT ; SELECT : le projet et la machine</td></tr>
-<tr><td>GLO tenu + potard</td><td>ALL : le même réglage sur les 4 pistes (l'écran en jaune et noir tant que GLO est tenu)</td></tr>
+<tr><td>GLO tenu + potard</td><td>ALL : le même réglage sur les 4 pistes, l'écran en jaune et noir ; en lâchant GLO tout revient (SEL tapé pendant : on garde)</td></tr>
 <tr><td>ENV</td><td>l'enveloppe de la piste : DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV</td></tr>
 <tr><td>ENV tenu + potard</td><td>l'aléatoire de ce réglage : à droite nouveau à chaque trig, à gauche en boucle</td></tr>
 <tr><td>REC</td><td>avec STEPS : les touches blanches sont les 16 pas ; tenir un pas + un potard = P-lock</td></tr>
