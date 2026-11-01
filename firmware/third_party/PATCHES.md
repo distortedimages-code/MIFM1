@@ -40,6 +40,13 @@
    the modulator's 72), its `Init` and its `Process` call. MIFM1's ALGORITHM never reaches it (0..0.625 of the module's
    knob: the six cross-modulations); were it to, the output would be silent.
 
+7. `warps/dsp/modulator.h`, `modulator.cc` (`tools/warps_fast.py`): `ProcessXmod` plays two neighbouring algorithms
+   and crossfades them by ALGORITHM's fraction; when the fraction is 0 over the whole block (on a mark: MIFM1's
+   ALGORITHM selector jumps from mark to mark), it plays the first alone: the same samples (the second's weight is
+   0), half the algorithms' work at 6x. With `MIFM1_RAM_CODE` (the firmware's build: `fm1.toml`), `#pragma clang
+   section` puts the unit's code in `.c1_text`, which fm1-base copies to RAM at boot: the modulator's loops out of
+   the XIP cache's way.
+
 Not changed, but used differently from the modules: Marbles and Tides 2 run at the control rate (Marbles 8 frames
 per audio block, Tides one), their time constants given that rate; Clouds' granular processor (written for 32 kHz)
 is not played yet (Rings, measured at v0.0, is no longer part of the firmware: Plaits' MODAL and STRING models

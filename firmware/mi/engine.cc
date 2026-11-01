@@ -295,8 +295,9 @@ float from_u(int param, float u) {
 }
 
 // a lane parameter as the trig plays it: its knob and cables, then the trig's lock and random
+int16_t lane_param[ENG_LANES][ENG_NTP];  // eng_track_param's answers, made once (E is asked ~150 times a block)
 float E(int lane, int tp) {
-  int param = eng_track_param(lane, tp);
+  int param = lane_param[lane][tp];
   return clamp_param(param, fin[param] + tdelta[lane][tp]);
 }
 
@@ -367,17 +368,23 @@ void read_sources() {
   }
 }
 
-// a trig: its locks and randoms over the knobs, whether it plays (its probability); a track's ratchets
+// a trig: its locks and randoms over the knobs, whether it plays (its probability); a track's ratchets. The locks are
+// found in one pass over the slots (not one a parameter: a sixteenth's trigs on seven lanes took 50,000 compares)
 void new_trig(int lane, int step, int locks) {
   int np = eng_lane_params(lane);
+  int16_t at[ENG_NTP];
+  for (int tp = 0; tp < ENG_NTP; ++tp) at[tp] = -1;
+  if (locks)
+    for (int i = 0; i < ENG_PLOCKS; ++i)
+      if (proj.lock[i].lane == lane && proj.lock[i].step == step && proj.lock[i].tp < ENG_NTP)
+        at[proj.lock[i].tp] = static_cast<int16_t>(i);
   for (int tp = 0; tp < ENG_NTP; ++tp) {
     tdelta[lane][tp] = 0.0f;
     if (tp >= np || !eng_tp_lockable(lane, tp)) continue;
-    int param = eng_track_param(lane, tp), i;
+    int param = eng_track_param(lane, tp);
     const eng_pdef_t* d = eng_pdef(param);
     float base = proj.val[param], v = base;
-    if (locks && (i = lock_find(lane, step, tp)) >= 0)
-      v = from_u(param, static_cast<float>(proj.lock[i].v) / 255.0f);
+    if (at[tp] >= 0) v = from_u(param, static_cast<float>(proj.lock[at[tp]].v) / 255.0f);
     int r = proj.rnd[lane][tp];
     if (r) {                            // > 0: a new random at each trig; < 0: the same at each pass (a loop)
       float a = static_cast<float>(r < 0 ? -r : r) * 0.01f, x = r > 0 ? rand01() : loop01(lane, step, tp);
@@ -802,9 +809,11 @@ const char* eng_param_name(int param) {
 
 int eng_model_enveloped(int m) { return (m >= 2 && m <= 4) || m >= 19; }
 
-const eng_pdef_t* eng_pdef(int param) {
+const eng_pdef_t* eng_pdef(int param) {   // (a table, made once: the render asks it hundreds of times a block)
+  static const eng_pdef_t* table[ENG_NPARAMS];
   if (param < 0 || param >= ENG_NPARAMS) param = 0;
-  return &kPages[page_type(param / 4)][param % 4];
+  if (!table[param]) table[param] = &kPages[page_type(param / 4)][param % 4];
+  return table[param];
 }
 
 int eng_param_mod(int param) {
@@ -1289,6 +1298,8 @@ int eng_init(void) {
   master = arena + a;
   a += (mms_size() + 7u) & ~7u;
   mms_init(master);
+  for (int l = 0; l < ENG_LANES; ++l)
+    for (int tp = 0; tp < ENG_NTP; ++tp) lane_param[l][tp] = static_cast<int16_t>(eng_track_param(l, tp));
   if (!eng_check(&proj)) eng_defaults(&proj);
   apply_cables();
   ready = 1;

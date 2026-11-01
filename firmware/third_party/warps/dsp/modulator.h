@@ -163,6 +163,15 @@ class Modulator {
       const float* in_2,
       float* out,
       size_t size) {
+    if (balance == 0.0f && balance_end == 0.0f) {  // MIFM1: one algorithm on a mark (its weight 0: the same
+      float parameter_increment = (parameter_end - parameter) * (1.0f / static_cast<float>(size));   // samples,
+                                                                   // half the work)
+      while (size--) {
+        *out++ = Xmod<algorithm_1>(*in_1++, *in_2++, parameter);
+        parameter += parameter_increment;
+      }
+      return;
+    }
     float step = 1.0f / static_cast<float>(size);
     float parameter_increment = (parameter_end - parameter) * step;
     float balance_increment = (balance_end - balance) * step; 

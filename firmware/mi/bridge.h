@@ -71,7 +71,7 @@ void mw_init(void *mem);
  * internal oscillator's shapes, at note (MIDI); shift 1: the frequency shifter, the easter egg (algorithm the shift,
  * timbre the side, level 1 the feedback, level 2 dry/wet) */
 void mw_set(void *w, float algorithm, float timbre, float level1, float level2, int osc, float note, int shift);
-/* ~1.1 ms late; dry: the input given as dry_in, as late (to mix with the output) */
+/* in calls of 64 frames, none late; dry: the input given as dry_in, as is (to mix with the output) */
 void mw_render(void *w, const float *carrier, const float *modulator, const float *dry_in, float *out, float *dry,
                uint32_t n);
 uint32_t mw_calls(void *w, uint32_t n);  /* the modulator's Process calls the next n frames make (its cost goes by them) */

@@ -32,4 +32,8 @@ grep -q "MIFM1: 72 taps" "$T/warps/dsp/modulator.h" || { echo "patch_mi: warps/d
 # 6. Warps' vocoder out (MIFM1 plays its cross-modulations and its frequency shifter only): its 64 KB object, its Init and
 #    its Process call (tools/warps_no_vocoder.py)
 python3 -I "$(dirname "$0")/warps_no_vocoder.py" "$T/warps"
+# 7. Warps lighter, the same sound: on a mark of ALGORITHM, one algorithm played instead of two crossfaded at a weight
+#    of 0; the modulator's code in RAM on the FM-1 (tools/warps_fast.py)
+python3 -I "$(dirname "$0")/warps_fast.py" "$T/warps"
+grep -q "MIFM1: one algorithm on a mark" "$T/warps/dsp/modulator.h" || { echo "patch_mi: warps: one algorithm"; exit 1; }
 echo "patched $T"

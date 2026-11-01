@@ -10,25 +10,20 @@
 // Its inputs never reach exact zero on the module (its converters' noise): here they get a 1-LSB dither, so that in
 // a silence its filters' states stay ordinary numbers instead of sinking into subnormals (very slow on most FPUs).
 //
-// The vocoder decimates by 12, so a Process call takes a multiple of 12 frames (warps.cc: 60): the bridge queues 48
-// of the FM-1's frames a call (~1.1 ms late).
+// Without the vocoder (which decimated by 12), a Process call takes any size up to the module's 96: the bridge cuts
+// a block into calls of 64 frames, each block the same work (128: two), and nothing waits (no queue, no latency).
 #include <new>
 #include "bridge.h"
 #include "warps/dsp/modulator.h"
 
 namespace {
 
-const uint32_t kFrames = 48;             // the frames a Process call
-const uint32_t kFifo = 256;
+const uint32_t kFrames = 64;             // the frames a Process call (at most)
 
 struct WarpsMod {
   warps::Modulator modulator;
   warps::ShortFrame in[kFrames], out[kFrames];
-  float dry_in[kFrames];                 // the dry input, queued with them (to come out as late as Warps' output)
-  uint32_t num_in;                       // the frames queued
   uint32_t dither;                       // a little noise generator (LCG)
-  float fifo[kFifo], fifo_dry[kFifo];    // the output and the dry, waiting to go
-  uint32_t fifo_read, fifo_count;
 };
 
 inline short to_short(float x, uint32_t* seed) {
@@ -58,11 +53,7 @@ void mw_init(void* mem) {
   p->phase_shift = 0.0f;
   p->note = 48.0f;
   p->carrier_shape = 0;
-  w->num_in = 0;
   w->dither = 0x2545F491u;
-  w->fifo_read = 0;
-  w->fifo_count = kFrames / 2;           // a call's worth of silence ahead: the output never waits mid-block
-  for (uint32_t i = 0; i < kFifo; ++i) w->fifo[i] = w->fifo_dry[i] = 0.0f;
 }
 
 void mw_set(void* v, float algorithm, float timbre, float level1, float level2, int osc, float note, int shift) {
@@ -78,35 +69,24 @@ void mw_set(void* v, float algorithm, float timbre, float level1, float level2, 
   p->note = note;
 }
 
-uint32_t mw_calls(void* v, uint32_t n) {   // the Process calls the next n frames make (2 or 3 for 128)
-  return (static_cast<WarpsMod*>(v)->num_in + n) / kFrames;
+uint32_t mw_calls(void* v, uint32_t n) {   // the Process calls n frames make
+  (void)v;
+  return (n + kFrames - 1) / kFrames;
 }
 
 void mw_render(void* v, const float* carrier, const float* modulator, const float* dry_in, float* out, float* dry,
                uint32_t n) {
   WarpsMod* w = static_cast<WarpsMod*>(v);
-  for (uint32_t i = 0; i < n; ++i) {
-    w->in[w->num_in].l = to_short(carrier[i], &w->dither);
-    w->in[w->num_in].r = to_short(modulator[i], &w->dither);
-    w->dry_in[w->num_in] = dry_in[i];
-    if (++w->num_in < kFrames) continue;
-    w->num_in = 0;
-    w->modulator.Process(w->in, w->out, kFrames);
-    for (uint32_t j = 0; j < kFrames && w->fifo_count < kFifo; ++j) {
-      uint32_t k = (w->fifo_read + w->fifo_count) % kFifo;
-      w->fifo[k] = static_cast<float>(w->out[j].l) * (1.0f / 32768.0f);
-      w->fifo_dry[k] = w->dry_in[j];
-      ++w->fifo_count;
+  for (uint32_t at = 0; at < n; at += kFrames) {
+    uint32_t len = n - at < kFrames ? n - at : kFrames;
+    for (uint32_t i = 0; i < len; ++i) {
+      w->in[i].l = to_short(carrier[at + i], &w->dither);
+      w->in[i].r = to_short(modulator[at + i], &w->dither);
     }
-  }
-  for (uint32_t i = 0; i < n; ++i) {
-    if (w->fifo_count) {
-      out[i] = w->fifo[w->fifo_read];
-      dry[i] = w->fifo_dry[w->fifo_read];
-      w->fifo_read = (w->fifo_read + 1) % kFifo;
-      --w->fifo_count;
-    } else {
-      out[i] = dry[i] = 0.0f;
+    w->modulator.Process(w->in, w->out, len);
+    for (uint32_t i = 0; i < len; ++i) {
+      out[at + i] = static_cast<float>(w->out[i].l) * (1.0f / 32768.0f);
+      dry[at + i] = dry_in[at + i];
     }
   }
 }
