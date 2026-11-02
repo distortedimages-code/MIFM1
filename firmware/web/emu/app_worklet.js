@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 // Copyright (C) 2026 Yoann
 // MIFM1's part of the browser emulator's worklet (fm1-base's web/emu/worklet.js loads it first): twice a second,
-// the FM-1's load as the engine models it (firmware/web.c web_fm1_load) to the page, for the line under the panel.
+// the FM-1's load as the engine models it (firmware/web.c web_fm1_load) to the page, for its gauges; the page's
+// "Essayer" (a model or a filter on the track playing: web_try).
 globalThis.fm1App = {
   n: 0,
   process(fm1) {
@@ -9,5 +10,8 @@ globalThis.fm1App = {
     const ex = fm1.ex;
     if (!ex.web_fm1_load) return;
     fm1.port.postMessage({ type: "app", fm1: [ex.web_fm1_load(0), ex.web_fm1_load(1), ex.web_fm1_load(2)] });
+  },
+  message(fm1, m) {
+    if (fm1.ex.web_try && m.kind !== undefined) fm1.ex.web_try(m.kind >>> 0, m.idx >>> 0);
   },
 };

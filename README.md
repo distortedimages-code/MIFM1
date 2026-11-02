@@ -67,8 +67,11 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 (ordinateur, téléphone, tablette), avec le panneau du FM-1 dessiné autour de son écran. Le même code que sur la
 machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
 pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
-en quatre gestes, le panneau (chaque numéro allume son repère sur la machine ; « Repères » les montre tous), la dose
-d'aléatoire, les spécifications, et des jauges de la charge du FM-1. Pour écouter MIFM1 sur un autre système (une
+en quatre gestes, le chemin du son (un schéma), le panneau (chaque numéro allume son repère sur la machine ;
+« Repères » les montre tous), les 28 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
+et ce qu'ils modélisent, les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le grit,
+les effets, le séquenceur, la dose d'aléatoire, les spécifications, et des jauges de la charge du FM-1. « Essayer »,
+sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_try). Pour écouter MIFM1 sur un autre système (une
 voiture, des enceintes de studio) ou montrer la machine sans elle. Les potards se tournent en glissant vers le haut
 ou le bas ; sur un ordinateur, des raccourcis clavier jouent les touches. SAVE tenu garde le projet dans le
 navigateur. L'écran du téléphone reste allumé tant que la page joue ; sur iPhone, le son passe même en mode

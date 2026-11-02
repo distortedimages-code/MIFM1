@@ -8,3 +8,23 @@ __attribute__((used, visibility("default"))) uint32_t web_fm1_load(uint32_t i)
 {
     return i == 0 ? eng_load(0) : i == 1 ? eng_load(1) : i == 2 ? eng_peak() : eng_prep_load();
 }
+
+/* the page's "Essayer": kind 0 a model (Plaits', an FM drum's: its kit with it), 1 a filter (its model), on the track
+ * playing, its page shown, as ALGORITHM would */
+__attribute__((used, visibility("default"))) void web_try(uint32_t kind, uint32_t i)
+{
+    int t = ui.track;
+    if (kind == 0 && i < ENG_MODELS) {
+        eng_set_model(t, (int)i);
+        go_page(PG_TRACK(t, 0));
+    } else if (kind == 1 && i < MF_MODELS) {
+        eng_project()->algo[PG_FILT(t, 0)] = (uint8_t)i;
+        go_page(VP_FLT1(t));
+    } else {
+        return;
+    }
+    dirty = 1;
+    ui.full = ui.body_panel = 1;
+    ui.anim = 1;                         /* (its name written again) */
+    ui.anim_at = plat_ms();
+}

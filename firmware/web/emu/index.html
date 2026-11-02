@@ -124,7 +124,9 @@ a:hover { color: var(--orange); }
 .part { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); gap: 1.2rem 3rem; padding-block: 64px 8px; }
 .part > h2 { margin: 0; font-size: 1.75rem; line-height: 1.1; font-weight: 800; font-stretch: 112%; letter-spacing: -.01em; }
 .part > div > p { margin: 0 0 1rem; max-width: 64ch; }
-@media (max-width: 860px) { .part { grid-template-columns: 1fr; padding-block: 48px 0; } }
+@media (max-width: 860px) { .part { grid-template-columns: minmax(0, 1fr); padding-block: 48px 0; } }
+.part.wide { grid-template-columns: minmax(0, 1fr); }            /* (a section whose drawings want the page's whole width) */
+.part.wide > div > p { max-width: 72ch; }
 
 /* four steps, in order */
 .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; counter-reset: s;
@@ -157,6 +159,93 @@ a:hover { color: var(--orange); }
 .curve text.k { fill: #000; font-weight: 700; }
 @media (max-width: 760px) { .dose { grid-template-columns: 1fr; } }
 
+/* the drawings: black lines on white, one orange, the machine's own icons (app.c ICONS, tools/web/icons_svg.py) */
+svg.ic { width: 52px; height: 52px; padding: 7px; border: 2px solid #000; border-radius: 50%; fill: none; stroke: #000; stroke-width: 2.6;
+         stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg text, .note { font-family: "Archivo", Arial, sans-serif; }
+svg .note { font-size: 11px; font-weight: 500; fill: var(--grey); }
+.mini { display: block; width: 100%; max-width: 210px; height: auto; margin: 0 0 .9rem; }
+.mini .body { fill: var(--paper); stroke: #c9cac4; stroke-width: 1.5; }
+.mini .orange { fill: var(--orange); } .mini .blk { fill: #000; }
+.mini .knob { fill: #151515; } .mini .knob.hi { stroke: var(--orange); stroke-width: 3; }
+.mini .ind { stroke: #fff; stroke-width: 2.5; stroke-linecap: round; }
+.mini .btn { fill: #fff; stroke: #bdbeb8; stroke-width: 1.5; } .mini .btn.hi { fill: var(--orange); stroke: var(--orange); }
+.mini .cap { font-size: 10px; font-weight: 700; fill: #000; }
+.mini .arc { fill: none; stroke: var(--orange); stroke-width: 2.5; stroke-linecap: round; }
+.panelbox, .flowbox { background: var(--paper); padding: 18px; margin-top: 1.2rem; overflow-x: auto; }
+.flow { display: block; width: 100%; min-width: 720px; height: auto; }
+.blk2 rect { fill: #fff; stroke: #000; stroke-width: 1.8; } .blk2.acc rect { stroke: var(--orange); stroke-width: 2.6; }
+.blk2 text, .lfo text { font-size: 15px; font-weight: 700; fill: #000; }
+use.fi { fill: none; stroke: #000; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.wire { fill: none; stroke: #000; stroke-width: 2; } .wire.dry { stroke: #9a9b96; }
+.wire.mod { stroke: var(--orange); stroke-dasharray: 6 5; } .wire.warps { stroke-dasharray: 3 4; }
+.lfo rect { fill: var(--orange); }
+.flow .tk, .flow .small { font-size: 12.5px; font-weight: 600; fill: var(--grey); }
+/* the engines */
+.engines { list-style: none; margin: 1.4rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr)); gap: 2px; }
+.engines li.bank { grid-column: 1 / -1; padding: 30px 0 10px; } .engines li.bank:first-child { padding-top: 0; }
+.bank h3 { margin: 0; font-size: 1.25rem; font-weight: 850; font-stretch: 118%; letter-spacing: -.005em; }
+.bank p { margin: .25rem 0 0; color: var(--grey); max-width: 70ch; }
+.eng { background: var(--paper); padding: 18px 16px 16px; display: flex; flex-direction: column; gap: .55rem; }
+.eng h4 { margin: .25rem 0 0; font-size: 1rem; font-weight: 800; font-stretch: 108%; letter-spacing: .02em; }
+.eng p { margin: 0; color: #2a2a27; font-size: 15px; line-height: 1.45; flex: 1; }
+.try { align-self: flex-start; display: inline-flex; align-items: center; gap: .5em; margin-top: .3rem; font: 600 13px "Archivo", Arial, sans-serif;
+       color: #000; background: transparent; border: 1.5px solid #000; border-radius: 999px; padding: .4em .95em; cursor: pointer; min-height: 32px; }
+.try::before { content: ""; border-left: 8px solid currentColor; border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+.try:hover { background: var(--orange); border-color: var(--orange); }
+.try.done { background: #000; border-color: #000; color: #fff; }
+/* the filters */
+.filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; margin-top: 1.4rem; }
+.filt { background: var(--paper); padding: 22px 22px 20px; display: flex; flex-direction: column; }
+.filt header { display: flex; align-items: baseline; gap: .8rem; flex-wrap: wrap; }
+.filt h3 { margin: 0; font-size: 2rem; line-height: 1; font-weight: 850; font-stretch: 125%; letter-spacing: -.02em; }
+.filt .kind { margin: 0; color: var(--grey); font-weight: 600; }
+.filt figure { margin: 1rem 0 .4rem; }
+.filt figcaption { font-size: 13px; color: var(--grey); margin-top: .3rem; }
+.filt > p { font-size: 15px; line-height: 1.5; margin: .8rem 0 0; flex: 1; }
+.plot, .schema { display: block; width: 100%; height: auto; }
+.plot .pbg { fill: #fff; } .plot .grid, svg .grid { stroke: #deded8; stroke-width: 1; }
+.plot .ax { font-size: 10px; font-weight: 500; fill: var(--grey); }
+.plot path, .curve2 path, .env path { fill: none; stroke-width: 2.4; stroke-linejoin: round; }
+.c1 { stroke: var(--orange); } .c2 { stroke: #000; } .c3 { stroke: #8a8b86; stroke-dasharray: 5 4; }
+.schema { margin-top: .6rem; }
+.schema .ln { fill: none; stroke: #000; stroke-width: 1.5; } .schema .fb { fill: none; stroke: var(--orange); stroke-width: 2; }
+.stage rect { fill: #fff; stroke: #000; stroke-width: 1.5; } .stage text { font-size: 12px; font-weight: 600; fill: #000; }
+.stage.hot rect { stroke: var(--orange); stroke-width: 2.2; }
+.node { fill: #fff; stroke: #000; stroke-width: 1.5; } .sym { font-size: 13px; font-weight: 700; fill: #000; }
+.out { font-size: 11px; font-weight: 700; fill: #000; } .tap { fill: var(--orange); }
+.vactrol { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 1rem 2rem; align-items: center; background: var(--paper);
+           padding: 22px; margin-top: 2px; }
+.vactrol p { margin: 0; font-size: 15.5px; }
+.pingl { stroke: #000; stroke-width: 2; }
+/* the grit, the effects, the sequencer */
+.grits { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; margin-top: 1.2rem; }
+.grits figure { margin: 0; background: var(--paper); padding: 16px; }
+.curve2 { display: block; width: 100%; height: auto; background: #fff; }
+.curve2 path.c1 { stroke-width: 3; } .curve2 path.c2 { stroke-width: 1.4; stroke-dasharray: 3 3; }
+.grits figcaption { font-size: 14px; margin-top: .6rem; }
+.fxs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; }
+@media (max-width: 520px) { .fxs { grid-template-columns: 1fr; } }
+.fxs li { background: var(--paper); padding: 20px 18px; }
+.fxs h3 { margin: .8rem 0 .3rem; font-size: 1.1rem; font-weight: 800; }
+.fxs p { margin: 0; font-size: 15px; color: #2a2a27; }
+.seqfigs { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); gap: 2px; margin-top: 1.2rem; }
+.steps16, .euclid { display: block; width: 100%; height: auto; background: var(--paper); padding: 14px; }
+.steps16 .lead { stroke: #000; stroke-width: 1.2; } .steps16 .lab { font-size: 13px; font-weight: 700; fill: #000; }
+.euclid .big { font-size: 18px; font-weight: 800; fill: #000; }
+.fcurve { fill: none; stroke: var(--orange); stroke-width: 3; stroke-linecap: round; }
+.steps16 .on, .steps16 .plock, .steps16 .rat { fill: #000; } .steps16 .off { fill: #fff; stroke: #c4c5bf; }
+.steps16 .prob { fill: #fff; stroke: #000; stroke-width: 1.5; } .steps16 .half { fill: #000; }
+.steps16 .dotlock { fill: var(--orange); } .steps16 .cut { stroke: var(--paper); stroke-width: 2.5; }
+.eon { fill: var(--orange); } .eoff { fill: #c4c5bf; } .epoly { fill: rgba(255, 80, 0, .12); stroke: var(--orange); stroke-width: 1.5; }
+.dosefigs { display: grid; gap: 2px; }
+.sline { stroke: #d6d7d1; stroke-width: 1; } .n1 { fill: var(--orange); } .n2 { fill: #000; } .n3 { fill: var(--teal); }
+@media (max-width: 860px) {
+  .filters, .vactrol, .seqfigs { grid-template-columns: minmax(0, 1fr); }
+  .euclid { max-width: 320px; justify-self: start; }
+  .grits { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 /* the specifications */
 .specs { margin: 0; display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); border-top: 2px solid #000; }
 .specs dt, .specs dd { margin: 0; padding: 11px 0; border-bottom: 1px solid var(--rule); }
@@ -185,6 +274,69 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
 </style>
 </head>
 <body>
+<!-- icons -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="ic0" viewBox="0 0 32 32"><line x1="4" y1="24" x2="12" y2="8"/><line x1="12" y1="8" x2="12" y2="24"/><line x1="12" y1="24" x2="20" y2="8"/><line x1="20" y1="8" x2="20" y2="24"/><line x1="20" y1="24" x2="28" y2="16"/></symbol>
+<symbol id="ic1" viewBox="0 0 32 32"><line x1="4" y1="16" x2="8" y2="7"/><line x1="8" y1="7" x2="12" y2="7"/><line x1="12" y1="7" x2="20" y2="25"/><line x1="20" y1="25" x2="24" y2="25"/><line x1="24" y1="25" x2="28" y2="16"/></symbol>
+<symbol id="ic2" viewBox="0 0 32 32"><circle cx="9" cy="9" r="2" class="dot"/><circle cx="16" cy="9" r="2" class="dot"/><circle cx="23" cy="9" r="2" class="dot"/><circle cx="9" cy="23" r="2" class="dot"/><circle cx="16" cy="23" r="2" class="dot"/><circle cx="23" cy="23" r="2" class="dot"/><line x1="9" y1="12" x2="9" y2="20"/></symbol>
+<symbol id="ic3" viewBox="0 0 32 32"><circle cx="9" cy="9" r="2" class="dot"/><circle cx="16" cy="9" r="2" class="dot"/><circle cx="23" cy="9" r="2" class="dot"/><circle cx="9" cy="23" r="2" class="dot"/><circle cx="16" cy="23" r="2" class="dot"/><circle cx="23" cy="23" r="2" class="dot"/><line x1="16" y1="12" x2="16" y2="20"/></symbol>
+<symbol id="ic4" viewBox="0 0 32 32"><circle cx="9" cy="9" r="2" class="dot"/><circle cx="16" cy="9" r="2" class="dot"/><circle cx="23" cy="9" r="2" class="dot"/><circle cx="9" cy="23" r="2" class="dot"/><circle cx="16" cy="23" r="2" class="dot"/><circle cx="23" cy="23" r="2" class="dot"/><line x1="23" y1="12" x2="23" y2="20"/></symbol>
+<symbol id="ic5" viewBox="0 0 32 32"><circle cx="16" cy="16" r="11"/><circle cx="18" cy="14" r="6"/><circle cx="19" cy="13" r="2" class="dot"/></symbol>
+<symbol id="ic6" viewBox="0 0 32 32"><line x1="5" y1="10" x2="27" y2="10"/><line x1="5" y1="16" x2="27" y2="16"/><line x1="5" y1="22" x2="27" y2="22"/><line x1="22" y1="5" x2="10" y2="27"/></symbol>
+<symbol id="ic7" viewBox="0 0 32 32"><line x1="4" y1="24" x2="4" y2="10"/><line x1="4" y1="10" x2="12" y2="10"/><line x1="12" y1="10" x2="12" y2="24"/><line x1="12" y1="24" x2="20" y2="24"/><line x1="20" y1="24" x2="20" y2="10"/><line x1="20" y1="10" x2="28" y2="10"/></symbol>
+<symbol id="ic8" viewBox="0 0 32 32"><line x1="4" y1="24" x2="12" y2="8"/><line x1="12" y1="8" x2="12" y2="24"/><line x1="12" y1="24" x2="18" y2="24"/><line x1="18" y1="24" x2="18" y2="8"/><line x1="18" y1="8" x2="26" y2="8"/><line x1="26" y1="8" x2="26" y2="24"/></symbol>
+<symbol id="ic9" viewBox="0 0 32 32"><line x1="4" y1="16" x2="7" y2="9"/><line x1="7" y1="9" x2="10" y2="7"/><line x1="10" y1="7" x2="13" y2="9"/><line x1="13" y1="9" x2="19" y2="23"/><line x1="19" y1="23" x2="22" y2="25"/><line x1="22" y1="25" x2="25" y2="23"/><line x1="25" y1="23" x2="28" y2="16"/></symbol>
+<symbol id="ic10" viewBox="0 0 32 32"><circle cx="12" cy="16" r="7"/><circle cx="21" cy="16" r="7"/></symbol>
+<symbol id="ic11" viewBox="0 0 32 32"><line x1="4" y1="24" x2="10" y2="22"/><line x1="10" y1="22" x2="13" y2="12"/><line x1="13" y1="12" x2="16" y2="7"/><line x1="16" y1="7" x2="19" y2="12"/><line x1="19" y1="12" x2="22" y2="22"/><line x1="22" y1="22" x2="28" y2="24"/></symbol>
+<symbol id="ic12" viewBox="0 0 32 32"><line x1="6" y1="26" x2="6" y2="6"/><line x1="11" y1="26" x2="11" y2="11"/><line x1="16" y1="26" x2="16" y2="15"/><line x1="21" y1="26" x2="21" y2="19"/><line x1="26" y1="26" x2="26" y2="22"/></symbol>
+<symbol id="ic13" viewBox="0 0 32 32"><rect x="5" y="5" width="9" height="9"/><rect x="18" y="5" width="9" height="9"/><rect x="5" y="18" width="9" height="9"/><rect x="18" y="18" width="9" height="9"/></symbol>
+<symbol id="ic14" viewBox="0 0 32 32"><line x1="5" y1="9" x2="19" y2="9"/><line x1="9" y1="16" x2="23" y2="16"/><line x1="13" y1="23" x2="27" y2="23"/></symbol>
+<symbol id="ic15" viewBox="0 0 32 32"><rect x="5" y="6" width="22" height="14"/><line x1="10" y1="20" x2="8" y2="27"/><line x1="8" y1="27" x2="16" y2="20"/></symbol>
+<symbol id="ic16" viewBox="0 0 32 32"><circle cx="10" cy="18" r="5"/><circle cx="17" cy="13" r="6"/><circle cx="23" cy="19" r="5"/></symbol>
+<symbol id="ic17" viewBox="0 0 32 32"><line x1="4" y1="18" x2="7" y2="10"/><line x1="7" y1="10" x2="10" y2="23"/><line x1="10" y1="23" x2="13" y2="8"/><line x1="13" y1="8" x2="16" y2="21"/><line x1="16" y1="21" x2="19" y2="11"/><line x1="19" y1="11" x2="22" y2="24"/><line x1="22" y1="24" x2="25" y2="12"/><line x1="25" y1="12" x2="28" y2="17"/></symbol>
+<symbol id="ic18" viewBox="0 0 32 32"><circle cx="8" cy="9" r="2" class="dot"/><circle cx="20" cy="7" r="2" class="dot"/><circle cx="14" cy="15" r="2" class="dot"/><circle cx="25" cy="17" r="2" class="dot"/><circle cx="9" cy="23" r="2" class="dot"/><circle cx="19" cy="25" r="2" class="dot"/></symbol>
+<symbol id="ic19" viewBox="0 0 32 32"><line x1="8" y1="5" x2="8" y2="27"/><line x1="16" y1="5" x2="20" y2="16"/><line x1="20" y1="16" x2="16" y2="27"/><line x1="24" y1="5" x2="24" y2="27"/></symbol>
+<symbol id="ic20" viewBox="0 0 32 32"><circle cx="16" cy="16" r="11"/><circle cx="16" cy="16" r="6"/><circle cx="16" cy="16" r="2" class="dot"/></symbol>
+<symbol id="ic21" viewBox="0 0 32 32"><circle cx="16" cy="16" r="9"/><circle cx="16" cy="16" r="3" class="dot"/></symbol>
+<symbol id="ic22" viewBox="0 0 32 32"><rect x="6" y="11" width="20" height="12"/><line x1="6" y1="15" x2="26" y2="15"/><line x1="9" y1="4" x2="15" y2="9"/><line x1="23" y1="4" x2="17" y2="9"/></symbol>
+<symbol id="ic23" viewBox="0 0 32 32"><line x1="5" y1="13" x2="16" y2="8"/><line x1="16" y1="8" x2="27" y2="13"/><line x1="5" y1="16" x2="16" y2="20"/><line x1="16" y1="20" x2="27" y2="16"/><line x1="16" y1="20" x2="16" y2="28"/></symbol>
+<symbol id="ic24" viewBox="0 0 32 32"><circle cx="16" cy="16" r="11"/><line x1="9" y1="17" x2="12" y2="12"/><line x1="12" y1="12" x2="16" y2="20"/><line x1="16" y1="20" x2="20" y2="12"/><line x1="20" y1="12" x2="23" y2="17"/></symbol>
+<symbol id="ic25" viewBox="0 0 32 32"><rect x="6" y="13" width="20" height="11"/><line x1="6" y1="17" x2="26" y2="17"/><line x1="7" y1="9" x2="11" y2="5"/><line x1="11" y1="5" x2="15" y2="9"/><line x1="15" y1="9" x2="19" y2="5"/><line x1="19" y1="5" x2="23" y2="9"/></symbol>
+<symbol id="ic26" viewBox="0 0 32 32"><line x1="3" y1="13" x2="16" y2="8"/><line x1="16" y1="8" x2="29" y2="13"/><line x1="3" y1="13" x2="29" y2="13"/><line x1="16" y1="13" x2="16" y2="28"/><line x1="10" y1="28" x2="22" y2="28"/></symbol>
+<symbol id="ic27" viewBox="0 0 32 32"><line x1="5" y1="11" x2="27" y2="11"/><line x1="5" y1="15" x2="27" y2="15"/><circle cx="16" cy="7" r="2" class="dot"/><line x1="16" y1="15" x2="16" y2="28"/><line x1="10" y1="22" x2="22" y2="22"/></symbol>
+<symbol id="ic28" viewBox="0 0 32 32"><line x1="4" y1="16" x2="7" y2="10"/><line x1="7" y1="10" x2="10" y2="7"/><line x1="10" y1="7" x2="13" y2="10"/><line x1="13" y1="10" x2="16" y2="16"/><line x1="16" y1="16" x2="19" y2="22"/><line x1="19" y1="22" x2="22" y2="25"/><line x1="22" y1="25" x2="25" y2="22"/><line x1="25" y1="22" x2="28" y2="16"/></symbol>
+<symbol id="ic29" viewBox="0 0 32 32"><line x1="4" y1="16" x2="10" y2="7"/><line x1="10" y1="7" x2="22" y2="25"/><line x1="22" y1="25" x2="28" y2="16"/></symbol>
+<symbol id="ic30" viewBox="0 0 32 32"><line x1="4" y1="24" x2="16" y2="8"/><line x1="16" y1="8" x2="16" y2="24"/><line x1="16" y1="24" x2="28" y2="8"/></symbol>
+<symbol id="ic31" viewBox="0 0 32 32"><line x1="4" y1="8" x2="16" y2="24"/><line x1="16" y1="24" x2="16" y2="8"/><line x1="16" y1="8" x2="28" y2="24"/></symbol>
+<symbol id="ic32" viewBox="0 0 32 32"><line x1="4" y1="24" x2="4" y2="8"/><line x1="4" y1="8" x2="16" y2="8"/><line x1="16" y1="8" x2="16" y2="24"/><line x1="16" y1="24" x2="28" y2="24"/><line x1="28" y1="24" x2="28" y2="8"/></symbol>
+<symbol id="ic33" viewBox="0 0 32 32"><line x1="4" y1="18" x2="10" y2="18"/><line x1="10" y1="18" x2="10" y2="9"/><line x1="10" y1="9" x2="16" y2="9"/><line x1="16" y1="9" x2="16" y2="23"/><line x1="16" y1="23" x2="22" y2="23"/><line x1="22" y1="23" x2="22" y2="13"/><line x1="22" y1="13" x2="28" y2="13"/></symbol>
+<symbol id="ic34" viewBox="0 0 32 32"><line x1="4" y1="19" x2="8" y2="13"/><line x1="8" y1="13" x2="12" y2="10"/><line x1="12" y1="10" x2="16" y2="13"/><line x1="16" y1="13" x2="20" y2="21"/><line x1="20" y1="21" x2="24" y2="22"/><line x1="24" y1="22" x2="28" y2="15"/></symbol>
+<symbol id="ic35" viewBox="0 0 32 32"><line x1="8" y1="6" x2="8" y2="26"/><line x1="16" y1="6" x2="16" y2="26"/><line x1="24" y1="6" x2="24" y2="26"/><line x1="5" y1="20" x2="11" y2="20"/><line x1="13" y1="10" x2="19" y2="10"/><line x1="21" y1="16" x2="27" y2="16"/></symbol>
+<symbol id="ic36" viewBox="0 0 32 32"><circle cx="7" cy="16" r="2" class="dot"/><line x1="11" y1="10" x2="13" y2="16"/><line x1="13" y1="16" x2="11" y2="22"/><line x1="16" y1="7" x2="19" y2="16"/><line x1="19" y1="16" x2="16" y2="25"/><line x1="21" y1="4" x2="25" y2="16"/><line x1="25" y1="16" x2="21" y2="28"/></symbol>
+<symbol id="ic37" viewBox="0 0 32 32"><line x1="5" y1="9" x2="27" y2="9"/><circle cx="11" cy="9" r="3" class="dot"/><line x1="5" y1="16" x2="27" y2="16"/><circle cx="21" cy="16" r="3" class="dot"/><line x1="5" y1="23" x2="27" y2="23"/><circle cx="14" cy="23" r="3" class="dot"/></symbol>
+<symbol id="ic38" viewBox="0 0 32 32"><line x1="16" y1="6" x2="16" y2="26"/><line x1="6" y1="16" x2="26" y2="16"/></symbol>
+<symbol id="ic39" viewBox="0 0 32 32"><line x1="10" y1="6" x2="10" y2="26"/><line x1="10" y1="6" x2="26" y2="16"/><line x1="26" y1="16" x2="10" y2="26"/></symbol>
+<symbol id="ic40" viewBox="0 0 32 32"><line x1="16" y1="4" x2="16" y2="20"/><line x1="9" y1="13" x2="16" y2="20"/><line x1="16" y1="20" x2="23" y2="13"/><line x1="6" y1="27" x2="26" y2="27"/></symbol>
+<symbol id="ic41" viewBox="0 0 32 32"><line x1="19" y1="3" x2="9" y2="18"/><line x1="9" y1="18" x2="20" y2="15"/><line x1="20" y1="15" x2="12" y2="29"/></symbol>
+<symbol id="ic42" viewBox="0 0 32 32"><rect x="3" y="10" width="5" height="12"/><rect x="10" y="10" width="5" height="12"/><rect x="17" y="10" width="5" height="12"/><rect x="24" y="10" width="5" height="12"/><circle cx="5" cy="16" r="1" class="dot"/><circle cx="19" cy="16" r="1" class="dot"/></symbol>
+<symbol id="ic43" viewBox="0 0 32 32"><rect x="5" y="5" width="22" height="22"/><circle cx="11" cy="11" r="2" class="dot"/><circle cx="16" cy="16" r="2" class="dot"/><circle cx="21" cy="21" r="2" class="dot"/></symbol>
+<symbol id="ic44" viewBox="0 0 32 32"><circle cx="10" cy="16" r="6"/><circle cx="22" cy="16" r="6"/></symbol>
+<symbol id="ic45" viewBox="0 0 32 32"><line x1="4" y1="8" x2="28" y2="24"/><line x1="4" y1="24" x2="28" y2="8"/></symbol>
+<symbol id="ic46" viewBox="0 0 32 32"><line x1="4" y1="26" x2="10" y2="6"/><line x1="10" y1="6" x2="16" y2="18"/><line x1="16" y1="18" x2="22" y2="6"/><line x1="22" y1="6" x2="28" y2="26"/></symbol>
+<symbol id="ic47" viewBox="0 0 32 32"><circle cx="16" cy="16" r="11"/><line x1="10" y1="10" x2="22" y2="22"/><line x1="22" y1="10" x2="10" y2="22"/></symbol>
+<symbol id="ic48" viewBox="0 0 32 32"><rect x="5" y="5" width="22" height="22"/><line x1="10" y1="10" x2="22" y2="22"/><line x1="22" y1="10" x2="10" y2="22"/></symbol>
+<symbol id="ic49" viewBox="0 0 32 32"><line x1="4" y1="22" x2="10" y2="22"/><line x1="10" y1="22" x2="10" y2="10"/><line x1="10" y1="10" x2="16" y2="10"/><line x1="16" y1="10" x2="16" y2="22"/><line x1="16" y1="22" x2="22" y2="22"/><line x1="22" y1="22" x2="22" y2="10"/><line x1="22" y1="10" x2="28" y2="10"/></symbol>
+<symbol id="ic50" viewBox="0 0 32 32"><line x1="8" y1="7" x2="24" y2="16"/><line x1="24" y1="16" x2="8" y2="25"/></symbol>
+<symbol id="ic51" viewBox="0 0 32 32"><circle cx="9" cy="16" r="4"/><line x1="15" y1="16" x2="27" y2="16"/><line x1="22" y1="11" x2="27" y2="16"/><line x1="27" y1="16" x2="22" y2="21"/></symbol>
+<symbol id="ic52" viewBox="0 0 32 32"><line x1="5" y1="6" x2="5" y2="26"/><line x1="12" y1="9" x2="12" y2="23"/><line x1="19" y1="12" x2="19" y2="20"/><line x1="26" y1="14" x2="26" y2="18"/></symbol>
+<symbol id="ic53" viewBox="0 0 32 32"><line x1="4" y1="7" x2="9" y2="7"/><line x1="9" y1="7" x2="9" y2="25"/><line x1="9" y1="25" x2="14" y2="15"/><line x1="14" y1="15" x2="20" y2="10"/><line x1="20" y1="10" x2="28" y2="7"/></symbol>
+<symbol id="ic54" viewBox="0 0 32 32"><line x1="5" y1="27" x2="27" y2="27"/><line x1="5" y1="27" x2="5" y2="5"/><line x1="5" y1="27" x2="16" y2="14"/><line x1="16" y1="14" x2="27" y2="10"/></symbol>
+<symbol id="ic55" viewBox="0 0 32 32"><rect x="4" y="14" width="6" height="12"/><rect x="13" y="8" width="6" height="18"/><rect x="22" y="12" width="6" height="14"/><line x1="4" y1="6" x2="28" y2="6"/></symbol>
+<symbol id="ic56" viewBox="0 0 32 32"><line x1="4" y1="26" x2="9" y2="11"/><line x1="9" y1="11" x2="23" y2="11"/><line x1="23" y1="11" x2="28" y2="26"/><line x1="16" y1="5" x2="16" y2="8"/></symbol>
+<symbol id="ic57" viewBox="0 0 32 32"><line x1="4" y1="22" x2="10" y2="22"/><line x1="10" y1="22" x2="10" y2="10"/><line x1="10" y1="10" x2="16" y2="10"/><line x1="16" y1="10" x2="16" y2="6"/><line x1="16" y1="6" x2="22" y2="6"/><line x1="22" y1="6" x2="22" y2="24"/><line x1="22" y1="24" x2="28" y2="24"/></symbol>
+<symbol id="ic58" viewBox="0 0 32 32"><circle cx="16" cy="16" r="10"/><circle cx="16" cy="6" r="3" class="dot"/><circle cx="25" cy="21" r="3" class="dot"/><circle cx="7" cy="21" r="3" class="dot"/></symbol>
+</defs></svg>
+<!-- /icons -->
 <div class="wrap">
 <header class="top">
   <a class="name" href="../">MIFM1</a>
@@ -243,11 +395,45 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
   <h2 id="h-start">Prise en main</h2>
   <div>
     <ol class="steps">
-      <li><h3>Allumer</h3><p>Le bouton orange met la machine sous tension et lance la démo : un kick, une basse Moog, un charleston FM, des accords dub. Fa mineur, 124 BPM.</p></li>
-      <li><h3>Choisir une piste</h3><p>PRESETS passe d'une piste à l'autre. EDIT parcourt son son, son grit et son filtre ; ENV, ses enveloppes.</p></li>
-      <li><h3>Sculpter</h3><p>Les quatre potards règlent la page affichée, SELECT tourne les pages. Un A cerclé en haut de l'écran : ALGORITHM change le modèle.</p></li>
-      <li><h3>Lâcher le hasard</h3><p>OCT− enfoncé, tourne SELECT. Chaque note devient un autre son : discret au début, déchaîné au bout, toujours dans la gamme.</p></li>
+      <li><svg class="mini" viewBox="0 0 160 84" aria-hidden="true"><rect x="2" y="2" width="156" height="80" rx="14" class="body"/><circle cx="80" cy="42" r="22" class="orange"/><path d="M73 31 L91 42 L73 53 Z" class="blk"/></svg>
+        <h3>Allumer</h3><p>Le bouton orange met la machine sous tension et lance la démo : un kick, une basse Moog, un charleston FM, des accords dub. Fa mineur, 124 BPM.</p></li>
+      <li><svg class="mini" viewBox="0 0 160 84" aria-hidden="true"><rect x="2" y="2" width="156" height="80" rx="14" class="body"/><circle cx="44" cy="44" r="16" class="knob hi"/><line x1="44" y1="44" x2="54" y2="34" class="ind"/><text x="44" y="20" class="cap" text-anchor="middle">PRESETS</text><rect x="86" y="30" width="46" height="30" rx="6" class="btn hi"/><text x="109" y="50" class="cap" text-anchor="middle">EDIT</text></svg>
+        <h3>Choisir une piste</h3><p>PRESETS passe d'une piste à l'autre. EDIT parcourt son son, son grit et son filtre ; ENV, ses enveloppes.</p></li>
+      <li><svg class="mini" viewBox="0 0 160 84" aria-hidden="true"><rect x="2" y="2" width="156" height="80" rx="14" class="body"/><circle cx="30" cy="44" r="12" class="knob"/><circle cx="63" cy="44" r="12" class="knob"/><circle cx="96" cy="44" r="12" class="knob hi"/><circle cx="129" cy="44" r="12" class="knob"/><path d="M80 52 A18 18 0 1 1 112 52" class="arc"/></svg>
+        <h3>Sculpter</h3><p>Les quatre potards règlent la page affichée, SELECT tourne les pages. Un A cerclé en haut de l'écran : ALGORITHM change le modèle.</p></li>
+      <li><svg class="mini" viewBox="0 0 160 84" aria-hidden="true"><rect x="2" y="2" width="156" height="80" rx="14" class="body"/><rect x="18" y="30" width="52" height="28" rx="6" class="btn hi"/><text x="44" y="49" class="cap" text-anchor="middle">OCT−</text><text x="80" y="50" class="cap" text-anchor="middle">+</text><circle cx="118" cy="44" r="16" class="knob"/><path d="M100 30 A24 24 0 0 1 136 30" class="arc"/><path d="M136 30 l-1 -8 m1 8 l-8 -1" class="arc"/></svg>
+        <h3>Lâcher le hasard</h3><p>OCT− enfoncé, tourne SELECT. Chaque note devient un autre son : discret au début, déchaîné au bout, toujours dans la gamme.</p></li>
     </ol>
+  </div>
+</section>
+
+<section class="part wide" aria-labelledby="h-flow">
+  <h2 id="h-flow">Le chemin du son</h2>
+  <div>
+    <p>Quatre pistes, et sur chacune la même chaîne : un moteur, un grit, un filtre, puis la table de mixage, deux
+      effets en envoi et un bus master. Warps peut prendre la place d'une piste pour la croiser avec une autre ; trois
+      LFO et quarante câbles tirent les ficelles. Tout ça tourne en flottants 32 bits, sur les deux cœurs du FM-1.</p>
+    <div class="flowbox">
+    <svg class="flow" viewBox="0 0 980 300" role="img" aria-label="Le chemin du son : moteur, grit, filtre, mixer, envois vers le delay et la réverbe, bus master, sortie ; Warps entre deux pistes ; LFO et câbles">
+      <text x="10" y="36" class="tk">sur chacune des 4 pistes</text>
+      <g class="blk2"><rect x="10" y="50" width="120" height="76" rx="8"/><use href="#ic8" x="55" y="58" width="30" height="30" class="fi"/><text x="70" y="114" text-anchor="middle">moteur</text></g>
+      <g class="blk2"><rect x="160" y="50" width="100" height="76" rx="8"/><use href="#ic57" x="195" y="58" width="30" height="30" class="fi"/><text x="210" y="114" text-anchor="middle">grit</text></g>
+      <g class="blk2 acc"><rect x="290" y="50" width="110" height="76" rx="8"/><path d="M308 74 H330 C 340 74, 343 62, 348 70 S 362 92, 382 96" class="fcurve"/><text x="345" y="114" text-anchor="middle">filtre</text></g>
+      <g class="blk2"><rect x="430" y="50" width="150" height="76" rx="8"/><use href="#ic35" x="490" y="58" width="30" height="30" class="fi"/><text x="505" y="114" text-anchor="middle">mixer, EQ, duck</text></g>
+      <path d="M130 88 H160 M260 88 H290 M400 88 H430" class="wire"/>
+      <g class="blk2"><rect x="640" y="22" width="130" height="54" rx="8"/><use href="#ic52" x="652" y="34" width="30" height="30" class="fi"/><text x="692" y="55">delay</text></g>
+      <g class="blk2"><rect x="640" y="100" width="130" height="54" rx="8"/><use href="#ic36" x="652" y="112" width="30" height="30" class="fi"/><text x="692" y="133">réverbe</text></g>
+      <g class="blk2 acc"><rect x="820" y="50" width="150" height="76" rx="8"/><use href="#ic55" x="880" y="58" width="30" height="30" class="fi"/><text x="895" y="114" text-anchor="middle">bus master</text></g>
+      <text x="895" y="146" text-anchor="middle" class="small">comp ou OTT, limiteur</text>
+      <path d="M580 88 H610 V49 H640 M610 88 V127 H640 M770 49 H795 V88 H820 M770 127 H795 V88" class="wire"/>
+      <path d="M595 88 V176 H808 V112 H820" class="wire dry"/><text x="700" y="170" text-anchor="middle" class="small">le son sec</text>
+      <g class="blk2"><rect x="290" y="210" width="290" height="56" rx="8"/><use href="#ic47" x="304" y="223" width="30" height="30" class="fi"/><text x="346" y="244">Warps : une piste par une autre</text></g>
+      <path d="M345 126 V210 M505 210 V126" class="wire warps"/>
+      <g class="lfo"><rect x="10" y="210" width="250" height="56" rx="28"/><use href="#ic29" x="30" y="223" width="30" height="30" class="fi"/><text x="72" y="244">3 LFO, 40 câbles</text></g>
+      <path d="M135 210 V160 Q135 150 145 150 H600" class="wire mod"/>
+      <text x="10" y="292" class="small">en pointillé orange : la modulation ; en pointillé noir : Warps, qui croise deux pistes</text>
+    </svg>
+    </div>
   </div>
 </section>
 
@@ -280,6 +466,234 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
   </div>
 </section>
 
+<section class="part wide" aria-labelledby="h-eng">
+  <h2 id="h-eng">28 moteurs</h2>
+  <div>
+    <p>Chaque piste joue l'un des 24 modèles de Plaits, le macro-oscillateur de Mutable Instruments, ou l'une des
+      quatre voix FM du LXR-02. Le code est celui des modules, compilé tel quel : les mêmes équations, les mêmes
+      tables, les mêmes erreurs d'arrondi qu'on aime. Chaque icône est celle de l'écran. « Essayer » charge le
+      moteur sur la piste jouée.</p>
+    <ul class="engines">
+<li class="bank"><h3>Plaits 1.2</h3><p>La deuxième banque, ajoutée par Émilie Gillet avec la version 1.2 du firmware de Plaits : six techniques de synthèse de plus, dont trois banques de patches DX7.</p></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic0"/></svg><h4>VA VCF</h4><p>La chaîne VCO, VCF d'un monophonique, sans un câble : un oscillateur à forme variable dans un filtre résonant modélisé, la soustractive classique en une seule voix.</p><button type="button" class="try" data-kind="0" data-idx="0">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic1"/></svg><h4>PHASE DIST</h4><p>La distorsion de phase des Casio CZ : une sinusoïde lue à vitesse variable dans son cycle se tord en dent de scie, en impulsion, en fausse résonance. Un balayage de filtre sans filtre.</p><button type="button" class="try" data-kind="0" data-idx="1">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic2"/></svg><h4>6-OP FM 1</h4><p>Six opérateurs, les 32 algorithmes du Yamaha DX7 et une banque de ses patches : HARMONICS choisit le patch, TIMBRE dose les modulateurs, MORPH voyage dans les enveloppes.</p><button type="button" class="try" data-kind="0" data-idx="2">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic3"/></svg><h4>6-OP FM 2</h4><p>Une deuxième banque de patches DX7 : pianos électriques, cloches, basses slappées, tout le vocabulaire FM des années 80, sur un seul potard.</p><button type="button" class="try" data-kind="0" data-idx="3">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic4"/></svg><h4>6-OP FM 3</h4><p>La troisième banque. La même mécanique à six opérateurs, d'autres timbres : nappes, cuivres synthétiques, percussions métalliques.</p><button type="button" class="try" data-kind="0" data-idx="4">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic5"/></svg><h4>WAVE TERRAIN</h4><p>Une surface mathématique en trois dimensions, survolée par une orbite : le son est l'altitude relevée le long du trajet. On change de terrain, on élargit l'orbite, le timbre se déforme.</p><button type="button" class="try" data-kind="0" data-idx="5">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic6"/></svg><h4>STRING MACHINE</h4><p>La section de cordes des string machines des années 70 : des ondes divisées empilées en accords, épaissies par un chorus d'ensemble. Le son des nappes d'Oxygène.</p><button type="button" class="try" data-kind="0" data-idx="6">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic7"/></svg><h4>CHIPTUNE</h4><p>Le processeur sonore d'une console 8 bits : des ondes carrées à rapport cyclique variable et des accords joués en arpèges si rapides qu'ils sonnent comme un seul son.</p><button type="button" class="try" data-kind="0" data-idx="7">Essayer sur la piste jouée</button></li>
+<li class="bank"><h3>Pitched</h3><p>La banque d'origine de Plaits (2018), ses oscillateurs accordés. Huit façons de fabriquer une onde.</p></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic8"/></svg><h4>VIRTUAL ANALOG</h4><p>Deux oscillateurs à forme variable, désaccordables : une impulsion qui devient carré, une dent de scie qui devient triangle. Des ondes à bande limitée : pas de repliement, même dans l'aigu.</p><button type="button" class="try" data-kind="0" data-idx="8">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic9"/></svg><h4>WAVESHAPER</h4><p>Un triangle passé dans un waveshaper puis un wavefolder : les harmoniques se replient sur elles-mêmes comme dans la synthèse west coast de Don Buchla.</p><button type="button" class="try" data-kind="0" data-idx="9">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic10"/></svg><h4>FM 2-OP</h4><p>Deux opérateurs sinusoïdaux et une rétroaction, la FM à l'état pur de John Chowning. Les rapports de fréquence tombent sur des intervalles musicaux : métal, cloche, basse.</p><button type="button" class="try" data-kind="0" data-idx="10">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic11"/></svg><h4>FORMANT</h4><p>Des segments de sinusoïdes multipliés, additionnés, synchronisés : une synthèse de formants granulaire dans la lignée de la VOSIM, deux résonances qui chantent sans filtre.</p><button type="button" class="try" data-kind="0" data-idx="11">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic12"/></svg><h4>HARMONIC</h4><p>La synthèse additive : une rangée de sinusoïdes harmoniques dont on sculpte l'enveloppe spectrale en temps réel, de l'orgue à la voix de verre.</p><button type="button" class="try" data-kind="0" data-idx="12">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic13"/></svg><h4>WAVETABLE</h4><p>Quatre banques de 8 × 8 ondes interpolées en deux dimensions : BANK, ROW, COLUMN. La table d'ondes des années PPG, parcourue en continu.</p><button type="button" class="try" data-kind="0" data-idx="13">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic14"/></svg><h4>CHORDS</h4><p>Des accords à quatre voix en ondes divisées ou en table d'ondes : HARMONICS choisit l'accord, TIMBRE l'inversion. Une machine paraphonique dans une piste.</p><button type="button" class="try" data-kind="0" data-idx="14">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic15"/></svg><h4>SPEECH</h4><p>Trois synthèses vocales empilées : des filtres de formants, SAM (le Software Automatic Mouth des Commodore 64) et le LPC des Speak & Spell de Texas Instruments.</p><button type="button" class="try" data-kind="0" data-idx="15">Essayer sur la piste jouée</button></li>
+<li class="bank"><h3>Noise & drums</h3><p>Le bruit, la physique et les boîtes à rythmes : des modèles de circuits et de matières.</p></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic16"/></svg><h4>SWARM</h4><p>Huit dents de scie qui dérivent chacune de son côté, chacune avec son enveloppe : un essaim granulaire, du supersaw au nuage.</p><button type="button" class="try" data-kind="0" data-idx="16">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic17"/></svg><h4>NOISE</h4><p>Un bruit blanc à horloge variable dans un filtre résonant : du souffle au sifflement accordé, en passant par le bruit numérique crénelé.</p><button type="button" class="try" data-kind="0" data-idx="17">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic18"/></svg><h4>PARTICLES</h4><p>Des impulsions aléatoires, le dust, qui excitent des réseaux de filtres résonants : pluie sur un toit, crépitements, gouttes accordées.</p><button type="button" class="try" data-kind="0" data-idx="18">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic19"/></svg><h4>STRING</h4><p>Karplus-Strong étendu : une ligne à retard et un filtre dans une boucle font une corde pincée, la dispersion la rend inharmonique, de la harpe au fil de fer.</p><button type="button" class="try" data-kind="0" data-idx="19">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic20"/></svg><h4>MODAL</h4><p>Un banc de résonateurs modaux, le cœur de Rings, frappé par un maillet ou soufflé par du bruit : cloches, bois, verre, tubes.</p><button type="button" class="try" data-kind="0" data-idx="20">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic21"/></svg><h4>KICK</h4><p>Le résonateur en T ponté de la TR-808, excité par une impulsion : le modèle comportemental d'un circuit, pas un échantillon. Du punch à la queue qui descend.</p><button type="button" class="try" data-kind="0" data-idx="21">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic22"/></svg><h4>SNARE</h4><p>Les modes du fût modélisés comme dans les caisses claires analogiques des boîtes à rythmes, mêlés à un bruit filtré pour le timbre.</p><button type="button" class="try" data-kind="0" data-idx="22">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic23"/></svg><h4>HI-HAT</h4><p>Six oscillateurs carrés désaccordés, le métal de la 808, passés dans des filtres : un charleston analogique qui s'ouvre et se ferme avec DECAY.</p><button type="button" class="try" data-kind="0" data-idx="23">Essayer sur la piste jouée</button></li>
+<li class="bank"><h3>FM drums</h3><p>Les voix de batterie du LXR-02 d'Erica Synths, héritière de la LXR de Sonic Potions : leur code tel quel, vérifié échantillon par échantillon contre l'original.</p></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic24"/></svg><h4>FM DRUM</h4><p>Un oscillateur porteur et un modulateur en FM, une enveloppe de hauteur qui claque : la grosse caisse et les toms, du sub au tom électronique.</p><button type="button" class="try" data-kind="0" data-idx="24">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic25"/></svg><h4>FM SNARE</h4><p>Un oscillateur, un bruit passé dans un filtre résonant, et le snap d'un transitoire : la caisse claire, sèche ou rugueuse.</p><button type="button" class="try" data-kind="0" data-idx="25">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic26"/></svg><h4>FM CYMBAL</h4><p>Un oscillateur modulé en FM par deux autres à des rapports inharmoniques : le métal qui s'étale et qui scintille.</p><button type="button" class="try" data-kind="0" data-idx="26">Essayer sur la piste jouée</button></li>
+<li class="eng"><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic27"/></svg><h4>FM HI-HAT</h4><p>La même architecture à trois opérateurs, coupée court par un passe-haut : le tss du charleston, fermé ou ouvert par un lock.</p><button type="button" class="try" data-kind="0" data-idx="27">Essayer sur la piste jouée</button></li>
+    </ul>
+  </div>
+</section>
+
+<section class="part wide" aria-labelledby="h-filt">
+  <h2 id="h-filt">Quatre filtres, quatre circuits</h2>
+  <div>
+    <p>Un filtre par piste, après le grit. Quatre topologies célèbres, modélisées à partir de leurs circuits : pas
+      des courbes de réponse imitées, des équations différentielles résolues échantillon par échantillon, avec leurs
+      non-linéarités là où les transistors les mettent. Courbes ci-dessous : la réponse, coupure à 1 kHz.</p>
+    <div class="filters">
+<article class="filt">
+  <header><h3>LADDER</h3><p class="kind">L'échelle Moog</p></header>
+  <figure><svg class="plot" viewBox="0 0 320 170" role="img" aria-label="Réponse du LADDER : passe-bas 24 dB sans et avec résonance, passe-haut"><rect x="30" y="12" width="280" height="138" class="pbg"/><line x1="95.2" y1="12" x2="95.2" y2="150" class="grid"/><text x="95.2" y="164" class="ax" text-anchor="middle">100</text><line x1="188.6" y1="12" x2="188.6" y2="150" class="grid"/><text x="188.6" y="164" class="ax" text-anchor="middle">1k</text><line x1="281.9" y1="12" x2="281.9" y2="150" class="grid"/><text x="281.9" y="164" class="ax" text-anchor="middle">10k</text><line x1="30" y1="53.4" x2="310" y2="53.4" class="grid"/><text x="26" y="57.4" class="ax" text-anchor="end">0 dB</text><path d="M30.0 53.4 L33.1 53.4 L36.2 53.4 L39.3 53.4 L42.4 53.4 L45.6 53.4 L48.7 53.4 L51.8 53.4 L54.9 53.5 L58.0 53.5 L61.1 53.5 L64.2 53.5 L67.3 53.5 L70.4 53.5 L73.6 53.5 L76.7 53.6 L79.8 53.6 L82.9 53.6 L86.0 53.7 L89.1 53.7 L92.2 53.7 L95.3 53.8 L98.4 53.9 L101.6 53.9 L104.7 54.0 L107.8 54.1 L110.9 54.3 L114.0 54.4 L117.1 54.6 L120.2 54.7 L123.3 55.0 L126.4 55.2 L129.6 55.5 L132.7 55.9 L135.8 56.2 L138.9 56.7 L142.0 57.2 L145.1 57.8 L148.2 58.5 L151.3 59.3 L154.4 60.2 L157.6 61.2 L160.7 62.4 L163.8 63.7 L166.9 65.2 L170.0 66.8 L173.1 68.7 L176.2 70.7 L179.3 73.0 L182.4 75.5 L185.6 78.2 L188.7 81.2 L191.8 84.4 L194.9 87.8 L198.0 91.5 L201.1 95.3 L204.2 99.4 L207.3 103.7 L210.4 108.2 L213.6 112.9 L216.7 117.7 L219.8 122.7 L222.9 127.8 L226.0 133.0 L229.1 138.4 L232.2 143.8 L235.3 149.4 L238.4 150.0 L241.6 150.0 L244.7 150.0 L247.8 150.0 L250.9 150.0 L254.0 150.0 L257.1 150.0 L260.2 150.0 L263.3 150.0 L266.4 150.0 L269.6 150.0 L272.7 150.0 L275.8 150.0 L278.9 150.0 L282.0 150.0 L285.1 150.0 L288.2 150.0 L291.3 150.0 L294.4 150.0 L297.6 150.0 L300.7 150.0 L303.8 150.0 L306.9 150.0 L310.0 150.0" class="c2"/><path d="M30.0 82.5 L33.1 82.5 L36.2 82.5 L39.3 82.5 L42.4 82.5 L45.6 82.5 L48.7 82.5 L51.8 82.5 L54.9 82.5 L58.0 82.5 L61.1 82.5 L64.2 82.5 L67.3 82.5 L70.4 82.5 L73.6 82.5 L76.7 82.5 L79.8 82.4 L82.9 82.4 L86.0 82.4 L89.1 82.4 L92.2 82.4 L95.3 82.3 L98.4 82.3 L101.6 82.3 L104.7 82.2 L107.8 82.2 L110.9 82.1 L114.0 82.0 L117.1 82.0 L120.2 81.9 L123.3 81.8 L126.4 81.6 L129.6 81.5 L132.7 81.3 L135.8 81.1 L138.9 80.8 L142.0 80.5 L145.1 80.1 L148.2 79.7 L151.3 79.1 L154.4 78.5 L157.6 77.7 L160.7 76.8 L163.8 75.6 L166.9 74.1 L170.0 72.2 L173.1 69.6 L176.2 66.2 L179.3 61.1 L182.4 53.1 L185.6 40.7 L188.7 46.8 L191.8 62.1 L194.9 72.9 L198.0 81.3 L201.1 88.4 L204.2 94.8 L207.3 100.7 L210.4 106.3 L213.6 111.8 L216.7 117.1 L219.8 122.5 L222.9 127.8 L226.0 133.2 L229.1 138.6 L232.2 144.0 L235.3 149.6 L238.4 150.0 L241.6 150.0 L244.7 150.0 L247.8 150.0 L250.9 150.0 L254.0 150.0 L257.1 150.0 L260.2 150.0 L263.3 150.0 L266.4 150.0 L269.6 150.0 L272.7 150.0 L275.8 150.0 L278.9 150.0 L282.0 150.0 L285.1 150.0 L288.2 150.0 L291.3 150.0 L294.4 150.0 L297.6 150.0 L300.7 150.0 L303.8 150.0 L306.9 150.0 L310.0 150.0" class="c1"/><path d="M30.0 150.0 L33.1 150.0 L36.2 150.0 L39.3 150.0 L42.4 150.0 L45.6 150.0 L48.7 150.0 L51.8 150.0 L54.9 150.0 L58.0 150.0 L61.1 150.0 L64.2 150.0 L67.3 150.0 L70.4 150.0 L73.6 150.0 L76.7 150.0 L79.8 150.0 L82.9 150.0 L86.0 150.0 L89.1 150.0 L92.2 150.0 L95.3 150.0 L98.4 150.0 L101.6 150.0 L104.7 150.0 L107.8 150.0 L110.9 150.0 L114.0 150.0 L117.1 150.0 L120.2 150.0 L123.3 150.0 L126.4 150.0 L129.6 150.0 L132.7 150.0 L135.8 150.0 L138.9 150.0 L142.0 150.0 L145.1 150.0 L148.2 150.0 L151.3 150.0 L154.4 145.8 L157.6 138.9 L160.7 131.8 L163.8 124.5 L166.9 116.8 L170.0 108.8 L173.1 100.1 L176.2 90.5 L179.3 79.3 L182.4 65.2 L185.6 46.6 L188.7 46.6 L191.8 55.8 L194.9 60.4 L198.0 62.7 L201.1 63.7 L204.2 63.9 L207.3 63.7 L210.4 63.2 L213.6 62.5 L216.7 61.7 L219.8 60.9 L222.9 60.1 L226.0 59.4 L229.1 58.6 L232.2 58.0 L235.3 57.4 L238.4 56.8 L241.6 56.4 L244.7 56.0 L247.8 55.6 L250.9 55.3 L254.0 55.0 L257.1 54.8 L260.2 54.6 L263.3 54.4 L266.4 54.3 L269.6 54.1 L272.7 54.0 L275.8 53.9 L278.9 53.9 L282.0 53.8 L285.1 53.7 L288.2 53.7 L291.3 53.7 L294.4 53.6 L297.6 53.6 L300.7 53.6 L303.8 53.5 L306.9 53.5 L310.0 53.5" class="c3"/></svg><figcaption>Orange : le passe-bas 24 dB, résonance poussée. Noir : sans résonance. Pointillé : le passe-haut.</figcaption></figure>
+  <svg class="schema" viewBox="0 0 320 110" role="img" aria-label="Schéma : quatre étages en cascade et la rétroaction de la sortie vers l'entrée">
+<circle cx="22" cy="46" r="9" class="node"/><text x="22" y="50" class="sym" text-anchor="middle">+</text>
+<line x1="4" y1="46" x2="13" y2="46" class="ln"/>
+<g class="stage"><rect x="44" y="30" width="48" height="32" rx="3"/><text x="68" y="51" text-anchor="middle">tanh ∫</text></g>
+<g class="stage"><rect x="108" y="30" width="48" height="32" rx="3"/><text x="132" y="51" text-anchor="middle">tanh ∫</text></g>
+<g class="stage"><rect x="172" y="30" width="48" height="32" rx="3"/><text x="196" y="51" text-anchor="middle">tanh ∫</text></g>
+<g class="stage"><rect x="236" y="30" width="48" height="32" rx="3"/><text x="260" y="51" text-anchor="middle">tanh ∫</text></g>
+<line x1="31" y1="46" x2="44" y2="46" class="ln"/><line x1="92" y1="46" x2="108" y2="46" class="ln"/>
+<line x1="156" y1="46" x2="172" y2="46" class="ln"/><line x1="220" y1="46" x2="236" y2="46" class="ln"/>
+<line x1="284" y1="46" x2="316" y2="46" class="ln"/>
+<path d="M300 46 V92 H22 V55" class="fb"/><text x="160" y="104" text-anchor="middle" class="note">résonance : −k × sortie</text>
+</svg>
+  <p>L'échelle à transistors de Robert Moog : quatre étages RC en cascade, chacun avec sa paire différentielle, et la sortie réinjectée à l'entrée pour la résonance. Ici le modèle « amélioré » de Stefano D'Angelo et Vesa Välimäki (2013) : chaque étage sature en tanh comme son transistor, et l'auto-oscillation sort du circuit lui-même, pas d'un oscillateur ajouté. Passe-bas 24 dB par octave ; passe-haut et passe-bande pris sur les étages, comme sur l'Oberheim Xpander.</p>
+  <button type="button" class="try" data-kind="1" data-idx="1">Essayer sur la piste jouée</button>
+</article>
+<article class="filt">
+  <header><h3>MS-20</h3><p class="kind">Le Korg 35</p></header>
+  <figure><svg class="plot" viewBox="0 0 320 170" role="img" aria-label="Réponse du MS-20 : passe-bas 12 dB avec sa résonance, passe-haut"><rect x="30" y="12" width="280" height="138" class="pbg"/><line x1="95.2" y1="12" x2="95.2" y2="150" class="grid"/><text x="95.2" y="164" class="ax" text-anchor="middle">100</text><line x1="188.6" y1="12" x2="188.6" y2="150" class="grid"/><text x="188.6" y="164" class="ax" text-anchor="middle">1k</text><line x1="281.9" y1="12" x2="281.9" y2="150" class="grid"/><text x="281.9" y="164" class="ax" text-anchor="middle">10k</text><line x1="30" y1="53.4" x2="310" y2="53.4" class="grid"/><text x="26" y="57.4" class="ax" text-anchor="end">0 dB</text><path d="M30.0 53.4 L33.1 53.4 L36.2 53.4 L39.3 53.4 L42.4 53.4 L45.6 53.4 L48.7 53.4 L51.8 53.4 L54.9 53.4 L58.0 53.4 L61.1 53.4 L64.2 53.4 L67.3 53.4 L70.4 53.3 L73.6 53.3 L76.7 53.3 L79.8 53.3 L82.9 53.3 L86.0 53.3 L89.1 53.3 L92.2 53.2 L95.3 53.2 L98.4 53.2 L101.6 53.1 L104.7 53.1 L107.8 53.0 L110.9 53.0 L114.0 52.9 L117.1 52.8 L120.2 52.7 L123.3 52.6 L126.4 52.5 L129.6 52.3 L132.7 52.1 L135.8 51.9 L138.9 51.6 L142.0 51.3 L145.1 51.0 L148.2 50.5 L151.3 50.0 L154.4 49.4 L157.6 48.7 L160.7 47.8 L163.8 46.7 L166.9 45.3 L170.0 43.6 L173.1 41.5 L176.2 38.7 L179.3 35.1 L182.4 30.2 L185.6 24.2 L188.7 21.3 L191.8 27.7 L194.9 36.7 L198.0 44.6 L201.1 51.3 L204.2 57.1 L207.3 62.2 L210.4 67.0 L213.6 71.4 L216.7 75.5 L219.8 79.5 L222.9 83.3 L226.0 87.0 L229.1 90.5 L232.2 94.0 L235.3 97.4 L238.4 100.8 L241.6 104.1 L244.7 107.4 L247.8 110.7 L250.9 113.9 L254.0 117.1 L257.1 120.3 L260.2 123.4 L263.3 126.6 L266.4 129.7 L269.6 132.9 L272.7 136.0 L275.8 139.1 L278.9 142.2 L282.0 145.3 L285.1 148.4 L288.2 150.0 L291.3 150.0 L294.4 150.0 L297.6 150.0 L300.7 150.0 L303.8 150.0 L306.9 150.0 L310.0 150.0" class="c1"/><path d="M30.0 131.6 L33.1 130.0 L36.2 128.5 L39.3 127.0 L42.4 125.4 L45.6 123.9 L48.7 122.4 L51.8 120.8 L54.9 119.3 L58.0 117.8 L61.1 116.2 L64.2 114.7 L67.3 113.2 L70.4 111.6 L73.6 110.1 L76.7 108.6 L79.8 107.1 L82.9 105.5 L86.0 104.0 L89.1 102.5 L92.2 101.0 L95.3 99.5 L98.4 97.9 L101.6 96.4 L104.7 94.9 L107.8 93.4 L110.9 91.9 L114.0 90.4 L117.1 88.9 L120.2 87.4 L123.3 85.9 L126.4 84.5 L129.6 83.0 L132.7 81.6 L135.8 80.1 L138.9 78.7 L142.0 77.3 L145.1 75.9 L148.2 74.6 L151.3 73.2 L154.4 71.9 L157.6 70.6 L160.7 69.4 L163.8 68.2 L166.9 67.0 L170.0 65.9 L173.1 64.8 L176.2 63.8 L179.3 62.9 L182.4 61.9 L185.6 61.1 L188.7 60.3 L191.8 59.6 L194.9 58.9 L198.0 58.3 L201.1 57.7 L204.2 57.2 L207.3 56.7 L210.4 56.3 L213.6 56.0 L216.7 55.6 L219.8 55.3 L222.9 55.1 L226.0 54.9 L229.1 54.7 L232.2 54.5 L235.3 54.3 L238.4 54.2 L241.6 54.1 L244.7 54.0 L247.8 53.9 L250.9 53.9 L254.0 53.8 L257.1 53.7 L260.2 53.7 L263.3 53.6 L266.4 53.6 L269.6 53.6 L272.7 53.6 L275.8 53.5 L278.9 53.5 L282.0 53.5 L285.1 53.5 L288.2 53.5 L291.3 53.5 L294.4 53.5 L297.6 53.4 L300.7 53.4 L303.8 53.4 L306.9 53.4 L310.0 53.4" class="c3"/></svg><figcaption>Orange : le passe-bas 12 dB et son pic. Pointillé : le passe-haut 6 dB.</figcaption></figure>
+  <svg class="schema" viewBox="0 0 320 110" role="img" aria-label="Schéma : deux pôles et une boucle de résonance saturée">
+<line x1="4" y1="40" x2="40" y2="40" class="ln"/>
+<g class="stage"><rect x="40" y="24" width="60" height="32" rx="3"/><text x="70" y="45" text-anchor="middle">pôle 1</text></g>
+<circle cx="130" cy="40" r="9" class="node"/><text x="130" y="44" class="sym" text-anchor="middle">+</text>
+<line x1="100" y1="40" x2="121" y2="40" class="ln"/><line x1="139" y1="40" x2="160" y2="40" class="ln"/>
+<g class="stage"><rect x="160" y="24" width="60" height="32" rx="3"/><text x="190" y="45" text-anchor="middle">pôle 2</text></g>
+<line x1="220" y1="40" x2="316" y2="40" class="ln"/>
+<g class="stage hot"><rect x="168" y="70" width="60" height="28" rx="3"/><text x="198" y="89" text-anchor="middle">sat × K</text></g>
+<path d="M262 40 V84 H228" class="fb"/><path d="M168 84 H130 V49" class="fb"/>
+<text x="290" y="104" text-anchor="end" class="note">la saturation dans la boucle</text>
+</svg>
+  <p>Le Korg 35 des premiers MS-20 et du MS-10 : deux pôles en Sallen-Key, et une boucle de résonance où la saturation est dans le retour. C'est elle qui fait hurler le filtre quand on le pousse, au lieu de l'écrêter. Modélisé sans délai dans la boucle (zero-delay feedback, Vadim Zavalishin) d'après la note AN-5 de Will Pirkle. Passe-bas 12 dB, passe-haut 6 dB, passe-bande en série comme les deux filtres du MS-20.</p>
+  <button type="button" class="try" data-kind="1" data-idx="2">Essayer sur la piste jouée</button>
+</article>
+<article class="filt">
+  <header><h3>SEM</h3><p class="kind">L'Oberheim SEM</p></header>
+  <figure><svg class="plot" viewBox="0 0 320 170" role="img" aria-label="Réponse du SEM : passe-bas, passe-bande et passe-haut 12 dB"><rect x="30" y="12" width="280" height="138" class="pbg"/><line x1="95.2" y1="12" x2="95.2" y2="150" class="grid"/><text x="95.2" y="164" class="ax" text-anchor="middle">100</text><line x1="188.6" y1="12" x2="188.6" y2="150" class="grid"/><text x="188.6" y="164" class="ax" text-anchor="middle">1k</text><line x1="281.9" y1="12" x2="281.9" y2="150" class="grid"/><text x="281.9" y="164" class="ax" text-anchor="middle">10k</text><line x1="30" y1="53.4" x2="310" y2="53.4" class="grid"/><text x="26" y="57.4" class="ax" text-anchor="end">0 dB</text><path d="M30.0 53.4 L33.1 53.4 L36.2 53.4 L39.3 53.4 L42.4 53.4 L45.6 53.4 L48.7 53.4 L51.8 53.4 L54.9 53.4 L58.0 53.4 L61.1 53.4 L64.2 53.4 L67.3 53.4 L70.4 53.4 L73.6 53.3 L76.7 53.3 L79.8 53.3 L82.9 53.3 L86.0 53.3 L89.1 53.3 L92.2 53.3 L95.3 53.3 L98.4 53.2 L101.6 53.2 L104.7 53.2 L107.8 53.1 L110.9 53.1 L114.0 53.0 L117.1 53.0 L120.2 52.9 L123.3 52.8 L126.4 52.7 L129.6 52.6 L132.7 52.5 L135.8 52.3 L138.9 52.1 L142.0 51.9 L145.1 51.6 L148.2 51.4 L151.3 51.0 L154.4 50.6 L157.6 50.2 L160.7 49.7 L163.8 49.1 L166.9 48.4 L170.0 47.7 L173.1 46.9 L176.2 46.2 L179.3 45.6 L182.4 45.3 L185.6 45.6 L188.7 46.7 L191.8 48.7 L194.9 51.5 L198.0 54.9 L201.1 58.6 L204.2 62.4 L207.3 66.2 L210.4 70.0 L213.6 73.7 L216.7 77.4 L219.8 81.0 L222.9 84.5 L226.0 87.9 L229.1 91.3 L232.2 94.7 L235.3 98.0 L238.4 101.3 L241.6 104.5 L244.7 107.8 L247.8 111.0 L250.9 114.1 L254.0 117.3 L257.1 120.5 L260.2 123.6 L263.3 126.7 L266.4 129.8 L269.6 133.0 L272.7 136.1 L275.8 139.2 L278.9 142.3 L282.0 145.3 L285.1 148.4 L288.2 150.0 L291.3 150.0 L294.4 150.0 L297.6 150.0 L300.7 150.0 L303.8 150.0 L306.9 150.0 L310.0 150.0" class="c1"/><path d="M30.0 138.3 L33.1 136.7 L36.2 135.2 L39.3 133.7 L42.4 132.1 L45.6 130.6 L48.7 129.1 L51.8 127.5 L54.9 126.0 L58.0 124.5 L61.1 122.9 L64.2 121.4 L67.3 119.8 L70.4 118.3 L73.6 116.8 L76.7 115.2 L79.8 113.7 L82.9 112.1 L86.0 110.6 L89.1 109.0 L92.2 107.5 L95.3 105.9 L98.4 104.4 L101.6 102.8 L104.7 101.2 L107.8 99.7 L110.9 98.1 L114.0 96.5 L117.1 94.9 L120.2 93.3 L123.3 91.7 L126.4 90.0 L129.6 88.4 L132.7 86.7 L135.8 85.0 L138.9 83.3 L142.0 81.6 L145.1 79.8 L148.2 78.0 L151.3 76.1 L154.4 74.2 L157.6 72.2 L160.7 70.1 L163.8 68.0 L166.9 65.8 L170.0 63.6 L173.1 61.3 L176.2 59.0 L179.3 56.9 L182.4 55.1 L185.6 53.8 L188.7 53.4 L191.8 53.9 L194.9 55.2 L198.0 57.0 L201.1 59.1 L204.2 61.4 L207.3 63.7 L210.4 66.0 L213.6 68.1 L216.7 70.3 L219.8 72.3 L222.9 74.3 L226.0 76.2 L229.1 78.1 L232.2 79.9 L235.3 81.7 L238.4 83.4 L241.6 85.1 L244.7 86.8 L247.8 88.5 L250.9 90.1 L254.0 91.8 L257.1 93.4 L260.2 95.0 L263.3 96.6 L266.4 98.2 L269.6 99.8 L272.7 101.3 L275.8 102.9 L278.9 104.5 L282.0 106.0 L285.1 107.6 L288.2 109.1 L291.3 110.7 L294.4 112.2 L297.6 113.8 L300.7 115.3 L303.8 116.9 L306.9 118.4 L310.0 119.9" class="c2"/><path d="M30.0 150.0 L33.1 150.0 L36.2 150.0 L39.3 150.0 L42.4 150.0 L45.6 150.0 L48.7 150.0 L51.8 150.0 L54.9 150.0 L58.0 150.0 L61.1 150.0 L64.2 150.0 L67.3 150.0 L70.4 150.0 L73.6 150.0 L76.7 150.0 L79.8 150.0 L82.9 150.0 L86.0 150.0 L89.1 150.0 L92.2 148.2 L95.3 145.2 L98.4 142.1 L101.6 139.0 L104.7 135.9 L107.8 132.8 L110.9 129.6 L114.0 126.5 L117.1 123.4 L120.2 120.3 L123.3 117.1 L126.4 113.9 L129.6 110.8 L132.7 107.6 L135.8 104.3 L138.9 101.1 L142.0 97.8 L145.1 94.5 L148.2 91.1 L151.3 87.7 L154.4 84.3 L157.6 80.8 L160.7 77.2 L163.8 73.5 L166.9 69.8 L170.0 66.0 L173.1 62.2 L176.2 58.4 L179.3 54.7 L182.4 51.4 L185.6 48.6 L188.7 46.6 L191.8 45.6 L194.9 45.3 L198.0 45.6 L201.1 46.2 L204.2 47.0 L207.3 47.7 L210.4 48.4 L213.6 49.1 L216.7 49.7 L219.8 50.2 L222.9 50.7 L226.0 51.0 L229.1 51.4 L232.2 51.7 L235.3 51.9 L238.4 52.1 L241.6 52.3 L244.7 52.5 L247.8 52.6 L250.9 52.7 L254.0 52.8 L257.1 52.9 L260.2 53.0 L263.3 53.0 L266.4 53.1 L269.6 53.1 L272.7 53.2 L275.8 53.2 L278.9 53.2 L282.0 53.3 L285.1 53.3 L288.2 53.3 L291.3 53.3 L294.4 53.3 L297.6 53.3 L300.7 53.3 L303.8 53.3 L306.9 53.4 L310.0 53.4" class="c3"/></svg><figcaption>Les trois sorties ensemble : orange le passe-bas, noir le passe-bande, pointillé le passe-haut.</figcaption></figure>
+  <svg class="schema" viewBox="0 0 320 110" role="img" aria-label="Schéma : un sommateur, deux intégrateurs, trois sorties">
+<line x1="4" y1="40" x2="30" y2="40" class="ln"/>
+<circle cx="39" cy="40" r="9" class="node"/><text x="39" y="44" class="sym" text-anchor="middle">+</text>
+<line x1="48" y1="40" x2="96" y2="40" class="ln"/>
+<g class="stage"><rect x="96" y="24" width="44" height="32" rx="3"/><text x="118" y="45" text-anchor="middle">∫</text></g>
+<line x1="140" y1="40" x2="190" y2="40" class="ln"/>
+<g class="stage"><rect x="190" y="24" width="44" height="32" rx="3"/><text x="212" y="45" text-anchor="middle">∫</text></g>
+<line x1="234" y1="40" x2="300" y2="40" class="ln"/>
+<circle cx="70" cy="40" r="3.5" class="tap"/><text x="70" y="22" text-anchor="middle" class="out">HP</text>
+<circle cx="165" cy="40" r="3.5" class="tap"/><text x="165" y="22" text-anchor="middle" class="out">BP</text>
+<circle cx="268" cy="40" r="3.5" class="tap"/><text x="268" y="22" text-anchor="middle" class="out">LP</text>
+<path d="M165 40 V78 H39 V49" class="fb"/><path d="M268 40 V94 H33 V49" class="fb"/>
+<text x="300" y="104" text-anchor="end" class="note">deux boucles : la fréquence, le Q</text>
+</svg>
+  <p>Le filtre à variables d'état du Synthesizer Expander Module d'Oberheim (1974) : deux intégrateurs bouclés sur un sommateur, et trois sorties en même temps, passe-bas, passe-bande, passe-haut. Une pente de 12 dB, une résonance ronde qui ne s'auto-oscille pas, comme sur l'original. En topologie TPT (Zavalishin) pour rester juste jusque dans l'aigu.</p>
+  <button type="button" class="try" data-kind="1" data-idx="3">Essayer sur la piste jouée</button>
+</article>
+<article class="filt">
+  <header><h3>VOX</h3><p class="kind">Les formants</p></header>
+  <figure><svg class="plot" viewBox="0 0 320 170" role="img" aria-label="Réponse du VOX : les formants de la voyelle A et de la voyelle I"><rect x="30" y="12" width="280" height="138" class="pbg"/><line x1="95.2" y1="12" x2="95.2" y2="150" class="grid"/><text x="95.2" y="164" class="ax" text-anchor="middle">100</text><line x1="188.6" y1="12" x2="188.6" y2="150" class="grid"/><text x="188.6" y="164" class="ax" text-anchor="middle">1k</text><line x1="281.9" y1="12" x2="281.9" y2="150" class="grid"/><text x="281.9" y="164" class="ax" text-anchor="middle">10k</text><line x1="30" y1="53.4" x2="310" y2="53.4" class="grid"/><text x="26" y="57.4" class="ax" text-anchor="end">0 dB</text><path d="M30.0 150.0 L33.1 150.0 L36.2 150.0 L39.3 150.0 L42.4 150.0 L45.6 150.0 L48.7 150.0 L51.8 148.7 L54.9 147.1 L58.0 145.6 L61.1 144.1 L64.2 142.5 L67.3 141.0 L70.4 139.4 L73.6 137.9 L76.7 136.3 L79.8 134.8 L82.9 133.2 L86.0 131.7 L89.1 130.1 L92.2 128.5 L95.3 126.9 L98.4 125.4 L101.6 123.8 L104.7 122.2 L107.8 120.6 L110.9 118.9 L114.0 117.3 L117.1 115.6 L120.2 113.9 L123.3 112.2 L126.4 110.4 L129.6 108.7 L132.7 106.8 L135.8 104.9 L138.9 102.9 L142.0 100.9 L145.1 98.7 L148.2 96.4 L151.3 93.9 L154.4 91.2 L157.6 88.2 L160.7 84.7 L163.8 80.6 L166.9 75.5 L170.0 68.7 L173.1 59.2 L176.2 53.6 L179.3 67.0 L182.4 82.0 L185.6 94.5 L188.7 80.4 L191.8 60.2 L194.9 66.9 L198.0 76.7 L201.1 83.5 L204.2 89.0 L207.3 94.1 L210.4 99.4 L213.6 106.1 L216.7 116.5 L219.8 116.0 L222.9 86.9 L226.0 75.3 L229.1 86.3 L232.2 92.8 L235.3 97.2 L238.4 100.5 L241.6 103.3 L244.7 105.8 L247.8 108.0 L250.9 110.1 L254.0 112.1 L257.1 114.0 L260.2 115.8 L263.3 117.6 L266.4 119.3 L269.6 121.0 L272.7 122.7 L275.8 124.3 L278.9 126.0 L282.0 127.6 L285.1 129.2 L288.2 130.8 L291.3 132.4 L294.4 133.9 L297.6 135.5 L300.7 137.1 L303.8 138.6 L306.9 140.2 L310.0 141.7" class="c1"/><path d="M30.0 145.6 L33.1 144.0 L36.2 142.4 L39.3 140.9 L42.4 139.3 L45.6 137.8 L48.7 136.2 L51.8 134.6 L54.9 133.0 L58.0 131.4 L61.1 129.8 L64.2 128.2 L67.3 126.6 L70.4 125.0 L73.6 123.3 L76.7 121.6 L79.8 119.9 L82.9 118.1 L86.0 116.4 L89.1 114.5 L92.2 112.6 L95.3 110.7 L98.4 108.7 L101.6 106.5 L104.7 104.3 L107.8 101.8 L110.9 99.2 L114.0 96.3 L117.1 93.1 L120.2 89.3 L123.3 84.9 L126.4 79.3 L129.6 71.8 L132.7 61.3 L135.8 53.5 L138.9 63.9 L142.0 74.2 L145.1 81.7 L148.2 87.6 L151.3 92.4 L154.4 96.7 L157.6 100.6 L160.7 104.3 L163.8 108.0 L166.9 111.7 L170.0 115.6 L173.1 119.9 L176.2 124.8 L179.3 130.8 L182.4 138.9 L185.6 150.0 L188.7 150.0 L191.8 148.7 L194.9 135.9 L198.0 127.3 L201.1 120.6 L204.2 114.6 L207.3 108.8 L210.4 102.9 L213.6 96.3 L216.7 87.9 L219.8 76.1 L222.9 70.8 L226.0 89.7 L229.1 100.9 L232.2 76.1 L235.3 76.2 L238.4 87.0 L241.6 93.7 L244.7 98.5 L247.8 102.4 L250.9 105.6 L254.0 108.4 L257.1 111.0 L260.2 113.3 L263.3 115.5 L266.4 117.6 L269.6 119.6 L272.7 121.5 L275.8 123.4 L278.9 125.2 L282.0 126.9 L285.1 128.6 L288.2 130.3 L291.3 132.0 L294.4 133.7 L297.6 135.3 L300.7 136.9 L303.8 138.5 L306.9 140.1 L310.0 141.7" class="c2"/></svg><figcaption>Orange : la voyelle A (730, 1090, 2440 Hz). Noir : la voyelle I (270, 2290, 3010 Hz).</figcaption></figure>
+  <svg class="schema" viewBox="0 0 320 110" role="img" aria-label="Schéma : trois résonateurs de formants en parallèle, sommés">
+<line x1="4" y1="55" x2="40" y2="55" class="ln"/>
+<path d="M40 55 V18 H96 M40 55 H96 M40 55 V92 H96" class="ln"/>
+<g class="stage"><rect x="96" y="6" width="76" height="24" rx="3"/><text x="134" y="22" text-anchor="middle">F1</text></g>
+<g class="stage"><rect x="96" y="43" width="76" height="24" rx="3"/><text x="134" y="59" text-anchor="middle">F2</text></g>
+<g class="stage"><rect x="96" y="80" width="76" height="24" rx="3"/><text x="134" y="96" text-anchor="middle">F3</text></g>
+<path d="M172 18 H230 V46 M172 55 H221 M172 92 H230 V64" class="ln"/>
+<circle cx="230" cy="55" r="9" class="node"/><text x="230" y="59" class="sym" text-anchor="middle">+</text>
+<line x1="239" y1="55" x2="316" y2="55" class="ln"/>
+</svg>
+  <p>Pas un filtre de synthé, une bouche : trois résonateurs en parallèle accordés sur les trois premiers formants des voyelles, les moyennes mesurées par Gordon Peterson et Harold Barney en 1952 sur 76 voix. CUTOFF glisse de A à E, I, O, U, la résonance les aiguise, TYPE choisit une voix grave, moyenne ou aiguë. Avec le bruit, un murmure.</p>
+  <button type="button" class="try" data-kind="1" data-idx="4">Essayer sur la piste jouée</button>
+</article>
+    </div>
+    <div class="vactrol">
+      <svg class="schema env" viewBox="0 0 420 130" role="img" aria-label="L'enveloppe à vactrol : une montée rapide, une chute qui ralentit, et le ping au trig">
+        <line x1="20" y1="110" x2="410" y2="110" class="ln"/>
+        <path d="M30 110 C 34 40, 40 22, 46 22 C 90 24, 120 70, 200 92 C 260 104, 330 108, 405 109" class="c1"/>
+        <line x1="30" y1="110" x2="30" y2="14" class="pingl"/><circle cx="30" cy="14" r="4" class="tap"/>
+        <text x="40" y="14" class="note">PING : une impulsion dans le filtre</text>
+        <text x="52" y="44" class="note">ATTACK</text><text x="200" y="80" class="note">DECAY : la chute ralentit</text>
+        <text x="20" y="126" class="note">trig</text>
+      </svg>
+      <p><b>Une enveloppe à vactrol pour chacun.</b> Un vactrol, c'est une LED collée à une photorésistance : la
+        lumière monte d'un coup, la résistance retombe lentement et pas en ligne droite. C'est l'âme des low pass
+        gates de Buchla, et celle du LPG de Plaits, dont MIFM1 reprend les coefficients. Autour : le <b>PING</b>, qui
+        frappe le filtre à chaque trig (avec de la résonance, il sonne seul, comme un tom), la <b>FM</b> par sa propre
+        sortie, échantillon par échantillon, et un <b>bruit coloré</b> (plus sombre, blanc ou plus brillant) injecté dans le filtre.</p>
+    </div>
+  </div>
+</section>
+
+<section class="part" aria-labelledby="h-grit">
+  <h2 id="h-grit">Le grit</h2>
+  <div>
+    <p>Avant le filtre, de quoi salir la voix : DRIVE monte le gain des petits signaux jusqu'à ×25 dans une des trois
+      courbes, RATE retient chaque échantillon (un échantillonneur bloqueur, jusqu'à 689 Hz), BITS arrondit à 16, 8,
+      4, 2 bits. Le repliement est voulu.</p>
+    <div class="grits">
+      <figure><svg class="curve2" viewBox="0 0 100 100" aria-hidden="true"><line x1="5" y1="50" x2="95" y2="50" class="grid"/><line x1="50" y1="5" x2="50" y2="95" class="grid"/><path d="M5.0 95.0 L6.5 95.0 L8.0 95.0 L9.5 95.0 L11.0 95.0 L12.5 95.0 L14.0 95.0 L15.5 95.0 L17.0 95.0 L18.5 95.0 L20.0 95.0 L21.5 95.0 L23.0 94.7 L24.5 94.3 L26.0 93.9 L27.5 93.4 L29.0 92.9 L30.5 92.3 L32.0 91.7 L33.5 90.9 L35.0 90.0 L36.5 89.0 L38.0 87.8 L39.5 86.3 L41.0 84.5 L42.5 82.3 L44.0 79.5 L45.5 75.7 L47.0 70.5 L48.5 62.7 L50.0 50.0 L51.5 37.3 L53.0 29.5 L54.5 24.3 L56.0 20.5 L57.5 17.7 L59.0 15.5 L60.5 13.7 L62.0 12.2 L63.5 11.0 L65.0 10.0 L66.5 9.1 L68.0 8.3 L69.5 7.7 L71.0 7.1 L72.5 6.6 L74.0 6.1 L75.5 5.7 L77.0 5.3 L78.5 5.0 L80.0 5.0 L81.5 5.0 L83.0 5.0 L84.5 5.0 L86.0 5.0 L87.5 5.0 L89.0 5.0 L90.5 5.0 L92.0 5.0 L93.5 5.0 L95.0 5.0" class="c1"/></svg><figcaption>Soft : une saturation douce</figcaption></figure>
+      <figure><svg class="curve2" viewBox="0 0 100 100" aria-hidden="true"><line x1="5" y1="50" x2="95" y2="50" class="grid"/><line x1="50" y1="5" x2="50" y2="95" class="grid"/><path d="M5.0 95.0 L6.5 95.0 L8.0 95.0 L9.5 95.0 L11.0 95.0 L12.5 95.0 L14.0 95.0 L15.5 95.0 L17.0 95.0 L18.5 95.0 L20.0 95.0 L21.5 95.0 L23.0 95.0 L24.5 95.0 L26.0 95.0 L27.5 95.0 L29.0 95.0 L30.5 92.9 L32.0 89.6 L33.5 86.3 L35.0 83.0 L36.5 79.7 L38.0 76.4 L39.5 73.1 L41.0 69.8 L42.5 66.5 L44.0 63.2 L45.5 59.9 L47.0 56.6 L48.5 53.3 L50.0 50.0 L51.5 46.7 L53.0 43.4 L54.5 40.1 L56.0 36.8 L57.5 33.5 L59.0 30.2 L60.5 26.9 L62.0 23.6 L63.5 20.3 L65.0 17.0 L66.5 13.7 L68.0 10.4 L69.5 7.1 L71.0 5.0 L72.5 5.0 L74.0 5.0 L75.5 5.0 L77.0 5.0 L78.5 5.0 L80.0 5.0 L81.5 5.0 L83.0 5.0 L84.5 5.0 L86.0 5.0 L87.5 5.0 L89.0 5.0 L90.5 5.0 L92.0 5.0 L93.5 5.0 L95.0 5.0" class="c1"/></svg><figcaption>Hard : écrêtée net</figcaption></figure>
+      <figure><svg class="curve2" viewBox="0 0 100 100" aria-hidden="true"><line x1="5" y1="50" x2="95" y2="50" class="grid"/><line x1="50" y1="5" x2="50" y2="95" class="grid"/><path d="M5.0 41.0 L6.5 44.3 L8.0 47.6 L9.5 50.9 L11.0 54.2 L12.5 57.5 L14.0 60.8 L15.5 64.1 L17.0 67.4 L18.5 70.7 L20.0 74.0 L21.5 77.3 L23.0 80.6 L24.5 83.9 L26.0 87.2 L27.5 90.5 L29.0 93.8 L30.5 92.9 L32.0 89.6 L33.5 86.3 L35.0 83.0 L36.5 79.7 L38.0 76.4 L39.5 73.1 L41.0 69.8 L42.5 66.5 L44.0 63.2 L45.5 59.9 L47.0 56.6 L48.5 53.3 L50.0 50.0 L51.5 46.7 L53.0 43.4 L54.5 40.1 L56.0 36.8 L57.5 33.5 L59.0 30.2 L60.5 26.9 L62.0 23.6 L63.5 20.3 L65.0 17.0 L66.5 13.7 L68.0 10.4 L69.5 7.1 L71.0 6.2 L72.5 9.5 L74.0 12.8 L75.5 16.1 L77.0 19.4 L78.5 22.7 L80.0 26.0 L81.5 29.3 L83.0 32.6 L84.5 35.9 L86.0 39.2 L87.5 42.5 L89.0 45.8 L90.5 49.1 L92.0 52.4 L93.5 55.7 L95.0 59.0" class="c1"/></svg><figcaption>Fold : ce qui dépasse repart</figcaption></figure>
+      <figure><svg class="curve2" viewBox="0 0 100 100" aria-hidden="true"><line x1="5" y1="50" x2="95" y2="50" class="grid"/><path d="M5 50 C 20 20, 35 20, 50 50 S 80 80, 95 50" class="c2"/><path d="M5 50 H17 V30 H29 V24 H41 V38 H53 V56 H65 V74 H77 V70 H89 V54 H95" class="c1"/></svg><figcaption>Rate et bits : l'escalier</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section class="part" aria-labelledby="h-fx">
+  <h2 id="h-fx">Les effets</h2>
+  <div>
+    <ul class="fxs">
+      <li><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic52"/></svg><h3>Delay</h3><p>Inspiré des potards du Zen Delay : temps calé sur le tempo (triolets, pointées) ou libre, un filtre résonant et un drive dans la boucle, du ping-pong, un léger pleurage de bande.</p></li>
+      <li><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic36"/></svg><h3>Réverbe</h3><p>Celle de Clouds : un réseau de passe-tout et de lignes à retard qui diffuse le son. Ses lignes sont ici en flottants, là où le module les stockait sur 12 bits.</p></li>
+      <li><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic47"/></svg><h3>Warps</h3><p>Le modulateur croisé de Mutable entre deux pistes : crossfade, cross-fold, anneau à diodes modélisé, anneau numérique, XOR, comparateur, et le décaleur de fréquence caché.</p></li>
+      <li><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic55"/></svg><h3>Bus master</h3><p>Un compresseur, ou OTT : trois bandes compressées vers le haut et vers le bas, d'après le preset d'Ableton. Puis le limiteur de Rings.</p></li>
+    </ul>
+  </div>
+</section>
+
+<section class="part wide" aria-labelledby="h-seq">
+  <h2 id="h-seq">Le séquenceur</h2>
+  <div>
+    <p>64 pas par piste, à la Elektron. Chaque pas peut verrouiller n'importe quel réglage (un P-lock), jouer avec une
+      probabilité, se répéter en ratchets. Des rythmes euclidiens répartissent N coups sur la longueur, Endless joue des
+      notes enregistrées une à une, et chaque effet a sa propre piste de pas qui l'ouvre et le referme.</p>
+    <div class="seqfigs">
+    <svg class="steps16" viewBox="0 0 640 150" role="img" aria-label="16 pas : des trigs, un P-lock, un pas à 50 %, un ratchet à trois coups">
+      <rect x="10" y="18" width="34" height="56" rx="4" class="on"/>
+      <rect x="49" y="18" width="34" height="56" rx="4" class="off"/>
+      <rect x="88" y="18" width="34" height="56" rx="4" class="off"/>
+      <rect x="127" y="18" width="34" height="56" rx="4" class="plock"/>
+      <rect x="166" y="18" width="34" height="56" rx="4" class="on"/>
+      <rect x="205" y="18" width="34" height="56" rx="4" class="off"/>
+      <rect x="244" y="18" width="34" height="56" rx="4" class="prob"/>
+      <rect x="283" y="18" width="34" height="56" rx="4" class="off"/>
+      <rect x="322" y="18" width="34" height="56" rx="4" class="on"/>
+      <rect x="361" y="18" width="34" height="56" rx="4" class="off"/>
+      <rect x="400" y="18" width="34" height="56" rx="4" class="off"/>
+      <rect x="439" y="18" width="34" height="56" rx="4" class="on"/>
+      <rect x="478" y="18" width="34" height="56" rx="4" class="rat"/>
+      <rect x="517" y="18" width="34" height="56" rx="4" class="off"/>
+      <rect x="556" y="18" width="34" height="56" rx="4" class="off"/>
+      <rect x="595" y="18" width="34" height="56" rx="4" class="off"/>
+      <circle cx="144" cy="46" r="6" class="dotlock"/>
+      <rect x="244" y="46" width="34" height="28" rx="3" class="half"/>
+      <line x1="489.3" y1="18" x2="489.3" y2="74" class="cut"/><line x1="500.7" y1="18" x2="500.7" y2="74" class="cut"/>
+      <line x1="27" y1="80" x2="27" y2="96" class="lead"/><text x="27" y="112" text-anchor="middle" class="lab">un trig</text>
+      <line x1="144" y1="80" x2="144" y2="96" class="lead"/><text x="144" y="112" text-anchor="middle" class="lab">un P-lock</text>
+      <line x1="261" y1="80" x2="261" y2="96" class="lead"/><text x="261" y="112" text-anchor="middle" class="lab">50 % de chances</text>
+      <line x1="495" y1="80" x2="495" y2="96" class="lead"/><text x="495" y="112" text-anchor="middle" class="lab">un ratchet ×3</text>
+      <text x="10" y="142" class="note">1 à 16, puis jusqu'à 64 pas : OCT− et OCT+ changent de page en mode STEP</text>
+    </svg>
+    <svg class="euclid" viewBox="0 0 200 150" role="img" aria-label="Un rythme euclidien : 5 coups répartis sur 16 pas">
+      <g transform="translate(100 70)">
+        <circle cx="0.0" cy="-52.0" r="6" class="eon"/>
+        <circle cx="19.9" cy="-48.0" r="3" class="eoff"/>
+        <circle cx="36.8" cy="-36.8" r="3" class="eoff"/>
+        <circle cx="48.0" cy="-19.9" r="6" class="eon"/>
+        <circle cx="52.0" cy="-0.0" r="3" class="eoff"/>
+        <circle cx="48.0" cy="19.9" r="3" class="eoff"/>
+        <circle cx="36.8" cy="36.8" r="6" class="eon"/>
+        <circle cx="19.9" cy="48.0" r="3" class="eoff"/>
+        <circle cx="0.0" cy="52.0" r="3" class="eoff"/>
+        <circle cx="-19.9" cy="48.0" r="6" class="eon"/>
+        <circle cx="-36.8" cy="36.8" r="3" class="eoff"/>
+        <circle cx="-48.0" cy="19.9" r="3" class="eoff"/>
+        <circle cx="-52.0" cy="0.0" r="6" class="eon"/>
+        <circle cx="-48.0" cy="-19.9" r="3" class="eoff"/>
+        <circle cx="-36.8" cy="-36.8" r="3" class="eoff"/>
+        <circle cx="-19.9" cy="-48.0" r="3" class="eoff"/>
+        <polygon points="0.0,-52.0 48.0,-19.9 36.8,36.8 -19.9,48.0 -52.0,0.0" class="epoly"/>
+        <text x="0" y="6" text-anchor="middle" class="big">5 / 16</text>
+      </g>
+      <text x="100" y="144" text-anchor="middle" class="note">euclidien : 5 coups au plus régulier</text>
+    </svg>
+    </div>
+  </div>
+</section>
+
 <section class="part" aria-labelledby="h-dose">
   <h2 id="h-dose">La dose d'aléatoire</h2>
   <div class="dose">
@@ -291,6 +705,7 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
         dans le delay ou la réverbe ; au-delà de 75 %, des fills s'ajoutent en fin de mesure.</p>
       <p>On la règle en tenant OCT− et en tournant SELECT. À 0, le son revient exactement tel qu'il était.</p>
     </div>
+    <div class="dosefigs">
     <svg class="curve" viewBox="0 0 320 220" role="img" aria-label="La portée de la dose selon la course du potard : 4 % à 20 % de course, 25 % à mi-course, toute la plage au bout">
       <line x1="40" y1="180" x2="300" y2="180" stroke="#000" stroke-width="1.5"/>
       <line x1="40" y1="20" x2="40" y2="180" stroke="#000" stroke-width="1.5"/>
@@ -303,6 +718,12 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
       <text x="40" y="214">la course du potard, %</text>
       <text x="48" y="30">la portée</text>
     </svg>
+    <svg class="curve scale" viewBox="0 0 320 150" role="img" aria-label="Chaque trig tombe sur une note de la gamme, avec un autre timbre">
+      <line x1="20" y1="20" x2="310" y2="20" class="sline"/><line x1="20" y1="36" x2="310" y2="36" class="sline"/><line x1="20" y1="52" x2="310" y2="52" class="sline"/><line x1="20" y1="68" x2="310" y2="68" class="sline"/><line x1="20" y1="84" x2="310" y2="84" class="sline"/><line x1="20" y1="100" x2="310" y2="100" class="sline"/><line x1="20" y1="116" x2="310" y2="116" class="sline"/><line x1="20" y1="132" x2="310" y2="132" class="sline"/>
+      <circle cx="30" cy="100" r="4" class="n1"/><circle cx="48" cy="68" r="6" class="n2"/><circle cx="66" cy="100" r="3" class="n1"/><circle cx="84" cy="36" r="5" class="n3"/><circle cx="102" cy="116" r="4" class="n2"/><circle cx="120" cy="68" r="7" class="n1"/><circle cx="138" cy="84" r="3" class="n3"/><circle cx="156" cy="52" r="5" class="n2"/><circle cx="174" cy="100" r="6" class="n1"/><circle cx="192" cy="20" r="3" class="n3"/><circle cx="210" cy="68" r="5" class="n2"/><circle cx="228" cy="84" r="4" class="n1"/><circle cx="246" cy="116" r="6" class="n3"/><circle cx="264" cy="52" r="3" class="n1"/><circle cx="282" cy="100" r="5" class="n2"/><circle cx="300" cy="36" r="4" class="n3"/>
+      <text x="20" y="146" class="note">chaque trig : une note de la gamme, un autre son</text>
+    </svg>
+    </div>
   </div>
 </section>
 
@@ -956,6 +1377,18 @@ function showMarks(on) {
   marksBtn.setAttribute("aria-pressed", on ? "true" : "false");
 }
 marksBtn.addEventListener("click", () => showMarks(marksBtn.getAttribute("aria-pressed") !== "true"));
+// "Essayer": a model or a filter on the track playing (firmware/web.c web_try), the machine switched on first
+document.querySelectorAll(".try").forEach((b) => b.addEventListener("click", async () => {
+  if (!node) await switchOn();
+  if (!node) return;
+  send({ type: "app", kind: +b.dataset.kind, idx: +b.dataset.idx });
+  document.querySelectorAll(".try.done").forEach((x) => { x.classList.remove("done"); x.textContent = "Essayer sur la piste jouée"; });
+  b.classList.add("done");
+  b.textContent = "Sur la piste jouée";
+  const r = device.getBoundingClientRect();
+  if (r.bottom < 80 || r.top > innerHeight - 80)
+    device.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+}));
 let spotTimer = 0;
 document.querySelectorAll("#legend li").forEach((li) => li.querySelector("button").addEventListener("click", () => {
   const n = +li.dataset.n;
