@@ -3,7 +3,8 @@
 # Copyright (C) 2026 Yoann
 """The machine's icons on the browser emulator's page: app.c's ICONS (each a few strokes on a 32-unit grid: lines,
 rings, discs, boxes, as vicon draws them on the screen) written as SVG symbols into firmware/web/emu/index.html,
-between its <!-- icons --> and <!-- /icons --> marks. Run it again when an icon changes.
+between its <!-- icons --> and <!-- /icons --> marks (their strokes a unit long, pathLength: the page draws them in).
+Run it again when an icon changes.
 
   python3 tools/web/icons_svg.py"""
 import re
@@ -38,13 +39,13 @@ for i, row in enumerate(ops):
     parts = []
     for op, a, b, c, d in row:
         if op == "L":
-            parts.append(f'<line x1="{a}" y1="{b}" x2="{c}" y2="{d}"/>')
+            parts.append(f'<line x1="{a}" y1="{b}" x2="{c}" y2="{d}" pathLength="1"/>')
         elif op == "C":
-            parts.append(f'<circle cx="{a}" cy="{b}" r="{c}"/>')
+            parts.append(f'<circle cx="{a}" cy="{b}" r="{c}" pathLength="1"/>')
         elif op == "D":
-            parts.append(f'<circle cx="{a}" cy="{b}" r="{c}" class="dot"/>')
+            parts.append(f'<circle cx="{a}" cy="{b}" r="{c}" fill="currentColor" stroke="none"/>')
         else:
-            parts.append(f'<rect x="{a}" y="{b}" width="{c}" height="{d}"/>')
+            parts.append(f'<rect x="{a}" y="{b}" width="{c}" height="{d}" pathLength="1"/>')
     out.append(f'<symbol id="ic{i}" viewBox="0 0 32 32">{"".join(parts)}</symbol>')
 out.append("</defs></svg>")
 page = page_path.read_text()

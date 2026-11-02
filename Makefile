@@ -56,6 +56,7 @@ uac-multi: base-patch
 # through tools/web/emcc, with MIFM1's page; firmware/build/emu/ (serve it over HTTP)
 web: base-patch
 	cd $(BASE) && PATH="$(CURDIR)/tools/web:$$PATH" python3 tools/build.py ../firmware --web
+	if [ -d firmware/web/emu/img ]; then cp -r firmware/web/emu/img firmware/build/emu/; fi
 
 # the FM-1's constraints checked with the computer's clang: no C++ library, no libm, a float-only FPU (any double
 # left in the code links soft-double routines and shows here as an undefined symbol)

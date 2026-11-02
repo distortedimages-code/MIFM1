@@ -110,6 +110,7 @@ jobs:
           (cd base && PATH="$GITHUB_WORKSPACE/tools/web:$PATH" python3 tools/build.py ../firmware --web --release "$VERSION") > web.log 2>&1 || { tail -40 web.log; exit 1; }
           mkdir -p site/emu
           cp firmware/build/emu/index.html firmware/build/emu/worklet.js firmware/build/emu/app_worklet.js firmware/build/emu/app.wasm site/emu/
+          if [ -d firmware/web/emu/img ]; then cp -r firmware/web/emu/img site/emu/; fi
           ls -la site/emu
       - uses: actions/upload-artifact@v4
         with:
