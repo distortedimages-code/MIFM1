@@ -2,108 +2,216 @@
 <!-- SPDX-License-Identifier: MPL-2.0
      Copyright (C) 2026 Charles Vestal
      Copyright (C) 2026 Yoann
-     MIFM1's page for fm1-base's browser emulator (base/web/emu/index.html, modified): in French, the demo groove
-     playing as it is switched on, the FM-1's modelled load (mi/web_costs.h) under the panel, the screen kept on and,
-     on an iPhone, the sound past the silent switch -->
+     MIFM1's page for fm1-base's browser emulator (base/web/emu/index.html, modified): its panel and script, around
+     them MIFM1's own page (in French): the machine as the hero, a strip with the FM-1's modelled load, a guide whose
+     numbers light the panel's controls, the random dose, the specifications. The demo groove plays as it is switched
+     on; the screen is kept on and, on an iPhone, the sound passes the silent switch -->
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{NAME}} dans le navigateur</title>
-<meta name="description" content="{{NAME}} pour le M-VAVE FM-1, dans le navigateur : le même code que celui du FM-1.">
+<title>{{NAME}}, la machine dans le navigateur</title>
+<meta name="description" content="{{NAME}} : une machine de synthèse 4 pistes pour le M-VAVE FM-1, tout son son en open source. Essaie-la ici, dans le navigateur : c'est le firmware lui-même qui joue.">
+<meta name="theme-color" content="#e4e5e0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Semi+Condensed:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap">
 <style>
-/* light: --muted, --accent and --teal darkened just enough for 4.5:1 on the cream */
-:root { --ground: #faf4e8; --ink: #48392f; --muted: #6e5c4b; --rule: #e6dccb; --accent: #b84a1e; --teal: #1b776e; --card: #fffaf1;
-        --bad: #a3271b; --focus: #1f6fd1; color-scheme: light; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --ground: #1c1814; --ink: #f2e8d8; --muted: #b3a28e; --rule: #3a322a; --accent: #f28a5a; --teal: #4cc3b6; --card: #26201b; --bad: #ff8a73; --focus: #79adff; color-scheme: dark; }
-}
-:root[data-theme="dark"] { --ground: #1c1814; --ink: #f2e8d8; --muted: #b3a28e; --rule: #3a322a; --accent: #f28a5a; --teal: #4cc3b6; --card: #26201b; --bad: #ff8a73; --focus: #79adff; color-scheme: dark; }
+/* the page's tokens: aluminium and white plastic, black ink, one orange for what lights and what to press, the FM-1
+   screen's teal for what is measured */
+:root { --alu: #e4e5e0; --paper: #f8f8f5; --ink: #000; --grey: #5c5d58; --rule: #c6c7c1; --orange: #ff5000;
+        --orange-soft: #ffc3a8; --teal: #0e9aa4; --focus: #0050ff; color-scheme: light; }
+* { box-sizing: border-box; }
+html { background: var(--alu); }
+body { margin: 0; background: var(--alu); color: var(--ink); font: 400 17px/1.5 "Archivo", "Helvetica Neue", Arial, sans-serif;
+       font-variation-settings: "wdth" 100; -webkit-font-smoothing: antialiased; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { color: var(--orange); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-body { background: var(--ground); color: var(--ink); margin: 0; padding-inline: 16px; padding-block: 28px 48px;
-       font: 400 16px/1.55 "Barlow", "Helvetica Neue", Arial, sans-serif; }
-main, body > header { max-width: 1040px; margin: 0 auto; }
-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem 1.2rem; margin: 0 0 1rem; }
-h1 { font: 700 2rem/1.1 "Barlow Semi Condensed", "Barlow", sans-serif; margin: 0; }
-header p { margin: 0; color: var(--muted); }
-header nav { margin-left: auto; display: flex; gap: 1rem; }
-a { color: var(--accent); }
-/* at phone width the drawn panel keeps its controls 24 px or more (WCAG 2.5.8): it keeps a minimum width and
-   scrolls sideways in its own box, not the page */
-.devicebox { overflow-x: auto; overscroll-behavior-x: contain; }
-.device { position: relative; width: 100%; min-width: 560px; aspect-ratio: 1000 / 640; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
-.device svg { pointer-events: none; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+@media (max-width: 600px) { .wrap { padding: 0 16px; } }
+
+/* the bar on top */
+.top { display: flex; align-items: center; gap: 1.5rem; padding-block: 18px; font-size: 15px; }
+.top .name { font-weight: 800; font-stretch: 125%; letter-spacing: .02em; text-decoration: none; }
+.top nav { margin-left: auto; display: flex; gap: 1.4rem; }
+.top nav a { text-decoration: none; color: var(--grey); }
+.top nav a:hover { color: var(--ink); }
+
+/* the hero: the name drawn wide, what the machine is beside it */
+.hero { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 1rem 3rem; align-items: end;
+        padding-block: 28px 30px; }
+.mark { margin: 0; font-weight: 850; font-stretch: 125%; font-size: clamp(4.2rem, 13.5vw, 10.6rem); line-height: .8;
+        letter-spacing: -.035em; }
+.mark span { display: inline-block; }
+.hero .lead { margin: 0 0 .6rem; font-size: 1.45rem; line-height: 1.25; font-weight: 600; max-width: 30ch; }
+.hero .sub { margin: 0; color: var(--grey); max-width: 46ch; }
+@media (max-width: 860px) { .hero { grid-template-columns: 1fr; align-items: start; } }
+@media (prefers-reduced-motion: no-preference) {   /* the one moment: the name typed in, its letters wide to set */
+  .mark span { animation: set .9s cubic-bezier(.2, .7, .1, 1) both; }
+  .mark span:nth-child(2) { animation-delay: .06s; } .mark span:nth-child(3) { animation-delay: .12s; }
+  .mark span:nth-child(4) { animation-delay: .18s; } .mark span:nth-child(5) { animation-delay: .24s; }
+  @keyframes set { from { opacity: 0; font-stretch: 62%; } to { opacity: 1; font-stretch: 125%; } }
+}
+
+/* the machine: fm1-base's drawn panel, in white plastic */
+.stage { padding-bottom: 8px; }
+.devicebox { overflow-x: auto; overscroll-behavior-x: contain; border-radius: 28px; }
+.device { position: relative; width: 100%; min-width: 560px; aspect-ratio: 1000 / 640; user-select: none; -webkit-user-select: none;
+          -webkit-touch-callout: none; touch-action: manipulation; }
+.device svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.device canvas { position: absolute; left: 31.8%; top: 9.6875%; width: 20%; height: 31.25%; background: #000; border-radius: 2px; }
 .hit { position: absolute; touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; border-radius: 12px; }
 .hit.knob { cursor: ns-resize; border-radius: 50%; }
-.hit:focus-visible { outline: 3px solid #ffb48a; outline-offset: 2px; box-shadow: 0 0 0 6px #1b1d20; }
-.device svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.device canvas { position: absolute; left: 31.8%; top: 9.6875%; width: 20%; height: 31.25%; background: #000; border-radius: 2px; }
-.ctl { cursor: pointer; }
-.ctl.knob { cursor: ns-resize; }
-.btnface { transition: fill .06s; }
-.lit .btnface { fill: #f28a5a; }
-.lit text.btn { fill: #2a140a; }
-.held .btnface, .held .keyface { stroke: #f28a5a; stroke-width: 3; }
-.latched .btnface, .latched .keyface { stroke: #6fc3ff; stroke-width: 3; }
-.keyface { transition: fill .06s; }
-.lit .keyface.white { fill: #f6b48e; }
-.lit .keyface.black { fill: #4cc3b6; }
-.dim .btnface { fill: #6e4636; }                /* the dim lights (plat_lights' db / dk, plat_lights_mid): half bright */
-.dim .keyface.white { fill: #e8c9b6; }
-.dim .keyface.black { fill: #8ac6bf; }
-.start { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(10, 11, 13, .55); border-radius: 4.4% / 6.9%; }
-.start button { font: 600 1.25rem "Barlow Semi Condensed", "Barlow", sans-serif; letter-spacing: .04em; padding: .7em 1.6em;
-                border-radius: 999px; border: 0; background: #f28a5a; color: #2a140a; cursor: pointer; }
-.start[hidden] { display: none; }
-.turn { display: none; margin: 0 0 .8rem; color: var(--muted); font-size: .92rem; }
-@media (orientation: portrait) and (max-width: 700px) { .turn { display: block; } }
-.start button:disabled { opacity: .6; cursor: progress; }
-.bar { display: flex; flex-wrap: wrap; gap: .5rem 1.2rem; align-items: center; margin: .9rem 0 0; color: var(--muted); font-size: .92rem; }
-.bar button, .speak button { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--muted); border-radius: 8px; padding: .3em .8em; cursor: pointer; min-height: 2.2em; }
-.bar button[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
-.speak button:disabled { opacity: .5; cursor: default; }
-#alert { color: var(--bad); font-weight: 600; flex-basis: 100%; }
-#alert:empty { display: none; }
-.speak { margin: 1.4rem 0 0; padding: 1rem 1.2rem; background: var(--card); border: 1px solid var(--rule); border-radius: 14px; }
-.speak summary { cursor: pointer; }
-.speak summary h2 { display: inline; font: 600 1.1rem "Barlow Semi Condensed", "Barlow", sans-serif; margin: 0; }
-.speak[open] summary { margin: 0 0 .6rem; }
-.bar .keys { display: inline-flex; gap: .4rem; align-items: center; }
-.speak fieldset { border: 0; margin: 0 0 .6rem; padding: 0; display: flex; flex-wrap: wrap; gap: .3rem 1.4rem; }
-.speak legend { font-weight: 600; padding: 0; margin: 0 0 .3rem; }
-.speak label { display: inline-flex; gap: .45rem; align-items: center; }
-.speak input { width: 1.1rem; height: 1.1rem; accent-color: var(--teal); }
-.speak .row { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; margin: .6rem 0 0; }
-#said { font-size: 1.25rem; margin: .2rem 0 0; min-height: 1.6em; overflow-wrap: anywhere; }
-#said:empty::before { content: "Rien pour l'instant."; color: var(--muted); font-size: 1rem; }
-.speak p.note { color: var(--muted); margin: .4rem 0 0; font-size: .92rem; }
+.hit:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.btnface, .keyface { transition: fill .06s; }
+.lit .btnface { fill: var(--orange); stroke: var(--orange); }
+.lit text.btn { fill: #000; }
+.held .btnface, .held .keyface { stroke: #000; stroke-width: 3; }
+.latched .btnface, .latched .keyface { stroke: var(--focus); stroke-width: 3; }
+.keyface { stroke: #c2c3bd; stroke-width: 1.5; }
+.lit .keyface.white { fill: var(--orange); stroke: var(--orange); }
+.lit .keyface.black { fill: var(--teal); stroke: var(--teal); }
+.dim .btnface { fill: #ffeee6; }
+.dim .keyface.white { fill: #fff1ea; }
+.dim .keyface.black { fill: #cdebed; }
+.spot .btnface, .spot .keyface, .spot circle:nth-child(2) { stroke: #000; stroke-width: 4; }
 @media (prefers-reduced-motion: reduce) { .btnface, .keyface { transition: none; } }
-.bar .cpu { font-variant-numeric: tabular-nums; }
-.help h2 { font: 600 1.1rem "Barlow Semi Condensed", "Barlow", sans-serif; margin: 0 0 .3rem; }
-.help { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem 2rem; margin: 1.6rem 0 0; }
-.help h2 { font: 600 1.1rem "Barlow Semi Condensed", "Barlow", sans-serif; margin: 0 0 .3rem; }
-.help p, .help ul { margin: 0; max-width: 60ch; }
-.help ul { padding-left: 1.1rem; }
-@media (max-height: 520px) { body { padding-block: 10px 32px; } header p { display: none; } h1 { font-size: 1.4rem; } }   /* a phone on its side */
-kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 0 .3em; color: var(--ink); }
+/* the guide's numbers on the panel */
+#marks g { opacity: 0; transition: opacity .25s; }
+.device.marks #marks g, #marks g.pulse { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { #marks g { transition: none; } }
+#marks circle { fill: var(--orange); }
+#marks text { font: 700 15px "Archivo", Arial, sans-serif; fill: #000; text-anchor: middle; dominant-baseline: central; }
+#marks g.pulse circle { fill: #000; } #marks g.pulse text { fill: #fff; }
+/* the switch */
+.start { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(248, 248, 245, .62);
+         border-radius: 4.4% / 6.9%; backdrop-filter: blur(1.5px); }
+.start[hidden] { display: none; }
+.start button { font: 700 1.2rem "Archivo", Arial, sans-serif; font-stretch: 110%; padding: .85em 1.7em .85em 1.2em; border-radius: 999px;
+                border: 0; background: var(--orange); color: #000; cursor: pointer; display: inline-flex; align-items: center; gap: .7em;
+                box-shadow: 0 1px 0 rgba(0, 0, 0, .25); }
+.start button::before { content: ""; width: 0; height: 0; border-left: 14px solid #000; border-top: 9px solid transparent;
+                        border-bottom: 9px solid transparent; }
+.start button:disabled { opacity: .65; cursor: progress; }
+.turn { display: none; margin: 0 0 .7rem; color: var(--grey); font-size: .92rem; }
+@media (orientation: portrait) and (max-width: 700px) { .turn { display: block; } }
+
+/* the strip under the machine: its state, the FM-1's load, the switches */
+.strip { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem 1.6rem; padding: 16px 0 6px; font-size: 15px; }
+.state { display: inline-flex; align-items: center; gap: .55rem; font-weight: 600; min-width: 7.5rem; }
+.state::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--rule); }
+.state.on::before { background: var(--orange); box-shadow: 0 0 0 4px rgba(255, 80, 0, .18); }
+.meters { display: flex; flex-wrap: wrap; gap: .4rem 1.4rem; align-items: center; }
+.meter { display: inline-flex; align-items: center; gap: .55rem; font-variant-numeric: tabular-nums; color: var(--grey); }
+.meter b { font-weight: 600; color: var(--ink); min-width: 3.2ch; text-align: right; }
+.meter .bar { width: 84px; height: 10px; background: repeating-linear-gradient(90deg, var(--rule) 0 6px, transparent 6px 8px); position: relative; }
+.meter .bar i { position: absolute; inset: 0 auto 0 0; width: 0; background: repeating-linear-gradient(90deg, var(--teal) 0 6px, transparent 6px 8px);
+                transition: width .4s; }
+.meter.hot .bar i { background: repeating-linear-gradient(90deg, var(--orange) 0 6px, transparent 6px 8px); }
+.switches { margin-left: auto; display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.switches button, .pill { font: 600 14px "Archivo", Arial, sans-serif; color: var(--ink); background: var(--paper); border: 1px solid var(--rule);
+                          border-radius: 999px; padding: .45em 1em; cursor: pointer; min-height: 36px; }
+.switches button[aria-pressed="true"] { background: #000; color: #fff; border-color: #000; }
+.switches label { display: inline-flex; gap: .4rem; align-items: center; color: var(--grey); font-size: 14px; }
+.switches input { accent-color: #000; width: 1rem; height: 1rem; }
+#alert { color: #b00; font-weight: 600; flex-basis: 100%; }
+#alert:empty { display: none; }
+.fine { color: var(--grey); font-size: 13px; margin: 0; }
+
+/* the guide: a heading's column on the left, its content on the right */
+.part { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); gap: 1.2rem 3rem; padding-block: 64px 8px; }
+.part > h2 { margin: 0; font-size: 1.75rem; line-height: 1.1; font-weight: 800; font-stretch: 112%; letter-spacing: -.01em; }
+.part > div > p { margin: 0 0 1rem; max-width: 64ch; }
+@media (max-width: 860px) { .part { grid-template-columns: 1fr; padding-block: 48px 0; } }
+
+/* four steps, in order */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; counter-reset: s;
+         border-top: 2px solid #000; }
+.steps li { counter-increment: s; padding: 14px 18px 4px 0; }
+.steps li::before { content: counter(s); display: block; font-weight: 850; font-stretch: 125%; font-size: 2.6rem; line-height: 1; margin-bottom: .6rem; }
+.steps h3 { margin: 0 0 .3rem; font-size: 1.05rem; }
+.steps p { margin: 0; color: var(--grey); font-size: 15.5px; }
+@media (max-width: 860px) { .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .steps { grid-template-columns: 1fr; } }
+
+/* the panel's legend: its numbers are the panel's */
+.legend { list-style: none; margin: .4rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr)); gap: 2px; }
+.legend li { margin: 0; }
+.legend button { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 2rem 1fr; gap: .2rem .8rem; width: 100%; padding: 12px 12px 12px 10px;
+                 background: var(--paper); cursor: pointer; min-height: 100%; }
+.legend button:hover { background: #fff; }
+.legend button:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.legend .n { grid-row: span 2; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: var(--orange); display: grid; place-items: center;
+             font-weight: 700; font-size: 14px; }
+.legend b { font-weight: 700; }
+.legend span.d { color: var(--grey); font-size: 15px; line-height: 1.35; }
+.legend li.on button { background: #000; color: #fff; } .legend li.on span.d { color: #d6d6d0; }
+
+/* the dose's curve */
+.dose { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 1rem 2.5rem; align-items: start; }
+.dose p { margin: 0 0 1rem; max-width: 60ch; }
+.curve { width: 100%; height: auto; background: var(--paper); }
+.curve text { font: 500 13px "Archivo", Arial, sans-serif; fill: var(--grey); }
+.curve text.k { fill: #000; font-weight: 700; }
+@media (max-width: 760px) { .dose { grid-template-columns: 1fr; } }
+
+/* the specifications */
+.specs { margin: 0; display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); border-top: 2px solid #000; }
+.specs dt, .specs dd { margin: 0; padding: 11px 0; border-bottom: 1px solid var(--rule); }
+.specs dt { font-weight: 700; padding-right: 1rem; }
+.specs dd { color: #222; }
+@media (max-width: 520px) { .specs { grid-template-columns: 1fr; } .specs dt { border-bottom: 0; padding-bottom: 0; } }
+
+/* the end: what it is built on, the screen reader */
+footer { margin-top: 72px; padding-block: 28px 56px; border-top: 2px solid #000; font-size: 15px; color: var(--grey); }
+footer p { max-width: 72ch; margin: 0 0 .8rem; }
+.speak { margin: 1.2rem 0 0; }
+.speak summary { cursor: pointer; color: var(--ink); font-weight: 600; }
+.speak summary h2 { display: inline; font-size: 1rem; margin: 0; }
+.speak fieldset { border: 0; margin: .8rem 0 .4rem; padding: 0; display: flex; flex-wrap: wrap; gap: .3rem 1.4rem; }
+.speak legend { font-weight: 600; padding: 0; margin: 0 0 .3rem; color: var(--ink); }
+.speak label { display: inline-flex; gap: .45rem; align-items: center; }
+.speak input { width: 1.05rem; height: 1.05rem; accent-color: #000; }
+.speak .row { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin: .6rem 0 0; }
+.speak button { font: 600 14px "Archivo", Arial, sans-serif; color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 999px;
+                padding: .4em 1em; cursor: pointer; }
+.speak button:disabled { opacity: .5; cursor: default; }
+#said { font-size: 1.2rem; margin: .2rem 0 0; min-height: 1.6em; overflow-wrap: anywhere; color: var(--ink); }
+#said:empty::before { content: "Rien pour l'instant."; color: var(--grey); font-size: 1rem; }
+kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); border: 1px solid var(--rule); border-radius: 5px; padding: 0 .35em; }
+@media (max-height: 520px) and (orientation: landscape) { .hero { padding-block: 6px 14px; } .mark { font-size: 4.2rem; } .hero .sub { display: none; } }
 </style>
 </head>
 <body>
-<header>
-  <h1>{{NAME}}</h1>
-  <p>le firmware du FM-1 tel quel, compilé pour le navigateur : le même son, le même écran</p>
+<div class="wrap">
+<header class="top">
+  <a class="name" href="../">MIFM1</a>
+  <nav aria-label="Le site">
+    <a href="../install/">Installer sur un FM-1</a>
+    <a href="https://github.com/distortedimages-code/MIFM1">Code source</a>
+  </nav>
 </header>
+
 <main>
-<h2 class="sr">Le FM-1</h2>
+<section class="hero" aria-labelledby="mark">
+  <h1 class="mark" id="mark" aria-label="MIFM1"><span>M</span><span>I</span><span>F</span><span>M</span><span>1</span></h1>
+  <div>
+    <p class="lead">Une machine de synthèse 4 pistes pour le M-VAVE FM-1.</p>
+    <p class="sub">Les 24 moteurs de Plaits sur chaque piste, les batteries FM du LXR-02, quatre filtres analogiques
+      modélisés, un séquenceur à P-locks et une dose d'aléatoire qui réinvente chaque note. Tout le son est open
+      source. Ce qui joue ici, c'est le firmware lui-même, compilé pour le navigateur : le même moteur, le même
+      écran.</p>
+  </div>
+</section>
+
+<section class="stage" aria-label="La machine">
 <p class="turn">Tourne ton téléphone à l'horizontale : les commandes seront plus grandes.</p>
 <div class="devicebox">
 <div class="device" id="device">
   <svg id="panel" viewBox="0 0 1000 640" aria-hidden="true" focusable="false"></svg>
-  <canvas id="screen" width="240" height="240" role="img" aria-label="L'écran du FM-1. Son texte est lu : voir Lecteur d'écran, sous le panneau"></canvas>
+  <canvas id="screen" width="240" height="240" role="img" aria-label="L'écran du FM-1. Son texte est lu : voir Lecteur d'écran, en bas de la page"></canvas>
   <div id="controls" role="group" aria-label="Le panneau du FM-1" aria-describedby="panel-keys" inert></div>
   <div class="start" id="start"><button type="button" id="go">Allumer et lancer la démo</button></div>
 </div>
@@ -112,65 +220,119 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
   potard, Page précédente et Page suivante plus vite. Espace ou Entrée tient un bouton ou une touche tant qu'on les tient ;
   Maj et Entrée la garde enfoncée jusqu'au prochain appui (à la souris : Maj-clic ou clic droit).</p>
 
-<div class="bar">
-  <span id="status" role="status">Éteint. Le son démarre à l'allumage.</span>
+<div class="strip">
+  <span class="state" id="status" role="status">Éteint</span>
+  <div class="meters" aria-label="La charge du FM-1, estimée">
+    <span class="meter" id="m0">cœur 1 <span class="bar"><i></i></span><b>–</b></span>
+    <span class="meter" id="m1">cœur 2 <span class="bar"><i></i></span><b>–</b></span>
+    <span class="meter" id="m2">pic <span class="bar"><i></i></span><b>–</b></span>
+  </div>
+  <div class="switches">
+    <button id="marksbtn" type="button" aria-pressed="false">Repères</button>
+    <button id="mute" type="button" aria-pressed="false">Muet</button>
+    <label><input type="checkbox" id="shortcuts" checked> Raccourcis clavier</label>
+    <button id="reset" type="button" aria-describedby="reset-why">Tout effacer</button>
+    <span id="reset-why" class="sr">Oublier ce qui a été sauvé et repartir de la démo</span>
+  </div>
   <span id="alert" role="alert"></span>
-  <button id="mute" type="button" aria-pressed="false">Muet</button>
-  <label class="keys"><input type="checkbox" id="shortcuts" checked> Raccourcis clavier</label>
-  <span class="cpu" id="fm1"></span>
-  <span class="cpu" id="cpu"></span>
-  <button id="reset" type="button" aria-describedby="reset-why">Tout effacer</button>
-  <span id="reset-why" class="sr">Oublier ce qui a été sauvé et repartir de la démo</span>
 </div>
+<p class="fine"><span id="fm1">La charge affichée est celle du FM-1, estimée : voir plus bas.</span> <span id="cpu"></span></p>
+</section>
 
-<details class="speak" id="speak">
-  <summary><h2>Lecteur d'écran</h2></summary>
-  <fieldset>
-    <legend>Sortie</legend>
-    <label><input type="radio" name="speak" value="sr" checked> Lecteur d'écran du système</label>
-    <label><input type="radio" name="speak" value="voice"> Voix intégrée (en anglais)</label>
-    <label><input type="radio" name="speak" value="off"> Aucune</label>
-  </fieldset>
-  <p id="said" aria-hidden="true"></p>
-  <div class="row">
-    <button type="button" id="where" disabled>Lire tout l'écran</button>
-    <button type="button" id="again" disabled>Répéter</button>
+<section class="part" aria-labelledby="h-start">
+  <h2 id="h-start">Prise en main</h2>
+  <div>
+    <ol class="steps">
+      <li><h3>Allumer</h3><p>Le bouton orange met la machine sous tension et lance la démo : un kick, une basse Moog, un charleston FM, des accords dub. Fa mineur, 124 BPM.</p></li>
+      <li><h3>Choisir une piste</h3><p>PRESETS passe d'une piste à l'autre. EDIT parcourt son son, son grit et son filtre ; ENV, ses enveloppes.</p></li>
+      <li><h3>Sculpter</h3><p>Les quatre potards règlent la page affichée, SELECT tourne les pages. Un A cerclé en haut de l'écran : ALGORITHM change le modèle.</p></li>
+      <li><h3>Lâcher le hasard</h3><p>OCT− enfoncé, tourne SELECT. Chaque note devient un autre son : discret au début, déchaîné au bout, toujours dans la gamme.</p></li>
+    </ol>
   </div>
-</details>
+</section>
 
-<section class="help" aria-label="Mode d'emploi">
+<section class="part" aria-labelledby="h-panel">
+  <h2 id="h-panel">Le panneau</h2>
   <div>
-    <h2>La démo</h2>
-    <p>Un kick sur les temps qui fait respirer une basse Moog (filtre LADDER, son enveloppe, un LFO triangle sur la
-      coupure) roulant sur les contretemps, un charleston FM sur toutes les doubles (decay et pan tirés à chaque coup,
-      ouverts sur les contretemps), des accords dub (CHORD dans le filtre SEM, un S&amp;H sur leur voicing, un hasard
-      lisse sur la coupure) jetés dans un delay ping-pong et la réverbe. Fa mineur, 124 BPM.
-      <b>PLAY</b> l'arrête et la relance ; <b>GLO</b> puis <b>SELECT</b> : la page projet (K1 et REC tenu chargent un
-      autre projet) et les chiffres de la machine.</p>
+    <p>Touche un numéro : son repère s'allume sur la machine. « Repères », sous la machine, les montre tous.</p>
+    <ol class="legend" id="legend">
+      <li data-n="1"><button type="button"><span class="n">1</span><b>MASTER</b><span class="d">Le volume.</span></button></li>
+      <li data-n="2"><button type="button"><span class="n">2</span><b>SELECT</b><span class="d">Les pages de ce qu'on regarde. Avec OCT− tenu : la dose d'aléatoire.</span></button></li>
+      <li data-n="3"><button type="button"><span class="n">3</span><b>PRESETS</b><span class="d">La piste jouée, de 1 à 4.</span></button></li>
+      <li data-n="4"><button type="button"><span class="n">4</span><b>ALGORITHM</b><span class="d">Le modèle de la piste, celui de son filtre, le mode du delay ou du bus.</span></button></li>
+      <li data-n="5"><button type="button"><span class="n">5</span><b>L'écran</b><span class="d">Le module, ses réglages, la charge du FM-1 en haut à droite.</span></button></li>
+      <li data-n="6"><button type="button"><span class="n">6</span><b>KNOB 1 à 4</b><span class="d">Les quatre réglages de la page.</span></button></li>
+      <li data-n="7"><button type="button"><span class="n">7</span><b>FX</b><span class="d">Le delay, la réverbe de Clouds, Warps.</span></button></li>
+      <li data-n="8"><button type="button"><span class="n">8</span><b>SEL</b><span class="d">Les câbles : tiens la touche d'un LFO et tourne un potard. Tenu : la matrice.</span></button></li>
+      <li data-n="9"><button type="button"><span class="n">9</span><b>ENV</b><span class="d">Les enveloppes. Tenu avec un potard : l'aléatoire de ce réglage.</span></button></li>
+      <li data-n="10"><button type="button"><span class="n">10</span><b>LFO</b><span class="d">Les trois LFO.</span></button></li>
+      <li data-n="11"><button type="button"><span class="n">11</span><b>EDIT</b><span class="d">Le son de la piste, son grit, son filtre.</span></button></li>
+      <li data-n="12"><button type="button"><span class="n">12</span><b>GLO</b><span class="d">Tempo, gamme, swing ; le projet, la machine. Tenu avec un potard : les quatre pistes.</span></button></li>
+      <li data-n="13"><button type="button"><span class="n">13</span><b>HOME</b><span class="d">Le mixer, l'EQ, le duck, le bus master.</span></button></li>
+      <li data-n="14"><button type="button"><span class="n">14</span><b>SAVE</b><span class="d">Tenu, à l'arrêt : le projet est gardé.</span></button></li>
+      <li data-n="15"><button type="button"><span class="n">15</span><b>ARP</b><span class="d">Endless : des notes enregistrées une à une, en boucle.</span></button></li>
+      <li data-n="16"><button type="button"><span class="n">16</span><b>SEQ</b><span class="d">Les pas de la piste, l'aléatoire, les rythmes euclidiens.</span></button></li>
+      <li data-n="17"><button type="button"><span class="n">17</span><b>PLAY</b><span class="d">Lecture et arrêt. Deux fois : tout le son coupé.</span></button></li>
+      <li data-n="18"><button type="button"><span class="n">18</span><b>REC</b><span class="d">KEY, le clavier joue ; STEP, il devient la grille des 16 pas.</span></button></li>
+      <li data-n="19"><button type="button"><span class="n">19</span><b>OCT− OCT+</b><span class="d">L'octave du clavier, les pages de pas.</span></button></li>
+      <li data-n="20"><button type="button"><span class="n">20</span><b>Le clavier</b><span class="d">Joue la piste, même à l'arrêt. Sur ordinateur : <kbd>Q</kbd> à <kbd>K</kbd>, <kbd>1</kbd> à <kbd>0</kbd>.</span></button></li>
+    </ol>
   </div>
-  <div>
-    <h2>Les commandes</h2>
-    <ul>
-      <li>Potards et encodeurs : glisser vers le haut ou le bas (ou la molette).</li>
-      <li>Boutons et touches : appuyer, tenir comme sur la machine.</li>
-      <li>Sur un ordinateur : <kbd>Q</kbd>…<kbd>K</kbd> les touches blanches, <kbd>1</kbd>…<kbd>0</kbd> les noires,
-        <kbd>↑</kbd> <kbd>↓</kbd> SELECT.</li>
-      <li><b>SAVE</b> tenu garde le projet dans ce navigateur, comme sur le FM-1.</li>
-    </ul>
+</section>
+
+<section class="part" aria-labelledby="h-dose">
+  <h2 id="h-dose">La dose d'aléatoire</h2>
+  <div class="dose">
+    <div>
+      <p>À chaque trig de chaque piste, elle relance tous les réglages du son : hauteurs, timbres, grit, filtre,
+        panoramique. Aucune note ne ressemble à la précédente, rien ne boucle.</p>
+      <p>Sa portée suit le carré de la course : des variations à peine perceptibles au début, le chaos au bout. Les
+        hauteurs sautent par demi-tons et retombent toujours sur la gamme choisie. De temps en temps, une note part
+        dans le delay ou la réverbe ; au-delà de 75 %, des fills s'ajoutent en fin de mesure.</p>
+      <p>On la règle en tenant OCT− et en tournant SELECT. À 0, le son revient exactement tel qu'il était.</p>
+    </div>
+    <svg class="curve" viewBox="0 0 320 220" role="img" aria-label="La portée de la dose selon la course du potard : 4 % à 20 % de course, 25 % à mi-course, toute la plage au bout">
+      <line x1="40" y1="180" x2="300" y2="180" stroke="#000" stroke-width="1.5"/>
+      <line x1="40" y1="20" x2="40" y2="180" stroke="#000" stroke-width="1.5"/>
+      <path d="M40 180 C 126.7 180, 213.3 126.7, 300 20" fill="none" stroke="#ff5000" stroke-width="3"/>
+      <circle cx="92" cy="173.6" r="4.5" fill="#000"/><circle cx="170" cy="140" r="4.5" fill="#000"/><circle cx="300" cy="20" r="4.5" fill="#000"/>
+      <text class="k" x="92" y="160" text-anchor="middle">4 %</text>
+      <text class="k" x="170" y="127" text-anchor="middle">25 %</text>
+      <text class="k" x="290" y="38" text-anchor="end">100 %</text>
+      <text x="92" y="200" text-anchor="middle">20</text><text x="170" y="200" text-anchor="middle">50</text><text x="300" y="200" text-anchor="end">100</text>
+      <text x="40" y="214">la course du potard, %</text>
+      <text x="48" y="30">la portée</text>
+    </svg>
   </div>
+</section>
+
+<section class="part" aria-labelledby="h-specs">
+  <h2 id="h-specs">Dedans</h2>
   <div>
-    <h2>Le CPU affiché</h2>
-    <p>Les pourcentages de l'écran (en haut à droite ; la page machine : GLO, SELECT) et la ligne
-      « FM-1 » sous le panneau sont ceux du FM-1, estimés. Le navigateur ne peut pas mesurer le temps du FM-1 : chaque
-      partie du moteur (un modèle de Plaits, un filtre, Warps, les effets, le séquenceur) y compte ce qu'elle coûte au
-      FM-1, d'après les instructions qu'elle exécute, calibrées sur le stress test mesuré sur la machine (cœurs 79 et
-      77 %, pic 91 %). Le stress test retombe sur ces chiffres ; ailleurs, compter ±20 % sur une piste. La démo tourne
-      vers 45 % par cœur, pic 60 %.</p>
+    <dl class="specs">
+      <dt>Pistes</dt><dd>4, chacune avec son moteur, son grit, son filtre et ses enveloppes</dd>
+      <dt>Moteurs</dt><dd>Les 24 modèles de Plaits (Mutable Instruments) et 4 batteries FM du LXR-02 (Erica Synths)</dd>
+      <dt>Filtres</dt><dd>LADDER (Moog), MS-20 (Korg 35), SEM (Oberheim), VOX (formants) ; LP, BP, HP ; enveloppe à vactrol, ping, FM, bruit coloré</dd>
+      <dt>Séquenceur</dt><dd>64 pas par piste, P-locks, probabilité, ratchets, rythmes euclidiens, Endless</dd>
+      <dt>Modulation</dt><dd>3 LFO, 40 câbles (8 par piste, 8 globaux), un aléatoire sur chaque réglage, la dose</dd>
+      <dt>Effets</dt><dd>Delay ping-pong filtré, réverbe de Clouds, Warps (6 modulations croisées, décaleur de fréquence), chacun avec sa piste de pas</dd>
+      <dt>Bus master</dt><dd>Compresseur ou OTT, limiteur</dd>
+      <dt>Gammes</dt><dd>15 gammes et leur tonique, sur tout ce qui a une hauteur</dd>
+      <dt>USB</dt><dd>Carte son 10 canaux sans pilote (les 4 pistes en stéréo, les effets), MIDI</dd>
+      <dt>Code</dt><dd>Open source : MIT (Mutable Instruments), GPL-3.0 (LXR-02), MPL-2.0 (MIFM1, fm1-base)</dd>
+    </dl>
   </div>
+</section>
+
+<section class="part" aria-labelledby="h-cpu">
+  <h2 id="h-cpu">La charge affichée</h2>
   <div>
-    <h2>En voiture</h2>
-    <p>L'écran reste allumé tant que la page joue (si le navigateur le permet). Sur iPhone, le son sort même avec le
-      mode silencieux (Safari 17 et plus). Le volume : MASTER, à gauche, puis celui du téléphone.</p>
+    <p>Les pourcentages de l'écran et les jauges sous la machine sont ceux du FM-1, estimés. Un navigateur ne peut pas
+      mesurer le temps que mettrait le FM-1 : ici, chaque partie du moteur compte ce qu'elle lui coûterait, d'après les
+      instructions qu'elle exécute, calibrées sur le stress test mesuré sur la machine (cœurs 79 et 77 %, pic 91 %).
+      Le stress test retombe sur ces chiffres ; ailleurs, compter ±20 % sur une piste. La démo tourne vers 45 % par
+      cœur, pic 60 %.</p>
+    <p>En voiture : l'écran reste allumé tant que la page joue, et sur iPhone le son passe même en mode silencieux.</p>
   </div>
 </section>
 <!-- what the screen says, for the computer's screen reader -->
@@ -178,6 +340,28 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
 <div id="live-a" class="sr" aria-live="assertive" aria-atomic="true"></div>
 </main>
 
+<footer>
+  <p>MIFM1 est construit sur le code ouvert de Mutable Instruments (Émilie Gillet, MIT), les voix du LXR-02 d'Erica
+    Synths (GPL-3.0) et fm1-base de Charles Vestal (MPL-2.0), dont vient aussi ce panneau. Ce n'est pas un produit
+    M-VAVE.</p>
+  <p><a href="../install/">Installer MIFM1 sur un FM-1</a></p>
+  <p><a href="https://github.com/distortedimages-code/MIFM1">Le code source</a></p>
+  <details class="speak" id="speak">
+    <summary><h2>Lecteur d'écran</h2></summary>
+    <fieldset>
+      <legend>Sortie</legend>
+      <label><input type="radio" name="speak" value="sr" checked> Lecteur d'écran du système</label>
+      <label><input type="radio" name="speak" value="voice"> Voix intégrée (en anglais)</label>
+      <label><input type="radio" name="speak" value="off"> Aucune</label>
+    </fieldset>
+    <p id="said" aria-hidden="true"></p>
+    <div class="row">
+      <button type="button" id="where" disabled>Lire tout l'écran</button>
+      <button type="button" id="again" disabled>Répéter</button>
+    </div>
+  </details>
+</footer>
+</div>
 
 <script>
 "use strict";
@@ -187,7 +371,7 @@ const ENC = { SELECT: 0, ALGORITHM: 1, PRESETS: 2, KNOB1: 3, KNOB2: 4, KNOB3: 5,
 const WHITE_K = [0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26];
 const BLACK_K = [1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25];
 const BLACK_AFTER = [0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 14];
-const BODY = "#3a3d42", TRAY = "#26282c", KEY_W = "#d9dadc", KEY_B = "#c9cacd", KNOB = "#1f2124", BTNC = "#2e3135", LABEL = "#e8e8ea";
+const BODY = "#f8f8f5", TRAY = "#e4e5e0", KEY_W = "#ffffff", KEY_B = "#d7d8d2", KNOB = "#151515", BTNC = "#ffffff", LABEL = "#111111";   // white plastic
 const STORE_KEY = "{{ID}}-emu-store", PREFS_KEY = "{{ID}}-emu-prefs";
 const $ = (id) => document.getElementById(id);
 const prefs = (() => { try { return JSON.parse(localStorage.getItem(PREFS_KEY) || "{}"); } catch { return {}; } })();
@@ -201,20 +385,20 @@ function el(tag, attrs, parent = svg) {
   return e;
 }
 function text(parent, x, y, s, size, fill = LABEL, weight = 600) {
-  const t = el("text", { x, y, "text-anchor": "middle", "font-family": "'Barlow Semi Condensed', 'Arial Narrow', Arial, sans-serif",
-                         "font-size": size, "font-weight": weight, fill, "letter-spacing": ".05em", class: "btn", "pointer-events": "none" }, parent);
+  const t = el("text", { x, y, "text-anchor": "middle", "font-family": "Archivo, 'Arial Narrow', Arial, sans-serif", "font-stretch": "88%",
+                         "font-size": size, "font-weight": weight, fill, "letter-spacing": ".04em", class: "btn", "pointer-events": "none" }, parent);
   t.textContent = s;
   return t;
 }
 
 // ---------------------------------------------------------------- the panel (a picture: aria-hidden)
-el("rect", { x: 4, y: 4, width: 992, height: 632, rx: 44, fill: BODY });
+el("rect", { x: 4, y: 4, width: 992, height: 632, rx: 44, fill: BODY, stroke: "#c9cac4", "stroke-width": 2 });
 const knobs = {};
 function knob(x, y, r, label, role, name) {
   const g = el("g", { class: "ctl knob" });
   el("circle", { cx: x, cy: y, r: r + 5, fill: TRAY }, g);
-  el("circle", { cx: x, cy: y, r, fill: KNOB, stroke: "#44474c", "stroke-width": 2 }, g);
-  const ind = el("line", { x1: x, y1: y - r + 5, x2: x, y2: y - r + 15, stroke: LABEL, "stroke-width": 3, "stroke-linecap": "round" }, g);
+  el("circle", { cx: x, cy: y, r, fill: KNOB, stroke: "#000", "stroke-width": 2 }, g);
+  const ind = el("line", { x1: x, y1: y - r + 5, x2: x, y2: y - r + 15, stroke: "#fff", "stroke-width": 3, "stroke-linecap": "round" }, g);
   text(g, x, y - r - 12, label, 17);
   el("circle", { cx: x, cy: y, r: r + 14, fill: "transparent" }, g);
   knobs[label] = { g, ind, x, y, angle: 0, role, name: name || label };
@@ -229,7 +413,7 @@ for (let i = 0; i < 4; i++) knob(610 + i * 104, 100, 22, `KNOB${i + 1}`, ENC[`KN
 const buttons = {};
 function button(x, y, w, h, label, two) {
   const g = el("g", { class: "ctl" });
-  el("rect", { x, y, width: w, height: h, rx: 9, fill: BTNC, stroke: "#4a4d52", "stroke-width": 1.5, class: "btnface" }, g);
+  el("rect", { x, y, width: w, height: h, rx: 9, fill: BTNC, stroke: "#bdbeb8", "stroke-width": 1.5, class: "btnface" }, g);
   if (two) { text(g, x + w / 2, y + h / 2 - 1, label, 12); text(g, x + w / 2, y + h / 2 + 12, two, 12); }
   else text(g, x + w / 2, y + h / 2 + 5, label, 15);
   buttons[label] = { g, bit: BTN[label], name: { "OCT-": "OCT minus", "OCT+": "OCT plus" }[label] || label, light: "" };
@@ -683,7 +867,7 @@ async function switchOn() {
   const go = $("go");
   go.disabled = true;
   go.textContent = "Démarrage…";
-  status.textContent = "Démarrage…";
+  status.textContent = "Démarrage";
   try {
     try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch { /* (an iPhone: past its silent switch) */ }
     const ac = new AudioContext({ sampleRate: 44100, latencyHint: "playback" });
@@ -704,11 +888,17 @@ async function switchOn() {
           drawLights(m.buttons, m.keys, m.dimButtons, m.dimKeys);
           if (m.said) onSaid(m.said);
           window.emuLast = m;
-          if (m.load !== undefined) cpu.textContent = `ce navigateur : ${m.load} % de son temps`;
+          if (m.load !== undefined) cpu.textContent = `Ce navigateur y passe ${m.load} % de son temps.`;
           if (m.store) saveStore(m.store);
         } else if (m.type === "app" && m.fm1) {
-          const [c0, c1, pk] = m.fm1.map((v) => Math.round(v / 10));
-          $("fm1").textContent = `FM-1 (estimé) : cœurs ${c0} et ${c1} %, pic ${pk} %`;
+          const v = m.fm1.map((x) => Math.round(x / 10));
+          v.forEach((p, i) => {
+            const e = $("m" + i);
+            e.querySelector("i").style.width = `${Math.min(p, 100)}%`;
+            e.querySelector("b").textContent = `${p} %`;
+            e.classList.toggle("hot", p >= 85);
+          });
+          $("fm1").textContent = `FM-1, estimé : cœurs ${v[0]} et ${v[1]} %, pic ${v[2]} %.`;
         } else if (m.type === "app" && appPart && appPart.message) appPart.message(m);
       };
     });
@@ -720,22 +910,71 @@ async function switchOn() {
     await ac.resume();
     $("start").hidden = true;
     controls.inert = false;
-    status.textContent = ac.sampleRate === 44100 ? "Allumé." : `Allumé (le navigateur joue à ${ac.sampleRate} Hz).`;
+    status.textContent = ac.sampleRate === 44100 ? "Allumé" : `Allumé (${ac.sampleRate} Hz)`;
+    status.classList.add("on");
     syncButtons(); syncKeys();
     send({ type: "buttons", mask: 1 << BTN.PLAY });   // playing at once (PLAY, as a hand would)
     setTimeout(syncButtons, 120);
     keepAwake();
     readerOn();
-    knobs.MASTER.hit.focus();                  // the switch is gone: on to the panel
+    knobs.MASTER.hit.focus({ preventScroll: true });   // the switch is gone: on to the panel
   } catch (err) {
     node = null;
     go.disabled = false;
     go.textContent = "Allumer et lancer la démo";
-    status.textContent = "Éteint.";
+    status.textContent = "Éteint";
     showAlert("Impossible de démarrer : " + (err && err.message || err) + ". Chrome, Edge, Firefox et Safari devraient tous marcher.");
   }
 }
 $("go").addEventListener("click", switchOn);
+
+// ---------------------------------------------------------------- the guide (MIFM1's page)
+// its numbers on the panel (a picture, drawn after the controls' targets were measured), each by its control; the
+// legend's buttons light theirs (the machine brought into view) and outline the control
+const MARKS = [[1, 136, 122, "MASTER"], [2, 246, 122, "SELECT"], [3, 136, 227, "PRESETS"], [4, 246, 227, "ALGORITHM"],
+               [5, 524, 56, null], [6, 584, 132, null], [7, 633, 177, "FX"], [8, 696, 177, "SEL"], [9, 759, 177, "ENV"],
+               [10, 822, 177, "LFO"], [11, 885, 177, "EDIT"], [12, 948, 177, "GLO"], [13, 633, 239, "HOME"],
+               [14, 696, 239, "SAVE"], [15, 759, 239, "ARP"], [16, 822, 239, "SEQ"], [17, 885, 239, "PLAY"],
+               [18, 948, 239, "REC"], [19, 262, 262, null], [20, 58, 366, null]];
+const marksG = el("g", { id: "marks" });
+const markEl = {};
+for (const [n, x, y] of MARKS) {
+  const g = el("g", {}, marksG);
+  el("circle", { cx: x, cy: y, r: 13 }, g);
+  const t = el("text", { x, y: y + 1 }, g);
+  t.textContent = n;
+  markEl[n] = g;
+}
+function controlOf(n) {
+  const m = MARKS.find((k) => k[0] === n), name = m && m[3];
+  if (!name) return n === 6 ? [1, 2, 3, 4].map((i) => knobs[`KNOB${i}`].g) : n === 19 ? [buttons["OCT-"].g, buttons["OCT+"].g] : [];
+  return [(knobs[name] || buttons[name]).g];
+}
+const marksBtn = $("marksbtn");
+function showMarks(on) {
+  device.classList.toggle("marks", on);
+  marksBtn.setAttribute("aria-pressed", on ? "true" : "false");
+}
+marksBtn.addEventListener("click", () => showMarks(marksBtn.getAttribute("aria-pressed") !== "true"));
+let spotTimer = 0;
+document.querySelectorAll("#legend li").forEach((li) => li.querySelector("button").addEventListener("click", () => {
+  const n = +li.dataset.n;
+  document.querySelectorAll("#legend li.on").forEach((x) => x.classList.remove("on"));
+  document.querySelectorAll(".spot").forEach((x) => x.classList.remove("spot"));
+  Object.values(markEl).forEach((g) => g.classList.remove("pulse"));
+  li.classList.add("on");
+  markEl[n].classList.add("pulse");
+  controlOf(n).forEach((g) => g.classList.add("spot"));
+  const r = device.getBoundingClientRect();
+  if (r.top < 0 || r.bottom > innerHeight)
+    device.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+  clearTimeout(spotTimer);
+  spotTimer = setTimeout(() => {
+    li.classList.remove("on");
+    markEl[n].classList.remove("pulse");
+    controlOf(n).forEach((g) => g.classList.remove("spot"));
+  }, 3500);
+}));
 // the screen kept on while the page plays (a phone in a car), asked again when the page comes back
 let wake = null;
 async function keepAwake() {

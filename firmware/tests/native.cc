@@ -1180,9 +1180,11 @@ int main(int argc, char** argv) {
   }
 
   // 29. the random dose: at 0 every trig plays the knobs; at 50 % each trig of each track throws every sound parameter
-  // of its own anew (the pitches, the timbres, the gate, the grit, the whole filter, the EQ, the pan: another value at
-  // each trig, within half its span), never the sends, the levels, the time; the effects' colours anew at each beat,
-  // Warps' ALGORITHM from mark to mark; at 100 % twice as wide; back to 0: the knobs again at the next trig
+  // of its own anew (the pitches in whole semitones, the timbres, the gate, the grit, the filter, the EQ, the pan:
+  // another value at each trig, within a quarter of its span: the knob's travel squared), never what leaves the scale
+  // (the pitch envelope, the VA's detune), the levels, the time; the sends now and then, lightly, upwards (a trig in
+  // seven at 100 %); the effects' colours anew at each beat, Warps' ALGORITHM from mark to mark; at 100 % its whole
+  // span; back to 0: the knobs again at the next trig
   {
     eng_play(0);
     eng_defaults(p);
@@ -1194,15 +1196,15 @@ int main(int argc, char** argv) {
     p->algo[PG_FILT(1, 0)] = MF_LADDER;                  // (a filter to throw)
     p->val[PG_WARPS(0) * 4 + 2] = 0.4f;                  // (Warps' ALGORITHM on a mark)
     const int fdbk = PG_DELAY(0) * 4 + 1, wa = PG_WARPS(0) * 4 + 2;
-    struct Stat { int trigs, wrong, kept_wrong, changed, marks_off; float far, fx_lo, fx_hi; };
+    struct Stat { int trigs, wrong, kept_wrong, changed, marks_off, sends, send_wrong, off_scale; float far, fx_lo, fx_hi; };
     auto run = [&](int dose, float bars) {
-      Stat st = {0, 0, 0, 0, 0, 0.0f, 1e9f, -1e9f};
+      Stat st = {0, 0, 0, 0, 0, 0, 0, 0, 0.0f, 1e9f, -1e9f};
       p->dice = static_cast<uint8_t>(dose);
       uint32_t r0[ENG_TRACKS];
       for (int t = 0; t < ENG_TRACKS; ++t) r0[t] = eng_rises(t);
       static float last[ENG_TRACKS][ENG_NTP];
       int seen[ENG_TRACKS] = {0, 0, 0, 0};
-      float a = static_cast<float>(dose) * 0.01f;
+      float a = static_cast<float>(dose) * static_cast<float>(dose) * 0.0001f;
       for (uint32_t b = 0; b < static_cast<uint32_t>(bars * 2.0f * 44100.0f / n); ++b) {
         eng_render(l, r, n);
         float fx = eng_final(fdbk);
@@ -1213,21 +1215,29 @@ int main(int argc, char** argv) {
           if (eng_rises(t) == r0[t]) continue;
           r0[t] = eng_rises(t);
           ++st.trigs;
-          int diff = 0;
+          int diff = 0, sent = 0;
           for (int tp = 0; tp < ENG_NTP; ++tp) {
             int param = eng_track_param(t, tp);
             if (param < 0 || tp == TP_NOTE || tp == TP_PROB || tp == TP_RATCHET) continue;
             float now = eng_now(param), dev = now - eng_final(param), sp = eng_dice_span(param);
-            if (sp == 0.0f) {
+            if (tp == TP_SEND || tp == TP_DSEND) {        // (now and then, upwards, lightly)
+              sent += dev > 1e-6f;
+              st.send_wrong += dev < -1e-6f || dev > 0.35f + 1e-4f;
+              continue;
+            }
+            if ((t == 1 && tp == 1) || tp == TP_PITCHENV) st.off_scale += std::fabs(dev) > 1e-6f;   // (the VA's
+            if (tp == 0) st.off_scale += std::fabs(dev * 24.0f - std::floor(dev * 24.0f + 0.5f)) > 1e-3f;   // detune;
+            if (sp == 0.0f) {                                                           // FREQ: semitones)
               st.kept_wrong += std::fabs(dev) > 1e-6f;   // (the sends, the levels, the time: the knobs)
               continue;
             }
-            if (std::fabs(dev) > a * sp + 1e-4f) ++st.wrong;
+            if (std::fabs(dev) > a * sp + (tp == 0 ? 1.0f / 48.0f : 0.0f) + 1e-4f) ++st.wrong;
             st.far = std::max(st.far, std::fabs(dev) / sp);
             diff += seen[t] && std::fabs(now - last[t][tp]) > 1e-6f;
             last[t][tp] = now;
           }
           st.changed += diff >= 8;                        // (another sound: most of its parameters elsewhere)
+          st.sends += sent > 0;
           seen[t] = 1;
         }
       }
@@ -1240,15 +1250,19 @@ int main(int argc, char** argv) {
     Stat back = run(0, 2.0f);
     float k = p->val[fdbk];
     printf("the random dose: at 0 %d trigs, %d moved; at 50 %% %d trigs, %d of them another sound, as far as %.2f of "
-           "the span, %d past it, %d kept parameters moved, the delay's FEEDBACK %.2f..%.2f (its knob %.2f), Warps "
-           "off its marks %d blocks; at 100 %% as far as %.2f; back at 0 %d moved\n", s0.trigs,
-           s0.wrong + s0.kept_wrong + static_cast<int>(s0.far > 0.0f), s50.trigs, s50.changed, s50.far,
-           s50.wrong, s50.kept_wrong, s50.fx_lo, s50.fx_hi, k, s50.marks_off + s100.marks_off, s100.far,
-           back.wrong + back.kept_wrong + static_cast<int>(back.far > 0.0f));
-    if (s0.trigs < 10 || s0.far > 0.0f || s0.kept_wrong || s0.fx_hi - s0.fx_lo > 1e-6f || s50.trigs < 20 ||
-        s50.changed < s50.trigs - 8 || s50.far > 0.5f + 1e-3f || s50.far < 0.3f || s50.wrong || s50.kept_wrong ||
-        s50.fx_hi - s50.fx_lo < 0.03f || s50.fx_hi > k + 0.1f + 1e-4f || s50.fx_lo < k - 0.1f - 1e-4f ||
-        s50.marks_off + s100.marks_off || s100.far < 0.6f || s100.wrong || back.far > 0.0f || back.kept_wrong)
+           "the span, %d past it, %d kept parameters moved, sends on %d, the delay's FEEDBACK %.2f..%.2f (its knob "
+           "%.2f), Warps off its marks %d blocks; at 100 %% as far as %.2f, sends on %d trigs of %d; off the scale %d; "
+           "back at 0 %d moved\n", s0.trigs, s0.wrong + s0.kept_wrong + s0.sends + static_cast<int>(s0.far > 0.0f),
+           s50.trigs, s50.changed, s50.far, s50.wrong, s50.kept_wrong, s50.sends, s50.fx_lo, s50.fx_hi, k,
+           s50.marks_off + s100.marks_off, s100.far, s100.sends, s100.trigs, s50.off_scale + s100.off_scale,
+           back.wrong + back.kept_wrong + back.sends + static_cast<int>(back.far > 0.0f));
+    if (s0.trigs < 10 || s0.far > 0.0f || s0.kept_wrong || s0.sends || s0.fx_hi - s0.fx_lo > 1e-6f || s50.trigs < 20 ||
+        s50.changed < s50.trigs - 8 || s50.far > 0.25f + 1e-3f || s50.far < 0.15f || s50.wrong || s50.kept_wrong ||
+        s50.fx_hi - s50.fx_lo < 0.01f || s50.fx_hi > k + 0.05f + 1e-4f || s50.fx_lo < k - 0.05f - 1e-4f ||
+        s50.marks_off + s100.marks_off || s100.far < 0.6f || s100.wrong || s100.kept_wrong ||
+        s100.sends < s100.trigs / 20 || s100.sends > s100.trigs * 3 / 10 || s50.sends > s50.trigs / 8 ||
+        s50.send_wrong + s100.send_wrong || s50.off_scale + s100.off_scale || back.far > 0.0f || back.kept_wrong ||
+        back.sends)
       ++failures, printf("FAIL: the random dose\n");
     eng_play(0);
     eng_defaults(p);

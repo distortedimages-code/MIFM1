@@ -360,24 +360,29 @@ float sat(float x) {                    // a soft limit: tanh's shape up to |x| 
 float src_value(int s) { return s > SRC_NONE && s < NSRC ? src[s] : 0.0f; }
 
 // the random dose (proj.dice, OCT- held on the panel, SELECT): every sound parameter thrown anew, at most its span
-// times the dose. A track's at each of its trigs (each note another sound: new_trig), the effects' at each beat (the
-// sequencer: their colours move under the notes): the pitches (FREQ, TRANSP, the pitch envelope), the timbres (Plaits'
-// HARMONICS, TIMBRE, MORPH, the envelope's knobs; an FM drum's own), the gate, the grit (its DRIVE, SHAPE, RATE,
-// BITS), the whole filter (its twelve knobs; from 50 % its TYPE too, on a trig in two at 100 %), the EQ, the pan, the
-// effects' colours (the delay's feedback, filter, drive, resonance, wow; the reverb's; Warps' ALGORITHM, TIMBRE and
-// levels). Not the sends (0.5.7: the sound thrown, not drowned in the effects), the levels, the time (divisions,
-// rates, lengths, tempo), the scale, the patching; not the filter's model (OFF stays OFF: its CPU)
+// times the dose's curve (its square: barely there at the start of the knob's travel, wild at its end). A track's at
+// each of its trigs (each note another sound: new_trig), the effects' at each beat (the sequencer: their colours move
+// under the notes): the pitches in whole semitones, then in the scale (FREQ, TRANSP), the timbres (Plaits' HARMONICS
+// but where it is an interval (the chords, the detune, a swarm's spread), TIMBRE, MORPH, the envelope's knobs; an FM
+// drum's own), the gate, the grit (its DRIVE, SHAPE, RATE, BITS), the filter (eleven knobs, not its PING; from 60 %
+// its TYPE too, on a trig in two at 100 %), the EQ, the pan, the effects' colours (the delay's feedback, filter,
+// drive, resonance, wow; the reverb's; Warps' ALGORITHM but as a frequency shift, TIMBRE and levels). Nothing that
+// leaves the scale (the pitch envelope, a ringing filter's ping, a shift), the levels, the time (divisions, rates,
+// lengths, tempo), the scale, the patching; not the filter's model (OFF stays OFF: its CPU). The sends (0.5.7: the
+// sound thrown, not drowned in the effects) only now and then, lightly: a trig in seven at 100 %, into one effect
 float dice_span(int param) {
   if (param < 0 || param >= ENG_NPARAMS) return 0.0f;
   int pt = page_type(param / 4), k = param % 4;
   switch (pt) {
     case PT_PLAITS1: return k == 0 ? 0.25f : 0.6f;            // FREQ: +/-6 semitones (in the scale when it is on)
     case PT_PLAITS2: return k == 0 ? 0.5f : k == 1 ? 0.6f : 1.0f;
-    case PT_PLAITS3: return k == 0 ? 1.0f : k == 1 ? 0.35f : k == 2 ? 7.0f : 0.0f;   // the pitch envelope, GATE,
-                                                                                     // TRANSP: +/-7
+    case PT_PLAITS3: return k == 1 ? 0.35f : k == 2 ? 7.0f : 0.0f;   // GATE, TRANSP: +/-7 (then in the scale); not
+                                                                     // the pitch envelope (its glide is off the scale)
     case PT_GRIT: return k == 0 ? 0.5f : k == 1 ? 1.5f : k == 2 ? 0.3f : 0.35f;   // (SHAPE: any of the three)
     case PT_FILT1: return k == 0 ? 0.35f : k == 1 ? 0.35f : k == 2 ? 0.8f : 0.4f;   // CUTOFF +/-3.4 octaves, RESO,
-    case PT_FILT2: return k == 0 ? 0.4f : k == 1 ? 0.5f : k == 2 ? 0.5f : 0.3f;     // ENV, DECAY; DRIVE, PING, FM, KEY;
+    case PT_FILT2: return k == 0 ? 0.4f : k == 1 ? 0.0f : k == 2 ? 0.5f : 0.3f;     // ENV, DECAY; DRIVE, FM, KEY (not
+                                                                                     // PING: a resonance it rings at
+                                                                                     // any pitch, off the scale);
     case PT_FILT3: return k == 0 ? 0.0f : k == 1 ? 0.35f : k == 2 ? 1.0f : 0.35f;   // NOISE, COLOR, ATTACK (TYPE:
                                                                                      // dice_type)
     case PT_EQ: return 0.35f;                                  // (to keep the track: a third of the way)
@@ -400,6 +405,14 @@ uint8_t tp_dice[ENG_TRACKS][ENG_NTP];
 int16_t fx_dice[kFxDice];
 float fx_span[kFxDice], fx_off[kFxDice];
 int n_fx_dice, dice_on;                 // (dice_on: the dose was up at the last beat, its offsets drawn)
+inline int iround(float v);
+float dice_curve() {                    // the dose's reach, 0..1: the knob's travel squared
+  float d = static_cast<float>(proj.dice > 100 ? 100 : proj.dice) * 0.01f;
+  return d * d;
+}
+int dice_interval(int m) {              // a Plaits model whose HARMONICS is an interval (off the scale, thrown)
+  return m == 6 || m == 7 || m == 8 || m == 14 || m == 16 || m == 18;   // string machine, chiptune, VA's detune,
+}                                                                       // chords, swarm, particle
 void make_dice() {                      // the effects' (a track's: at its trigs, new_trig)
   for (int j = 0; j < n_fx_dice; ++j) fx_off[j] = fx_span[j] * (2.0f * rand01() - 1.0f);
   dice_on = 1;
@@ -427,8 +440,10 @@ void apply_cables() {
   if (!proj.dice) dice_on = 0;
   if (proj.dice) {                      // the random dose, over the knobs (under the cables): the effects' this beat
     if (!dice_on) make_dice();
-    float a = static_cast<float>(proj.dice > 100 ? 100 : proj.dice) * 0.01f;
-    for (int j = 0; j < n_fx_dice; ++j) fin[fx_dice[j]] += a * fx_off[j];
+    float a = dice_curve();
+    int shift = iround(proj.val[PG_WARPS(1) * 4 + 3]) == WM_SHIFT;
+    for (int j = 0; j < n_fx_dice; ++j)
+      if (!(shift && fx_dice[j] == PG_WARPS(0) * 4 + 2)) fin[fx_dice[j]] += a * fx_off[j];
     // Warps' ALGORITHM on a mark (one cross-modulation): thrown to another mark, never between two (there Warps plays
     // both algorithms, blended: twice its work)
     const int wa = PG_WARPS(0) * 4 + 2;
@@ -654,12 +669,17 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
   if (lane < ENG_TRACKS) {              // the random dose: every sound parameter of the track thrown anew, this trig's
     dice_type[lane] = -1;
     if (proj.dice) {
-      float a = static_cast<float>(proj.dice > 100 ? 100 : proj.dice) * 0.01f;
-      a *= 0.05f;                       // (tp_dice: in 0.05s)
-      for (int tp = 0; tp < ENG_NTP; ++tp)
-        if (tp_dice[lane][tp]) tdelta[lane][tp] += a * static_cast<float>(tp_dice[lane][tp]) * (2.0f * rand01() - 1.0f);
-      a *= 20.0f;
-      if (a > 0.5f && rand01() < a - 0.5f) dice_type[lane] = static_cast<int>(rand_u32() % MF_TYPES);   // (its TYPE)
+      float a = dice_curve(), d = static_cast<float>(proj.dice > 100 ? 100 : proj.dice) * 0.01f;
+      int iv = dice_interval(proj.algo[PG_TRACK(lane, 0)]);
+      for (int tp = 0; tp < ENG_NTP; ++tp) {
+        if (!tp_dice[lane][tp] || (tp == 1 && iv)) continue;
+        float off = a * 0.05f * static_cast<float>(tp_dice[lane][tp]) * (2.0f * rand01() - 1.0f);   // (in 0.05s)
+        if (tp == 0) off = static_cast<float>(iround(off * 24.0f)) * (1.0f / 24.0f);   // FREQ: whole semitones
+        tdelta[lane][tp] += off;
+      }
+      if (d > 0.6f && rand01() < (d - 0.6f) * 1.25f) dice_type[lane] = static_cast<int>(rand_u32() % MF_TYPES);
+      if (rand01() < 0.15f * a)         // now and then, lightly, into the delay or the reverb
+        tdelta[lane][rand01() < 0.5f ? TP_DSEND : TP_SEND] += 0.2f + 0.15f * rand01();
     }
   }
   if (lane >= ENG_TRACKS) {             // an effect: open, by its probability

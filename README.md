@@ -25,8 +25,9 @@ et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la base de
 - une **matrice de câbles** : les 3 LFO vers presque tous les paramètres, 8 câbles par piste et 8 globaux, posés en
   tenant la touche d'un LFO et en tournant un potard (en atténuverteur) ;
 - une **dose d'aléatoire** cachée (OCT− tenu, SELECT), sur son propre écran, qui relance tout le son à chaque trig
-  de chaque piste (hauteurs, timbres, grit, filtres entiers, pans ; pas les envois d'effets), plus ou moins loin, le
-  rend tel quel à 0, et dans son dernier quart ajoute des **fills** en fin de mesure ;
+  de chaque piste (hauteurs toujours dans la gamme, timbres, grit, filtres, pans, un envoi d'effet de temps en
+  temps), discrète au début de la course et folle au bout, le rend tel quel à 0, et dans son dernier quart ajoute des
+  **fills** en fin de mesure ;
 - **trois effets, chacun avec sa propre piste de pas** : un **delay** inspiré des potards du Zen Delay (temps en
   divisions du tempo ou libre en millisecondes, feedback, filtre passe-bas / passe-haut avec résonance, drive, mono ou ping-pong, une légère
   modulation de bande), la **réverbe de Clouds** et **Warps**. Sans pas, l'effet est toujours ouvert ; avec des pas,
@@ -65,7 +66,9 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 <https://distortedimages-code.github.io/MIFM1/emu/> : **le firmware tel quel, compilé pour le navigateur**
 (ordinateur, téléphone, tablette), avec le panneau du FM-1 dessiné autour de son écran. Le même code que sur la
 machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
-pages ; « Allumer et lancer la démo » démarre le son et PLAY. Pour écouter MIFM1 sur un autre système (une
+pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
+en quatre gestes, le panneau (chaque numéro allume son repère sur la machine ; « Repères » les montre tous), la dose
+d'aléatoire, les spécifications, et des jauges de la charge du FM-1. Pour écouter MIFM1 sur un autre système (une
 voiture, des enceintes de studio) ou montrer la machine sans elle. Les potards se tournent en glissant vers le haut
 ou le bas ; sur un ordinateur, des raccourcis clavier jouent les touches. SAVE tenu garde le projet dans le
 navigateur. L'écran du téléphone reste allumé tant que la page joue ; sur iPhone, le son passe même en mode
@@ -351,8 +354,8 @@ vactrol (celle du low-pass gate de Plaits), **F.ATK** sa montée (instantanée �
 **F.DECAY** sa chute, qui ralentit en descendant (de 5 ms à plus d'une seconde, puis sa queue), et **PING**, une
 impulsion dans le filtre à chaque trig : avec de la résonance, il sonne tout seul (une percussion, même sur une voix
 silencieuse). **F.KEY** (deuxième page du son) fait suivre la note (100 % : une octave par octave). Tout se locke pas
-par pas (sauf TYPE), a son aléatoire, se module par les câbles, et la dose d'aléatoire relance ses douze réglages à
-chaque trig (son TYPE aussi à partir de 50 %). À
+par pas (sauf TYPE), a son aléatoire, se module par les câbles, et la dose d'aléatoire relance ses réglages à chaque
+trig (pas son PING ; son TYPE aussi au-delà de 60 %). À
 STOP, les enveloppes se ferment et les filtres s'éteignent en ~23 ms (une auto-oscillation, un ping qui sonne encore,
 leur bruit) jusqu'au trig suivant. L'écran du filtre dessine sa réponse telle qu'elle est (son enveloppe, sa FM, la
 touche), sa fréquence et ce qu'il coûte au cœur qui le joue (CPU, en % du bloc : la part du filtre dans T1..T4 de la
@@ -412,21 +415,27 @@ La machine passe sur **son écran à elle** : la troisième couleur du thème s'
 en grand, en blanc, ses lettres arrivant de gauche à droite à travers des signes ; plus la dose monte, plus ses
 lettres se mettent à changer (une à quelques %, les six à 100 %, toutes relancées à chaque cran) et plus les cases du
 fond tremblent. Dessous, la dose, sa barre (le dernier quart marqué) et ce que font les fills. **À chaque trig de
-chaque piste**, tous ses réglages du son sont relancés au hasard, chacun de son côté, plus ou moins loin selon la
-dose (à 100 %, jusqu'au bout de sa plage) : chaque note est un autre son, rien ne boucle. FREQ (jusqu'à ±6 demi-tons
-à 100 %, dans la gamme), la transposition (±7), l'enveloppe de hauteur, la gate, HARMONICS, TIMBRE, MORPH, DECAY,
-COLOUR et les enveloppes de Plaits (sur une batterie FM, ses huit réglages), le grit entier (DRIVE, SHAPE, RATE,
-BITS : à forte dose, une note sur deux sale), le filtre entier (CUTOFF jusqu'à ±3,4 octaves, RESO, ENV, DECAY,
-DRIVE, PING, FM, KEY, NOISE, COLOR, ATTACK ; à partir de 50 % son TYPE aussi, LP, BP ou HP, sur un trig sur deux à
-100 % ; pas son modèle : un filtre OFF le reste, son CPU avec), l'EQ et le pan. Les effets, eux, sont relancés à
-chaque temps : le feedback, le filtre, le drive, la résonance et le pleurage du delay, la réverbe, l'algorithme de
-Warps (d'un repère à un autre : entre deux, Warps calcule les deux algorithmes, deux fois plus de travail), son timbre
-et ses niveaux. Rien de ce qui tient le temps (divisions, tempo, vitesses, longueurs, pas), ni les envois vers les
-effets (le son secoué, pas noyé dans le delay et la réverbe), les niveaux, la gamme ou le branchement. On lâche
-OCT− : retour à la page, la dose reste (en bas, un trait de la largeur de la dose ; les potards montrent la valeur
-que le dernier trig a tirée, RANDOM dessous). Revenir à 0 rend le son exact de départ dès le trig suivant, comme
-l'annulation d'ALL. Pendant le geste, l'octave du clavier (ou la page de pas) ne bouge pas. (Jusqu'en 0.6.1, la dose
-tirait un seul écart par réglage, gardé à chaque trig : un son déplacé, mais le même à chaque note.)
+chaque piste**, tous ses réglages du son sont relancés au hasard, chacun de son côté : chaque note est un autre son,
+rien ne boucle. **La dose suit une courbe** (son carré) : au début de la course, des écarts à peine perceptibles (à
+20 %, 4 % de la plage), de plus en plus francs, toute la plage à 100 %. **Tout reste dans la gamme** : FREQ (jusqu'à
+±6 demi-tons à 100 %) et la transposition (±7) sautent par demi-tons entiers, puis sur les notes de la gamme choisie ;
+ce qui en sortirait n'est jamais tiré : l'enveloppe de hauteur (son glissando), le PING du filtre (une résonance
+qui sonne à n'importe quelle hauteur), HARMONICS là où c'est un intervalle (les accords de CHORD, STRING MACHINE et
+CHIPTUNE, le désaccord du VIRTUAL ANALOG, l'écart de SWARM et de PARTICLE), le décalage de Warps en décaleur de
+fréquence. Le reste : HARMONICS ailleurs, TIMBRE, MORPH, DECAY, COLOUR et les enveloppes de Plaits (sur une batterie
+FM, ses réglages), la gate, le grit entier (DRIVE, SHAPE, RATE, BITS : à forte dose, une note sur deux sale), le
+filtre (CUTOFF jusqu'à ±3,4 octaves, RESO, ENV, DECAY, DRIVE, FM, KEY, NOISE, COLOR, ATTACK ; au-delà de 60 % son
+TYPE aussi, LP, BP ou HP, sur un trig sur deux à 100 % ; pas son modèle : un filtre OFF le reste, son CPU avec),
+l'EQ et le pan. **Les envois d'effets**, de temps en temps et légèrement : à 100 %, un trig sur sept environ part
+dans le delay ou dans la réverbe (un envoi de 20 à 35 %, en plus du sien), presque jamais à mi-course. Les effets
+eux-mêmes sont relancés à chaque temps : le feedback, le filtre, le drive, la résonance et le pleurage du delay, la
+réverbe, l'algorithme de Warps (d'un repère à un autre : entre deux, Warps calcule les deux algorithmes, deux fois
+plus de travail), son timbre et ses niveaux. Rien de ce qui tient le temps (divisions, tempo, vitesses, longueurs,
+pas), ni les niveaux, la gamme ou le branchement. On lâche OCT− : retour à la page, la dose reste (en bas, un trait
+de la largeur de la dose ; les potards montrent la valeur que le dernier trig a tirée, RANDOM dessous). Revenir à 0
+rend le son exact de départ dès le trig suivant, comme l'annulation d'ALL. Pendant le geste, l'octave du clavier (ou
+la page de pas) ne bouge pas. (Jusqu'en 0.6.1, la dose tirait un seul écart par réglage, gardé à chaque trig : un son
+déplacé, mais le même à chaque note.)
 
 **Les fills** (le dernier quart de la dose, 76 à 100 %) : des trigs en plus à la fin des mesures (comptées depuis
 PLAY), comme un batteur, sur les pistes qui jouent des pas (pas sur Endless). À 76 %, un fill sur le dernier temps
