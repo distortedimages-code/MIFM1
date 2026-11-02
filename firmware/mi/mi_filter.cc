@@ -6,16 +6,20 @@
 //           Improved Virtual Analog Model of the Moog Ladder Filter", ICASSP 2013; its reference code, MoogLadders'
 //           ImprovedModel.h, Copyright 2012 Stefano D'Angelo, ISC licence: notice at the end): a transistor pair's
 //           tanh at each of the four stages, the thermal voltage 0.312, trapezoidal steps. Low pass 24 dB; band and
-//           high pass from its stages (Oberheim Xpander's mixes). DRIVE: the input into the transistors.
+//           high pass from its stages (Oberheim Xpander's mixes). DRIVE: the input into the transistors (its level kept).
 //   MS-20   Korg 35 (the MS-10's, the first MS-20's), after Will Pirkle's model (app note AN-5, "Designing Software
 //           Synthesizer Plug-Ins in C++") on Vadim Zavalishin's zero-delay feedback one-poles ("The Art of VA Filter
 //           Design"), its saturation inside the resonance loop as Pirkle's NLP option has it: the resonance drives.
 //           Low pass 12 dB, high pass 6 as the circuit is; band pass, a one-pole high pass into its low pass (the
-//           MS-20's two filters in series). DRIVE: the loop's saturation.
-//   SEM     Oberheim SEM's 12 dB state variable filter (Pirkle's model on Zavalishin's: low, band, high pass); DRIVE
-//           its input saturated.
+//           MS-20's two filters in series). DRIVE: the loop's saturation (its level given back).
+//   SEM     Oberheim SEM's 12 dB state variable filter (Pirkle's model on Zavalishin's: low, band, high pass). DRIVE:
+//           its input stage pushed (drive_in: a transistor stage a little off centre, anti-aliased) and its two
+//           integrators' OTAs with it. Each OTA saturates on what it gets (the high pass, the band), so the drive lives
+//           with the resonance and the cutoff: the peak thickens and squashes. Each curve is taken at the previous
+//           sample's input (its gain, a sample behind), the filter solved without delay around it.
 //   VOX     three formants (the vowels' first three resonances, as a voice makes them: Peterson and Barney's measured
-//           averages, low, mid and high voices), CUTOFF going A, E, I, O, U, its resonance their sharpness.
+//           averages, low, mid and high voices), CUTOFF going A, E, I, O, U, its resonance their sharpness. DRIVE:
+//           its input stage and the three resonators' integrators pushed as SEM's (the formants growl, as a throat).
 // Each: NOISE, white noise into it at its envelope's level (it breathes at the trigs; with resonance, whistles), its
 // COLOR a tilt; ATTACK its envelope's rise.
 // Each has its envelope, a vactrol's (Plaits' low-pass gate envelope, ported: a rise, ATTACK's, a fall slowing as it
@@ -55,8 +59,11 @@ struct Filter {
   float V[4], dV[4], tV[4];
   // MS-20: the one-poles' states (LPF1, LPF2, HPF1 or HPF2), the pre high pass (band)
   float k35[3], pre;
-  // SEM / VOX: the state variable filters' states (two each, three for VOX)
-  float sv[6];
+  // SEM / VOX: the state variable filters' states (two each, three for VOX), their integrators' last inputs (DRIVE)
+  float sv[6], nl[6];
+  // SEM / VOX: DRIVE's input stage (its curve's last input and antiderivative, the coupling capacitor's states)
+  float du1, dF1, dcx, dcy;
+  int dstale;
 };
 Filter flt[MF_TRACKS];
 
@@ -98,7 +105,9 @@ inline float soft(float y) {             // the output kept within +/-2: as it i
 void reset_state(Filter& f) {
   for (int i = 0; i < 4; ++i) f.V[i] = f.dV[i] = f.tV[i] = 0.0f;
   for (int i = 0; i < 3; ++i) f.k35[i] = 0.0f;
-  for (int i = 0; i < 6; ++i) f.sv[i] = 0.0f;
+  for (int i = 0; i < 6; ++i) f.sv[i] = f.nl[i] = 0.0f;
+  f.du1 = f.dF1 = f.dcx = f.dcy = 0.0f;
+  f.dstale = 1;
   f.pre = f.y1 = f.nlp = 0.0f;
 }
 
@@ -168,12 +177,63 @@ inline float svf(float* s, float x, float g, float a0, float rho, float* lp, flo
   return b;
 }
 
+// the state variable filter with its integrators saturating (DRIVE: k, their OTAs' input gain): each integrator's
+// rate is g times its curve's gain at what it got the sample before (sat(kv) / kv: 1 while small), then the filter
+// is solved without delay as the linear one is, with the two rates (p: the two last inputs, the high pass and the
+// band). rho is the linear filter's (twice the damping, plus g)
+inline float ota_gain(float v) {
+  float v2 = v * v;
+  return v2 <= 2.25f ? 1.0f - (4.0f / 27.0f) * v2 : fm_rsqrtf(v2);   // (sat's: the cubic, then flat)
+}
+inline float svf_nl(float* s, float* p, float x, float g, float rho, float k, float* lp, float* hp) {
+  float g1 = g * ota_gain(k * p[0]), g2 = g * ota_gain(k * p[1]), r = rho - g + g2;
+  float h = (x - r * s[0] - s[1]) / (1.0f + g1 * r);
+  float b = g1 * h + s[0];
+  float l = g2 * b + s[1];
+  s[0] = g1 * h + b;
+  s[1] = g2 * b + l;
+  p[0] = h;
+  p[1] = b;
+  *lp = l;
+  *hp = h;
+  return b;
+}
+
 // a transistor pair's curve without a division (the FM-1 reads code through a cache both cores share, and divides
 // slowly): a cubic, tanh's slope at 0, flat at 1.5 and beyond (where tanh is at 0.9)
 inline float sat(float x) {
   if (x > 1.5f) return 1.0f;
   if (x < -1.5f) return -1.0f;
   return x - (4.0f / 27.0f) * x * x * x;
+}
+
+// DRIVE's input stage (SEM, VOX): the signal pushed into a transistor stage biased a little off its centre (even
+// harmonics with the odd: the warmth of a real one), its curve taken through its antiderivative (first-order
+// antiderivative anti-aliasing: the harmonics it makes fold back far less), a coupling capacitor after it (the bias's
+// DC out, under 5 Hz), its level kept about the same as it saturates
+inline float sat_F(float x) {            // sat's antiderivative
+  float a = fm_fabsf(x);
+  if (a <= 1.5f) {
+    float x2 = x * x;
+    return x2 * (0.5f - x2 * (1.0f / 27.0f));
+  }
+  return a - 0.5625f;
+}
+inline float drive_in(Filter& f, float x, float dg, float bias, float sb, float lvl) {
+  float u = dg * x + bias, Fu = sat_F(u), du = u - f.du1, y;
+  if (f.dstale) {
+    y = sat(u);
+    f.dstale = 0;
+  } else {
+    y = fm_fabsf(du) > 1e-3f ? (Fu - f.dF1) / du : sat(0.5f * (u + f.du1));
+  }
+  f.du1 = u;
+  f.dF1 = Fu;
+  y -= sb;                               // (the bias's own output)
+  float z = y - f.dcx + 0.99929f * f.dcy;
+  f.dcx = y;
+  f.dcy = z;
+  return z * lvl;
 }
 
 // the vactrol (Plaits' LPGEnvelope), a step each kStep samples; a trig in this sub-block starts its rise
@@ -226,6 +286,7 @@ inline float out(Filter& f, Run& r, float y) {   // its output kept within 2, a 
 
 void run_ladder(Filter& f, Run& r, float* x, uint32_t n) {
   const float res = 4.2f * f.reso, drive = 1.0f + 15.0f * f.drive * f.drive;
+  const float lc = 1.0f / (1.0f + 1.4f * f.drive + 1.6f * f.drive * f.drive);   // (louder a little, then squashed)
   // its outputs mixed: the input, then its four stages (LP: the last, its passband given back a third; HP, BP: the
   // Xpander's mixes)
   float w[5] = {0.0f, 0.0f, 0.0f, 0.0f, 1.0f + 0.35f * res};
@@ -258,13 +319,13 @@ void run_ladder(Filter& f, Run& r, float* x, uint32_t n) {
       V[3] += d3 + dV[3];
       dV[3] = d3;
       tV[3] = sat(V[3] * kInvVt2);
-      x[i] = out(f, r, w[0] * u + w[1] * V[0] + w[2] * V[1] + w[3] * V[2] + w[4] * V[3]);
+      x[i] = out(f, r, lc * (w[0] * u + w[1] * V[0] + w[2] * V[1] + w[3] * V[2] + w[4] * V[3]));
     }
   }
 }
 
 void run_ms20(Filter& f, Run& r, float* x, uint32_t n) {
-  const float st = 1.0f + 7.0f * f.drive, ist = 1.0f / st;
+  const float st = 1.0f + 7.0f * f.drive, ist = 1.0f / st, mk = 1.0f + 0.6f * (st - 1.0f);   // (mk: its level back)
   float* s = f.k35;
   const int hp = f.type == MF_HP, bp = f.type == MF_BP;
   for (uint32_t i0 = 0; i0 < n; i0 += kStep) {
@@ -299,13 +360,14 @@ void run_ms20(Filter& f, Run& r, float* x, uint32_t n) {
       }
       float v3 = (y2 - s[2]) * G, l3 = v3 + s[2];
       s[2] = l3 + v3;
-      x[i] = out(f, r, y * f.iK);
+      x[i] = out(f, r, y * f.iK * mk);
     }
   }
 }
 
 void run_sem(Filter& f, Run& r, float* x, uint32_t n) {
-  const float dg = 1.0f + 7.0f * f.drive, idg = 1.0f / dg;   // DRIVE: its input saturated (an OTA's curve)
+  const float k = 6.0f * f.drive;       // DRIVE: its OTAs' input gain (0: the linear filter, as it was), and its input
+  const float dg = 1.0f + 7.0f * f.drive, bias = 0.3f * f.drive, sb = sat(bias), lvl = 1.0f / (1.0f + 0.08f * (dg - 1.0f));
   const float wl = f.type == MF_LP ? 1.0f : 0.0f, wh = f.type == MF_HP ? 1.0f : 0.0f;
   const float wb = f.type == MF_BP ? 2.0f * f.a0 * (1.0f + 2.0f * f.reso) : 0.0f;   // (the band: 0 dB, then its Q)
   for (uint32_t i0 = 0; i0 < n; i0 += kStep) {
@@ -315,8 +377,9 @@ void run_sem(Filter& f, Run& r, float* x, uint32_t n) {
       if (r.fm_on) fm_coefs(f, r);
       float lp, hp, in = x[i] + (i == ping_at ? r.ping : 0.0f);
       if (r.nv != 0.0f) in += r.nv * cnoise(f);   // (the noise: its envelope's)
-      if (dg > 1.0f) in = sat(dg * in) * idg;
-      float bp = svf(f.sv, in, f.g, f.b2, f.b3, &lp, &hp);
+      if (k > 0.0f) in = drive_in(f, in, dg, bias, sb, lvl);
+      else f.dstale = 1;
+      float bp = k > 0.0f ? svf_nl(f.sv, f.nl, in, f.g, f.b3, k, &lp, &hp) : svf(f.sv, in, f.g, f.b2, f.b3, &lp, &hp);
       x[i] = out(f, r, wl * lp + wb * bp + wh * hp);
     }
   }
@@ -324,7 +387,8 @@ void run_sem(Filter& f, Run& r, float* x, uint32_t n) {
 
 void run_vox(Filter& f, Run& r, float* x, uint32_t n) {
   const float gain = 2.0f * f.a0 * (2.4f + 0.14f / (2.0f * f.a0));   // (each formant +7 dB)
-  const float dg = 1.0f + 7.0f * f.drive, idg = 1.0f / dg;
+  const float k = 1.5f * f.drive;       // DRIVE: the resonators' OTAs (gentler than SEM's: the vowels stay), the input
+  const float dg = 1.0f + 7.0f * f.drive, bias = 0.3f * f.drive, sb = sat(bias), lvl = 1.0f / (1.0f + 0.04f * (dg - 1.0f));
   for (uint32_t i0 = 0; i0 < n; i0 += kStep) {
     uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
     sub_block(f, r, i0, i1, &ping_at);
@@ -332,8 +396,13 @@ void run_vox(Filter& f, Run& r, float* x, uint32_t n) {
       if (r.fm_on) fm_coefs(f, r);
       float lp, hp, sum = 0.0f, in = x[i] + (i == ping_at ? 4.0f * r.ping : 0.0f);
       if (r.nv != 0.0f) in += 1.5f * r.nv * cnoise(f);   // (narrow formants: more of it)
-      if (dg > 1.0f) in = sat(dg * in) * idg;
-      for (int k = 0; k < 3; ++k) sum += kVoxGain[k] * svf(&f.sv[2 * k], in, f.vg[k], f.va0[k], f.vrho[k], &lp, &hp);
+      if (k > 0.0f) in = drive_in(f, in, dg, bias, sb, lvl);
+      else f.dstale = 1;
+      if (k > 0.0f)
+        for (int j = 0; j < 3; ++j)
+          sum += kVoxGain[j] * svf_nl(&f.sv[2 * j], &f.nl[2 * j], in, f.vg[j], f.vrho[j], k, &lp, &hp);
+      else
+        for (int j = 0; j < 3; ++j) sum += kVoxGain[j] * svf(&f.sv[2 * j], in, f.vg[j], f.va0[j], f.vrho[j], &lp, &hp);
       x[i] = out(f, r, sum * gain);
     }
   }
