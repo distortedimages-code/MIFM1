@@ -42,6 +42,18 @@ void lx_knob_text(int model, int k, float v, char *b, int n);   /* as the LXR-02
 void lx_defaults(int model, float *k);   /* the knobs as the model's kit has them */
 int lx_knob_steps(int model, int k);     /* its values a knob's turn goes through: 128 (MIDI's), a wave's 6 */
 
+/* ---- ARC (mi_arc.cc, 0.8): MIFM1's own voice, a sine phase-modulated by its parasites (an operator with its
+ * feedback, a XOR, sparks on resonators tuned to the note's harmonics; through a high pass and a Korg 35), each trig
+ * another sound, its randoms in a loop. Its eight knobs as an FM drum's (k: 0..1, a bipolar knob from its middle):
+ * SPARK, COLOR, VARY, DECAY, LOOP, S.ENV, XOR, P.ENV ---- */
+void arc_init(void);
+void arc_silence(void);                  /* every sound cut: silent until the next trig (its loops kept) */
+void arc_set(int t, float note, const float *k);
+void arc_gate(int t, int g);             /* a rise: a trig (at the next block); a fall: a held note let go */
+void arc_render(int t, float *out, uint32_t n);
+const char *arc_knob_name(int k);
+void arc_defaults(float *k);
+
 /* ---- the tracks' filters (mi_filter.cc): LADDER (Moog's, D'Angelo and Valimaki's model), MS-20 (Korg 35, its
  * resonance driven), SEM (Oberheim's state variable, noise into it), VOX (three formants); each with a vactrol
  * envelope, a ping, FM from its own output, key tracking ---- */

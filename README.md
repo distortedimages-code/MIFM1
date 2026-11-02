@@ -13,6 +13,9 @@ et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la base de
   répétitions calées au tempo, ralenties ou accélérées, des accidents) ;
 - **quatre batteries FM** comme modèles de piste en plus : les voix du **LXR-02** (son firmware est open source,
   GPL-3.0), grosse caisse et toms, caisse claire, cymbale et charleston, leur code tel quel (voir plus bas) ;
+- **ARC** (0.8), la voix propre de MIFM1 : un son électrique, entre une basse sinus pure et des parasites injectés en
+  FM (un opérateur qui se réinjecte, un XOR, des étincelles accordées), passés dans un double filtre façon MS-20 ;
+  chaque trig est un autre son, et ses hasards peuvent tourner en boucle (voir plus bas) ;
 - un **séquenceur pas à pas** à la Elektron, 64 pas par piste, avec P-locks, et deux modes de jeu : **KEY** (le
   clavier joue la piste) et **STEP** (le clavier est la grille, les touches noires choisissent la piste ou l'effet) ;
 - **Endless** sur chaque piste, comme sur l'OP-1 : on enregistre des notes et des silences un par un, ils tournent
@@ -71,7 +74,7 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
 pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
 en quatre gestes, le chemin du son (un schéma), le panneau (chaque numéro allume son repère sur la machine ;
-« Repères » les montre tous), les 28 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
+« Repères » les montre tous), les 29 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
 et ce qu'ils modélisent, les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le circuit bending,
 les effets, le séquenceur, la dose d'aléatoire, les spécifications, et des jauges de la charge du FM-1. « Essayer »,
 sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_try). Pour écouter MIFM1 sur un autre système (une
@@ -185,6 +188,36 @@ FM-1 est listé dans `firmware/third_party/lxr/MIFM1.md`) : le LXR-02 calcule un
 FM-1 n'a pas ; leur enveloppe d'amplitude garde exactement la valeur du double (vérifiée pas à pas), le reste passe
 en float, et `make lxr-check` compare les deux : 99,99 % des échantillons identiques à ceux du LXR-02, les autres à
 quelques pas de 16 bits (-111 dB).
+
+**ARC** (0.8 ; ALGORITHM après FM HI-HAT, la banque MIFM1) : la voix écrite pour MIFM1, le son d'un circuit électrique,
+d'une bobine Tesla, d'après celui de Haus Arafna. Une sinusoïde porte la note ; ses parasites la modulent en phase
+(FM) : un **opérateur** avec sa propre réinjection (l'opérateur 6 d'un DX7 : un sinus sans réinjection, une scie vers
+le haut, un bruit tonal au-delà), sur un rapport de la note ; un **XOR**, le carré de la note fois celui de l'opérateur
+(l'anneau d'une porte logique, ses fronts adoucis contre le repliement, en polyBLEP) ; et des **étincelles**, deux résonateurs accordés sur des
+harmoniques de la note, frappés au hasard (un arc qui claque) et au début des cycles de la note (l'interrupteur d'une
+bobine Tesla : le buzz sur la hauteur). Avant de moduler, les parasites (pas le sinus) passent dans un **double filtre**
+façon MS-20 : un passe-haut sous la note, puis un passe-bas Korg 35 dont la résonance sature dans sa boucle (le modèle
+de Pirkle, comme le filtre MS-20) : ils chantent sur son pic. Une part s'entend telle quelle. SPARK à 0 : un sinus pur
+(ses harmoniques sous -130 dB) ; plus haut, ça grésille, bourdonne, crie, la note toujours dessous.
+
+**Chaque trig est un autre son** : le rapport de l'opérateur, la dose de parasites, la décroissance, les harmoniques
+des étincelles, leur moment, la dérive de la note (VARY dit jusqu'où). **LOOP** garde ces hasards en boucle, comme la
+Turing Machine de Music Thing garde ses bits : seize trigs de graines, chaque trig reprend celle d'il y a seize trigs
+ou en tire une nouvelle ; LOOP au bout, les mêmes seize sons reviennent, étincelles comprises, à l'échantillon près ;
+à 0, jamais deux fois le même. Les trigs donnent le temps, la boucle donne les sons. Un trig après un silence repart
+toujours du même point (la même attaque) ; un trig sur un son qui sonne encore continue de là (pas de clic).
+
+Ses huit réglages sont aux places de ceux des batteries FM (les potards après FREQ, sur les trois pages du son) :
+
+| 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **SPARK** (les parasites, et la résonance du Korg 35 avec eux) | **COLOR** (le rapport de l'opérateur, les harmoniques des étincelles, la coupure du filtre) | **VARY** (l'écart d'un trig à l'autre) | **DECAY** (20 ms à 6 s ; au bout, tenu tant que la note l'est) | **LOOP** (la boucle des hasards) | **S.ENV** (+ : les parasites à l'attaque, qui retombent vers le sinus ; − : qui montent pendant la note) | **XOR** (la part de la porte logique dans les parasites) | **P.ENV** (un balayage de hauteur au trig : un zap, un kick ; + vers le haut, − vers le bas) |
+
+Ils s'écrivent en %, S.ENV et P.ENV de −100 à +100. Choisir ARC met ces réglages aux siens (une basse avec un peu
+d'électricité, des étincelles à l'attaque) et garde l'OCTAVE de la piste : ARC joue la note comme Plaits, FREQ, la
+gamme, TRANSP et OCTAVE compris. DECAY au bout, la note tient tant que la touche ou le trig (sa longueur). ENV n'a qu'une page, celle du filtre de
+la piste. Les câbles, les locks, les aléatoires de trig, la dose et le circuit bending marchent sur lui comme
+ailleurs. Il coûte au FM-1 environ 11 % d'un bloc par voix (un VIRTUAL ANALOG : 15 %).
 
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
 icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis

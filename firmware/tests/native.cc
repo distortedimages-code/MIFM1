@@ -2130,6 +2130,129 @@ int main(int argc, char** argv) {
     eng_play(0);
   }
 
+  // 42. ARC (mi_arc.cc, 0.7): on a track, its name, its knobs (named, its defaults, written in %, its envelopes
+  // either way), its sound through the engine; the voice itself: SPARK at 0 a pure sine on the note (its harmonics
+  // under -90 dB); LOOP at the end the same sixteen sounds again, sample for sample (VARY up: not the same each
+  // trig), LOOP at 0 others; any setting finite and bounded
+  {
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    eng_set_model(0, ENG_ARC);
+    float kd[8];
+    arc_defaults(kd);
+    int setup_ok = std::strcmp(eng_algo_name(PG_TRACK(0, 0), ENG_ARC), "ARC") == 0;
+    for (int i = 0; i < 8; ++i) {
+      int param = PG_TRACK(0, 0) * 4 + 1 + i;
+      float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
+      if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), arc_knob_name(i)) != 0) setup_ok = 0;
+    }
+    char tx[24], tx2[24];
+    eng_param_text(PG_TRACK(0, 0) * 4 + 1, p->val[PG_TRACK(0, 0) * 4 + 1], tx, sizeof tx);       // SPARK 30 %
+    eng_param_text(PG_TRACK(0, 2) * 4 + 0, eng_pdef(PG_TRACK(0, 2) * 4)->kind == K_BIP ? -1.0f : 0.0f, tx2,
+                   sizeof tx2);                                                                    // P.ENV at its left
+    setup_ok &= std::strcmp(tx, "30%") == 0 && std::strcmp(tx2, "-100%") == 0;
+    eng_cut();
+    for (int b = 0; b < 3; ++b) eng_render(l, r, n);
+    float pk_eng = 0.0f;
+    int nan = 0;
+    for (int b = 0; b < 400; ++b) {
+      if (b % 50 == 0) eng_key(0, 36, 1);
+      if (b % 50 == 20) eng_key(0, 36, 0);
+      eng_render(l, r, n);
+      for (uint32_t i = 0; i < n; ++i) {
+        if (!std::isfinite(l[i])) nan = 1;
+        pk_eng = std::max(pk_eng, std::fabs(l[i]));
+      }
+    }
+    eng_key(0, 36, 0);
+    setup_ok &= !nan && pk_eng > 0.05f;
+    eng_defaults(p);
+    eng_cut();
+
+    // the voice: SPARK 0, VARY 0, held (DECAY at the end), C3
+    static float buf[44100];
+    float k[8] = {0.0f, 0.35f, 0.0f, 1.0f, 1.0f, 0.5f, 0.0f, 0.5f};
+    arc_init();
+    arc_set(0, 48.0f, k);
+    arc_gate(0, 1);
+    for (uint32_t i = 0; i < 44100; i += 32) arc_render(0, &buf[i], 32);   // (its rise, its first second)
+    for (uint32_t i = 0; i < 44100; i += 32) arc_render(0, &buf[i], 32);
+    int zc = 0;
+    for (uint32_t i = 1; i < 44100; ++i) zc += buf[i - 1] < 0.0f && buf[i] >= 0.0f;
+    auto level = [&](double hz) {        // a Hann-windowed Goertzel: the level at hz, against a full sine
+      double w = 2.0 * M_PI * hz / 44100.0, c = 2.0 * std::cos(w), s1 = 0.0, s2 = 0.0;
+      for (uint32_t i = 0; i < 44100; ++i) {
+        double s0 = buf[i] * (0.5 - 0.5 * std::cos(2.0 * M_PI * i / 44100.0)) + c * s1 - s2;
+        s2 = s1;
+        s1 = s0;
+      }
+      return std::sqrt(s1 * s1 + s2 * s2 - c * s1 * s2) / (44100.0 * 0.25);
+    };
+    double f0 = 130.8128, a1 = level(f0), hmax = 0.0;
+    for (int h = 2; h <= 9; ++h) hmax = std::max(hmax, level(f0 * h));
+    double thd = 20.0 * std::log10(hmax / a1 + 1e-12);
+    int pure_ok = zc >= 129 && zc <= 132 && a1 > 0.5 && thd < -90.0;
+
+    // LOOP: 32 trigs (VARY, SPARK up, short), each after silence; the 16 after the 16 first
+    auto trigs = [&](float loop, float* sig, float* rms) {
+      float kk[8] = {0.6f, 0.5f, 0.9f, 0.0f, loop, 0.8f, 0.3f, 0.6f};
+      static float tb[32][8192];
+      arc_init();
+      for (int tr = 0; tr < 32; ++tr) {
+        arc_set(0, 43.0f, kk);
+        arc_gate(0, 1);
+        for (uint32_t i = 0; i < 8192; i += 32) {
+          if (i == 2048) arc_gate(0, 0);
+          arc_render(0, &tb[tr][i], 32);
+        }
+        float tmp[32];
+        for (int b = 0; b < 4000; ++b) arc_render(0, tmp, 32);   // (3 s: silent again)
+        double e = 0.0;
+        for (int i = 0; i < 8192; ++i) e += static_cast<double>(tb[tr][i]) * tb[tr][i];
+        rms[tr] = static_cast<float>(std::sqrt(e / 8192.0));
+      }
+      float diff = 0.0f;                 // the most a sample differs, a trig against the one 16 before
+      for (int tr = 16; tr < 32; ++tr)
+        for (int i = 0; i < 8192; ++i) diff = std::max(diff, std::fabs(tb[tr][i] - tb[tr - 16][i]));
+      *sig = diff;
+    };
+    float d_locked, d_free, rms_l[32], rms_f[32];
+    trigs(1.0f, &d_locked, rms_l);
+    trigs(0.0f, &d_free, rms_f);
+    float lo = 1e9f, hi = 0.0f;
+    for (int tr = 0; tr < 16; ++tr) lo = std::min(lo, rms_l[tr]), hi = std::max(hi, rms_l[tr]);
+    int loop_ok = d_locked == 0.0f && d_free > 0.05f && hi > lo * 1.15f;
+
+    // anything: 300 settings drawn, a trig each, its half second
+    uint32_t sd = 12345u;
+    auto rnd = [&]() { sd = sd * 1664525u + 1013904223u; return static_cast<float>(sd >> 8) / 16777216.0f; };
+    float pk_any = 0.0f;
+    int nan_any = 0;
+    arc_init();
+    for (int s = 0; s < 300; ++s) {
+      float kk[8];
+      for (int i = 0; i < 8; ++i) kk[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();
+      arc_set(s & 3, 12.0f + 100.0f * rnd(), kk);
+      arc_gate(s & 3, 1);
+      for (int b = 0; b < 690; ++b) {
+        if (b == 300) arc_gate(s & 3, 0);
+        float tmp[32];
+        arc_render(s & 3, tmp, 32);
+        for (int i = 0; i < 32; ++i) {
+          if (!std::isfinite(tmp[i])) nan_any = 1;
+          pk_any = std::max(pk_any, std::fabs(tmp[i]));
+        }
+      }
+    }
+    arc_init();
+    printf("ARC: %s (its knobs, %s, %s), through the engine peak %.2f; SPARK 0: %d cycles a second (C3), its harmonics "
+           "%.0f dB; LOOP at the end: %.6f apart (each trig's level %.2f..%.2f), at 0: %.2f apart; 300 settings: peak "
+           "%.2f%s\n", setup_ok ? "ok" : "WRONG", tx, tx2, pk_eng, zc, thd, d_locked, lo, hi, d_free, pk_any,
+           nan_any ? ", NaN" : "");
+    if (!setup_ok || !pure_ok || !loop_ok || nan_any || pk_any > 1.6f) ++failures, printf("FAIL: ARC\n");
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

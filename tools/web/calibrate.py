@@ -5,7 +5,7 @@
 
 The engine is built for this computer as the FM-1 runs it, scalar (no vectorised loops: the FM-1 has none), and
 played under valgrind's callgrind (tools/web/calib.cc), which counts the instructions each part runs: every Plaits
-model and FM drum on its own, each filter (plain, with FM, with NOISE), the bits (the bending's first page), Warps' algorithms (Eco, HQ), the
+model, FM drum and ARC on its own, each filter (plain, with FM, with NOISE), the bits (the bending's first page), Warps' algorithms (Eco, HQ), the
 effects with each master bus, the preparation (the sequencer, the LFOs, the cables). Counts, not times: they come
 out the same on any computer, and the FM-1's time has kept close to them. 0.5.8's stress test, measured on the FM-1
 (the machine page, its worst block: T1 20 %, T2 18, T3 20, T4 32, WP 22, FX 28, PREP 14) and counted here
@@ -80,7 +80,7 @@ def count(exe, *args):
 def main():
     exe = build()
     jobs = {"blank": ("blank", SECS), "stress": ("stress", SECS * 2)}
-    for m in range(28):                                  # ENG_MODELS: the 24 Plaits, the 4 FM drums
+    for m in range(29):                                  # ENG_MODELS: the 24 Plaits, the 4 FM drums, ARC
         jobs[f"model{m}"] = ("one", m, 0, 0, 0, 0, 0, -1, 0, SECS)
     for f in range(1, 5):                                # MF_LADDER..MF_VOX, under the VA (8)
         for v, (fm, nz) in enumerate(((0, 0), (0.5, 0), (0, 0.5))):
@@ -98,7 +98,7 @@ def main():
     rest = res["blank"]["voice"] / 4.0                   # a resting voice's render (its silence), each block
     va = res["model8"]
     k = lambda ir, rate: ir / 1000.0 * rate              # instructions a block -> the FM-1's us a block
-    model = [k(res[f"model{m}"]["voice"] - 3 * rest, K_VOICE) for m in range(28)]
+    model = [k(res[f"model{m}"]["voice"] - 3 * rest, K_VOICE) for m in range(29)]
     filt = [[0.0, 0.0, 0.0]] + [[k(res[f"filter{f}.{v}"]["filter"] - va["filter"], K_VOICE) for v in range(3)]
                                 for f in range(1, 5)]
     bend = k(res["bend"]["voice"] - va["voice"], K_VOICE)   # (apply_bend inlined in render_voice)
@@ -121,7 +121,7 @@ def main():
     names = ["VA VCF", "PHASE DIST", "6-OP FM 1", "6-OP FM 2", "6-OP FM 3", "WAVE TERRAIN", "STRING MACH", "CHIPTUNE",
              "VIRTUAL ANALOG", "WAVESHAPING", "FM 2-OP", "GRAIN", "ADDITIVE", "WAVETABLE", "CHORD", "SPEECH", "SWARM",
              "NOISE", "PARTICLE", "STRING", "MODAL", "KICK", "SNARE", "HI-HAT", "FM DRUM", "FM SNARE", "FM CYMBAL",
-             "FM HI-HAT"]
+             "FM HI-HAT", "ARC"]
     f1 = lambda v: f"{v:.1f}f"
     h = ["/* SPDX-License-Identifier: MPL-2.0",
          " * Copyright (C) 2026 Yoann */",
@@ -129,8 +129,8 @@ def main():
          " * (2902 us), from the instructions it runs (tools/web/calibrate.py writes this file: see there how). */",
          "#pragma once",
          f"static const float kWebRest = {f1(k(rest, K_VOICE))};   /* a resting voice */",
-         "static const float kWebModel[28] = {   /* a voice playing, by model */"]
-    for m in range(28):
+         "static const float kWebModel[29] = {   /* a voice playing, by model */"]
+    for m in range(29):
         h.append(f"    {f1(model[m])},{' ' * (8 - len(f1(model[m])))}/* {m:2d} {names[m]} */")
     h += ["};",
           "static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, VOX): plain, its FM's extra, "
