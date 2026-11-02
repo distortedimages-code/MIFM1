@@ -24,7 +24,7 @@
         --orange-soft: #ffc3a8; --teal: #0e9aa4; --focus: #0050ff; color-scheme: light; }
 * { box-sizing: border-box; }
 html { background: var(--alu); }
-body { margin: 0; background: var(--alu); color: var(--ink); font: 400 17px/1.5 "Archivo", "Helvetica Neue", Arial, sans-serif;
+body { margin: 0; overflow-x: clip; background: var(--alu); color: var(--ink); font: 400 17px/1.5 "Archivo", "Helvetica Neue", Arial, sans-serif;
        font-variation-settings: "wdth" 100; -webkit-font-smoothing: antialiased; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; }
@@ -278,6 +278,30 @@ use.fi { fill: none; stroke: #000; stroke-width: 2.6; stroke-linecap: round; str
   @keyframes turn { to { transform: rotate(28deg); } }
 }
 
+/* the photographs: beside a section's title (sticky while it reads), developed as they come into view; the lab's
+   strip, full width, drifting sideways as the page scrolls */
+.part > .shot { grid-column: 1; grid-row: 2; margin: 0; align-self: start; position: sticky; top: 24px; }
+.part:has(> .shot) > div { grid-column: 2; grid-row: 1 / span 2; }
+.shot img { display: block; width: 100%; height: auto; aspect-ratio: 545 / 461; object-fit: cover; background: #222; }
+.shot figcaption { font-size: 13px; color: var(--grey); margin-top: .5rem; }
+.band { margin: 72px 0 0; width: 100vw; margin-left: calc(50% - 50vw); overflow: hidden; }
+.reel { display: flex; gap: 6px; width: max-content; will-change: transform; }
+.reel figure { margin: 0; }
+.reel img { display: block; height: clamp(190px, 30vw, 330px); width: auto; aspect-ratio: 545 / 461; object-fit: cover; background: #222; }
+@media (prefers-reduced-motion: no-preference) {
+  .js .shot.anim img { transform: scale(1.06); filter: grayscale(1) contrast(1.15); opacity: .55;
+                       transition: transform 1.4s cubic-bezier(.2, .7, .1, 1), filter 1.6s ease, opacity 1s ease; }
+  .js .shot.anim.seen img { transform: none; filter: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .band { overflow-x: auto; } }
+@media (max-width: 860px) {
+  .part > .shot { grid-column: 1; grid-row: auto; position: static; }
+  .part:has(> .shot) > div { grid-column: 1; grid-row: auto; }
+  .shot img { aspect-ratio: 16 / 7; }
+  .shot figcaption { margin-top: .3rem; font-size: 12px; }
+  .band { margin-top: 40px; }
+}
+
 /* the specifications */
 .specs { margin: 0; display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); border-top: 2px solid #000; }
 .specs dt, .specs dd { margin: 0; padding: 11px 0; border-bottom: 1px solid var(--rule); }
@@ -452,6 +476,7 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
 
 <section class="part" aria-labelledby="h-start">
   <h2 id="h-start">Prise en main</h2>
+  <figure class="shot anim"><img src="img/exp_03.webp" alt="Une main règle les potards d'un synthétiseur posé parmi des sphères de verre." width="546" height="461" loading="lazy" decoding="async"><figcaption>Expérience 3. La main sur la machine.</figcaption></figure>
   <div>
     <ol class="steps anim">
       <li><svg class="mini" viewBox="0 0 160 84" aria-hidden="true"><rect x="2" y="2" width="156" height="80" rx="14" class="body"/><circle cx="80" cy="42" r="22" class="orange breathe"/><path d="M73 31 L91 42 L73 53 Z" class="blk"/></svg>
@@ -501,6 +526,7 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
 
 <section class="part" aria-labelledby="h-panel">
   <h2 id="h-panel">Le panneau</h2>
+  <figure class="shot anim"><img src="img/exp_02.webp" alt="Un écran d'oscilloscope affiche « MVAV FM1 firmware v1.2 » et deux formes d'onde." width="544" height="461" loading="lazy" decoding="async"><figcaption>Expérience 2. Le signal à l'écran.</figcaption></figure>
   <div>
     <p>Touche un numéro : son repère s'allume sur la machine. « Repères », sous la machine, les montre tous.</p>
     <ol class="legend" id="legend">
@@ -525,6 +551,17 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
       <li data-n="19"><button type="button"><span class="n">19</span><b>OCT− OCT+</b><span class="d">L'octave du clavier, les pages de pas.</span></button></li>
       <li data-n="20"><button type="button"><span class="n">20</span><b>Le clavier</b><span class="d">Joue la piste, même à l'arrêt. Sur ordinateur : <kbd>Q</kbd> à <kbd>K</kbd>, <kbd>1</kbd> à <kbd>0</kbd>.</span></button></li>
     </ol>
+  </div>
+</section>
+
+<section class="band" aria-label="Le laboratoire">
+  <div class="reel" id="reel">
+    <figure><img src="img/lab_01.webp" alt="Une chercheuse, un casque autour du cou, observe un tube de verre traversé de lumière orange." width="544" height="457" loading="lazy" decoding="async"></figure>
+    <figure><img src="img/exp_01.webp" alt="Un chercheur en blouse et lunettes de protection, un casque sur l'oreille, écoute." width="545" height="461" loading="lazy" decoding="async"></figure>
+    <figure><img src="img/lab_02.webp" alt="Une main tourne un potard d'un petit synthétiseur relié à un clavier." width="537" height="457" loading="lazy" decoding="async"></figure>
+    <figure><img src="img/lab_03.webp" alt="Un chercheur en combinaison, de dos, devant un banc d'appareils et un grand disque lumineux." width="548" height="457" loading="lazy" decoding="async"></figure>
+    <figure><img src="img/lab_04.webp" alt="Un chercheur au casque joue sur un clavier devant un écran de spectre." width="544" height="463" loading="lazy" decoding="async"></figure>
+    <figure><img src="img/lab_06.webp" alt="Une chercheuse au casque règle un appareil dans un laboratoire." width="548" height="463" loading="lazy" decoding="async"></figure>
   </div>
 </section>
 
@@ -671,6 +708,7 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
 
 <section class="part" aria-labelledby="h-grit">
   <h2 id="h-grit">Le grit</h2>
+  <figure class="shot anim"><img src="img/exp_04.webp" alt="Du ferrofluide hérissé de pointes dans une coupelle de verre." width="545" height="463" loading="lazy" decoding="async"><figcaption>Expérience 4. Du ferrofluide sous un champ.</figcaption></figure>
   <div>
     <p>Avant le filtre, de quoi salir la voix : DRIVE monte le gain des petits signaux jusqu'à ×25 dans une des trois
       courbes, RATE retient chaque échantillon (un échantillonneur bloqueur, jusqu'à 689 Hz), BITS arrondit à 16, 8,
@@ -686,6 +724,7 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
 
 <section class="part" aria-labelledby="h-fx">
   <h2 id="h-fx">Les effets</h2>
+  <figure class="shot anim"><img src="img/exp_06.webp" alt="Des plants dans une chambre de culture éclairée de rose, au milieu d'appareils." width="546" height="463" loading="lazy" decoding="async"><figcaption>Expérience 6. La chambre de culture.</figcaption></figure>
   <div>
     <ul class="fxs anim">
       <li><svg class="ic" viewBox="0 0 32 32" aria-hidden="true"><use href="#ic52"/></svg><h3>Delay</h3><p>Inspiré des potards du Zen Delay : temps calé sur le tempo (triolets, pointées) ou libre, un filtre résonant et un drive dans la boucle, du ping-pong, un léger pleurage de bande.</p></li>
@@ -760,6 +799,7 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
 
 <section class="part" aria-labelledby="h-dose">
   <h2 id="h-dose">La dose d'aléatoire</h2>
+  <figure class="shot anim"><img src="img/lab_05.webp" alt="Une boîte de Petri pleine de cellules orange et de bulles, vue de dessus." width="536" height="462" loading="lazy" decoding="async"><figcaption>Laboratoire 5. Une culture au hasard.</figcaption></figure>
   <div class="dose">
     <div>
       <p>À chaque trig de chaque piste, elle relance tous les réglages du son : hauteurs, timbres, grit, filtre,
@@ -793,6 +833,7 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
 
 <section class="part" aria-labelledby="h-specs">
   <h2 id="h-specs">Dedans</h2>
+  <figure class="shot anim"><img src="img/exp_05.webp" alt="Deux chercheurs en blouse travaillent face à des synthétiseurs sur un banc de laboratoire." width="541" height="463" loading="lazy" decoding="async"><figcaption>Expérience 5. Le banc d'essai.</figcaption></figure>
   <div>
     <dl class="specs">
       <dt>Pistes</dt><dd>4, chacune avec son moteur, son grit, son filtre et ses enveloppes</dd>
@@ -1466,6 +1507,22 @@ document.querySelectorAll(".try").forEach((b) => b.addEventListener("click", asy
     e.target.classList.toggle("live", e.isIntersecting);
   }), { threshold: 0.2 });
   all.forEach((x) => io.observe(x));
+})();
+(function drift() {
+  const reel = $("reel");
+  if (!reel || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  let queued = false;
+  const place = () => {
+    queued = false;
+    const r = reel.parentElement.getBoundingClientRect(), vh = innerHeight;
+    if (r.bottom < 0 || r.top > vh) return;
+    const p = Math.min(1, Math.max(0, (vh - r.top) / (vh + r.height)));
+    const room = Math.max(0, reel.scrollWidth - r.width);
+    reel.style.transform = `translateX(${(-p * room).toFixed(1)}px)`;
+  };
+  addEventListener("scroll", () => { if (!queued) { queued = true; requestAnimationFrame(place); } }, { passive: true });
+  addEventListener("resize", place);
+  place();
 })();
 let spotTimer = 0;
 document.querySelectorAll("#legend li").forEach((li) => li.querySelector("button").addEventListener("click", () => {
