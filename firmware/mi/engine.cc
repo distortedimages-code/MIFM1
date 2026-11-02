@@ -288,6 +288,7 @@ int32_t tick;                           // sixteenths since PLAY
 uint32_t fill_trigs[ENG_TRACKS];        // the dose's fills' trigs each track played (the tests)
 int cur_step[ENG_LANES];
 int gl_at[ENG_TRACKS];                  // the glitch: this block's sixteenth (the sample it starts at; -1 none)
+int gl_busy[ENG_TRACKS];                // its slice taken or repeating (the voice does not rest meanwhile)
 float gl_six = 5000.0f;                 // a sixteenth, samples
 void glitch_stop_all();
 float raw_left[ENG_TRACKS];             // a step's gate: its samples left
@@ -994,7 +995,7 @@ void set_voice(int t) {
 const int kQuiet = 4;                   // the silent blocks before it rests
 int quiet[ENG_TRACKS];
 int voice_rests(int t) {
-  if (vgate[t] || quiet[t] < kQuiet) return 0;
+  if (vgate[t] || quiet[t] < kQuiet || gl_busy[t]) return 0;
   for (uint32_t k = 0; k < kFrames; ++k)
     if (fg[t][k]) return 0;
   return 1;
@@ -1128,7 +1129,7 @@ struct Glitch {
   float mix;                            // the repeats over the live (0..1), glided
 };
 Glitch glitch[ENG_TRACKS];
-void glitch_stop_all() {
+void glitch_stop_all() {                // (the transport stopped: the repeats fade back to the live)
   for (int t = 0; t < ENG_TRACKS; ++t) glitch[t].on = 0;
 }
 
@@ -1194,6 +1195,7 @@ void apply_glitch(int t, float* x, uint32_t n) {
     x[i] = live + (rep - live) * g.mix;
   }
   gl_at[t] = -1;
+  gl_busy[t] = g.on || g.mix > 0.0f;
 }
 
 volatile uint8_t filt_stop;             // the transport stopped: the filters to close
@@ -1223,6 +1225,7 @@ void render_voice(int t, uint32_t n) {
     glitch[t].on = 0;
     glitch[t].mix = 0.0f;
     gl_at[t] = -1;
+    gl_busy[t] = 0;
     mf_reset(t);
     return;
   }
@@ -1274,7 +1277,7 @@ void render_voice(int t, uint32_t n) {
   apply_glitch(t, vbuf[t], n);          // (its glitch: after the filter, the track's sound repeated)
   float pk = 0.0f;
   for (uint32_t i = 0; i < n; ++i) pk = fm_maxf(pk, fm_fabsf(vbuf[t][i]));
-  quiet[t] = !vgate[t] && pk < 3e-5f ? quiet[t] + 1 : 0;
+  quiet[t] = !vgate[t] && pk < 3e-5f && !glitch[t].on ? quiet[t] + 1 : 0;   // (a hole the glitch made: not a rest)
 }
 
 // the mix, the effects and the master bus, a block behind (the output 2.9 ms later): they take the last block's

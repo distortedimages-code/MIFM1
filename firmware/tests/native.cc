@@ -1121,11 +1121,14 @@ int main(int argc, char** argv) {
     int reps0 = reps;
     p->val[PG_GLITCH(0) * 4 + 2] = 1.0f;                 // BEND: each repeat higher; DROP: accidents
     p->val[PG_GLITCH(0) * 4 + 3] = 1.0f;
+    float spmax = 0.0f;                  // (the fastest a repeat went: BEND up, each one faster)
     for (int b2 = 0; b2 < 600; ++b2) {
       eng_render(l, r, n);
       eng_glitch_state(0, &reps, &sp);
+      spmax = std::max(spmax, sp);
       for (uint32_t i = 0; i < n; ++i) gpk = std::isfinite(l[i]) ? std::max(gpk, std::fabs(l[i])) : 1e9f;
     }
+    sp = spmax;
     eng_play(0);
     printf("glitch: states seen %d (taking %d, repeating %d), %d repeats, peak %.2f, bent speed %.2f\n", seen2,
            (seen2 >> 1) & 1, (seen2 >> 2) & 1, reps0, gpk, sp);
