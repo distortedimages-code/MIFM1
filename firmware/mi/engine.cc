@@ -31,6 +31,50 @@ extern "C" {
 float eng_test_prebus[2][128];           // (the tests: the master before its bus, what the USB channels sum to)
 #endif
 
+#ifdef PLAT_WEB
+// The browser emulator (fm1-base's tools/build.py --web, tools/web): the engine's clock is the FM-1's, modelled. A
+// browser cannot time the engine (its clock moves a render quantum at a time, and its speed is not the FM-1's); here
+// each part, as it runs, moves the clock of the core it runs on by what it costs the FM-1 (mi/web_costs.h, counted
+// by tools/web/calibrate.py), and the second core is simulated on its own clock: a job starts when it is asked and
+// the core is free, core 0 waits for it when it must. The machine page, the header's load, the filters' CPU and the
+// split between the cores then read the FM-1's times, as near as the table has them.
+#include "web_costs.h"
+namespace {
+uint32_t web_clk[2], web_c1_end;
+int web_core, web_c1_on;
+void web_spend(float us) { web_clk[web_core] += static_cast<uint32_t>(us * static_cast<float>(PLAT_TICKS_PER_US)); }
+int web_later(uint32_t a, uint32_t b) { return static_cast<int32_t>(a - b) > 0; }   // (the clock wraps: 179 s)
+}  // namespace
+extern "C" {
+static uint32_t web_ticks24(void) { return web_clk[web_core]; }
+int plat_cpu2_set(int on) { web_c1_on = on != 0; return 0; }
+int plat_cpu2_on(void) { return web_c1_on; }
+int plat_cpu2_run(void (*fn)(uint32_t), uint32_t arg) {
+  if (!web_c1_on) return 0;
+  web_clk[1] = web_later(web_c1_end, web_clk[0]) ? web_c1_end : web_clk[0];
+  web_core = 1;
+  fn(arg);
+  web_core = 0;
+  web_c1_end = web_clk[1];
+  return 1;
+}
+int plat_cpu2_wait(void) {
+  if (web_later(web_c1_end, web_clk[0])) web_clk[0] = web_c1_end;
+  return 0;
+}
+void plat_cpu2_sync(void) {}
+int plat_cpu2_busy(void) { return web_later(web_c1_end, web_clk[0]); }
+int plat_cpu2_gave_up(void) { return 0; }
+uint32_t plat_cpu2_bad(void) { return 0; }
+int plat_cpu2_barred(void) { return 0; }
+uint32_t plat_cpu2_stack(void) { return 0; }
+}
+#define plat_ticks24 web_ticks24
+#define WEB_SPEND(us) web_spend(us)
+#else
+#define WEB_SPEND(us) ((void)0)
+#endif
+
 namespace {
 
 // ---------------------------------------------------------------- parameters ---
@@ -976,11 +1020,21 @@ void apply_grit(int t, float* x, uint32_t n) {
 
 void render_voice(int t, uint32_t n) {
   if (voice_rests(t)) {
+    WEB_SPEND(kWebRest);
     for (uint32_t i = 0; i < n; ++i) vbuf[t][i] = 0.0f;
     grit[t].hold = grit[t].cnt = 0.0f;
     mf_reset(t);
     return;
   }
+#ifdef PLAT_WEB
+  {                                     // (its model, its grit if any of it is up)
+    int m = proj.algo[PG_TRACK(t, 0)];
+    const Grit& gr = grit[t];
+    web_spend((kWebModel[m < 0 ? 0 : m > 27 ? 27 : m] + (gr.k1 > 0.0f || gr.rate < 1.0f || gr.steps > 0.0f ? kWebGrit
+                                                                                                             : 0.0f)) *
+              static_cast<float>(n) / 128.0f);
+  }
+#endif
   int lx = lx_model(t) >= 0;            // an FM drum: a rise triggers it, its own envelope does the rest
   uint32_t step = n / kFrames, pos = 0;
   for (uint32_t k = 0; k < kFrames; ++k) {
@@ -1009,6 +1063,14 @@ void render_voice(int t, uint32_t n) {
   }
   apply_grit(t, vbuf[t], n);
   uint32_t fq = plat_ticks24();
+#ifdef PLAT_WEB
+  {
+    int fm = proj.algo[PG_FILT(t, 0)];
+    if (fm > MF_OFF && fm < MF_MODELS)
+      web_spend((kWebFilter[fm][0] + (fm_fabsf(E(t, TP_FM)) > 0.005f ? kWebFilter[fm][1] : 0.0f) +
+                 (E(t, TP_NOISE) > 0.005f ? kWebFilter[fm][2] : 0.0f)) * static_cast<float>(n) / 128.0f);
+  }
+#endif
   mf_process(t, vbuf[t], n);            // the filter (OFF: nothing)
   filt_ticks[t] = plat_ticks24() - fq;
   float pk = 0.0f;
@@ -1150,6 +1212,19 @@ void mix_job(uint32_t n) {
 }
 
 void fx_job(uint32_t n) {
+#ifdef PLAT_WEB
+  {                                     // (the bus's mode; the EQ of the tracks playing, the duck, the delay's filter,
+    int bus = proj.algo[PG_COMP] > MB_OTT ? static_cast<int>(MB_COMP) : proj.algo[PG_COMP];   // Warps in the mix)
+    float us = kWebFx[bus];
+    for (int t = 0; t < ENG_TRACKS; ++t) {
+      if ((mj.eq[t] <= -kEqDead || mj.eq[t] >= kEqDead) && quiet[t] < kQuiet) us += kWebFxEq;
+      if (t && (mj.duck0[t] > 0.0f || mj.duck1[t] > 0.0f)) us += kWebFxDuck;
+    }
+    if (fm_fabsf(E(LANE_DELAY, 2)) > 0.01f) us += kWebFxDelay;
+    if (mj.dst >= 0 && !mj.idle) us += kWebFxWarps;
+    web_spend(us * static_cast<float>(n) / 128.0f);
+  }
+#endif
   mix_job(n);
   float inv = 1.0f / static_cast<float>(n), ret = fx_ret0, dret = (fx_ret1 - fx_ret0) * inv, eret = fx_dret0;
   float deret = (fx_dret1 - fx_dret0) * inv, pr = 0.0f, pd = 0.0f;
@@ -1211,7 +1286,13 @@ uint32_t warps_calls;
 void run_task(int i, uint32_t n) {
   uint32_t q = plat_ticks24();
   if (i < ENG_TRACKS) render_voice(i, n);
-  else if (i == kTaskWarps) mw_render(warps, w_car, w_mod, w_din, w_out, w_dry, n);
+  else if (i == kTaskWarps) {
+#ifdef PLAT_WEB
+    int a = eng_warps_algo();
+    WEB_SPEND(kWebWarps[proj.warps_hq ? 1 : 0][a < 0 ? 0 : a > 5 ? 5 : a] * static_cast<float>(n) / 128.0f);
+#endif
+    mw_render(warps, w_car, w_mod, w_din, w_out, w_dry, n);
+  }
   else fx_job(fx_n);
   task_ticks[i] = plat_ticks24() - q;
 }
@@ -1934,6 +2015,93 @@ void eng_defaults(project_t* p) {
   ++lock_gen;
 }
 
+// the demo groove (GLO, SELECT: PROJECT, the second; a first power-on; the browser emulator's start): a kick on the
+// beat, ducking a Moog bass (LADDER, its envelope, a triangle a bar on its cutoff) that rolls on the off-beats with a
+// riff of locks, the FM hi-hat on every sixteenth (its decay and pan new at each, an open one on the off-beats), dub
+// stabs of CHORD through SEM (S&H on their voicing, a smooth random on the cutoff) thrown into a dotted-eighth
+// ping-pong and the reverb; F minor, 124 BPM, a gentle compressor on the bus. Light on purpose: about half of each
+// of the FM-1's cores (the machine page), room left for what is added
+void eng_groove(project_t* p) {
+  eng_blank(p);
+  static const int kModel[4] = {21, 8, ENG_LX0 + 3, 14};   // kick, virtual analog, FM hi-hat, chords
+  static const int kOct[4] = {-1, -1, 0, 0};
+  static const float kLevel[4] = {1.0f, 0.4f, 0.5f, 1.0f};
+  static const float kPan[4] = {0.0f, 0.0f, 0.25f, -0.15f};
+  static const float kRSend[4] = {0.0f, 0.05f, 0.15f, 0.45f};
+  static const float kDSend[4] = {0.0f, 0.0f, 0.1f, 0.5f};
+  static const float kDecay[4] = {0.42f, 0.3f, 0.5f, 0.35f};
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(kModel[t]);
+    if (kModel[t] >= ENG_LX0) lx_kit(p, t);
+    else p->val[PG_TRACK(t, 1) * 4 + 0] = kDecay[t];
+    p->val[PG_TRACK(t, 2) * 4 + 3] = static_cast<float>(kOct[t]);
+    p->val[PG_MIX * 4 + t] = kLevel[t];
+    p->val[PG_PAN * 4 + t] = kPan[t];
+    p->val[PG_RSEND * 4 + t] = kRSend[t];
+    p->val[PG_DSEND * 4 + t] = kDSend[t];
+  }
+  p->val[PG_GRIT(0) * 4 + 0] = 0.25f;                   // the kick: a little drive
+  // the bass: a saw (MORPH), no detune, short gates; through the ladder, opened by its envelope at each note
+  p->val[PG_TRACK(1, 0) * 4 + 1] = 0.0f;
+  p->val[PG_TRACK(1, 0) * 4 + 2] = 0.3f;
+  p->val[PG_TRACK(1, 0) * 4 + 3] = 0.85f;
+  p->val[PG_TRACK(1, 2) * 4 + 1] = 0.35f;
+  p->algo[PG_FILT(1, 0)] = MF_LADDER;
+  static const float kBassF[12] = {0.5f, 0.55f, 0.45f, 0.28f, 0.3f, 0.0f, 0.0f, 0.5f, MF_LP, 0.0f, 0.0f, 0.0f};
+  for (int k = 0; k < 12; ++k) p->val[PG_FILT(1, k / 4) * 4 + k % 4] = kBassF[k];
+  // the stabs: a minor seventh chord (HARMONICS), short (GATE), through SEM's low pass, its envelope and a breath of
+  // noise
+  p->val[PG_TRACK(3, 0) * 4 + 1] = 0.55f;
+  p->val[PG_TRACK(3, 0) * 4 + 2] = 0.4f;
+  p->val[PG_TRACK(3, 0) * 4 + 3] = 0.3f;
+  p->val[PG_TRACK(3, 2) * 4 + 1] = 0.35f;
+  p->algo[PG_FILT(3, 0)] = MF_SEM;
+  static const float kStabF[12] = {0.58f, 0.45f, 0.45f, 0.32f, 0.0f, 0.0f, 0.0f, 0.3f, MF_LP, 0.15f, -0.3f, 0.05f};
+  for (int k = 0; k < 12; ++k) p->val[PG_FILT(3, k / 4) * 4 + k % 4] = kStabF[k];
+  // LFO 1: a triangle a bar (the bass's cutoff); LFO 2: a sample and hold on the half bar (the stabs' voicing);
+  // LFO 3: a slow smooth random (the stabs' cutoff, the delay's filter)
+  static const float kLfo[3][4] = {{static_cast<float>(LW_TRI), 4.5f / 9.0f, static_cast<float>(LM_SYNC), 0.0f},
+                                   {static_cast<float>(LW_SH), 5.5f / 9.0f, static_cast<float>(LM_SYNC), 0.1f},
+                                   {static_cast<float>(LW_SMOOTH), 0.3f, static_cast<float>(LM_FREE), 0.3f}};
+  for (int i = 0; i < 3; ++i)
+    for (int k = 0; k < 4; ++k) p->val[PG_LFO(i) * 4 + k] = kLfo[i][k];
+  p->val[PG_DUCK * 4 + 0] = 0.4f;                        // the kick ducks the bass and the stabs
+  p->val[PG_DUCK * 4 + 1] = 0.55f;
+  p->val[PG_DUCK * 4 + 3] = 0.35f;
+  static const float kDelay[8] = {7.0f, 0.55f, -0.3f, 0.15f, 0.25f, 1.0f, 0.15f, 0.55f};   // a dotted eighth,
+  for (int k = 0; k < 8; ++k) p->val[PG_DELAY(k / 4) * 4 + k % 4] = kDelay[k];               // ping-pong, darkened
+  static const float kRev[4] = {0.7f, 0.5f, 0.7f, 0.45f};
+  for (int k = 0; k < 4; ++k) p->val[PG_REVERB * 4 + k] = kRev[k];
+  static const float kComp[4] = {0.3f, 0.3f, 0.5f, 3.0f / 12.0f};   // the bus: -9 dB, 3:1, +3 dB
+  for (int k = 0; k < 4; ++k) p->val[PG_COMP * 4 + k] = kComp[k];
+  p->algo[PG_COMP] = MB_COMP;
+  p->val[PG_GLOBAL * 4 + 0] = 0.61629f;                  // 30 x 2^(0.61629 x 3.3219) = 124 BPM
+  p->val[PG_GLOBAL * 4 + 1] = 2.0f;                      // minor
+  p->val[PG_GLOBAL * 4 + 2] = 5.0f;                      // on F
+  cable(p, 1, 0, SRC_L1, PG_FILT(1, 0) * 4 + 0, 22);     // T2: the triangle -> CUTOFF
+  cable(p, 3, 0, SRC_L2, PG_TRACK(3, 0) * 4 + 2, 30);    // T4: S&H -> TIMBRE (the voicing), the smooth random ->
+  cable(p, 3, 1, SRC_L3, PG_FILT(3, 0) * 4 + 0, 25);     // CUTOFF
+  cable(p, 4, 0, SRC_L3, PG_DELAY(0) * 4 + 2, 20);       // global: the smooth random -> the delay's filter
+  static const uint16_t kPat[4] = {0x1111, 0xEEEE, 0xFFFF, 0x0848};   // bit s: step s
+  for (int t = 0; t < ENG_TRACKS; ++t) set_trigs(p, t, kPat[t]);
+  set_lock(p, 1, 3, TP_NOTE, 12.0f);                     // the bass's riff (in the scale), its last note slid up
+  set_lock(p, 1, 7, TP_NOTE, 3.0f);
+  set_lock(p, 1, 10, TP_NOTE, 7.0f);
+  set_lock(p, 1, 11, TP_NOTE, 5.0f);
+  set_lock(p, 1, 15, TP_NOTE, 10.0f);
+  set_lock(p, 2, 2, TP_DECAY, 0.75f);                    // the open hats, on the off-beats
+  set_lock(p, 2, 6, TP_DECAY, 0.75f);
+  set_lock(p, 2, 10, TP_DECAY, 0.75f);
+  set_lock(p, 2, 14, TP_DECAY, 0.85f);
+  set_lock(p, 0, 12, TP_RATCHET, 2.0f);                  // the kick's double, its last of the bar
+  set_lock(p, 3, 11, TP_NOTE, -2.0f);                    // the stabs: their second one a step down
+  p->rnd[1][TP_RATCHET] = 12;                            // the bass: a ratchet now and then
+  p->rnd[2][TP_DECAY] = 20;                              // the hats: their decay and pan new at each
+  p->rnd[2][TP_PAN] = 30;
+  p->val[PG_STEP(2) * 4 + 1] = 0.9f;                     // (and 10 % of them left out)
+  ++lock_gen;
+}
+
 // the stress test (GLO, SELECT: PROJECT, K1, REC held): a fixed patch that keeps everything busy, to read the
 // machine page against, version after version: four tracks playing (a kick, VA VCF, CHORD, MODAL), two of
 // them gritty, Warps (diode ring, T3 by T2), OTT, the delay and the reverb fed, the duck, the filters, the three LFOs
@@ -2649,16 +2817,27 @@ void eng_render(float* l, float* r, uint32_t n) {
   }
   // 1. the LFOs, with the knobs and cables of the last block
   uint32_t pp[6];                       // (the preparation's parts, timed: the machine page's worst block)
+#ifdef PLAT_WEB
+  float prep_us = kWebPrep;             // (its floor and its cables, in the FM-1's shares: the stress test's worst
+  for (int g = 0; g <= ENG_TRACKS; ++g) // block, LFO 5.1 %, CAB 1.6, SEQ 2.0, LANES 1.3, KNOBS 4.2)
+    for (int c = 0; c < ENG_CABLES; ++c)
+      if (proj.cable[g][c].depth && proj.cable[g][c].src != SRC_NONE) prep_us += kWebPrepCable;
+  prep_us *= static_cast<float>(n) / 128.0f / 14.2f;
+#endif
   run_lfos(n);
+  WEB_SPEND(prep_us * 5.1f);
   pp[0] = plat_ticks24();
   // 2. every parameter, the cables over the knobs
   apply_cables();
+  WEB_SPEND(prep_us * 1.6f);
   pp[1] = plat_ticks24();
   // 3. the trigs
   sequence(n);
+  WEB_SPEND(prep_us * 2.0f);
   pp[2] = plat_ticks24();
   float open[kFx];
   fx_lanes(n, open);
+  WEB_SPEND(prep_us * 1.3f);
   pp[3] = plat_ticks24();
   if (filt_stop) {                      // STOP: the filters' envelopes closed, their rings and noise faded out
     filt_stop = 0;
@@ -2669,6 +2848,7 @@ void eng_render(float* l, float* r, uint32_t n) {
     set_grit(t);
     set_filter(t);
   }
+  WEB_SPEND(prep_us * 4.2f);
   // 4. the voices (those not resting) on both cores: core 1's handed over as soon as it is done with its first job;
   // core 0 meanwhile plays the early tasks it kept, then its voices, the costliest first
   uint32_t v = 0, rest = 0;

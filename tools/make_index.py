@@ -33,6 +33,9 @@ Clouds et Warps entre deux pistes.</p>
 <div class="card"><b>Installer</b><br><a href="install/">Installer MIFM1 {version}</a>
 <p>Dans Chrome ou Edge, le FM-1 branché en USB et à l'arrêt. Laisser la page aller jusqu'au bout : le firmware, puis
 les tables des modules.</p></div>
+<div class="card"><b>Dans le navigateur</b><br><a href="emu/">Essayer MIFM1 {version} sans le FM-1</a>
+<p>Le même firmware compilé pour le navigateur (ordinateur, téléphone) : le même son, le même écran, la démo qui joue
+à l'allumage, et la charge du FM-1 estimée.</p></div>
 <h2>Les commandes</h2>
 <table>
 <tr><td>KNOB 1 à 4</td><td>les 4 paramètres de la page</td></tr>

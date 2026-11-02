@@ -192,7 +192,8 @@ int eng_warps_track(void);
 /* the engine */
 int eng_init(void);                      /* main loop, once: the modules in the engine's memory (0 ok) */
 project_t *eng_project(void);            /* the live project: the screen writes it, the render reads it */
-void eng_defaults(project_t *p);         /* the patch a new project plays (the demo) */
+void eng_defaults(project_t *p);         /* the first demo (0.1's), the tests' patch */
+void eng_groove(project_t *p);           /* the demo groove: a first power-on's, the browser emulator's */
 void eng_blank(project_t *p);            /* INIT: four Plaits at noon, nothing patched, no steps */
 void eng_stress_fm(project_t *p);        /* the same with the four FM drums on the tracks */
 void eng_stress(project_t *p);           /* the stress test: a fixed patch keeping everything busy (the machine page's

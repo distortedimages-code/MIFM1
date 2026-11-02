@@ -599,14 +599,19 @@ static int data_check(void)
 }
 
 /* ---------------------------------------------------------------- store --- */
-static void project_load(void)            /* the saved project (v0.1's read into this version's), else the demo */
+static void project_load(void)            /* the saved project (v0.1's read into this version's), else the demo
+                                          * groove */
 {
     project_t *p = eng_project();
     int got = plat_store_load(OBJ_PROJECT, &scratch, sizeof scratch);
     if (got > 0 && eng_upgrade(&scratch, got))
         *p = scratch;
     else
-        eng_defaults(p);
+#if defined(PLAT_HOST) && !defined(PLAT_WEB)
+        eng_defaults(p);                 /* (the host simulator: 0.1's demo, which its screens' script was written on) */
+#else
+        eng_groove(p);
+#endif
     eng_fresh();                         /* (the last project's trigs' locks and randoms gone) */
     dirty = 0;
 }
@@ -635,7 +640,7 @@ void app_backup_restored(void)
 }
 
 /* ---------------------------------------------------------------- audio --- */
-static float out_l[APP_BLOCK], out_r[APP_BLOCK];
+static float eng_l[APP_BLOCK], eng_r[APP_BLOCK];
 static int usb_live;                     /* the engine rendered this block: its USB channels are this block's */
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
@@ -650,11 +655,11 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
             lr[i] = 0;
         return;
     }
-    eng_render(out_l, out_r, n);
+    eng_render(eng_l, eng_r, n);
     usb_live = 1;
     for (i = 0; i < n; i++) {
-        lr[2 * i] = (int32_t)(fm_clampf(out_l[i], -1.0f, 1.0f) * g);
-        lr[2 * i + 1] = (int32_t)(fm_clampf(out_r[i], -1.0f, 1.0f) * g);
+        lr[2 * i] = (int32_t)(fm_clampf(eng_l[i], -1.0f, 1.0f) * g);
+        lr[2 * i + 1] = (int32_t)(fm_clampf(eng_r[i], -1.0f, 1.0f) * g);
     }
 }
 
@@ -727,7 +732,7 @@ static void disc(float cx, float cy, float r, uint16_t c)
         }
 }
 
-static void ring(float cx, float cy, float r, float w, uint16_t c)   /* r the outer edge, w its width */
+static void hoop(float cx, float cy, float r, float w, uint16_t c)   /* r the outer edge, w its width */
 {
     BOX_OF(cx, cy, r);
     for (int y = ya; y <= yb; y++)
@@ -988,7 +993,7 @@ static void vicon(float cx, float cy, float s, float w, uint16_t c, int which, i
             float x1 = cx + ((float)o->c - 16.0f) * s, y1 = cy + ((float)o->d - 16.0f) * s;
             switch (o->op) {
             case 'L': seg(x0, y0, x1, y1, ww, col); break;
-            case 'C': ring(x0, y0, (float)o->c * s + ww * 0.5f, ww, col); break;
+            case 'C': hoop(x0, y0, (float)o->c * s + ww * 0.5f, ww, col); break;
             case 'D': disc(x0, y0, (float)o->c * s + (ww - w) * 0.5f, col); break;
             default: {
                 float xr = x0 + (float)o->c * s, yr = y0 + (float)o->d * s;
@@ -1156,7 +1161,7 @@ static void draw_header(void)
             led((float)(x + 14 + f * 9), 14.0f, 3.0f, ac, f == page_face(ui.page) ? 8 : 0);
         if (alg) {
             float cx = (float)(x + (faces ? 15 + faces * 9 : 0) + 9);
-            ring(cx, 14.0f, 6.5f, 1.4f, ac);
+            hoop(cx, 14.0f, 6.5f, 1.4f, ac);
             cv_text((int)cx - (text_w(&FONT_T, "A") + 1) / 2, 8, &FONT_T, "A", ac);
         }
         if (mode == 3 && knock)          /* ALL in yellow and black: white on black here, black on yellow there */
@@ -1205,7 +1210,7 @@ static void draw_header(void)
 #define HY 35.0f
 static void hero_icon(int which, uint16_t c)
 {
-    ring(HX, HY, 27.0f, 2.0f, c);
+    hoop(HX, HY, 27.0f, 2.0f, c);
     vicon(HX, HY, 1.05f, 2.4f, c, which, 0);
 }
 
@@ -1473,7 +1478,7 @@ static void panel_filter(int t, uint16_t ac)
     float res = eng_final(PG_FILT(t, 0) * 4 + 1), hz = m ? eng_filter_hz(t) : 1000.0f, env = eng_filter_env(t);
     float q = m == MF_SEM ? 0.5f + 12.0f * res * res * res : m == MF_LADDER ? 0.5f + 6.0f * res * res : 0.6f + 5.0f * res;
     char s[48], v[16];
-    ring(HX, HY, 27.0f, 2.0f, m ? ac : DIM);
+    hoop(HX, HY, 27.0f, 2.0f, m ? ac : DIM);
     /* the response, 20 Hz .. 20 kHz over the ring's inside, -30 .. +18 dB */
     float px = 0.0f, py = 0.0f;
     for (int i = 0; i <= 36; i++) {
@@ -1656,7 +1661,7 @@ static void panel_euclid(int l)
         int on = eng_trig(l, i);
         disc(x, yy, dr, on ? c : OFF);
         if (i == now)
-            ring(x, yy, dr + 2.2f, 1.2f, HI);
+            hoop(x, yy, dr + 2.2f, 1.2f, HI);
     }
 }
 
@@ -2279,7 +2284,7 @@ static void draw_knob_at(int page, int k, int force)
     else if (under[0])
         cv_text(30 - text_w(&FONT_XS, under) / 2, 78, &FONT_XS, under, view != KV_VALUE ? vc : MUTED);
     else if (ui.mod && eng_param_mod(param))
-        ring(30.0f, 85.0f, 4.5f, 1.4f, DIM);
+        hoop(30.0f, 85.0f, 4.5f, 1.4f, DIM);
     blit((uint32_t)(k * KNOB_W), KNOB_Y);
 }
 static void draw_knob(int k) { draw_knob_at(ui.page, k, 0); }
@@ -2343,7 +2348,7 @@ static void draw_matrix(void)
 static void draw_projects(void)          /* the projects REC held loads, in the module's display */
 {
     static int shown = -1;
-    static const char *const P[5] = {"New: 4 Plaits, nothing patched", "The demo patch", "The saved project",
+    static const char *const P[5] = {"New: 4 Plaits, nothing patched", "The demo groove", "The saved project",
                                      "Stress test (plays at once)", "Stress test, on the 4 FM drums"};
     if (ui.full || ui.body_panel || shown != ui.init_sel) {
         shown = ui.init_sel;
@@ -3284,7 +3289,7 @@ static void go_page_dir(int page, int dir)
 }
 static void go_page(int page) { go_page_dir(page, 0); }
 
-/* GLO, REC held: a new project (four Plaits, nothing patched), the demo patch, or the saved project again. The
+/* GLO, REC held: a new project (four Plaits, nothing patched), the demo groove, or the saved project again. The
  * transport stops; nothing is saved until SAVE is held */
 static void project_init(int which)
 {
@@ -3299,7 +3304,7 @@ static void project_init(int which)
         if (which == 0)
             eng_blank(&scratch);
         else if (which == 1)
-            eng_defaults(&scratch);
+            eng_groove(&scratch);
         else if (which == 3)
             eng_stress(&scratch);
         else
@@ -3307,7 +3312,7 @@ static void project_init(int which)
         *eng_project() = scratch;
         eng_fresh();
         dirty = 1;
-        app_say(which == 0 ? "NEW PROJECT" : which == 1 ? "DEMO PATCH" : "STRESS TEST",
+        app_say(which == 0 ? "NEW PROJECT" : which == 1 ? "DEMO GROOVE" : "STRESS TEST",
                 which == 0 ? "4 PLAITS" : which == 1 ? "LOADED" : which == 3 ? "PLAYING" : "FM DRUMS PLAYING");
     }
     p->out_mode = out;

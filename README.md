@@ -60,6 +60,40 @@ modèles MODAL et STRING de Plaits en reprennent le code, en plus léger).
 <https://distortedimages-code.github.io/MIFM1/>. Dans Chrome ou Edge, FM-1 branché en USB et à l'arrêt : installer,
 laisser la page écrire les tables des modules après le firmware. Le firmware d'origine se remet de la même façon.
 
+## Dans le navigateur
+
+<https://distortedimages-code.github.io/MIFM1/emu/> : **le firmware tel quel, compilé pour le navigateur**
+(ordinateur, téléphone, tablette), avec le panneau du FM-1 dessiné autour de son écran. Le même code que sur la
+machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
+pages ; « Allumer et lancer la démo » démarre le son et PLAY. Pour écouter MIFM1 sur un autre système (une
+voiture, des enceintes de studio) ou montrer la machine sans elle. Les potards se tournent en glissant vers le haut
+ou le bas ; sur un ordinateur, des raccourcis clavier jouent les touches. SAVE tenu garde le projet dans le
+navigateur. L'écran du téléphone reste allumé tant que la page joue ; sur iPhone, le son passe même en mode
+silencieux.
+
+**La charge affichée est celle du FM-1, estimée.** Un navigateur ne peut pas mesurer le temps que le FM-1 mettrait (son
+horloge avance d'un bloc à la fois, et sa vitesse n'est pas celle du FM-1) : dans cette version, l'horloge du moteur
+est un modèle, où chaque partie avance celle du cœur qui la joue de ce qu'elle coûte au FM-1, et le second cœur est
+simulé avec la sienne. L'en-tête, la page machine (GLO, SELECT), le CPU des filtres et la répartition entre les deux
+cœurs lisent donc des temps de FM-1, et une ligne sous le panneau les résume. Le coût de chaque partie
+(`firmware/mi/web_costs.h`) vient des **instructions** qu'elle exécute, comptées par valgrind (`tools/web/calibrate.py`) :
+chaque modèle de Plaits et chaque batterie FM seuls, chaque filtre (avec et sans FM, avec et sans bruit), le grit,
+Warps (ses algorithmes, Eco et HQ), les effets avec chaque mode du bus, l'EQ, le duck, la préparation (séquenceur,
+LFO, câbles). Des instructions plutôt que des temps : ceux d'un ordinateur ne disent rien de ceux du FM-1 (le stress
+test de 0.5.8, mesuré sur les deux : de 9 à 89 fois plus lent selon la piste, l'ordinateur vectorisant certaines
+boucles et s'effondrant sur les nombres sous-normaux), alors que le temps du FM-1 suit le nombre d'instructions :
+6,75 µs pour mille dans les voix, 6,8 dans Warps, 5,4 dans les effets, 17 dans la préparation (son code est plein de
+branches et dispersé : le cache du FM-1 le rate plus souvent). Le stress test retombe ainsi sur ses chiffres du FM-1
+(cœurs 78 et 77 %, pic 87 % ; sur la machine 79, 77 et 91) ; ailleurs, compter ±20 % sur une piste : le modèle ne
+connaît pas la taille de code d'un modèle (qui passe ou non dans le cache) ni ses réglages (le nombre de voix d'un
+CHORD, la queue d'un STRING).
+
+La construire : `make web` (avec `pip install ziglang` ; dans `firmware/build/emu/`, à servir en HTTP) :
+`tools/web/emcc` passe les commandes d'Emscripten que fm1-base donne au clang de Zig
+(wasm32-wasi), et la page de MIFM1 (`firmware/web/emu/`, en français) remplace celle de fm1-base. GitHub la publie à
+chaque push dans `emu/`. Après un changement qui pèse sur le CPU (un module, un filtre), `python3
+tools/web/calibrate.py` recompte et réécrit la table.
+
 ## Enregistrer dans un DAW (USB)
 
 Branché en USB, le FM-1 est aussi une **carte son multipiste** (class compliant : aucun pilote, sur Mac, Windows,
@@ -91,13 +125,18 @@ FM-1) n'est pas activé.
 passent par des signes au hasard dans les couleurs du thème avant de se poser, de gauche à droite), un trait de la
 troisième couleur se tire dessous, puis « 4-TRACK SYNTHESIS MACHINE » et la version : 1,8 s, qu'un bouton passe.
 
-Un projet neuf joue déjà (PLAY) : piste 1 une grosse caisse sur chaque temps, piste 2 une basse VA dont le LFO 1
-(une rampe relancée par ses notes) ouvre le MORPH, piste 3 un FM 2 opérateurs en mélodie aléatoire bouclée, jetée dans le delay
-sur deux de ses notes (la piste de pas du delay), piste 4 un résonateur MODAL dans la réverbe. 120 BPM, do mineur.
+Un FM-1 sans projet sauvegardé joue **la démo** (PLAY), un groove : piste 1 un kick sur les temps (un peu de grit,
+un double à la fin de la mesure) qui fait respirer (le duck) une basse Moog en piste 2, VIRTUAL ANALOG dans le filtre
+LADDER (son enveloppe à chaque note, un LFO triangle d'une mesure sur la coupure), qui roule sur les contretemps avec
+un riff de locks et un ratchet de temps en temps ; piste 3 le charleston FM sur toutes les doubles croches (decay et
+pan tirés à chaque coup, ouvert sur les contretemps, 10 % de coups laissés) ; piste 4 des accords dub, CHORD dans le
+filtre SEM (un S&H sur leur voicing, un hasard lisse sur la coupure, un souffle de bruit), jetés dans un delay
+ping-pong à la croche pointée et dans la réverbe ; un compresseur doux sur le bus. Fa mineur, 124 BPM. Elle est
+légère exprès : environ 45 % de chaque cœur (pic vers 60 %), de la place pour ce qu'on y ajoute (Warps en prend 20).
 
 **Repartir de zéro (INIT)** : GLO, SELECT (la page PROJECT), puis **K1** choisit le projet et **REC tenu** le
 charge : *New* (4 pistes Plaits sur VIRTUAL ANALOG, tous les potards à midi, aucun pas, aucun câble, rien vers les
-effets, do majeur), *The demo patch* (le patch ci-dessus) ou *The saved project* (le dernier sauvegardé, pour
+effets, do majeur), *The demo groove* (la démo ci-dessus) ou *The saved project* (le dernier sauvegardé, pour
 annuler), *Stress test* ou *Stress test, on the 4 FM drums*. Le transport s'arrête ; rien n'est sauvegardé tant que SAVE n'est pas tenu.
 
 **Le stress test** (GLO, SELECT, K1 sur *Stress test*, REC tenu) : un patch fixe, le même à chaque fois, qui démarre

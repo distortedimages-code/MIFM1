@@ -10,7 +10,7 @@ OUT = build
 SRC = $(wildcard firmware/mi/*.cc) $(shell find firmware/third_party -name '*.cc')
 OBJ = $(patsubst %.cc,$(OUT)/obj/%.o,$(SRC))
 
-.PHONY: all test lxr-check uac-multi base-patch device-check firmware host clean
+.PHONY: all test lxr-check uac-multi base-patch device-check firmware host web clean
 all: test
 
 $(OUT)/obj/%.o: %.cc
@@ -51,6 +51,11 @@ uac-multi: base-patch
 	@mkdir -p $(OUT)
 	$(CC) -std=c99 -O2 -w -I$(BASE)/bsp/chip -I$(BASE)/bsp/boards/fm1 tools/uac_multi_test.c -o $(OUT)/uac_multi_test
 	$(OUT)/uac_multi_test
+
+# the browser emulator (README: Dans le navigateur): the firmware in WebAssembly, by Zig's clang (pip install ziglang)
+# through tools/web/emcc, with MIFM1's page; firmware/build/emu/ (serve it over HTTP)
+web: base-patch
+	cd $(BASE) && PATH="$(CURDIR)/tools/web:$$PATH" python3 tools/build.py ../firmware --web
 
 # the FM-1's constraints checked with the computer's clang: no C++ library, no libm, a float-only FPU (any double
 # left in the code links soft-double routines and shows here as an undefined symbol)

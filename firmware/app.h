@@ -19,6 +19,12 @@ void app_splash(void);
 /* the USB audio input (fm1.toml usb_audio_in; patches/fm1-base-usb-multi.patch): 10 channels, the four tracks and the
  * effects' return (app_uac_frames, mi/engine.h eng_usb_frames); a block more in hand, the renders taking most of their
  * time (past ~40 % the ring runs dry: holds in the recording); its ring (512 frames of 10: 10 KB) in RAM, not the pool */
+/* the browser emulator (tools/build.py --web, tools/web/README.md): the second core is the engine's own simulation
+ * there, on the FM-1's modelled clock (mi/engine.cc PLAT_WEB, mi/web_costs.h) */
+#ifdef PLAT_WEB
+#define APP_HOST_CPU2 1
+#define APP_WEB                           /* (web.c: the FM-1's modelled load, for the page) */
+#endif
 #define FM1B_UAC_CH 10
 #define FM1B_UAC_DEEP 1
 #define FM1B_UAC_RING_POOL 0

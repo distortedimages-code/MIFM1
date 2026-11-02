@@ -1953,6 +1953,36 @@ int main(int argc, char** argv) {
     eng_cut();
   }
 
+  // 41. the demo groove (a first power-on's, the browser emulator's): its four tracks playing, its filters on two of
+  // them (the bass's cutoff moved by its LFO), no NaN, its peak under full scale
+  {
+    eng_play(0);
+    eng_groove(p);
+    eng_fresh();
+    eng_cut();
+    for (int b = 0; b < 4; ++b) eng_render(l, r, n);
+    eng_play(1);
+    uint32_t r0[ENG_TRACKS];
+    for (int t = 0; t < ENG_TRACKS; ++t) r0[t] = eng_rises(t);
+    float pk = 0.0f, lo = 1e9f, hi = 0.0f;
+    int nan = 0;
+    for (uint32_t b = 0; b < static_cast<uint32_t>(8.0f * 44100.0f / n); ++b) {
+      eng_render(l, r, n);
+      for (uint32_t i = 0; i < n; ++i) {
+        if (!std::isfinite(l[i]) || !std::isfinite(r[i])) nan = 1;
+        pk = std::max(pk, std::max(std::fabs(l[i]), std::fabs(r[i])));
+      }
+      if (b % 64 == 0 && !(eng_gates() & 2u)) lo = std::min(lo, eng_filter_hz(1)), hi = std::max(hi, eng_filter_hz(1));
+    }
+    printf("the demo groove: %u %u %u %u trigs in 8 s, peak %.2f, the bass's cutoff between notes %.0f..%.0f Hz\n",
+           eng_rises(0) - r0[0], eng_rises(1) - r0[1], eng_rises(2) - r0[2], eng_rises(3) - r0[3], pk, lo, hi);
+    int ok = !nan && pk < 1.0f && pk > 0.2f && hi > lo * 1.3f;
+    for (int t = 0; t < ENG_TRACKS; ++t) ok = ok && eng_rises(t) - r0[t] >= 8;
+    if (!ok) ++failures, printf("FAIL: the demo groove\n");
+    eng_play(0);
+    eng_cut();
+  }
+
   // 37. the USB audio input's 10 channels (eng_usb_frames): silence until the host has recorded a block, then the
   // four tracks and the effects' return, each sounding, their sum the master before its bus (to the 16-bit steps,
   // where none of them is clipped); on the demo patch and on the stress test (Warps in a track's place, OTT)

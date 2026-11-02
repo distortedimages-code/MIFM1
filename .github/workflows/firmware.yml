@@ -2,7 +2,8 @@
 # Copyright (C) 2026 Yoann
 # MIFM1 on GitHub (after ZINZIN's workflow): on every push, the tests on a computer (every scene plays; the FM-1's
 # constraints with the computer's clang; the host simulator's screens), then the firmware, its resource region (the
-# modules' biggest tables) and its web installer with m-bootloader, published on the repository's GitHub Pages
+# modules' biggest tables), its web installer with m-bootloader and the browser emulator (emu/), published on the
+# repository's GitHub Pages
 # (Settings > Pages > Source: GitHub Actions). Then everything happens in Chrome or Edge:
 # https://<account>.github.io/<repository>/
 # The firmware job fetches JieLi's toolchain (pkgman.jieliapp.com) and the three files of the AC79 SDK a package
@@ -19,7 +20,7 @@ concurrency:                     # a newer push of the same branch replaces a ru
   group: firmware-${{ github.ref }}
   cancel-in-progress: true
 env:
-  VERSION: "0.6.0"
+  VERSION: "0.6.1"
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -103,6 +104,13 @@ jobs:
         run: |
           python3 tools/make_installer.py firmware/build/mifm1-"$VERSION".fwsc "$VERSION" site
           python3 tools/make_index.py site "$VERSION"
+      - name: The browser emulator (the firmware compiled to WebAssembly by Zig's clang, tools/web/emcc; the demo groove playing, the FM-1's load modelled)
+        run: |
+          pip install ziglang==0.17.0
+          (cd base && PATH="$GITHUB_WORKSPACE/tools/web:$PATH" python3 tools/build.py ../firmware --web --release "$VERSION") > web.log 2>&1 || { tail -40 web.log; exit 1; }
+          mkdir -p site/emu
+          cp firmware/build/emu/index.html firmware/build/emu/worklet.js firmware/build/emu/app_worklet.js firmware/build/emu/app.wasm site/emu/
+          ls -la site/emu
       - uses: actions/upload-artifact@v4
         with:
           name: mifm1-fwsc

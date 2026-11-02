@@ -1,6 +1,7 @@
 build/
 firmware/build/
-firmware/web/
+firmware/web/*
+!firmware/web/emu/
 __pycache__/
 *.pyc
 .DS_Store
