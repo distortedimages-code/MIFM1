@@ -302,8 +302,11 @@ en descendant (DECAY : de 5 ms à plus d'une seconde, puis sa queue). **PING** e
 chaque trig : avec de la résonance, il sonne tout seul (une percussion, même sur une voix silencieuse). **FM** renvoie
 la sortie du filtre dans sa fréquence de coupure, échantillon par échantillon, d'un côté ou de l'autre : de la
 rugosité, puis du chaos. **KEY** fait suivre la note (100 % : une octave par octave). Tout se locke pas par pas, a son
-aléatoire, se module par les câbles, et la dose d'aléatoire bouge CUTOFF, RESO et ENV. L'écran dessine la réponse du
-filtre telle qu'elle est (son enveloppe, sa FM, la touche), sa fréquence en dessous.
+aléatoire, se module par les câbles, et la dose d'aléatoire bouge CUTOFF, RESO et ENV. Le bruit de SEM et de VOX suit
+l'enveloppe (il souffle aux trigs, pas en continu). À STOP, les enveloppes se ferment et les filtres s'éteignent en
+~23 ms (une auto-oscillation, un ping qui sonne encore, leur bruit) jusqu'au trig suivant. L'écran dessine la réponse
+du filtre telle qu'elle est (son enveloppe, sa FM, la touche), sa fréquence et ce qu'il coûte au cœur qui le joue
+(CPU, en % du bloc : la part du filtre dans T1..T4 de la page machine).
 
 **Les rythmes euclidiens** (SEQ, troisième face ; sur les effets, la dernière face) : **FILLS** coups répartis aussi
 régulièrement que possible sur la longueur de la piste, **ROTATE** les décale ; LENGTH et PROB sont ceux de la piste

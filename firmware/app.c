@@ -1374,6 +1374,17 @@ static void panel_filter(int t, uint16_t ac)
             text_cat(s, v, sizeof s);
             text_cat(s, " HZ", sizeof s);
         }
+        if (eng_playing() || eng_filter_load(t)) {   /* its time on its core (the machine page's T1..T4 hold it) */
+            uint32_t ld = eng_filter_load(t);
+            text_cat(s, "|CPU ", sizeof s);
+            int_text((int32_t)(ld / 10u), v);
+            text_cat(s, v, sizeof s);
+            text_cat(s, ".", sizeof s);
+            v[0] = (char)('0' + ld % 10u);
+            v[1] = 0;
+            text_cat(s, v, sizeof s);
+            text_cat(s, "%", sizeof s);
+        }
     }
     hero_line(y, s);
 }
@@ -1755,6 +1766,7 @@ static void draw_panel(void)
         for (int k = 0; k < 8; k++)
             s[2] = s[2] * 131 + (int)(eng_final(PG_FILT(tr, k / 4) * 4 + k % 4) * 100.0f);
         s[2] = s[2] * 7 + (int)(fm_log2f(fm_maxf(eng_filter_hz(tr), 10.0f)) * 12.0f);
+        s[2] = s[2] * 11 + (int)(eng_filter_load(tr) / 5u);
         break;
     case PT_EUC: {
         int l = eng_page_lane(ui.page);

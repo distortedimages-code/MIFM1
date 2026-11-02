@@ -902,6 +902,9 @@ struct Grit {
   float hold, cnt;                      // the sample held, the count to the next
 };
 Grit grit[ENG_TRACKS];
+volatile uint8_t filt_stop;             // the transport stopped: the filters to close
+volatile uint32_t filt_ticks[ENG_TRACKS];   // the filter's time in its voice's task, the last block (the screen's)
+float filt_cost[ENG_TRACKS];
 const float mf_off_knobs[MF_KNOBS] = {1.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f};
 
 void set_grit(int t) {
@@ -1003,7 +1006,9 @@ void render_voice(int t, uint32_t n) {
     else mp_render(voice[t], &vbuf[t][pos], &vaux[t][pos], n - pos);
   }
   apply_grit(t, vbuf[t], n);
+  uint32_t fq = plat_ticks24();
   mf_process(t, vbuf[t], n);            // the filter (OFF: nothing)
+  filt_ticks[t] = plat_ticks24() - fq;
   float pk = 0.0f;
   for (uint32_t i = 0; i < n; ++i) pk = fm_maxf(pk, fm_fabsf(vbuf[t][i]));
   quiet[t] = !vgate[t] && pk < 3e-5f ? quiet[t] + 1 : 0;
@@ -2331,6 +2336,9 @@ extern "C" {
 float eng_dice_span(int param) { return dice_span(param); }
 float eng_filter_hz(int t) { return mf_cutoff_hz(t); }
 float eng_filter_env(int t) { return mf_env(t); }
+uint32_t eng_filter_load(int t) {
+  return t >= 0 && t < ENG_TRACKS && proj.algo[PG_FILT(t, 0)] ? pct10(static_cast<uint32_t>(filt_cost[t]), kN) : 0u;
+}
 
 void eng_rnd_redraw(project_t* p, int lane, int tp) {
   if (lane >= 0 && lane < ENG_LANES && tp >= 0 && tp < ENG_NTP) p->rseed[lane][tp] = static_cast<uint8_t>(p->rseed[lane][tp] + 1u);
@@ -2453,6 +2461,7 @@ void cut_now() {
 
 void eng_play(int on) {
   if (on && !playing && ready) restart = 1;
+  if (!on && playing) filt_stop = 1;    // (the render closes the filters: their state is its)
   if (!on)
     for (int t = 0; t < ENG_TRACKS; ++t) {
       raw_left[t] = 0.0f;
@@ -2558,6 +2567,10 @@ void eng_render(float* l, float* r, uint32_t n) {
   float open[kFx];
   fx_lanes(n, open);
   pp[3] = plat_ticks24();
+  if (filt_stop) {                      // STOP: the filters' envelopes closed, their rings and noise faded out
+    filt_stop = 0;
+    for (int t = 0; t < ENG_TRACKS; ++t) mf_stop(t);
+  }
   for (int t = 0; t < ENG_TRACKS; ++t) {
     set_voice(t);
     set_grit(t);
@@ -2651,7 +2664,10 @@ void eng_render(float* l, float* r, uint32_t n) {
   uint32_t tj = plat_ticks24();
 #endif
   for (int i = 0; i < ENG_TRACKS; ++i)  // the costs: averaged over ~8 blocks (a voice's while it plays)
-    if ((todo >> i) & 1u) task_cost[i] += (static_cast<float>(task_ticks[i]) - task_cost[i]) * 0.125f;
+    if ((todo >> i) & 1u) {
+      task_cost[i] += (static_cast<float>(task_ticks[i]) - task_cost[i]) * 0.125f;
+      filt_cost[i] += (static_cast<float>(filt_ticks[i]) - filt_cost[i]) * 0.125f;   // (its filter's share)
+    }
   if (w_job && warps_calls)
     warps_chunk_cost += (static_cast<float>(task_ticks[kTaskWarps]) / static_cast<float>(warps_calls) -
                          warps_chunk_cost) * 0.125f;

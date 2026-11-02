@@ -30,12 +30,6 @@ const float kSr = 44100.0f;
 const float kInvSr = 1.0f / 44100.0f;
 const float kPi = 3.14159265f;
 
-inline float tanh_pade(float x) {        // tanh, as a (3, 2) Padé: odd, 1 at 3 and beyond, within 2 % (a transistor
-  if (x > 3.0f) return 1.0f;            // pair's curve: the shape, not the digits)
-  if (x < -3.0f) return -1.0f;
-  float x2 = x * x;
-  return x * (27.0f + x2) / (27.0f + 9.0f * x2);
-}
 
 struct Filter {
   int model, type;
@@ -45,13 +39,15 @@ struct Filter {
   float short_decay, decay_tail;         // the vactrol's
   float vs;                              // its state, 0..1
   int ramp;                              // rising
+  uint32_t fade;                         // STOP: the samples left of its fade out (then it is still, until a trig)
+  int still;
   uint32_t trig[8];                      // this block's trigs (their samples)
   int ntrig;
   float y1;                              // the last output (FM)
   uint32_t rng;
   float now_oct;                         // (the screen: the cutoff as it is)
   // the coefficients, made every 8 samples (each sample with FM): a model's own
-  float g, G, a0, b2, b3, K;             // (LADDER: g; MS-20: g, G, a0, b2, b3, K; SEM: g, a0, rho in b2)
+  float g, G, a0, b2, b3, K, iK;         // (LADDER: g; MS-20: g, G, a0, b2, b3, K, 1 / K; SEM: g, a0, rho in b2)
   float vg[3], va0[3], vrho[3];          // VOX's three formants
   // LADDER
   float V[4], dV[4], tV[4];
@@ -97,7 +93,7 @@ void reset_state(Filter& f) {
   f.pre = f.y1 = 0.0f;
 }
 
-const float kVt2 = 2.0f * 0.312f, kInvVt2 = 1.0f / (2.0f * 0.312f);
+const float kInvVt2 = 1.0f / (2.0f * 0.312f);   // (the ladder: its transistors' thermal voltage, 0.312, twice)
 
 // the coefficients for a cutoff of c octaves over 20 Hz (the model's range kept)
 void coefs(Filter& f, float c) {
@@ -150,7 +146,8 @@ void coefs(Filter& f, float c) {
   }
 }
 
-// a zero-delay feedback state variable filter (Zavalishin's; Pirkle's SEM): its band pass, its low and high in lp, hp
+// a zero-delay feedback state variable filter (Zavalishin's; Pirkle's SEM), a sample: its band pass, its low pass in *lp,
+// high pass in *hp
 inline float svf(float* s, float x, float g, float a0, float rho, float* lp, float* hp) {
   float h = a0 * (x - rho * s[0] - s[1]);
   float b = g * h + s[0];
@@ -162,134 +159,210 @@ inline float svf(float* s, float x, float g, float a0, float rho, float* lp, flo
   return b;
 }
 
-// LADDER, a sample: D'Angelo and Valimaki's equations (ImprovedModel.h's), its output not inverted
-inline float ladder(Filter& f, float x, float res, float drive, int type) {
-  float g = f.g, u = drive * x - res * f.V[3];
-  float d0 = g * (tanh_pade(u * kInvVt2) - f.tV[0]);
-  f.V[0] += d0 + f.dV[0];
-  f.dV[0] = d0;
-  f.tV[0] = tanh_pade(f.V[0] * kInvVt2);
-  float d1 = g * (f.tV[0] - f.tV[1]);
-  f.V[1] += d1 + f.dV[1];
-  f.dV[1] = d1;
-  f.tV[1] = tanh_pade(f.V[1] * kInvVt2);
-  float d2 = g * (f.tV[1] - f.tV[2]);
-  f.V[2] += d2 + f.dV[2];
-  f.dV[2] = d2;
-  f.tV[2] = tanh_pade(f.V[2] * kInvVt2);
-  float d3 = g * (f.tV[2] - f.tV[3]);
-  f.V[3] += d3 + f.dV[3];
-  f.dV[3] = d3;
-  f.tV[3] = tanh_pade(f.V[3] * kInvVt2);
-  if (type == MF_LP) return f.V[3] * (1.0f + 0.35f * res);   // (the passband the resonance takes, a third given back)
-  float in = kVt2 * tanh_pade(u * kInvVt2);   // the chain's input as its first stage sees it
-  if (type == MF_HP) return in - 4.0f * f.V[0] + 6.0f * f.V[1] - 4.0f * f.V[2] + f.V[3];
-  return 4.0f * (f.V[1] - 2.0f * f.V[2] + f.V[3]);   // (a 12 dB band: two stages high, two low)
+// a transistor pair's curve without a division (the FM-1 reads code through a cache both cores share, and divides
+// slowly): a cubic, tanh's slope at 0, flat at 1.5 and beyond (where tanh is at 0.9)
+inline float sat(float x) {
+  if (x > 1.5f) return 1.0f;
+  if (x < -1.5f) return -1.0f;
+  return x - (4.0f / 27.0f) * x * x * x;
 }
 
-// MS-20: Korg 35, a sample (Pirkle's KORG35 LPF / HPF, its NLP on: tanh(sat u) in the loop)
-inline float ms20(Filter& f, float x, float sat, float isat, int type) {
+// the vactrol (Plaits' LPGEnvelope), a step each kStep samples; a trig in this sub-block starts its rise
+const uint32_t kStep = 16;
+inline float vactrol(Filter& f, float vs, int* ramp) {
+  if (*ramp) {
+    vs += 0.04f * static_cast<float>(kStep);
+    if (vs >= 1.0f) vs = 1.0f, *ramp = 0;
+  } else {
+    float s2 = vs * vs, coef = f.short_decay + (1.0f - s2 * s2) * f.decay_tail;
+    vs -= static_cast<float>(kStep) * coef * vs;
+    if (vs < 1e-6f) vs = 0.0f;
+  }
+  return vs;
+}
+
+// each model's block: sub-blocks of kStep samples, the vactrol and the coefficients at each (each sample with FM), the
+// trigs (a ping: an impulse into the filter), then the model alone, its type a mix of its outputs (no branch a sample)
+struct Run {
+  float oct, doct, vs, y1, fm5, ping;
+  int ramp, ti, fm_on;
+};
+
+__attribute__((noinline)) void sub_block(Filter& f, Run& r, uint32_t i0, uint32_t i1, uint32_t* ping_at) {
+  *ping_at = 0xFFFFFFFFu;
+  while (r.ti < f.ntrig && f.trig[r.ti] < i1) {
+    *ping_at = f.trig[r.ti] < i0 ? i0 : f.trig[r.ti];
+    ++r.ti;
+    r.ramp = 1;
+  }
+  r.vs = vactrol(f, r.vs, &r.ramp);
+  r.oct += r.doct * static_cast<float>(i1 - i0);
+  float c = fm_clampf(r.oct + f.env * 8.0f * r.vs, -0.5f, 10.2f);
+  f.now_oct = c;
+  if (!r.fm_on) coefs(f, c);
+}
+__attribute__((noinline)) void fm_coefs(Filter& f, const Run& r) {
+  coefs(f, fm_clampf(f.now_oct + r.fm5 * r.y1, -0.5f, 10.2f));
+}
+inline float out(Filter& f, Run& r, float y) {   // its output kept within 2, a NaN reset
+  if (!(y == y)) {
+    reset_state(f);
+    y = 0.0f;
+  }
+  y = soft(y);
+  r.y1 = y;
+  return y;
+}
+
+void run_ladder(Filter& f, Run& r, float* x, uint32_t n) {
+  const float res = 4.2f * f.reso, drive = 1.0f + 15.0f * f.special * f.special;
+  // its outputs mixed: the input, then its four stages (LP: the last, its passband given back a third; HP, BP: the
+  // Xpander's mixes)
+  float w[5] = {0.0f, 0.0f, 0.0f, 0.0f, 1.0f + 0.35f * res};
+  if (f.type == MF_HP) w[0] = 1.0f, w[1] = -4.0f, w[2] = 6.0f, w[3] = -4.0f, w[4] = 1.0f;
+  else if (f.type == MF_BP) w[2] = 4.0f, w[3] = -8.0f, w[4] = 4.0f;
+  float* V = f.V;
+  float* dV = f.dV;
+  float* tV = f.tV;
+  for (uint32_t i0 = 0; i0 < n; i0 += kStep) {
+    uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
+    sub_block(f, r, i0, i1, &ping_at);
+    for (uint32_t i = i0; i < i1; ++i) {
+      if (r.fm_on) fm_coefs(f, r);
+      float g = f.g, u = drive * (x[i] + (i == ping_at ? r.ping : 0.0f)) - res * V[3];
+      float d0 = g * (sat(u * kInvVt2) - tV[0]);
+      V[0] += d0 + dV[0];
+      dV[0] = d0;
+      tV[0] = sat(V[0] * kInvVt2);
+      float d1 = g * (tV[0] - tV[1]);
+      V[1] += d1 + dV[1];
+      dV[1] = d1;
+      tV[1] = sat(V[1] * kInvVt2);
+      float d2 = g * (tV[1] - tV[2]);
+      V[2] += d2 + dV[2];
+      dV[2] = d2;
+      tV[2] = sat(V[2] * kInvVt2);
+      float d3 = g * (tV[2] - tV[3]);
+      V[3] += d3 + dV[3];
+      dV[3] = d3;
+      tV[3] = sat(V[3] * kInvVt2);
+      x[i] = out(f, r, w[0] * u + w[1] * V[0] + w[2] * V[1] + w[3] * V[2] + w[4] * V[3]);
+    }
+  }
+}
+
+void run_ms20(Filter& f, Run& r, float* x, uint32_t n) {
+  const float st = 1.0f + 7.0f * f.special, ist = 1.0f / st;
   float* s = f.k35;
-  float G = f.G, K = f.K, y;
-  if (type == MF_BP) {                   // the band: a one-pole high pass first (the MS-20's HPF, then its LPF)
-    float v = (x - f.pre) * G, l = v + f.pre;
-    f.pre = l + v;
-    x = 2.5f * (x - l);
+  const int hp = f.type == MF_HP, bp = f.type == MF_BP;
+  for (uint32_t i0 = 0; i0 < n; i0 += kStep) {
+    uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
+    sub_block(f, r, i0, i1, &ping_at);
+    for (uint32_t i = i0; i < i1; ++i) {
+      if (r.fm_on) fm_coefs(f, r);
+      float G = f.G, K = f.K, in = x[i] + (i == ping_at ? r.ping : 0.0f), y;
+      if (bp) {                          // the band: a one-pole high pass first (the MS-20's HPF, then its LPF)
+        float v = (in - f.pre) * G, l = v + f.pre;
+        f.pre = l + v;
+        in = 2.5f * (in - l);
+      }
+      // LP (and BP): LPF1 -> u -> LPF2, HPF1 on the output for the feedback; HP: HPF1 -> u, HPF2 and LPF1 on it
+      float v1 = (in - s[0]) * G, l1 = v1 + s[0];
+      s[0] = l1 + v1;
+      float u = f.a0 * ((hp ? in - l1 : l1) + f.b2 * s[1] + f.b3 * s[2]);
+      u = sat(st * u) * ist;             // (Pirkle's NLP: in its loop)
+      float y2;
+      if (hp) {
+        y = K * u;
+        float v2 = (y - s[1]) * G, l2 = v2 + s[1];
+        s[1] = l2 + v2;
+        y2 = y - l2;
+      } else {
+        float v2 = (u - s[1]) * G;
+        y2 = v2 + s[1];
+        s[1] = y2 + v2;
+        y = K * y2;
+        y2 = y;
+      }
+      float v3 = (y2 - s[2]) * G, l3 = v3 + s[2];
+      s[2] = l3 + v3;
+      x[i] = out(f, r, y * f.iK);
+    }
   }
-  if (type != MF_HP) {                   // LPF1 -> (u) -> LPF2, HPF1 on the output for the feedback
-    float v1 = (x - s[0]) * G, y1 = v1 + s[0];
-    s[0] = y1 + v1;
-    float u = f.a0 * (y1 + f.b2 * s[1] + f.b3 * s[2]);
-    u = tanh_pade(sat * u) * isat;
-    float v2 = (u - s[1]) * G, y2 = v2 + s[1];
-    s[1] = y2 + v2;
-    y = K * y2;
-    float v3 = (y - s[2]) * G, l3 = v3 + s[2];
-    s[2] = l3 + v3;
-  } else {                               // HPF1 -> (u) -> y, HPF2 and LPF1 on it for the feedback
-    float v1 = (x - s[0]) * G, l1 = v1 + s[0];
-    s[0] = l1 + v1;
-    float u = f.a0 * ((x - l1) + f.b2 * s[1] + f.b3 * s[2]);
-    u = tanh_pade(sat * u) * isat;
-    y = K * u;
-    float v2 = (y - s[1]) * G, l2 = v2 + s[1];
-    s[1] = l2 + v2;
-    float v3 = ((y - l2) - s[2]) * G, l3 = v3 + s[2];
-    s[2] = l3 + v3;
+}
+
+void run_sem(Filter& f, Run& r, float* x, uint32_t n) {
+  const float nz = 0.35f * f.special * f.special;
+  const float wl = f.type == MF_LP ? 1.0f : 0.0f, wh = f.type == MF_HP ? 1.0f : 0.0f;
+  const float wb = f.type == MF_BP ? 2.0f * f.a0 * (1.0f + 2.0f * f.reso) : 0.0f;   // (the band: 0 dB, then its Q)
+  for (uint32_t i0 = 0; i0 < n; i0 += kStep) {
+    uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
+    sub_block(f, r, i0, i1, &ping_at);
+    for (uint32_t i = i0; i < i1; ++i) {
+      if (r.fm_on) fm_coefs(f, r);
+      float lp, hp, in = x[i] + (i == ping_at ? r.ping : 0.0f) + nz * r.vs * noise(f);   // (the noise: its envelope's)
+      float bp = svf(f.sv, in, f.g, f.b2, f.b3, &lp, &hp);
+      x[i] = out(f, r, wl * lp + wb * bp + wh * hp);
+    }
   }
-  return y / K;
+}
+
+void run_vox(Filter& f, Run& r, float* x, uint32_t n) {
+  const float nz = 0.5f * f.special, gain = 2.0f * f.a0 * (2.4f + 0.14f / (2.0f * f.a0));   // (each formant +7 dB)
+  for (uint32_t i0 = 0; i0 < n; i0 += kStep) {
+    uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
+    sub_block(f, r, i0, i1, &ping_at);
+    for (uint32_t i = i0; i < i1; ++i) {
+      if (r.fm_on) fm_coefs(f, r);
+      float lp, hp, sum = 0.0f, in = x[i] + (i == ping_at ? 4.0f * r.ping : 0.0f) + nz * r.vs * noise(f);
+      for (int k = 0; k < 3; ++k) sum += kVoxGain[k] * svf(&f.sv[2 * k], in, f.vg[k], f.va0[k], f.vrho[k], &lp, &hp);
+      x[i] = out(f, r, sum * gain);
+    }
+  }
 }
 
 void process(Filter& f, float* x, uint32_t n) {
-  const float res = f.reso, sp = f.special;
-  const float ladder_res = 4.2f * res, ladder_drive = 1.0f + 15.0f * sp * sp;
-  const float k35_sat = 1.0f + 7.0f * sp, k35_isat = 1.0f / k35_sat;
-  const float noise_amt = f.model == MF_SEM ? 0.35f * sp * sp : 0.5f * sp;
-  const int fm_on = f.fm != 0.0f, model = f.model, type = f.type;
-  const float fm5 = f.fm * 5.0f;
-  float oct = f.oct0, doct = (f.oct1 - f.oct0) / static_cast<float>(n);
-  float vs = f.vs, y1 = f.y1, out_bp = 0.0f;
-  int ramp = f.ramp, ti = 0;
-  if (model == MF_SEM) out_bp = 2.0f * f.a0 * (1.0f + 2.0f * res);   // (the band: its peak 0 dB, then the resonance's)
-  for (uint32_t i0 = 0; i0 < n; i0 += 8) {
-    uint32_t i1 = i0 + 8 > n ? n : i0 + 8;
-    int pinged[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-    while (ti < f.ntrig && f.trig[ti] < i1) {   // a trig: the vactrol rises, the filter is pinged
-      pinged[f.trig[ti] - i0 < 8 ? f.trig[ti] - i0 : 0] = 1;
-      ++ti;
-      ramp = 1;
+  Run r;
+  r.oct = f.oct0;
+  r.doct = (f.oct1 - f.oct0) / static_cast<float>(n);
+  r.vs = f.vs;
+  r.y1 = f.y1;
+  r.ramp = f.ramp;
+  r.ti = 0;
+  r.fm_on = f.fm != 0.0f;
+  r.fm5 = f.fm * 5.0f;
+  r.ping = f.ping * 3.0f;
+  if (f.ntrig) f.still = 0, f.fade = 0;   // (a trig wakes it)
+  if (f.still) {                         // STOP: faded out, still (a self-oscillation, a ring: silent) until a trig
+    for (uint32_t i = 0; i < n; ++i) x[i] = 0.0f;
+    f.oct0 = f.oct1;
+    return;
+  }
+  switch (f.model) {
+    case MF_LADDER: run_ladder(f, r, x, n); break;
+    case MF_MS20: run_ms20(f, r, x, n); break;
+    case MF_SEM: run_sem(f, r, x, n); break;
+    default: run_vox(f, r, x, n); break;
+  }
+  if (f.fade) {                          // STOP's fade out (~23 ms), then still
+    float g = static_cast<float>(f.fade) * (1.0f / 1024.0f), dg = 1.0f / 1024.0f;
+    for (uint32_t i = 0; i < n; ++i) {
+      x[i] *= g;
+      g = g > dg ? g - dg : 0.0f;
     }
-    // the vactrol (Plaits' LPGEnvelope), a step each 8 samples
-    if (ramp) {
-      vs += 0.32f;
-      if (vs >= 1.0f) vs = 1.0f, ramp = 0;
-    } else {
-      float s2 = vs * vs, coef = f.short_decay + (1.0f - s2 * s2) * f.decay_tail;
-      vs -= 8.0f * coef * vs;
-      if (vs < 1e-6f) vs = 0.0f;
-    }
-    oct += doct * static_cast<float>(i1 - i0);
-    float c = oct + f.env * 8.0f * vs;
-    if (!fm_on) coefs(f, fm_clampf(c, -0.5f, 10.2f));
-    for (uint32_t i = i0; i < i1; ++i) {
-      float in = x[i], y;
-      if (pinged[i - i0]) in += f.ping * (model == MF_VOX ? 12.0f : 3.0f);   // (VOX: narrow, a harder knock)
-      if (fm_on) coefs(f, fm_clampf(c + fm5 * y1, -0.5f, 10.2f));
-      switch (model) {
-        case MF_LADDER:
-          y = ladder(f, in, ladder_res, ladder_drive, type);
-          break;
-        case MF_MS20:
-          y = ms20(f, in, k35_sat, k35_isat, type);
-          break;
-        case MF_SEM: {
-          float lp, hp, bp = svf(f.sv, in + noise_amt * noise(f), f.g, f.b2, f.b3, &lp, &hp);
-          y = type == MF_LP ? lp : type == MF_BP ? bp * out_bp : hp;
-          break;
-        }
-        default: {
-          float lp, hp, sum = 0.0f, v = in + noise_amt * noise(f);
-          for (int k = 0; k < 3; ++k) sum += kVoxGain[k] * svf(&f.sv[2 * k], v, f.vg[k], f.va0[k], f.vrho[k], &lp, &hp);
-          y = sum * 2.0f * f.a0 * (2.4f + 0.14f / (2.0f * f.a0));   // (each formant's peak +7 dB, sharper a little louder)
-          break;
-        }
-      }
-      if (!(y == y)) {                   // (blown up: never, but a NaN would stay)
-        reset_state(f);
-        y = 0.0f;
-      }
-      y = soft(y);
-      y1 = y;
-      x[i] = y;
+    f.fade = f.fade > n ? f.fade - n : 0;
+    if (!f.fade) {
+      reset_state(f);
+      f.still = 1;
     }
   }
-  for (int i = 0; i < 4; ++i) f.V[i] = fm_flush(f.V[i]), f.tV[i] = fm_flush(f.tV[i]);
+  for (int i = 0; i < 4; ++i) f.V[i] = fm_flush(f.V[i]), f.dV[i] = fm_flush(f.dV[i]), f.tV[i] = fm_flush(f.tV[i]);
   for (int i = 0; i < 3; ++i) f.k35[i] = fm_flush(f.k35[i]);
   for (int i = 0; i < 6; ++i) f.sv[i] = fm_flush(f.sv[i]);
   f.pre = fm_flush(f.pre);
-  f.vs = vs;
-  f.y1 = y1;
-  f.ramp = ramp;
+  f.vs = r.vs;
+  f.y1 = r.y1;
+  f.ramp = r.ramp;
   f.ntrig = 0;
   f.oct0 = f.oct1;
 }
@@ -310,10 +383,12 @@ void mf_init(void) {
     f.vs = 0.0f;
     f.ramp = 0;
     f.ntrig = 0;
+    f.fade = 0;
+    f.still = 0;
     f.rng = 0x9E3779B9u * static_cast<uint32_t>(t + 1);
     f.now_oct = 9.8f;
     f.g = f.G = f.a0 = f.b2 = f.b3 = 0.0f;
-    f.K = 1.0f;
+    f.K = f.iK = 1.0f;
     reset_state(f);
   }
 }
@@ -334,7 +409,8 @@ void mf_set(int t, int model, int type, const float* k, float note) {
   f.special = fm_clampf(k[MF_SPECIAL], 0.0f, 1.0f);
   f.ping = fm_clampf(k[MF_PING], 0.0f, 1.0f);
   f.fm = fm_clampf(k[MF_FM], -1.0f, 1.0f);
-  if (f.model == MF_MS20) f.K = 0.01f + 2.2f * f.reso;   // (over 2: it sings, its loop's tanh holding it)
+  if (f.model == MF_MS20) f.K = 0.01f + 2.2f * f.reso, f.iK = 1.0f / f.K;   // (over 2: it sings, its loop's
+                                                                             // saturation holding it)
   else if (f.model == MF_SEM) f.a0 = 0.5f / (0.5f + 12.0f * f.reso * f.reso * f.reso);   // r = 1 / 2Q, Q 0.5 .. 12.5
   else if (f.model == MF_VOX) f.a0 = 0.5f / (2.0f + 18.0f * f.reso);                    // Q 2 .. 20
 }
@@ -354,6 +430,14 @@ void mf_process(int t, float* x, uint32_t n) {
     return;
   }
   process(f, x, n);
+}
+
+void mf_stop(int t) {                   // the transport stopped: its envelope closed, the filter faded out, then still
+  if (t < 0 || t >= MF_TRACKS) return;
+  Filter& f = flt[t];
+  f.vs = 0.0f;
+  f.ramp = 0;
+  if (!f.still && f.model != MF_OFF) f.fade = 1024;
 }
 
 void mf_reset(int t) {

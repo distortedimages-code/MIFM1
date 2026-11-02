@@ -179,6 +179,7 @@ void eng_fills(int dice, int *every, int *beats, int *tracks);
 uint32_t eng_fill_trigs(int t);          /* the fills' trigs track t played, since power-on */
 float eng_filter_hz(int t);              /* a track's filter: its cutoff now (its envelope, FM and key in), Hz */
 float eng_filter_env(int t);             /* its envelope now, 0..1 */
+uint32_t eng_filter_load(int t);         /* its time, in tenths of % of the block (its voice's task holds it), averaged */
 const char *eng_algo_name(int page, int a);
 
 /* Warps as it plays: its algorithm (0..5 the cross-modulations, 6 the frequency shifter; -1 off), its name, the track

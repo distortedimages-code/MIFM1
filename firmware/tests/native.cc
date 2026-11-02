@@ -1840,6 +1840,40 @@ int main(int argc, char** argv) {
       printf("filter envelope: cutoff %.0f Hz, at a trig %.0f Hz\n", before, after);
       if (after < before * 8.0f) ok = 0;
     }
+    {                                                    // STOP: a self-oscillation, a ring, the noise, silent at
+      float k[MF_KNOBS] = {0.6f, 1.0f, 0.5f, 0.2f, 1.0f, 1.0f, 0.3f, 0.0f}, buf[128];   // once; the noise is its envelope's
+      float before = 0.0f, after = 0.0f, woke = 0.0f, quiet_noise = 0.0f;
+      for (int m = MF_LADDER; m < MF_MODELS; ++m) {
+        mf_init();
+        mf_set(0, m, MF_LP, k, 60.0f);
+        mf_trigger(0, 0);
+        for (int b = 0; b < 400; ++b) {                  // pinged, then ringing (LADDER, MS-20: their own song)
+          mf_set(0, m, MF_LP, k, 60.0f);
+          for (int i = 0; i < 128; ++i) buf[i] = 0.0f;
+          mf_process(0, buf, 128);
+          if (b > 380)
+            for (int i = 0; i < 128; ++i) quiet_noise = std::max(quiet_noise, m >= MF_SEM ? std::fabs(buf[i]) : 0.0f);
+          if (b == 10)
+            for (int i = 0; i < 128; ++i) before = std::max(before, std::fabs(buf[i]));
+        }
+        mf_stop(0);
+        for (int b = 0; b < 40; ++b) {
+          mf_set(0, m, MF_LP, k, 60.0f);
+          for (int i = 0; i < 128; ++i) buf[i] = 0.0f;
+          mf_process(0, buf, 128);
+          if (b >= 9)
+            for (int i = 0; i < 128; ++i) after = std::max(after, std::fabs(buf[i]));
+        }
+        mf_trigger(0, 0);                                // a trig wakes it
+        mf_set(0, m, MF_LP, k, 60.0f);
+        for (int i = 0; i < 128; ++i) buf[i] = 0.0f;
+        mf_process(0, buf, 128);
+        for (int i = 0; i < 128; ++i) woke = std::max(woke, std::fabs(buf[i]));
+      }
+      printf("filters at STOP: %.3f ringing, %.5f 26 ms after, %.3f at the next trig; SEM's and VOX's noise long after a "
+             "trig %.5f (DECAY 50 ms: 1.1 s after)\n", before, after, woke, quiet_noise);
+      if (after > 0.0f || woke < 0.01f || before < 0.05f || quiet_noise > 0.001f) ok = 0;
+    }
     {                                                    // OFF: the sound as it is
       mf_init();
       float k[MF_KNOBS] = {0.1f, 1.0f, 1.0f, 0.6f, 1.0f, 1.0f, 1.0f, 1.0f}, buf[128], ref[128];
