@@ -457,11 +457,12 @@ canal droit inversé, ils reçoivent tout le mix, en mono (une oreille en opposi
 « dans la tête »). Pour la stéréo, un casque sans micro ou un adaptateur casque/micro. Le réglage reste quand on
 charge un autre projet.
 
-**Les couleurs** (GLO, SELECT, K4) : sept thèmes, chacun un fond sombre et trois couleurs pour l'état des modules
+**Les couleurs** (GLO, SELECT, K4) : huit thèmes, chacun un fond sombre et trois couleurs pour l'état des modules
 (celles que les icônes et les anneaux prennent) et ALL : **Acid** (citron vert, violet, rouge orangé), **Ember**
 (or, orange, cramoisi sur un noir chaud), **Neon** (menthe, lavande, rose sur indigo), **Ice** (cyan, pervenche,
 magenta), **Rust** (vert-de-gris, rouille, jaune danger sur graphite), **Mono** (blanc, argent, rouge) et
-**Mutable** (le teal, l'orange et le rose des modules, ceux des versions 0.1 à 0.3.6). Comme la sortie et la
+**Mutable** (le teal, l'orange et le rose des modules, ceux des versions 0.1 à 0.3.6) et **Graphite** (des gris et
+une seule lumière, orange, comme le Machinedrum d'Elektron : celui de la démo dans le navigateur). Comme la sortie et la
 qualité de Warps, le thème reste quand on charge un autre projet ; il est gardé avec le projet sauvegardé.
 
 **Le clavier** relance la note à chaque touche, même jouée legato, et une touche tapée très vite sonne quand même.

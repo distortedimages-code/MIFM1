@@ -72,7 +72,8 @@ typedef struct {
     uint16_t track, off, rule, sel;      /* a ring's travel unlit (1 px), an LED off, a rule, the chosen row */
     uint16_t a1, a2, a3, knock;
 } theme_t;
-#define NTHEMES 7
+#define NTHEMES 8
+#define THEME_GRAPHITE 7                 /* (the browser emulator's demo: its drawn machine's greys and orange) */
 static const theme_t THEMES[NTHEMES] = {
     {"Acid",                             /* black; lime, violet, a red-orange */
      RGB(0, 0, 0), RGB(236, 240, 228), RGB(255, 255, 255), RGB(150, 154, 146), RGB(102, 106, 98),
@@ -102,6 +103,11 @@ static const theme_t THEMES[NTHEMES] = {
      RGB(0, 0, 0), RGB(240, 239, 235), RGB(255, 255, 255), RGB(154, 151, 152), RGB(107, 104, 105),
      RGB(60, 58, 59), RGB(48, 46, 47), RGB(38, 36, 37), RGB(46, 44, 45),
      RGB(24, 201, 212), RGB(255, 178, 46), RGB(255, 74, 125), RGB(255, 214, 0)},
+    {"Graphite",                         /* greys and one light, orange (Elektron's Machinedrum: a graphite panel, an
+                                          * aluminium sleeve): orange, silver, a pale orange */
+     RGB(12, 12, 13), RGB(232, 232, 229), RGB(255, 255, 255), RGB(150, 150, 147), RGB(100, 100, 98),
+     RGB(56, 56, 58), RGB(44, 44, 46), RGB(34, 34, 36), RGB(46, 46, 48),
+     RGB(255, 92, 22), RGB(196, 196, 192), RGB(255, 168, 112), RGB(255, 92, 22)},
 };
 static const theme_t *th = &THEMES[0];
 #define BG (th->bg)
@@ -611,6 +617,9 @@ static void project_load(void)            /* the saved project (v0.1's read into
         eng_defaults(p);                 /* (the host simulator: 0.1's demo, which its screens' script was written on) */
 #else
         eng_groove(p);
+#ifdef PLAT_WEB
+        p->theme = THEME_GRAPHITE;       /* (the page's machine: greys, its light orange) */
+#endif
 #endif
     eng_fresh();                         /* (the last project's trigs' locks and randoms gone) */
     dirty = 0;
