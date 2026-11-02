@@ -2930,7 +2930,7 @@ static void draw_footer(void)
         text_cat(t, v, sizeof t);
         cv_text(10, 3, &FONT_T, t, all >= 90 ? AC3 : HI);
         t[0] = 0;
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 6; i++) {    /* (* : core 1 played it) */
             uint32_t q = eng_peak_part(i);
             text_cat(t, N[i], sizeof t);
             if (!q && i < 5) {
@@ -2938,6 +2938,8 @@ static void draw_footer(void)
             } else {
                 int_text((int32_t)((q + 5u) / 10u), v);
                 text_cat(t, v, sizeof t);
+                if ((eng_peak_core1() >> i) & 1u)
+                    text_cat(t, "*", sizeof t);
             }
         }
         cv_text(10, 13, &FONT_T, t, MUTED);

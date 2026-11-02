@@ -272,6 +272,8 @@ uint32_t eng_load(int core);             /* the render's time on core 0 or 1, in
 void eng_delay_mode(int mode);           /* the delay's ALGORITHM (DL_SYNC, DL_FREE), its TIME kept */
 uint32_t eng_prep_load(void);            /* core 0's preparation of a block (the sequencer, the LFOs, the cables), the same */
 uint32_t eng_peak(void);                 /* the worst total of the last second, same unit */
+uint32_t eng_peak_core1(void);           /* the worst block's tasks core 1 played (bit i: 0..3 the voices, 4 Warps, 5
+                                          * the effects) */
 int eng_guard(void);                     /* the CPU guard now: 0 idle, 1..3 the filters' FM lightened (a block over 92 %
                                           * of its time, a late one, two late ones; held 0.3 s a level) */
 uint32_t eng_guard_blocks(void);         /* the blocks it has lightened since power-on */

@@ -376,7 +376,7 @@ volatile uint32_t guard_blocks;
 // the worst block of the last second, its own figures (what made the peak): each task's ticks (0: not played), core
 // 0's preparation, core 0's and core 1's totals, the whole render; the preparation's parts (the start and the LFOs,
 // the cables, the sequencer, the effects' lanes, the voices' knobs); its frames
-volatile uint32_t peak_of[ENG_TRACKS + 2 + 4 + 5], peak_n = 128u;
+volatile uint32_t peak_of[ENG_TRACKS + 2 + 4 + 5], peak_n = 128u, peak_c1;
 volatile uint32_t c1_job_ticks[2];      // core 1's time on the block's first and second job (written by it alone)
 float prep_cost = 1.0f;                 // core 0's preparation of a block (ticks, averaged): the sequencer, the cables
 volatile int on_core1_last;
@@ -1558,12 +1558,19 @@ void core1_job(uint32_t arg) {
   c1_job_ticks[(arg >> 8) & 1u] = plat_ticks24() - t0;
 }
 
-float cost_of(uint32_t m) {
-  float c = 0.0f;
-  for (int i = 0; i < kTasks; ++i)
-    if ((m >> i) & 1u) c += task_cost[i];
-  return c;
+// each set of tasks' cost, made once a block (0.8.4): the splits ask it some 150 times a block, and summing the set
+// each time was 4 % of a block on core 0 (its preparation runs from the flash, through the cache). The same sums as one
+// task at a time from the lowest: bit for bit what they were
+float sub_cost[1u << kTasks];
+void make_sub_costs() {
+  int hi = 0;
+  sub_cost[0] = 0.0f;
+  for (uint32_t m = 1; m < (1u << kTasks); ++m) {
+    if (m == 2u << hi) ++hi;            // (its highest task)
+    sub_cost[m] = sub_cost[m & ~(1u << hi)] + task_cost[hi];
+  }
 }
+inline float cost_of(uint32_t m) { return sub_cost[m & ((1u << kTasks) - 1u)]; }
 
 // the voices core 1 plays (its share of v), it free at a, core 0 at b: the busier core's least (16 ways at most)
 uint32_t split_voices(uint32_t v, float a, float b, float* worst) {
@@ -3167,6 +3174,7 @@ void eng_render(float* l, float* r, uint32_t n) {
     task_cost[kTaskWarps] = warps_chunk_cost * static_cast<float>(warps_calls);
   }
   int c1ok = use_core1 && plat_cpu2_on(), jobs = 0;
+  make_sub_costs();
   uint32_t ja = c1ok ? split_early(early, last_voices) : 0u, pending = 0;   // core 1's first job, its job outstanding
   uint32_t bno = (block_no + 1u) & 0xFFFFu;   // (this block's number: its offer's)
   block_no = bno;
@@ -3300,6 +3308,7 @@ void eng_render(float* l, float* r, uint32_t n) {
   }
   if (jobs & 1) c1 += c1_job_ticks[0];
   if (jobs & 2) c1 += c1_job_ticks[1];
+  uint32_t on1 = ((jobs & 1) ? ja : 0u) | ((jobs & 2) ? jb : 0u);   // (the tasks core 1 played: the machine page)
   int on_core1 = jobs != 0;
   uint32_t todo = early | v;
   on_core1_last = on_core1;
@@ -3316,9 +3325,10 @@ void eng_render(float* l, float* r, uint32_t n) {
                          warps_chunk_cost) * 0.125f;
   if (fx_n) task_cost[kTaskFx] += (static_cast<float>(task_ticks[kTaskFx]) - task_cost[kTaskFx]) * 0.125f;
   // the output: the last block's, through its effects and the master bus (none yet, or another size: silence)
-  for (uint32_t i = 0; i < n; ++i) {
-    l[i] = fx_n == n ? fx_out_l[i] : 0.0f;
-    r[i] = fx_n == n ? fx_out_r[i] : 0.0f;
+  if (fx_n == n) {
+    for (uint32_t i = 0; i < n; ++i) l[i] = fx_out_l[i], r[i] = fx_out_r[i];
+  } else {
+    for (uint32_t i = 0; i < n; ++i) l[i] = r[i] = 0.0f;
   }
   usb_ok = usb_now && fx_n == n;
   if (cut_req == 1) {                   // STOP twice: faded out over this block, the modules made new at the next
@@ -3439,6 +3449,7 @@ void eng_render(float* l, float* r, uint32_t n) {
     peak_of[kTasks + 1] = c0;
     peak_of[kTasks + 2] = c1;
     peak_of[kTasks + 3] = tot;
+    peak_c1 = on1;
     peak_of[kTasks + 4] = pp[0] - t0;
     for (int i = 1; i < 5; ++i) peak_of[kTasks + 4 + i] = pp[i] - pp[i - 1];
     peak_n = n;
@@ -3498,6 +3509,7 @@ uint32_t eng_peak_part(int i) {         // the worst block's: 0..3 the voices, 4
 uint32_t eng_prep_load(void) { return ready ? pct10(static_cast<uint32_t>(prep_cost), kN) : 0u; }
 uint32_t eng_peak(void) { return peak; }
 int eng_guard(void) { return guard; }
+uint32_t eng_peak_core1(void) { return peak_c1; }
 uint32_t eng_guard_blocks(void) { return guard_blocks; }
 void eng_guard_test(int on, int level) {   // (the tests: the guard on, or held at a level)
   guard_on = on;
