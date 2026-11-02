@@ -965,8 +965,10 @@ int main(int argc, char** argv) {
   }
 
   // 27. the Euclidean rhythms (3 in 8: x..x..x., 5 in 16, turned), 0.3.8's project (version 8, 2888 bytes: all of it,
-  // no grit), then the grit on a held note of track 1 (a virtual analog voice, alone): BITS at the end (2 bits: a few
-  // values left), RATE at the end (689 Hz: a sample held 64), DRIVE through each shape (finite, within full scale)
+  // no grit), then the bending's bits on a held note of track 1 (a virtual analog voice, alone; 0.7, the grit's
+  // place): BITS near the end (a few values left), at the end (1 bit: this quiet a voice, none), CLOCK at the end (x2
+  // the note: a sample held for a long while), each SHAPE and a MASK (finite, within the output's reach); then its
+  // glitch, the steps playing: GLITCH full (it takes its slice, then repeats it), BEND and DROP up (still finite)
   {
     char e38[9], e516r[17];
     int n516 = 0;
@@ -995,10 +997,10 @@ int main(int argc, char** argv) {
     rnd[3 * 21 + TP_EQ] = 25;
     int ok = eng_upgrade(q, 2888);
     printf("a version 8 project: %s, theme %d, the filter %.2f, its random %d, drive %.2f, fills %.0f\n",
-           ok ? "read" : "REFUSED", q->theme, q->val[PG_EQ * 4 + 2], q->rnd[3][TP_EQ], q->val[PG_GRIT(1) * 4],
+           ok ? "read" : "REFUSED", q->theme, q->val[PG_EQ * 4 + 2], q->rnd[3][TP_EQ], q->val[PG_BEND(1) * 4],
            q->val[PG_EUC(2) * 4]);
     if (!ok || !eng_check(q) || q->theme != 4 || q->val[PG_EQ * 4 + 2] != 0.25f || q->rnd[3][TP_EQ] != 25 ||
-        q->val[PG_GRIT(1) * 4] != 0.0f || q->val[PG_EUC(2) * 4] != 0.0f)
+        q->val[PG_BEND(1) * 4] != 0.0f || q->val[PG_EUC(2) * 4] != 0.0f)
       ++failures, printf("FAIL: the version 8 project\n");
 
     eng_play(0);
@@ -1033,26 +1035,102 @@ int main(int argc, char** argv) {
     int d0, c0, d1, c1, d2, c2, dd, cd;
     float k0, k1, k2, kd[3];
     measure(&d0, &c0, &k0);
-    p->val[PG_GRIT(0) * 4 + 3] = 0.85f;                  // BITS: 4
+    p->val[PG_BEND(0) * 4 + 1] = 0.85f;                  // BITS: 3
     measure(&d1, &c1, &k1);
     float k3;
-    p->val[PG_GRIT(0) * 4 + 3] = 1.0f;                   // BITS: 2 (this quiet a voice: none left)
+    p->val[PG_BEND(0) * 4 + 1] = 1.0f;                   // BITS: 1 (this quiet a voice: none left)
     measure(&dd, &cd, &k3);
-    p->val[PG_GRIT(0) * 4 + 3] = 0.0f;
-    p->val[PG_GRIT(0) * 4 + 2] = 1.0f;                   // RATE: 689 Hz
+    p->val[PG_BEND(0) * 4 + 1] = 0.0f;
+    p->val[PG_BEND(0) * 4 + 0] = 1.0f;                   // CLOCK: x2 the note (a hold every 168 samples)
     measure(&d2, &c2, &k2);
-    p->val[PG_GRIT(0) * 4 + 2] = 0.0f;
-    p->val[PG_GRIT(0) * 4 + 0] = 1.0f;                   // DRIVE, each shape
-    for (int sh = 0; sh < 3; ++sh) {
-      p->val[PG_GRIT(0) * 4 + 1] = static_cast<float>(sh);
-      measure(&dd, &cd, &kd[sh]);
+    p->val[PG_BEND(0) * 4 + 0] = 0.0f;
+    float ks[BS_N + 1];
+    for (int sh = 1; sh < BS_N; ++sh) {                  // each SHAPE, then a MASK (Sign inv)
+      p->val[PG_BEND(0) * 4 + 3] = static_cast<float>(sh);
+      measure(&dd, &cd, &ks[sh]);
     }
+    p->val[PG_BEND(0) * 4 + 3] = 0.0f;
+    p->val[PG_BEND(0) * 4 + 2] = 8.0f;
+    measure(&dd, &cd, &ks[0]);
+    p->val[PG_BEND(0) * 4 + 2] = 0.0f;
     eng_key(0, 48, 0);
-    printf("grit: plain %d values a block, %d changes, peak %.2f; 4 bits %d values; 2 bits peak %.4f; 689 Hz %d changes;"
-           " drive peaks %.2f %.2f %.2f\n", d0, c0, k0, d1, k3, c2, kd[0], kd[1], kd[2]);
-    if (d0 < 64 || d1 > 16 || k3 > 1e-3f || c2 > 4 || k0 <= 0.01f || kd[0] > 1.0f || kd[1] > 1.0f || kd[2] > 1.0f ||
-        kd[0] < k0)
-      ++failures, printf("FAIL: the grit\n");
+    float kw = 0.0f;
+    for (int sh = 0; sh < BS_N; ++sh) kw = std::max(kw, ks[sh]);
+    printf("bits: plain %d values a block, %d changes, peak %.2f; 3 bits %d values; 1 bit peak %.4f; clock x2 %d changes;"
+           " shapes and a mask peak %.2f\n", d0, c0, k0, d1, k3, c2, kw);
+    if (d0 < 64 || d1 > 16 || k3 > 1e-3f || c2 > 4 || k0 <= 0.01f || kw > 2.0f || kw < 0.01f)
+      ++failures, printf("FAIL: the bits\n");
+    {                                    // 0.6's project (version 14, 3652 bytes): read, its grit gone, the rest kept
+      struct v14 {
+        uint32_t magic;
+        uint16_t version, size;
+        float val[64 * 4];
+        uint8_t algo[64];
+        uint8_t out_mode, warps_hq, theme, dice, dice_seed;
+        cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+        uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+        int8_t rnd[ENG_LANES][37];
+        uint16_t seed[ENG_LANES];
+        plock_t lock[ENG_PLOCKS];
+        uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+        uint8_t endless_len[ENG_TRACKS];
+        int8_t endless_key[ENG_TRACKS];
+        uint8_t rseed[ENG_LANES][37];
+      };
+      static_assert(sizeof(v14) == 3652u, "0.6's project");
+      static uint8_t b14[sizeof(project_t)];
+      for (uint32_t i = 0; i < sizeof b14; ++i) b14[i] = 0;
+      v14* o = reinterpret_cast<v14*>(b14);
+      o->magic = PROJECT_MAGIC;
+      o->version = 14;
+      o->size = 3652;
+      for (int i = 0; i < 64 * 4; ++i) o->val[i] = 0.5f;
+      o->algo[PG_FILT(2, 0)] = MF_SEM;
+      o->theme = 5;
+      o->rnd[1][TP_CLOCK + 1] = 40;                       // (the grit's SHAPE's random: gone)
+      o->rnd[1][TP_CUTOFF] = 30;                          // (the filter's: kept)
+      for (int i = 0; i < ENG_PLOCKS; ++i) o->lock[i].lane = 0xFF;
+      o->lock[0].lane = 2, o->lock[0].step = 3, o->lock[0].tp = TP_CLOCK + 3, o->lock[0].v = 9;   // (gone)
+      o->lock[1].lane = 2, o->lock[1].step = 4, o->lock[1].tp = TP_RESO, o->lock[1].v = 7;        // (kept)
+      o->cable[0][0].src = SRC_L1, o->cable[0][0].dst = PG_BEND(0) * 4, o->cable[0][0].depth = 50;   // (gone)
+      o->cable[0][1].src = SRC_L2, o->cable[0][1].dst = PG_FILT(0, 0) * 4, o->cable[0][1].depth = 40;
+      project_t* q14 = reinterpret_cast<project_t*>(b14);
+      int ok14 = eng_upgrade(q14, 3652);
+      printf("a version 14 project: %s, theme %d, bits %.2f, glitch %.2f size %.0f, filter %d %.2f, randoms %d %d, locks %d %d,"
+             " cables %d %d\n", ok14 ? "read" : "REFUSED", q14->theme, q14->val[PG_BEND(1) * 4], q14->val[PG_GLITCH(1) * 4],
+             q14->val[PG_GLITCH(1) * 4 + 1], q14->algo[PG_FILT(2, 0)], q14->val[PG_FILT(2, 1) * 4], q14->rnd[1][TP_CLOCK + 1],
+             q14->rnd[1][TP_CUTOFF], q14->lock[0].lane, q14->lock[1].lane, q14->cable[0][0].depth, q14->cable[0][1].depth);
+      if (!ok14 || !eng_check(q14) || q14->theme != 5 || q14->val[PG_BEND(1) * 4] != 0.0f ||
+          q14->val[PG_GLITCH(1) * 4] != 0.0f || q14->val[PG_GLITCH(1) * 4 + 1] != static_cast<float>(GL_16) ||
+          q14->algo[PG_FILT(2, 0)] != MF_SEM || q14->val[PG_FILT(2, 1) * 4] != 0.5f || q14->rnd[1][TP_CLOCK + 1] != 0 ||
+          q14->rnd[1][TP_CUTOFF] != 30 || q14->lock[0].lane != 0xFF || q14->lock[1].lane != 2 ||
+          q14->cable[0][0].depth != 0 || q14->cable[0][1].depth != 40)
+        ++failures, printf("FAIL: the version 14 project\n");
+    }
+    for (int s2 = 0; s2 < 16; ++s2) eng_trig_set(0, s2, 1);   // the glitch: the steps playing
+    p->val[PG_GLITCH(0) * 4 + 0] = 1.0f;
+    p->val[PG_GLITCH(0) * 4 + 1] = static_cast<float>(GL_16);
+    eng_play(1);
+    int seen2 = 0, reps = 0;
+    float sp = 1.0f, gpk = 0.0f;
+    for (int b2 = 0; b2 < 600; ++b2) {
+      eng_render(l, r, n);
+      seen2 |= 1 << eng_glitch_state(0, &reps, &sp);
+      for (uint32_t i = 0; i < n; ++i) gpk = std::isfinite(l[i]) ? std::max(gpk, std::fabs(l[i])) : 1e9f;
+    }
+    int reps0 = reps;
+    p->val[PG_GLITCH(0) * 4 + 2] = 1.0f;                 // BEND: each repeat higher; DROP: accidents
+    p->val[PG_GLITCH(0) * 4 + 3] = 1.0f;
+    for (int b2 = 0; b2 < 600; ++b2) {
+      eng_render(l, r, n);
+      eng_glitch_state(0, &reps, &sp);
+      for (uint32_t i = 0; i < n; ++i) gpk = std::isfinite(l[i]) ? std::max(gpk, std::fabs(l[i])) : 1e9f;
+    }
+    eng_play(0);
+    printf("glitch: states seen %d (taking %d, repeating %d), %d repeats, peak %.2f, bent speed %.2f\n", seen2,
+           (seen2 >> 1) & 1, (seen2 >> 2) & 1, reps0, gpk, sp);
+    if (!((seen2 >> 1) & 1) || !((seen2 >> 2) & 1) || reps0 < 1 || gpk > 2.0f || !(sp > 1.0f))
+      ++failures, printf("FAIL: the glitch\n");
     eng_defaults(p);
   }
 
@@ -1180,7 +1258,7 @@ int main(int argc, char** argv) {
   }
 
   // 29. the random dose: at 0 every trig plays the knobs; at 50 % each trig of each track throws every sound parameter
-  // of its own anew (the pitches in whole semitones, the timbres, the gate, the grit, the filter, the EQ, the pan:
+  // of its own anew (the pitches in whole semitones, the timbres, the gate, the bits and the glitch, the filter, the EQ, the pan:
   // another value at each trig, within a quarter of its span: the knob's travel squared), never what leaves the scale
   // (the pitch envelope, the VA's detune), the levels, the time; the sends now and then, lightly, upwards (a trig in
   // seven at 100 %); the effects' colours anew at each beat, Warps' ALGORITHM from mark to mark; at 100 % its whole

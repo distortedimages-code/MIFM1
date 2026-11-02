@@ -26,7 +26,7 @@ extern "C" {
 #define LANE_REVERB 5
 #define LANE_WARPS 6
 #define ENG_CABLES 8                     /* per track, and as many global */
-#define ENG_NPAGES 64
+#define ENG_NPAGES 68
 #define ENG_NPARAMS (ENG_NPAGES * 4)
 #define ENG_STEPS 64                     /* the steps a lane: four pages of 16 */
 #define ENG_PLOCKS 384                   /* parameter locks, for all the lanes' steps */
@@ -56,8 +56,9 @@ extern "C" {
 #define PG_OTT 39                        /* OTT (three bands squashed up and down): DEPTH, TIME, DRIVE, LEVEL */
 #define PG_EQ 40                         /* the mixer's filter, a knob a track: to the left a low pass coming down
                                           * (the highs cut), to the right a high pass going up (the lows), 24 dB/oct */
-#define PG_GRIT(t) (41 + (t))            /* a track's grit (Plaits' fourth face): DRIVE through a SHAPE (soft, hard,
-                                          * folded), RATE (a sample and hold: the rate down to 689 Hz), BITS */
+#define PG_BEND(t) (41 + (t))            /* a track's circuit bending, its bits (0.7: the grit's place): CLOCK (a sample
+                                          * and hold on a multiple of the note), BITS, MASK (its 8-bit word's bits
+                                          * on, inverted or muted), SHAPE (a digital shaper) */
 #define PG_EUC(l) (45 + (l))             /* a lane's Euclidean rhythm (its steps' last face): FILLS spread as evenly
                                           * as they go over the lane's LENGTH, ROTATE; turning them writes its trigs
                                           * (the screen: its third and fourth knobs are the lane's LENGTH and PROB) */
@@ -65,10 +66,15 @@ extern "C" {
                                           * them otherwise: app.c): CUTOFF, RESO, ENV, DECAY; DRIVE, PING, FM, KEY;
                                           * TYPE (LP, BP, HP; VOX: low, mid, high voices), NOISE, COLOR, ATTACK. The
                                           * first's ALGORITHM: the model (OFF, LADDER, MS-20, SEM, VOX) */
+#define PG_GLITCH(t) (64 + (t))          /* its glitch (after its filter): GLITCH (a sixteenth's chance to repeat), SIZE
+                                          * (the slice: 1/64 .. 1/8), BEND (each repeat slower and lower, or faster
+                                          * and higher), DROP (a repeat's chance of an accident: backwards, a hole) */
 enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_LFO, PT_MIX, PT_PAN, PT_REVERB, PT_RSEND, PT_DELAY1,
        PT_DELAY2, PT_DSEND, PT_STEP, PT_LANE, PT_GLOBAL, PT_ARP, PT_WARPS1, PT_WARPS2, PT_DUCK, PT_COMP, PT_OTT, PT_EQ,
-       PT_GRIT, PT_EUC, PT_FILT1, PT_FILT2, PT_FILT3, NPT };
-enum { GS_SOFT, GS_HARD, GS_FOLD };    /* the grit's shapes */
+       PT_BEND, PT_EUC, PT_FILT1, PT_FILT2, PT_FILT3, PT_GLITCH, NPT };
+enum { BS_OFF, BS_RECT, BS_DOWN, BS_DOWN3, BS_FOLD, BS_SWAP, BS_N };   /* the bits' SHAPE */
+#define BM_N 12                          /* the bits' MASKs */
+enum { GL_64, GL_32, GL_16, GL_8, GL_N };   /* the glitch's SIZE */
 enum { MB_OFF, MB_COMP, MB_OTT };       /* the master bus's mode (PG_COMP's ALGORITHM) */
 /* Warps' carrier (PG_WARPS(0)'s first knob): none (Warps off), a track, or the module's internal oscillator, its three
  * shapes (sine, triangle, saw) */
@@ -83,8 +89,9 @@ enum { DL_SYNC, DL_FREE };              /* the delay's ALGORITHM: its time in di
  * page's note, probability and ratchets, its duck, its filter. An effect lane's are its effect's knobs
  * (eng_lane_params) */
 enum { TP_DECAY = 4, TP_PITCHENV = 8, TP_LENGTH, TP_TRANSPOSE, TP_OCTAVE, TP_LEVEL, TP_SEND, TP_PAN, TP_NOTE, TP_PROB,
-       TP_RATCHET, TP_DSEND, TP_DUCK, TP_EQ, TP_DRIVE, TP_SHAPE, TP_RATE, TP_BITS, TP_CUTOFF, TP_RESO, TP_FENV,
-       TP_FDECAY, TP_FDRIVE, TP_PING, TP_FM, TP_KEY, TP_FTYPE, TP_NOISE, TP_COLOR, TP_FATTACK, ENG_NTP };
+       TP_RATCHET, TP_DSEND, TP_DUCK, TP_EQ, TP_CLOCK, TP_CRUSH, TP_MASK, TP_BSHAPE, TP_CUTOFF, TP_RESO, TP_FENV,
+       TP_FDECAY, TP_FDRIVE, TP_PING, TP_FM, TP_KEY, TP_FTYPE, TP_NOISE, TP_COLOR, TP_FATTACK, TP_GLITCH, TP_GSIZE,
+       TP_GBEND, TP_GDROP, ENG_NTP };    /* (0.7: the grit's four the bits', the glitch's four after the filter's) */
                                          /* (T1 has no TP_DUCK: it ducks the others) */
 int eng_track_param(int lane, int tp);   /* its parameter (an effect lane: its effect's knob tp) */
 int eng_param_tp(int param, int *lane);  /* a parameter's tp and lane, -1 if none */
@@ -140,7 +147,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 14u              /* (13: 0.5.8's and 0.5.9's, their filters in two pages (the type an
+#define PROJECT_VERSION 15u              /* (14: 0.6's, with the grit (its four knobs where the bits are, no glitch):
+                                          * read, the grit gone; 13: 0.5.8's and 0.5.9's, their filters in two pages (the type an
                                           * ALGORITHM, no NOISE as such, COLOR, ATTACK): read; 12: 0.5.6's, without the filters (8 pages, 8 lane parameters): read, the
                                           * filters off; 11: 0.5's, without the looped randoms' draws (rseed) either: read, 0 each; 10: 0.4's,
                                           * the same but without the FM drums either: read as it is; 9: 0.3.9's and 0.3.10's, with Tides, Warps' faces as they were, no random
@@ -180,6 +188,12 @@ void eng_fills(int dice, int *every, int *beats, int *tracks);
 uint32_t eng_fill_trigs(int t);          /* the fills' trigs track t played, since power-on */
 float eng_filter_hz(int t);              /* a track's filter: its cutoff now (its envelope, FM and key in), Hz */
 float eng_filter_env(int t);             /* its envelope now, 0..1 */
+/* the circuit bending, for the screen: a cycle of a sine through a track's bits as they are now (n points, -1..1);
+ * the bits' mask (its inverted and muted bits); its glitch now (0 live, 1 taking its slice, 2 repeating), the repeats
+ * so far, their speed */
+void eng_bend_preview(int t, float *y, int n);
+void eng_bend_mask(int t, uint8_t *inv, uint8_t *cut);
+int eng_glitch_state(int t, int *reps, float *speed);
 uint32_t eng_filter_load(int t);         /* its time, in tenths of % of the block (its voice's task holds it), averaged */
 const char *eng_algo_name(int page, int a);
 

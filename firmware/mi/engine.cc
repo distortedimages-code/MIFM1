@@ -100,7 +100,14 @@ const char* const kDivNames[kDivs] = {"1/32", "1/16T", "1/16", "1/8T", "1/16D", 
 const float kDivMult[kDivs] = {0.5f, 2.0f / 3.0f, 1.0f, 4.0f / 3.0f, 1.5f, 2.0f, 8.0f / 3.0f, 3.0f, 4.0f, 6.0f, 8.0f,
                                12.0f, 16.0f};   // in sixteenths
 const char* const kDelayMode[2] = {"Mono", "Ping-pong"};
-const char* const kGritShape[3] = {"Soft", "Hard", "Fold"};
+const char* const kBendShapes[BS_N] = {"Off", "Rect", "Down", "Down 3", "Fold", "Swap"};
+const char* const kBendMasks[BM_N] = {"Clean", "Lo cut", "Lo inv", "Odd cut", "Even inv", "Holes", "Mid inv",
+                                      "Hi inv", "Sign inv", "Sign cut", "3 bits", "Comb"};
+// the masks on the 8-bit word (bit 0 the least): its bits inverted, its bits muted
+const uint8_t kMaskInv[BM_N] = {0x00, 0x00, 0x03, 0x00, 0x55, 0x00, 0x18, 0x40, 0x80, 0x00, 0x00, 0x00};
+const uint8_t kMaskCut[BM_N] = {0x00, 0x03, 0x00, 0x2A, 0x00, 0x18, 0x00, 0x00, 0x00, 0x80, 0x1F, 0x55};
+const char* const kGlitchSizes[GL_N] = {"1/64", "1/32", "1/16", "1/8"};
+const float kClockRatio[10] = {48.0f, 32.0f, 24.0f, 16.0f, 12.0f, 8.0f, 6.0f, 4.0f, 3.0f, 2.0f};   // CLOCK: x the note
 const char* const kFiltTypes[3] = {"LP", "BP", "HP"};   // (VOX: its voices, eng_param_text)
 
 // the knobs' names: the modules' own, short (a word, 52 px at most on the screen: the knobs apart)
@@ -132,11 +139,14 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Thresh", K_UNI, 0, 0, 0}, {"Ratio", K_UNI, 0, 0, 0}, {"Release", K_UNI, 0, 0, 0}, {"Gain", K_BIP, 0, 0, 0}},
   {{"Depth", K_UNI, 0, 0, 0}, {"Time", K_UNI, 0, 0, 0}, {"Drive", K_BIP, 0, 0, 0}, {"Level", K_BIP, 0, 0, 0}},
   {{"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}},
-  {{"Drive", K_UNI, 0, 0, 0}, {"Shape", K_ENUM, 0, 2, kGritShape}, {"Rate", K_UNI, 0, 0, 0}, {"Bits", K_UNI, 0, 0, 0}},
+  {{"Clock", K_UNI, 0, 0, 0}, {"Bits", K_UNI, 0, 0, 0}, {"Mask", K_ENUM, 0, BM_N - 1, kBendMasks},
+   {"Shape", K_ENUM, 0, BS_N - 1, kBendShapes}},
   {{"Fills", K_INT, 0, 64, 0}, {"Rotate", K_INT, 0, 63, 0}, {"Length", K_INT, 1, 64, 0}, {"Prob", K_UNI, 0, 0, 0}},
   {{"Cutoff", K_UNI, 0, 0, 0}, {"Reso", K_UNI, 0, 0, 0}, {"Env", K_BIP, 0, 0, 0}, {"Decay", K_UNI, 0, 0, 0}},
   {{"Drive", K_UNI, 0, 0, 0}, {"Ping", K_UNI, 0, 0, 0}, {"FM", K_BIP, 0, 0, 0}, {"Key", K_UNI, 0, 0, 0}},
   {{"Type", K_ENUM, 0, 2, kFiltTypes}, {"Noise", K_UNI, 0, 0, 0}, {"Color", K_BIP, 0, 0, 0}, {"Attack", K_UNI, 0, 0, 0}},
+  {{"Glitch", K_UNI, 0, 0, 0}, {"Size", K_ENUM, 0, GL_N - 1, kGlitchSizes}, {"Bend", K_BIP, 0, 0, 0},
+   {"Drop", K_UNI, 0, 0, 0}},
 };
 const char* const kBusModes[3] = {"OFF", "COMP", "OTT"};
 const char* const kDelayAlgos[2] = {"SYNC", "FREE"};
@@ -180,6 +190,7 @@ const char* const kLfoRatioNames[9] = {"4 / beat", "2 / beat", "1 / beat", "1 / 
                                          "1 / 2 bars", "1 / 4 bars", "1 / 8 bars", "1 / 16 bars"};
 
 int page_type(int page) {
+  if (page >= PG_GLITCH(0)) return PT_GLITCH;
   if (page >= PG_FILT(0, 0)) return PT_FILT1 + (page - PG_FILT(0, 0)) % 3;
   if (page < 12) return PT_PLAITS1 + page % 3;
   if (page < 16) return PT_LFO;
@@ -193,13 +204,15 @@ int page_type(int page) {
   if (page < PG_WARPS(0)) return PT_ARP;
   if (page < PG_DUCK) return page == PG_WARPS(0) ? PT_WARPS1 : PT_WARPS2;
   if (page < PG_EQ) return page == PG_DUCK ? PT_DUCK : page == PG_COMP ? PT_COMP : PT_OTT;
-  return page == PG_EQ ? PT_EQ : page < PG_EUC(0) ? PT_GRIT : PT_EUC;
+  return page == PG_EQ ? PT_EQ : page < PG_EUC(0) ? PT_BEND : PT_EUC;
 }
 
-// the grit's RATE: the sample and hold's share of the samples (1: all, the rate as it is; 1/64 at the end: 689 Hz);
-// its BITS: the steps a unit (2^15: 16 bits; 2 at the end: 2 bits)
-inline float grit_rate(float v) { return fm_exp2f(-6.0f * v); }
-inline float grit_steps(float v) { return fm_exp2f(15.0f - 14.0f * v); }
+// the bits' CLOCK: its multiple of the note (0: off); BITS: how many (12 down to 1, 0: off)
+inline int clock_index(float v) {
+  int i = static_cast<int>(v * 10.0f - 1e-4f);
+  return i < 0 ? 0 : i > 9 ? 9 : i;
+}
+inline float crush_bits(float v) { return 12.0f - 11.0f * v; }
 
 // the mixer's filter (PG_EQ, a knob a track): its cutoff, to the left a low pass from 18 kHz down to 125 Hz, to the
 // right a high pass from 20 Hz up to 8 kHz, an octave a step of the knob's travel the same all along; in the middle
@@ -274,6 +287,9 @@ float step_clk;                         // samples into the sixteenth
 int32_t tick;                           // sixteenths since PLAY
 uint32_t fill_trigs[ENG_TRACKS];        // the dose's fills' trigs each track played (the tests)
 int cur_step[ENG_LANES];
+int gl_at[ENG_TRACKS];                  // the glitch: this block's sixteenth (the sample it starts at; -1 none)
+float gl_six = 5000.0f;                 // a sixteenth, samples
+void glitch_stop_all();
 float raw_left[ENG_TRACKS];             // a step's gate: its samples left
 int last_g[ENG_TRACKS];                 // the gate of the last frame
 int rat_on[ENG_TRACKS], rat_n[ENG_TRACKS];
@@ -364,7 +380,8 @@ float src_value(int s) { return s > SRC_NONE && s < NSRC ? src[s] : 0.0f; }
 // each of its trigs (each note another sound: new_trig), the effects' at each beat (the sequencer: their colours move
 // under the notes): the pitches in whole semitones, then in the scale (FREQ, TRANSP), the timbres (Plaits' HARMONICS
 // but where it is an interval (the chords, the detune, a swarm's spread), TIMBRE, MORPH, the envelope's knobs; an FM
-// drum's own), the gate, the grit (its DRIVE, SHAPE, RATE, BITS), the filter (eleven knobs, not its PING; from 60 %
+// drum's own), the gate, the bits (CLOCK, BITS, MASK, SHAPE) and the glitch (GLITCH, SIZE, BEND, DROP), the filter
+// (eleven knobs, not its PING; from 60 %
 // its TYPE too, on a trig in two at 100 %), the EQ, the pan, the effects' colours (the delay's feedback, filter,
 // drive, resonance, wow; the reverb's; Warps' ALGORITHM but as a frequency shift, TIMBRE and levels). Nothing that
 // leaves the scale (the pitch envelope, a ringing filter's ping, a shift), the levels, the time (divisions, rates,
@@ -378,7 +395,9 @@ float dice_span(int param) {
     case PT_PLAITS2: return k == 0 ? 0.5f : k == 1 ? 0.6f : 1.0f;
     case PT_PLAITS3: return k == 1 ? 0.35f : k == 2 ? 7.0f : 0.0f;   // GATE, TRANSP: +/-7 (then in the scale); not
                                                                      // the pitch envelope (its glide is off the scale)
-    case PT_GRIT: return k == 0 ? 0.5f : k == 1 ? 1.5f : k == 2 ? 0.3f : 0.35f;   // (SHAPE: any of the three)
+    case PT_BEND: return k == 0 ? 0.3f : k == 1 ? 0.35f : k == 2 ? 3.0f : 2.0f;   // (MASK: three either way; SHAPE
+                                                                                   // two)
+    case PT_GLITCH: return k == 0 ? 0.25f : k == 1 ? 1.0f : k == 2 ? 0.5f : 0.3f;
     case PT_FILT1: return k == 0 ? 0.35f : k == 1 ? 0.35f : k == 2 ? 0.8f : 0.4f;   // CUTOFF +/-3.4 octaves, RESO,
     case PT_FILT2: return k == 0 ? 0.4f : k == 1 ? 0.0f : k == 2 ? 0.5f : 0.3f;     // ENV, DECAY; DRIVE, FM, KEY (not
                                                                                      // PING: a resonance it rings at
@@ -811,6 +830,9 @@ void sequence(uint32_t n) {
     el[t] = sl * kArpMult[r < 0 ? 0 : r > 5 ? 5 : r];
     gate_seen[t] = 0;
   }
+  for (int t = 0; t < ENG_TRACKS; ++t) gl_at[t] = -1;
+  gl_six = sl;
+  if (!playing) glitch_stop_all();
   for (uint32_t k = 0; k < kFrames; ++k) {
     int fresh[ENG_TRACKS] = {0, 0, 0, 0};   // a step's trig in this frame
     int fhit[ENG_TRACKS] = {0, 0, 0, 0}, fdn[ENG_TRACKS] = {0, 0, 0, 0};   // the dose's fills: a hit, its note
@@ -819,6 +841,7 @@ void sequence(uint32_t n) {
       ++tick;
       if (step_clk >= six_len(sl)) step_clk = 0.0f;
       if (proj.dice && tick % 4 == 0) make_dice();   // (the dose: the effects thrown anew at each beat)
+      for (int t = 0; t < ENG_TRACKS; ++t) gl_at[t] = static_cast<int>(k * static_cast<uint32_t>(fl));   // (the glitch)
       if (fill_amount_q(proj.dice) && tick % 16 >= 8) {   // (the bar's second half: where fills are)
         int stepping[ENG_TRACKS];
         for (int t = 0; t < ENG_TRACKS; ++t) stepping[t] = !endless[t] && !e_rec[t] && eng_lane_has_trigs(t);
@@ -977,31 +1000,216 @@ int voice_rests(int t) {
   return 1;
 }
 
-// a track's grit (PG_GRIT), on its voice (Warps and the mixer get it gritty): DRIVE (a gain up to x25 on the small
-// signals, full scale kept) through its SHAPE, soft (x (1 + k) / (1 + k |x|)), hard (clipped) or folded (a triangle:
-// what goes over comes back down); then RATE, a sample and hold (a sample kept until the next is due); then BITS, the
-// samples rounded to their steps. Each only when its knob is up
-struct Grit {
-  float k0, k1;                         // DRIVE's k, the last block's and this one's (glided over the block)
-  int shape;
-  float rate, steps;                    // a sample's share of a hold (1: none), the steps a unit (0: none)
+// a track's circuit bending (0.7, the grit's place), on its voice: its bits before its filter, its glitch after it.
+// The bits (after OTO Machines' Biscuit, an 8-bit box with a switch for each bit): SHAPE first, a digital shaper
+// (rectified: an octave up; DOWN, DOWN 3: the sign turned at every second, every third cycle, as a divider does: an
+// octave, an octave and a fifth under; folded; or SWAP, the 8-bit word's halves swapped), then CLOCK (a sample and
+// hold on a multiple of the note: x48 down to x2, the aliasing it makes in tune), BITS (12 down to 1), MASK (the
+// sample as an 8-bit word, each bit on, inverted or muted: the part under the word kept but when its last bit is
+// muted). A coupling capacitor after it, when a rectifier or a flipped bit leaves a DC. All off: nothing done
+struct Bend {
+  int on, shape, mask, ci, dc;          // (dc: a shape or a mask that leaves a DC: the capacitor on)
+  float rate, steps;                    // CLOCK: a sample's share of a hold (1: none); BITS: the steps a unit (0: none)
   float hold, cnt;                      // the sample held, the count to the next
+  int pos, zc;                          // the zero crossings: above, their count
+  float dx, dy;                         // the coupling capacitor
 };
-Grit grit[ENG_TRACKS];
+Bend bend[ENG_TRACKS];
+
+inline float note_hz(float note) { return 440.0f * fm_exp2f((note - 69.0f) * (1.0f / 12.0f)); }
+
+void set_bend(int t) {
+  Bend& g = bend[t];
+  float ck = E(t, TP_CLOCK), cr = E(t, TP_CRUSH);
+  g.mask = iround(E(t, TP_MASK));
+  g.mask = g.mask < 0 ? 0 : g.mask >= BM_N ? BM_N - 1 : g.mask;
+  g.shape = iround(E(t, TP_BSHAPE));
+  g.shape = g.shape < 0 ? 0 : g.shape >= BS_N ? BS_N - 1 : g.shape;
+  g.ci = ck < 0.005f ? -1 : clock_index(ck);
+  g.rate = 1.0f;
+  if (g.ci >= 0) {
+    float r = note_hz(vnote[t]) * kClockRatio[g.ci] / kSr;
+    g.rate = r < 1.0f ? r : 1.0f;
+  }
+  g.steps = cr < 0.005f ? 0.0f : fm_exp2f(crush_bits(cr) - 1.0f);
+  int on = g.shape != BS_OFF || g.rate < 1.0f || g.steps > 0.0f || g.mask != 0;
+  int dc = g.shape == BS_RECT || g.shape == BS_SWAP || g.mask != 0;
+  if (dc && !g.dc) g.dx = g.dy = 0.0f;
+  g.on = on;
+  g.dc = dc;
+}
+
+inline float bend_word(float x, int mask, int swap) {   // the sample as an 8-bit word, its mask or its halves swapped
+  float s = x * 128.0f, f = fm_floorf(s);
+  int w = static_cast<int>(f);
+  w = w < -128 ? -128 : w > 127 ? 127 : w;
+  float frac = s - f;
+  uint32_t u = static_cast<uint32_t>(w) & 0xFFu;
+  if (swap) u = ((u << 4) | (u >> 4)) & 0xFFu;
+  u = (u ^ kMaskInv[mask]) & ~static_cast<uint32_t>(kMaskCut[mask]) & 0xFFu;
+  int v = u >= 128u ? static_cast<int>(u) - 256 : static_cast<int>(u);
+  if (kMaskCut[mask] & 1u) frac = 0.0f;
+  return (static_cast<float>(v) + frac) * (1.0f / 128.0f);
+}
+
+inline float bend_one(Bend& g, float x) {
+  if (g.shape != BS_OFF && g.shape != BS_SWAP) {
+    if (g.shape == BS_RECT) {
+      x = 1.6f * fm_fabsf(x);
+    } else if (g.shape == BS_FOLD) {
+      float u = (3.0f * x + 1.0f) * 0.25f;   // (a period of 4: up from -1 to 1, then back down)
+      u -= fm_floorf(u);
+      x = 1.0f - 4.0f * fm_fabsf(u - 0.5f);
+    } else {                            // DOWN, DOWN 3: a divider on the rising zero crossings (a hysteresis)
+      if (!g.pos && x > 0.02f) g.pos = 1, ++g.zc;
+      else if (g.pos && x < -0.02f) g.pos = 0;
+      int flip = g.shape == BS_DOWN ? (g.zc & 1) : (g.zc % 3 == 2);
+      if (g.zc >= 6) g.zc -= 6;
+      if (flip) x = -x;
+    }
+  }
+  if (g.rate < 1.0f) {
+    g.cnt += g.rate;
+    if (g.cnt >= 1.0f) {
+      g.cnt -= 1.0f;
+      g.hold = x;
+    }
+    x = g.hold;
+  }
+  if (g.steps > 0.0f) x = fm_floorf(x * g.steps + 0.5f) / g.steps;
+  if (g.mask || g.shape == BS_SWAP) x = bend_word(x, g.mask, g.shape == BS_SWAP);
+  if (!g.dc) return x;
+  float z = x - g.dx + 0.99857f * g.dy;   // (10 Hz)
+  g.dx = x;
+  g.dy = z;
+  return z;
+}
+
+void apply_bend(int t, float* x, uint32_t n) {
+  Bend& g = bend[t];
+  if (!g.on) return;
+  for (uint32_t i = 0; i < n; ++i) x[i] = bend_one(g, x[i]);
+}
+
+// the glitch (after Qu-Bit's Data Bender, a circuit-bent buffer): at each sixteenth, GLITCH's chance that the track
+// stutters. Its slice (SIZE, halved until it fits) is taken as it plays, then played again and again until a
+// sixteenth says otherwise; BEND turns each repeat slower and lower (a tape stopping) or faster and higher; DROP is
+// each repeat's chance of an accident, backwards or a hole. The slices in 8-bit mu-law at 22.05 kHz, 4 KB a track
+// (186 ms; the FM-1 has no more to give): the repeats a little lo-fi, as a bent sampler's
+const uint32_t kGlBytes = 4096u;
+uint8_t gl_pool[2][kGlBytes] PLAT_POOL;  // (two in the pool, two in the RAM: what is left of each)
+uint8_t gl_ram[2][kGlBytes];
+inline uint8_t* gl_buf(int t) { return t < 2 ? gl_pool[t] : gl_ram[t - 2]; }
+int16_t mu_dec[256];
+void make_mu() {
+  for (int i = 0; i < 256; ++i) {       // G.711's mu-law
+    int u = ~i & 0xFF, sign = u & 0x80, ex = (u >> 4) & 7, man = u & 0x0F;
+    int s = (((man << 3) + 0x84) << ex) - 0x84;
+    mu_dec[i] = static_cast<int16_t>(sign ? -s : s);
+  }
+}
+inline uint8_t mu_enc(float x) {
+  int s = static_cast<int>(x * 8031.0f) << 2;
+  s = s > 32635 ? 32635 : s < -32635 ? -32635 : s;
+  int sign = s < 0 ? 0x80 : 0;
+  if (sign) s = -s;
+  s += 0x84;
+  int ex = 7;
+  for (int m = 0x4000; ex > 0 && !(s & m); m >>= 1) --ex;
+  int man = (s >> (ex + 3)) & 0x0F;
+  return static_cast<uint8_t>(~(sign | (ex << 4) | man) & 0xFF);
+}
+const float kMuScale = 1.0f / (8031.0f * 4.0f);
+
+struct Glitch {
+  int on;                               // 0 live, 1 taking its slice (the live goes on), 2 repeating
+  uint32_t len, rec;                    // the slice's half-rate samples, those taken
+  float acc;                            // (taking: two samples averaged)
+  int half;
+  float pos, speed;                     // the repeat's place (half-rate samples), its speed
+  int rev, mute, reps;
+  float mix;                            // the repeats over the live (0..1), glided
+};
+Glitch glitch[ENG_TRACKS];
+void glitch_stop_all() {
+  for (int t = 0; t < ENG_TRACKS; ++t) glitch[t].on = 0;
+}
+
+void glitch_event(int t) {              // a sixteenth: repeat (or go on repeating), or back to the live
+  Glitch& g = glitch[t];
+  float p = E(t, TP_GLITCH);
+  if (playing && p > 0.005f && rand01() < p) {
+    if (g.on) return;
+    int sz = iround(E(t, TP_GSIZE));
+    float len = gl_six * (sz <= GL_64 ? 0.25f : sz == GL_32 ? 0.5f : sz == GL_16 ? 1.0f : 2.0f) * 0.5f;
+    while (len > static_cast<float>(kGlBytes) && len > 64.0f) len *= 0.5f;
+    g.len = static_cast<uint32_t>(len);
+    if (g.len < 32u) g.len = 32u;
+    g.rec = 0u;
+    g.acc = 0.0f;
+    g.half = 0;
+    g.pos = 0.0f;
+    g.speed = 1.0f;
+    g.rev = g.mute = 0;
+    g.reps = 0;
+    g.on = 1;
+  } else {
+    g.on = 0;
+  }
+}
+
+void apply_glitch(int t, float* x, uint32_t n) {
+  Glitch& g = glitch[t];
+  if (!g.on && g.mix <= 0.0f && gl_at[t] < 0) return;
+  uint8_t* buf = gl_buf(t);
+  float bendv = E(t, TP_GBEND), drop = E(t, TP_GDROP);
+  float mult = fm_exp2f(bendv * 0.5f);  // (each repeat: up to half an octave lower or higher)
+  for (uint32_t i = 0; i < n; ++i) {
+    if (static_cast<int>(i) == gl_at[t]) glitch_event(t);
+    float live = x[i], rep = 0.0f, target = 0.0f;
+    if (g.on == 1) {                    // taking the slice: the live heard
+      g.acc += live;
+      if (++g.half == 2) {
+        buf[g.rec++] = mu_enc(g.acc * 0.5f);
+        g.acc = 0.0f;
+        g.half = 0;
+        if (g.rec >= g.len) g.on = 2, g.pos = 0.0f;
+      }
+    } else if (g.on == 2) {             // repeating
+      float L = static_cast<float>(g.len);
+      float q = g.rev ? L - 1.0f - g.pos : g.pos;
+      int j = static_cast<int>(q);
+      if (j < 0) j = 0;
+      uint32_t j1 = static_cast<uint32_t>(j) + 1u < g.len ? static_cast<uint32_t>(j) + 1u : static_cast<uint32_t>(j);
+      float fr = q - static_cast<float>(j);
+      float s = (static_cast<float>(mu_dec[buf[j]]) + fr * static_cast<float>(mu_dec[buf[j1]] - mu_dec[buf[j]])) * kMuScale;
+      float e = fm_minf(1.0f, fm_minf(g.pos, L - 1.0f - g.pos) * (1.0f / 24.0f));   // (the slice's ends faded)
+      rep = g.mute ? 0.0f : s * fm_maxf(e, 0.0f);
+      target = 1.0f;
+      g.pos += 0.5f * g.speed;
+      if (g.pos >= L - 1.0f) {          // the next repeat: its speed, its accident
+        g.pos = 0.0f;
+        ++g.reps;
+        g.speed = clampf(g.speed * mult, 0.125f, 4.0f);
+        g.rev = g.mute = 0;
+        if (drop > 0.005f && rand01() < drop) {
+          if (rand01() < 0.6f) g.rev = 1;
+          else g.mute = 1;
+        }
+        if (g.speed < 0.16f) g.mute = 1;   // (the tape stopped)
+      }
+    }
+    g.mix += (target - g.mix) * 0.03f;  // (~1 ms)
+    if (g.mix < 1e-4f && !g.on) g.mix = 0.0f;
+    x[i] = live + (rep - live) * g.mix;
+  }
+  gl_at[t] = -1;
+}
+
 volatile uint8_t filt_stop;             // the transport stopped: the filters to close
 volatile uint32_t filt_ticks[ENG_TRACKS];   // the filter's time in its voice's task, the last block (the screen's)
 float filt_cost[ENG_TRACKS];
 const float mf_off_knobs[MF_KNOBS] = {1.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-
-void set_grit(int t) {
-  Grit& g = grit[t];
-  float d = E(t, TP_DRIVE), r = E(t, TP_RATE), b = E(t, TP_BITS);
-  g.k0 = g.k1;
-  g.k1 = 24.0f * d * d;
-  g.shape = iround(E(t, TP_SHAPE));
-  g.rate = r < 0.005f ? 1.0f : grit_rate(r);
-  g.steps = b < 0.005f ? 0.0f : grit_steps(b);
-}
 
 // a track's filter (PG_FILT, mi_filter.cc): its model and type (the pages' ALGORITHM), its knobs as the trig sees
 // them (locks, randoms, the dose, the cables), the note for its KEY
@@ -1017,63 +1225,22 @@ void set_filter(int t) {
   mf_set(t, m, dice_type[t] >= 0 ? dice_type[t] : iround(proj.val[PG_FILT(t, 2) * 4]), k, vnote[t]);
 }
 
-void apply_grit(int t, float* x, uint32_t n) {
-  Grit& g = grit[t];
-  if (g.k0 > 0.0f || g.k1 > 0.0f) {
-    float k = g.k0, dk = (g.k1 - g.k0) / static_cast<float>(n);
-    if (g.shape == GS_HARD) {
-      for (uint32_t i = 0; i < n; ++i) {
-        k += dk;
-        x[i] = clampf((1.0f + k) * x[i], -1.0f, 1.0f);
-      }
-    } else if (g.shape == GS_FOLD) {
-      for (uint32_t i = 0; i < n; ++i) {
-        k += dk;
-        float u = ((1.0f + k) * x[i] + 1.0f) * 0.25f;   // (a period of 4: up from -1 to 1, then back down)
-        u -= fm_floorf(u);
-        x[i] = 1.0f - 4.0f * fm_fabsf(u - 0.5f);
-      }
-    } else {
-      for (uint32_t i = 0; i < n; ++i) {
-        k += dk;
-        x[i] = (1.0f + k) * x[i] / (1.0f + k * fm_fabsf(x[i]));
-      }
-    }
-  }
-  if (g.rate < 1.0f) {
-    float hold = g.hold, cnt = g.cnt, r = g.rate;
-    for (uint32_t i = 0; i < n; ++i) {
-      cnt += r;
-      if (cnt >= 1.0f) {
-        cnt -= 1.0f;
-        hold = x[i];
-      }
-      x[i] = hold;
-    }
-    g.hold = hold;
-    g.cnt = cnt;
-  }
-  if (g.steps > 0.0f) {
-    float q = g.steps, iq = 1.0f / q;
-    for (uint32_t i = 0; i < n; ++i) x[i] = fm_floorf(x[i] * q + 0.5f) * iq;
-  }
-}
-
 void render_voice(int t, uint32_t n) {
   if (voice_rests(t)) {
     WEB_SPEND(kWebRest);
     for (uint32_t i = 0; i < n; ++i) vbuf[t][i] = 0.0f;
-    grit[t].hold = grit[t].cnt = 0.0f;
+    bend[t].hold = bend[t].cnt = 0.0f;
+    glitch[t].on = 0;
+    glitch[t].mix = 0.0f;
+    gl_at[t] = -1;
     mf_reset(t);
     return;
   }
 #ifdef PLAT_WEB
-  {                                     // (its model, its grit if any of it is up)
+  {                                     // (its model, its bits if any of them is up, its glitch)
     int m = proj.algo[PG_TRACK(t, 0)];
-    const Grit& gr = grit[t];
-    web_spend((kWebModel[m < 0 ? 0 : m > 27 ? 27 : m] + (gr.k1 > 0.0f || gr.rate < 1.0f || gr.steps > 0.0f ? kWebGrit
-                                                                                                             : 0.0f)) *
-              static_cast<float>(n) / 128.0f);
+    web_spend((kWebModel[m < 0 ? 0 : m > 27 ? 27 : m] + (bend[t].on ? kWebBend : 0.0f) +
+               (glitch[t].on || glitch[t].mix > 0.0f ? kWebGlitch : 0.0f)) * static_cast<float>(n) / 128.0f);
   }
 #endif
   int lx = lx_model(t) >= 0;            // an FM drum: a rise triggers it, its own envelope does the rest
@@ -1102,7 +1269,7 @@ void render_voice(int t, uint32_t n) {
     if (lx) lx_render(t, &vbuf[t][pos], n - pos);
     else mp_render(voice[t], &vbuf[t][pos], &vaux[t][pos], n - pos);
   }
-  apply_grit(t, vbuf[t], n);
+  apply_bend(t, vbuf[t], n);
   uint32_t fq = plat_ticks24();
 #ifdef PLAT_WEB
   {
@@ -1114,6 +1281,7 @@ void render_voice(int t, uint32_t n) {
 #endif
   mf_process(t, vbuf[t], n);            // the filter (OFF: nothing)
   filt_ticks[t] = plat_ticks24() - fq;
+  apply_glitch(t, vbuf[t], n);          // (its glitch: after the filter, the track's sound repeated)
   float pk = 0.0f;
   for (uint32_t i = 0; i < n; ++i) pk = fm_maxf(pk, fm_fabsf(vbuf[t][i]));
   quiet[t] = !vgate[t] && pk < 3e-5f ? quiet[t] + 1 : 0;
@@ -1467,7 +1635,8 @@ uint32_t eng_prof[3];                    // (a computer's measure: the preparati
 int eng_page_type(int page) { return page_type(page); }
 int eng_page_track(int page) {
   if (page < 12) return page / 3;
-  if (page >= PG_GRIT(0) && page < PG_GRIT(ENG_TRACKS)) return page - PG_GRIT(0);
+  if (page >= PG_BEND(0) && page < PG_BEND(ENG_TRACKS)) return page - PG_BEND(0);
+  if (page >= PG_GLITCH(0) && page < PG_GLITCH(ENG_TRACKS)) return page - PG_GLITCH(0);
   if (page >= PG_FILT(0, 0) && page < PG_FILT(ENG_TRACKS, 0)) return (page - PG_FILT(0, 0)) / 3;
   if (page >= PG_EUC(0) && page < PG_EUC(ENG_TRACKS)) return page - PG_EUC(0);
   if (page >= PG_ARP(0) && page < PG_ARP(0) + ENG_TRACKS) return page - PG_ARP(0);
@@ -1512,8 +1681,9 @@ int eng_track_param(int lane, int tp) {
   if (tp == TP_DSEND) return PG_DSEND * 4 + lane;
   if (tp == TP_DUCK) return PG_DUCK * 4 + lane;   // (T1's: the duck's DECAY, not a parameter of T1's: not lockable)
   if (tp == TP_EQ) return PG_EQ * 4 + lane;
+  if (tp >= TP_GLITCH) return PG_GLITCH(lane) * 4 + (tp - TP_GLITCH);
   if (tp >= TP_CUTOFF) return PG_FILT(lane, (tp - TP_CUTOFF) / 4) * 4 + (tp - TP_CUTOFF) % 4;
-  if (tp >= TP_DRIVE) return PG_GRIT(lane) * 4 + (tp - TP_DRIVE);
+  if (tp >= TP_CLOCK) return PG_BEND(lane) * 4 + (tp - TP_CLOCK);
   return PG_STEP(lane) * 4 + (tp - TP_NOTE);
 }
 
@@ -1545,9 +1715,12 @@ int eng_param_tp(int param, int* lane) {
   } else if (page == PG_EQ) {
     l = k;
     tp = TP_EQ;
-  } else if (page >= PG_GRIT(0) && page < PG_GRIT(ENG_TRACKS)) {
-    l = page - PG_GRIT(0);
-    tp = TP_DRIVE + k;
+  } else if (page >= PG_BEND(0) && page < PG_BEND(ENG_TRACKS)) {
+    l = page - PG_BEND(0);
+    tp = TP_CLOCK + k;
+  } else if (page >= PG_GLITCH(0) && page < PG_GLITCH(ENG_TRACKS)) {
+    l = page - PG_GLITCH(0);
+    tp = TP_GLITCH + k;
   } else if (page >= PG_FILT(0, 0) && page < PG_FILT(ENG_TRACKS, 0)) {
     l = (page - PG_FILT(0, 0)) / 3;
     tp = TP_CUTOFF + ((page - PG_FILT(0, 0)) % 3) * 4 + k;
@@ -1785,21 +1958,23 @@ void eng_param_text(int param, float v, char* b, int n) {
   } else if ((pt == PT_FILT1 && k == 1) || (pt == PT_FILT2 && (k == 0 || k == 1 || k == 3)) || (pt == PT_FILT3 && k == 1)) {
     put_num(b, n, static_cast<int32_t>(v * 100.0f + 0.5f), 0, 0);
     put_end(b, n, pt == PT_FILT2 && k == 3 ? "%" : "");
-  } else if (pt == PT_GRIT && k >= 2) {  // RATE: the rate it holds at; BITS: how many
+  } else if (pt == PT_BEND && k < 2) {   // CLOCK: its multiple of the note; BITS: how many
     if (v < 0.005f) {
       put(b, n, "Off");
-    } else if (k == 2) {
-      float hz = kSr * grit_rate(v);
-      if (hz >= 1000.0f) {
-        put_num(b, n, static_cast<int32_t>(hz * 0.01f + 0.5f), 1, 0);
-        put_end(b, n, "k");
-      } else {
-        put_num(b, n, static_cast<int32_t>(hz + 0.5f), 0, 0);
-        put_end(b, n, " Hz");
-      }
+    } else if (k == 0) {
+      put(b, n, "x");
+      put_num(b + 1, n - 1, static_cast<int32_t>(kClockRatio[clock_index(v)]), 0, 0);
     } else {
-      put_num(b, n, static_cast<int32_t>(16.0f - 14.0f * v + 0.5f), 0, 0);
+      put_num(b, n, static_cast<int32_t>(crush_bits(v) + 0.5f), 0, 0);
       put_end(b, n, " bit");
+    }
+  } else if (pt == PT_GLITCH && k == 2) {   // BEND: each repeat lower (Fall) or higher (Rise), in semitones
+    int st = static_cast<int>(v * 6.0f + (v < 0 ? -0.5f : 0.5f));
+    if (!st) {
+      put(b, n, "Loop");
+    } else {
+      put(b, n, st < 0 ? "Fall " : "Rise ");
+      put_num(b + 5, n - 5, st < 0 ? -st : st, 0, 0);
     }
   } else if (pt == PT_LANE && k == 0) {  // an effect's DECAY: its time
     float s = lane_tau(v);
@@ -1840,7 +2015,7 @@ void eng_param_text(int param, float v, char* b, int n) {
     put_num(b, n, static_cast<int32_t>(50.0f + 25.0f * v + 0.5f), 0, 0);
     put_end(b, n, "%");
   } else if ((pt == PT_STEP && k == 1) || (pt == PT_ARP && k == 1) || (pt == PT_LANE && (k == 1 || k == 2)) ||
-             (pt == PT_DUCK && k > 0) || (pt == PT_OTT && k == 0) || (pt == PT_GRIT && k == 0) ||
+             (pt == PT_DUCK && k > 0) || (pt == PT_OTT && k == 0) || (pt == PT_GLITCH && (k == 0 || k == 3)) ||
              (pt == PT_WARPS1 && k == 3)) {
     put_num(b, n, static_cast<int32_t>(v * 100.0f + 0.5f), 0, 0);
     put_end(b, n, "%");
@@ -1962,6 +2137,7 @@ void eng_blank(project_t* p) {
     p->val[PG_STEP(t) * 4 + 2] = 1.0f;
     p->val[PG_ARP(t) * 4 + 0] = 2.0f;                    // Endless: sixteenths, half gates, forward
     p->val[PG_ARP(t) * 4 + 1] = 0.5f;
+    p->val[PG_GLITCH(t) * 4 + 1] = static_cast<float>(GL_16);   // the glitch: off, its slice a sixteenth
   }
   for (int l = 0; l < ENG_LANES; ++l) {
     p->val[PG_STEP(l) * 4 + 3] = 16.0f;
@@ -2081,7 +2257,6 @@ void eng_groove(project_t* p) {
     p->val[PG_RSEND * 4 + t] = kRSend[t];
     p->val[PG_DSEND * 4 + t] = kDSend[t];
   }
-  p->val[PG_GRIT(0) * 4 + 0] = 0.25f;                   // the kick: a little drive
   // the bass: a saw (MORPH), no detune, short gates; through the ladder, opened by its envelope at each note
   p->val[PG_TRACK(1, 0) * 4 + 1] = 0.0f;
   p->val[PG_TRACK(1, 0) * 4 + 2] = 0.3f;
@@ -2145,7 +2320,7 @@ void eng_groove(project_t* p) {
 
 // the stress test (GLO, SELECT: PROJECT, K1, REC held): a fixed patch that keeps everything busy, to read the
 // machine page against, version after version: four tracks playing (a kick, VA VCF, CHORD, MODAL), two of
-// them gritty, Warps (diode ring, T3 by T2), OTT, the delay and the reverb fed, the duck, the filters, the three LFOs
+// them bent, Warps (diode ring, T3 by T2), OTT, the delay and the reverb fed, the duck, the filters, the three LFOs
 // on 18 cables, randoms, locks, ratchets
 void eng_stress(project_t* p) {
   eng_blank(p);
@@ -2179,10 +2354,11 @@ void eng_stress(project_t* p) {
     p->algo[PG_FILT(t, 0)] = static_cast<uint8_t>(kFm[t]);
     for (int k = 0; k < 12; ++k) p->val[PG_FILT(t, k / 4) * 4 + k % 4] = kFk[t][k];
   }
-  p->val[PG_GRIT(0) * 4 + 0] = 0.35f;                    // the kick driven (soft)
-  p->val[PG_GRIT(1) * 4 + 0] = 0.25f;                    // the bass clipped, a little decimated
-  p->val[PG_GRIT(1) * 4 + 1] = static_cast<float>(GS_HARD);
-  p->val[PG_GRIT(1) * 4 + 2] = 0.15f;
+  p->val[PG_BEND(0) * 4 + 1] = 0.3f;                     // the kick crushed (0.7: the bits, the grit's place)
+  p->val[PG_BEND(1) * 4 + 0] = 0.25f;                    // the bass: its clock on the note, a bit inverted, folded
+  p->val[PG_BEND(1) * 4 + 2] = 2.0f;
+  p->val[PG_BEND(1) * 4 + 3] = static_cast<float>(BS_FOLD);
+  p->val[PG_GLITCH(3) * 4 + 0] = 0.3f;                   // T4 glitching
   // LFO 1: a triangle a bar; LFO 2: a sample and hold at ~3 Hz, slewed; LFO 3: a sine at 0.3 Hz
   static const float kLfo[3][4] = {{static_cast<float>(LW_TRI), 4.5f / 9.0f, static_cast<float>(LM_SYNC), 0.0f},
                                    {static_cast<float>(LW_SH), 0.725f, static_cast<float>(LM_FREE), 0.15f},
@@ -2205,12 +2381,12 @@ void eng_stress(project_t* p) {
   for (int k = 0; k < 4; ++k) p->val[PG_OTT * 4 + k] = kOtt[k];
   p->val[PG_GLOBAL * 4 + 1] = 2.0f;                      // minor
   // the cables: each track's, then the global ones
-  cable(p, 0, 0, SRC_L2, PG_TRACK(0, 0) * 4 + 2, 25);    // T1: S&H -> BRIGHT, sine -> the grit, the triangle -> DECAY
-  cable(p, 0, 1, SRC_L3, PG_GRIT(0) * 4 + 0, 30);
+  cable(p, 0, 0, SRC_L2, PG_TRACK(0, 0) * 4 + 2, 25);    // T1: S&H -> BRIGHT, sine -> its bits, the triangle -> DECAY
+  cable(p, 0, 1, SRC_L3, PG_BEND(0) * 4 + 1, 30);
   cable(p, 0, 2, SRC_L1, PG_TRACK(0, 1) * 4 + 0, 20);
   cable(p, 1, 0, SRC_L1, PG_TRACK(1, 0) * 4 + 1, 40);    // T2: the triangle -> HARMONICS and the filter, S&H ->
   cable(p, 1, 1, SRC_L2, PG_TRACK(1, 0) * 4 + 3, 30);    // MORPH, the sine -> BITS
-  cable(p, 1, 2, SRC_L3, PG_GRIT(1) * 4 + 3, 15);
+  cable(p, 1, 2, SRC_L3, PG_BEND(1) * 4 + 1, 15);
   cable(p, 1, 3, SRC_L1, PG_EQ * 4 + 1, -20);
   cable(p, 2, 0, SRC_L1, PG_TRACK(2, 0) * 4 + 3, 40);    // T3: the triangle -> MORPH, S&H -> TIMBRE, the sine -> the
   cable(p, 2, 1, SRC_L2, PG_TRACK(2, 0) * 4 + 2, 35);    // pan and the delay's send
@@ -2465,6 +2641,69 @@ void upgrade_v13(project_t* p, const project_v13& o) {
   }
 }
 
+// 0.6's (version 14): 64 pages, 37 lane parameters, the grit where the bits are now (its DRIVE, SHAPE, RATE, BITS),
+// no glitch
+struct project_v14 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[64 * 4];
+  uint8_t algo[64];
+  uint8_t out_mode, warps_hq, theme, dice, dice_seed;
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+  int8_t rnd[ENG_LANES][37];
+  uint16_t seed[ENG_LANES];
+  plock_t lock[ENG_PLOCKS];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+  uint8_t rseed[ENG_LANES][37];
+};
+
+static_assert(sizeof(project_v14) == 3652u, "0.6's project: its bytes as 0.6.6 saved them");
+
+void upgrade_v14(project_t* p, const project_v14& o) {
+  eng_blank(p);
+  for (int i = 0; i < 64 * 4; ++i) p->val[i] = o.val[i];
+  for (int i = 0; i < 64; ++i) p->algo[i] = o.algo[i];
+  p->out_mode = o.out_mode;
+  p->warps_hq = o.warps_hq;
+  p->theme = o.theme;
+  p->dice = o.dice;
+  p->dice_seed = o.dice_seed;
+  for (int g = 0; g <= ENG_TRACKS; ++g)
+    for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c] = o.cable[g][c];
+  for (int l = 0; l < ENG_LANES; ++l) {
+    for (int i = 0; i < ENG_STEPS / 8; ++i) p->trig[l][i] = o.trig[l][i];
+    for (int i = 0; i < 37; ++i) {        // (the lane parameters' order kept: the glitch's four after)
+      p->rnd[l][i] = o.rnd[l][i];
+      p->rseed[l][i] = o.rseed[l][i];
+    }
+    p->seed[l] = o.seed[l];
+  }
+  for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i] = o.lock[i];
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    for (int i = 0; i < ENG_ENDLESS; ++i) p->endless[t][i] = o.endless[t][i];
+    p->endless_len[t] = o.endless_len[t];
+    p->endless_key[t] = o.endless_key[t];
+  }
+}
+
+// the grit gone (0.7): what an older project had of it (its knobs, their randoms, locks and cables) is not the bits'
+void grit_gone(project_t* p) {
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    for (int k = 0; k < 4; ++k) p->val[PG_BEND(t) * 4 + k] = 0.0f;
+    for (int tp = TP_CLOCK; tp <= TP_BSHAPE; ++tp) p->rnd[t][tp] = 0, p->rseed[t][tp] = 0;
+  }
+  for (int i = 0; i < ENG_PLOCKS; ++i)
+    if (p->lock[i].lane < ENG_TRACKS && p->lock[i].tp >= TP_CLOCK && p->lock[i].tp <= TP_BSHAPE) p->lock[i].lane = 0xFF;
+  for (int g = 0; g <= ENG_TRACKS; ++g)
+    for (int c = 0; c < ENG_CABLES; ++c) {
+      int d = p->cable[g][c].dst;
+      if (d >= PG_BEND(0) * 4 && d < PG_BEND(ENG_TRACKS) * 4) p->cable[g][c].depth = 0, p->cable[g][c].src = SRC_NONE;
+    }
+}
+
 // versions 7 to 9: their pages first, their lane parameters first (what came after is new)
 void blank_v9(project_t* p);
 
@@ -2628,6 +2867,33 @@ void upgrade_from(project_t* p, const project_old<NP>& o) {
 extern "C" {
 
 float eng_dice_span(int param) { return dice_span(param); }
+
+void eng_bend_preview(int t, float* y, int n) {   // a cycle of a sine through the bits as they are (CLOCK: its
+  if (t < 0 || t >= ENG_TRACKS || n < 2) return; // multiple of the cycle)
+  Bend g = bend[t];
+  g.hold = g.cnt = 0.0f;
+  g.pos = g.zc = 0;
+  g.dx = g.dy = 0.0f;
+  g.rate = g.ci >= 0 ? kClockRatio[g.ci] / static_cast<float>(n) : 1.0f;
+  if (g.rate > 1.0f) g.rate = 1.0f;
+  for (int pass = 0; pass < 7; ++pass)            // (its divider and its capacitor settled: six cycles first)
+    for (int i = 0; i < n; ++i) {
+      float x = 0.9f * fm_sinf(6.2831853f * static_cast<float>(i) / static_cast<float>(n));
+      float v = g.on ? bend_one(g, x) : x;
+      if (pass == 6) y[i] = clampf(v, -1.2f, 1.2f);
+    }
+}
+void eng_bend_mask(int t, uint8_t* inv, uint8_t* cut) {
+  int m = t >= 0 && t < ENG_TRACKS ? bend[t].mask : 0;
+  if (inv) *inv = kMaskInv[m];
+  if (cut) *cut = kMaskCut[m];
+}
+int eng_glitch_state(int t, int* reps, float* speed) {
+  if (t < 0 || t >= ENG_TRACKS) return 0;
+  if (reps) *reps = glitch[t].reps;
+  if (speed) *speed = glitch[t].speed;
+  return glitch[t].on;
+}
 float eng_filter_hz(int t) { return mf_cutoff_hz(t); }
 float eng_filter_env(int t) { return mf_env(t); }
 uint32_t eng_filter_load(int t) {
@@ -2648,14 +2914,24 @@ int eng_upgrade(project_t* p, int bytes) {
     project_v9 v9;
     project_v12 v12;
     project_v13 v13;
+    project_v14 v14;
   } u;
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
+  if (v == 14 && bytes == static_cast<int>(sizeof(project_v14)) && p->size == sizeof(project_v14)) {
+    const uint8_t* from = reinterpret_cast<const uint8_t*>(p);
+    uint8_t* to = reinterpret_cast<uint8_t*>(&u.v14);
+    for (uint32_t i = 0; i < sizeof(project_v14); ++i) to[i] = from[i];
+    upgrade_v14(p, u.v14);
+    grit_gone(p);
+    return 1;
+  }
   if (v == 13 && bytes == static_cast<int>(sizeof(project_v13)) && p->size == sizeof(project_v13)) {
     const uint8_t* from = reinterpret_cast<const uint8_t*>(p);
     uint8_t* to = reinterpret_cast<uint8_t*>(&u.v13);
     for (uint32_t i = 0; i < sizeof(project_v13); ++i) to[i] = from[i];
     upgrade_v13(p, u.v13);
+    grit_gone(p);
     return 1;
   }
   if (((v == 10 || v == 11) && bytes == static_cast<int>(kV11Bytes) && p->size == kV11Bytes) ||
@@ -2667,6 +2943,7 @@ int eng_upgrade(project_t* p, int bytes) {
       for (int l = 0; l < ENG_LANES; ++l)
         for (int i = 0; i < 25; ++i) u.v12.rseed[l][i] = 0;
     upgrade_v12(p, u.v12);
+    grit_gone(p);
     return 1;
   }
   uint32_t size = v == 9 ? sizeof u.v9 : v == 8 ? sizeof u.v8 : v == 7 ? sizeof u.v7 : v == 6 ? sizeof u.v6 : v == 5 ? sizeof u.v5
@@ -2682,12 +2959,15 @@ int eng_upgrade(project_t* p, int bytes) {
   else if (v == 5) upgrade_from(p, u.v5);
   else upgrade_from(p, u.v4);
   remap_v9(p);                          // (read as 0.3's: then into 0.4's)
+  grit_gone(p);
   return 1;
 }
 
 int eng_init(void) {
   uint32_t need = 0, a = 0;
   mf_init();                            // (the tracks' filters: their own static state)
+  make_mu();                            // (the glitch's slices)
+  for (int t = 0; t < ENG_TRACKS; ++t) gl_at[t] = -1;
   need = 4u * ((mp_size() + 7u) & ~7u) + ((mrv_size() + 7u) & ~7u) +
          ((mw_size() + 7u) & ~7u) + ((mdl_size() + 7u) & ~7u) + ((mms_size() + 7u) & ~7u);
   if (need > sizeof(arena)) return -1;
@@ -2752,7 +3032,9 @@ void cut_now() {
     mp_init(voice[t]);
     vgate[t] = 0;                       // (a key still held: a new trig)
     quiet[t] = kQuiet;                  // (resting until then)
-    grit[t].hold = grit[t].cnt = 0.0f;
+    bend[t].hold = bend[t].cnt = 0.0f;
+    glitch[t].on = 0;
+    glitch[t].mix = 0.0f;
     meter[t] = 0.0f;
   }
   mw_init(warps);
@@ -2897,7 +3179,7 @@ void eng_render(float* l, float* r, uint32_t n) {
   }
   for (int t = 0; t < ENG_TRACKS; ++t) {
     set_voice(t);
-    set_grit(t);
+    set_bend(t);
     set_filter(t);
   }
   WEB_SPEND(prep_us * 4.2f);

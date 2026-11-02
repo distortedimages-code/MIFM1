@@ -8,9 +8,9 @@
 // either (its clock moves a render quantum at a time), so there the engine's clock is a model's: each part costs
 // what the table calibrate.py writes says (firmware/mi/web_costs.h).
 //   calib stress SECONDS                 the stress test playing
-//   calib one MODEL FILTER FM NOISE GRIT BUS WARPS HQ SECONDS [EXTRA]
+//   calib one MODEL FILTER FM NOISE BEND BUS WARPS HQ SECONDS [EXTRA]
 //                                        T1 alone playing a note every step (its voice never rests), on MODEL, its
-//                                        filter FILTER (FM, NOISE: 0..1), GRIT 0/1; the bus BUS (MB_*); WARPS -1 off
+//                                        filter FILTER (FM, NOISE: 0..1), BEND 0/1 (its bits); the bus BUS (MB_*); WARPS -1 off
 //                                        or its algorithm's mark 0..5 (T2 by T1, T2 playing too), HQ 0/1; EXTRA
 //                                        (bits) T1's EQ, the duck, the delay's filter and drive
 //   calib blank SECONDS                  nothing playing (the preparation's floor, a resting voice)
@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
       for (int s = 0; s < ENG_STEPS; ++s) eng_trig_set(l, s, 0);
     secs = argc > 2 ? static_cast<float>(atof(argv[2])) : 2.0f;
   } else if (!strcmp(what, "one") && argc >= 11) {
-    int model = atoi(argv[2]), filter = atoi(argv[3]), grit = atoi(argv[6]), bus = atoi(argv[7]);
+    int model = atoi(argv[2]), filter = atoi(argv[3]), bend = atoi(argv[6]), bus = atoi(argv[7]);
     int warps = atoi(argv[8]), hq = atoi(argv[9]);
     float fm = static_cast<float>(atof(argv[4])), noise = static_cast<float>(atof(argv[5]));
     secs = static_cast<float>(atof(argv[10]));
@@ -65,10 +65,10 @@ int main(int argc, char** argv) {
     p->val[PG_FILT(0, 0) * 4 + 2] = 0.3f;
     p->val[PG_FILT(0, 1) * 4 + 2] = fm;
     p->val[PG_FILT(0, 2) * 4 + 1] = noise;
-    if (grit) {
-      p->val[PG_GRIT(0) * 4 + 0] = 0.3f;
-      p->val[PG_GRIT(0) * 4 + 2] = 0.15f;
-      p->val[PG_GRIT(0) * 4 + 3] = 0.3f;
+    if (bend) {                          // (the bits: CLOCK, BITS, a MASK)
+      p->val[PG_BEND(0) * 4 + 0] = 0.3f;
+      p->val[PG_BEND(0) * 4 + 1] = 0.3f;
+      p->val[PG_BEND(0) * 4 + 2] = 2.0f;
     }
     p->algo[PG_COMP] = static_cast<uint8_t>(bus);
     int extra = argc > 11 ? atoi(argv[11]) : 0;          // the effects' own costs: 1 T1's EQ, 2 the duck on T2..T4,

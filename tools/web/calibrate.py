@@ -5,13 +5,13 @@
 
 The engine is built for this computer as the FM-1 runs it, scalar (no vectorised loops: the FM-1 has none), and
 played under valgrind's callgrind (tools/web/calib.cc), which counts the instructions each part runs: every Plaits
-model and FM drum on its own, each filter (plain, with FM, with NOISE), the grit, Warps' algorithms (Eco, HQ), the
+model and FM drum on its own, each filter (plain, with FM, with NOISE), the bits (the bending's first page), Warps' algorithms (Eco, HQ), the
 effects with each master bus, the preparation (the sequencer, the LFOs, the cables). Counts, not times: they come
 out the same on any computer, and the FM-1's time has kept close to them. 0.5.8's stress test, measured on the FM-1
 (the machine page, its worst block: T1 20 %, T2 18, T3 20, T4 32, WP 22, FX 28, PREP 14) and counted here
 (e161509, scalar), gives the FM-1's microseconds a thousand instructions:
 
-    the voices (Plaits, the filters, the grit) 6.75   Warps 6.82   the effects and the bus 5.42   the preparation 17.2
+    the voices (Plaits, the filters, the bits) 6.75   Warps 6.82   the effects and the bus 5.42   the preparation 17.2
 
 (the preparation's code is branchy and spread out: the FM-1's cache misses it more). The table is those counts
 times those rates. What it cannot know: a model's own code size (the FM-1 reads its code from flash through a
@@ -53,7 +53,7 @@ def build():
 
 
 FUNCS = {"total": r"\beng_render\b", "tasks": r"run_task\(", "voice": r"render_voice\(", "plaits": r"\bmp_render\b",
-         "lx": r"\blx_render\b", "filter": r"\bmf_process\b", "grit": r"apply_grit\(", "warps": r"\bmw_render\b"}
+         "lx": r"\blx_render\b", "filter": r"\bmf_process\b", "bend": r"apply_bend\(", "warps": r"\bmw_render\b"}
 
 
 def count(exe, *args):
@@ -85,7 +85,7 @@ def main():
     for f in range(1, 5):                                # MF_LADDER..MF_VOX, under the VA (8)
         for v, (fm, nz) in enumerate(((0, 0), (0.5, 0), (0, 0.5))):
             jobs[f"filter{f}.{v}"] = ("one", 8, f, fm, nz, 0, 0, -1, 0, SECS)
-    jobs["grit"] = ("one", 8, 0, 0, 0, 1, 0, -1, 0, SECS)
+    jobs["bend"] = ("one", 8, 0, 0, 0, 1, 0, -1, 0, SECS)
     for b in range(3):
         jobs[f"bus{b}"] = ("one", 8, 0, 0, 0, 0, b, -1, 0, SECS)
     for e in (1, 2, 4):
@@ -101,7 +101,7 @@ def main():
     model = [k(res[f"model{m}"]["voice"] - 3 * rest, K_VOICE) for m in range(28)]
     filt = [[0.0, 0.0, 0.0]] + [[k(res[f"filter{f}.{v}"]["filter"] - va["filter"], K_VOICE) for v in range(3)]
                                 for f in range(1, 5)]
-    grit = k(res["grit"]["voice"] - va["voice"], K_VOICE)   # (apply_grit inlined in render_voice)
+    bend = k(res["bend"]["voice"] - va["voice"], K_VOICE)   # (apply_bend inlined in render_voice)
     fx = [k(res[f"bus{b}"]["tasks"] - (res[f"bus{b}"]["voice"] - 3 * rest), K_FX) for b in range(3)]
     st = res["stress"]                                   # (Warps in the mix, and what else the stress test's effects
     fx_s = k(st["tasks"] - st["voice"] - st["warps"], K_FX)   # do that these runs do not: the rest of its figure)
@@ -139,7 +139,8 @@ def main():
         base = filt[f][0]
         h.append(f"    {{{f1(base)}, {f1(max(filt[f][1] - base, 0.0))}, {f1(max(filt[f][2] - base, 0.0))}}},")
     h += ["};",
-          f"static const float kWebGrit = {f1(grit)};   /* the grit, one of its knobs up */",
+          f"static const float kWebBend = {f1(bend)};   /* the bits, one of their knobs up */",
+          "static const float kWebGlitch = 9.0f;   /* the glitch, taking or repeating its slice (estimated: a few loads a sample) */",
           "static const float kWebWarps[2][6] = {   /* Warps, its algorithm's mark (Eco, HQ) */",
           "    {" + ", ".join(f1(v) for v in warps[0]) + "},",
           "    {" + ", ".join(f1(v) for v in warps[1]) + "},",

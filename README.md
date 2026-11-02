@@ -7,8 +7,10 @@ et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la base de
 - un **filtre** par piste, quatre modèles d'après les meilleurs modèles virtuels analogiques ouverts : **LADDER**
   (l'échelle Moog), **MS-20** (Korg 35, la résonance qui drive), **SEM** (Oberheim) et **VOX** (des formants), en LP,
   BP ou HP, avec du bruit coloré dedans, une enveloppe à vactrol, un **ping** et une **FM** par sa propre sortie ;
-- **Plaits** sur chaque piste, ses 24 modèles au complet, et un **grit** par piste (drive doux, dur ou replié,
-  réduction de fréquence d'échantillonnage et de bits) ;
+- **Plaits** sur chaque piste, ses 24 modèles au complet, et un **circuit bending** par piste (0.7, à la place du
+  grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
+  allumés, inversés ou coupés, des formes numériques) et son **glitch** à la manière du Data Bender de Qu-Bit (des
+  répétitions calées au tempo, ralenties ou accélérées, des accidents) ;
 - **quatre batteries FM** comme modèles de piste en plus : les voix du **LXR-02** (son firmware est open source,
   GPL-3.0), grosse caisse et toms, caisse claire, cymbale et charleston, leur code tel quel (voir plus bas) ;
 - un **séquenceur pas à pas** à la Elektron, 64 pas par piste, avec P-locks, et deux modes de jeu : **KEY** (le
@@ -25,7 +27,7 @@ et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la base de
 - une **matrice de câbles** : les 3 LFO vers presque tous les paramètres, 8 câbles par piste et 8 globaux, posés en
   tenant la touche d'un LFO et en tournant un potard (en atténuverteur) ;
 - une **dose d'aléatoire** cachée (OCT− tenu, SELECT), sur son propre écran, qui relance tout le son à chaque trig
-  de chaque piste (hauteurs toujours dans la gamme, timbres, grit, filtres, pans, un envoi d'effet de temps en
+  de chaque piste (hauteurs toujours dans la gamme, timbres, bits et glitch, filtres, pans, un envoi d'effet de temps en
   temps), discrète au début de la course et folle au bout, le rend tel quel à 0, et dans son dernier quart ajoute des
   **fills** en fin de mesure ;
 - **trois effets, chacun avec sa propre piste de pas** : un **delay** inspiré des potards du Zen Delay (temps en
@@ -69,7 +71,7 @@ machine (le même moteur, les mêmes modules, les mêmes calculs en flottants si
 pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
 en quatre gestes, le chemin du son (un schéma), le panneau (chaque numéro allume son repère sur la machine ;
 « Repères » les montre tous), les 28 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
-et ce qu'ils modélisent, les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le grit,
+et ce qu'ils modélisent, les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le circuit bending,
 les effets, le séquenceur, la dose d'aléatoire, les spécifications, et des jauges de la charge du FM-1. « Essayer »,
 sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_try). Pour écouter MIFM1 sur un autre système (une
 voiture, des enceintes de studio) ou montrer la machine sans elle. Les potards se tournent en glissant vers le haut
@@ -83,7 +85,7 @@ est un modèle, où chaque partie avance celle du cœur qui la joue de ce qu'ell
 simulé avec la sienne. L'en-tête, la page machine (GLO, SELECT), le CPU des filtres et la répartition entre les deux
 cœurs lisent donc des temps de FM-1, et une ligne sous le panneau les résume. Le coût de chaque partie
 (`firmware/mi/web_costs.h`) vient des **instructions** qu'elle exécute, comptées par valgrind (`tools/web/calibrate.py`) :
-chaque modèle de Plaits et chaque batterie FM seuls, chaque filtre (avec et sans FM, avec et sans bruit), le grit,
+chaque modèle de Plaits et chaque batterie FM seuls, chaque filtre (avec et sans FM, avec et sans bruit), les bits,
 Warps (ses algorithmes, Eco et HQ), les effets avec chaque mode du bus, l'EQ, le duck, la préparation (séquenceur,
 LFO, câbles). Des instructions plutôt que des temps : ceux d'un ordinateur ne disent rien de ceux du FM-1 (le stress
 test de 0.5.8, mesuré sur les deux : de 9 à 89 fois plus lent selon la piste, l'ordinateur vectorisant certaines
@@ -114,7 +116,7 @@ effets.
 | 7-8 | T4 |
 | 9-10 | le retour des effets : delay et réverbe |
 
-Chaque piste sort après son niveau, son pan, son EQ et le duck, avec son grit et Warps (quand Warps prend la place
+Chaque piste sort après son niveau, son pan, son EQ et le duck, avec son circuit bending et Warps (quand Warps prend la place
 d'une piste, c'est lui qu'on entend sur elle), mais sans delay ni réverbe : ce sont des bus partagés, leur retour
 arrive sur 9-10. **La somme des 10 entrées, c'est le master avant son bus** (compresseur ou OTT, limiteur), à refaire
 dans le DAW si on le veut ; le master avec son bus n'est pas sur l'USB (la sortie casque l'a).
@@ -131,7 +133,7 @@ FM-1) n'est pas activé.
 passent par des signes au hasard dans les couleurs du thème avant de se poser, de gauche à droite), un trait de la
 troisième couleur se tire dessous, puis « 4-TRACK SYNTHESIS MACHINE » et la version : 1,8 s, qu'un bouton passe.
 
-Un FM-1 sans projet sauvegardé joue **la démo** (PLAY), un groove : piste 1 un kick sur les temps (un peu de grit,
+Un FM-1 sans projet sauvegardé joue **la démo** (PLAY), un groove : piste 1 un kick sur les temps (
 un double à la fin de la mesure) qui fait respirer (le duck) une basse Moog en piste 2, VIRTUAL ANALOG dans le filtre
 LADDER (son enveloppe à chaque note, un LFO triangle d'une mesure sur la coupure), qui roule sur les contretemps avec
 un riff de locks et un ratchet de temps en temps ; piste 3 le charleston FM sur toutes les doubles croches (decay et
@@ -147,7 +149,7 @@ annuler), *Stress test* ou *Stress test, on the 4 FM drums*. Le transport s'arr�
 
 **Le stress test** (GLO, SELECT, K1 sur *Stress test*, REC tenu) : un patch fixe, le même à chaque fois, qui démarre
 tout seul et laisse sous les yeux la page machine (la charge des cœurs, le pic, ce que coûte chaque piste) : pour
-comparer les versions entre elles. Une grosse caisse et une basse VA VCF passées au grit, des accords (CHORD) et un
+comparer les versions entre elles. Une grosse caisse et une basse VA VCF passées aux bits (et la piste 4 au glitch), des accords (CHORD) et un
 résonateur MODAL, chacun dans un des quatre filtres (depuis 0.5.8 : LADDER, MS-20, SEM avec sa FM, VOX pingé ; les
 chiffres montent donc par rapport aux versions d'avant), Warps (anneau à diodes, T3 par T2), OTT sur le bus, le delay et la réverbe nourris, le duck, les
 filtres, les trois LFO sur 20 câbles, des aléatoires, des locks et des ratchets. La sortie, la qualité de Warps (Eco
@@ -177,7 +179,7 @@ une note MIDI le fait sur le LXR-02 (un pas en do 3, octave 0, joue la hauteur d
 sur leur accord fin). Choisir une batterie FM remet l'OCTAVE de la piste à 0 (une piste de basse à −1 la jouerait une
 octave sous son kit). Un trig relance la voix (à pleine vélocité), son enveloppe fait le reste : GATE n'y change
 rien. Le charleston ouvert est un DECAY plus long : un lock sur DECAY. Les câbles, les locks, les aléatoires, la dose
-et le grit marchent sur elles comme sur Plaits. Leur code est celui du LXR-02, compilé tel quel (ce qui change pour le
+et le circuit bending marchent sur elles comme sur Plaits. Leur code est celui du LXR-02, compilé tel quel (ce qui change pour le
 FM-1 est listé dans `firmware/third_party/lxr/MIFM1.md`) : le LXR-02 calcule une partie en double précision, que le
 FM-1 n'a pas ; leur enveloppe d'amplitude garde exactement la valeur du double (vérifiée pas à pas), le reste passe
 en float, et `make lxr-check` compare les deux : 99,99 % des échantillons identiques à ceux du LXR-02, les autres à
@@ -202,7 +204,7 @@ En haut, à côté du nom du module, deux repères disent ce que font les deux e
 module**, une LED chacune (celle qu'on regarde allumée) entre deux petites flèches, quand il y en a plus d'une
 (SELECT les parcourt) ; et un **A cerclé** quand **ALGORITHM** change quelque chose ici : le modèle de la piste sur son
 son, le modèle du filtre sur son filtre, le mode du delay, du bus master, les algorithmes de Warps. Pas de A sur le
-grit ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'un filtre OFF sont grisés.
+circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'un filtre OFF sont grisés.
 
 | Contrôle | Effet |
 | --- | --- |
@@ -210,7 +212,7 @@ grit ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'un filtre OF
 | **SELECT** | les pages de ce qu'on regarde (les deux du son de la piste, les deux de son filtre, les faces d'un effet…), en glissant |
 | **ALGORITHM** | le type de ce qu'on a devant soi, là où il y a un choix (le A cerclé en haut) : sur le son de la piste, son modèle (les 24 de Plaits, puis les 4 batteries FM) ; sur son filtre, le modèle de filtre (OFF, LADDER, MS-20, SEM, VOX) ; sur Warps, d'un repère d'ALGO au suivant ; sur le delay, SYNC (vers la gauche) ou FREE (vers la droite) |
 | **PRESETS** | la piste active, de 1 à 4 |
-| **EDIT** | les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **GRIT**, son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son |
+| **EDIT** | les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
 | **SEQ** | les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) |
 | **ARP** | Endless, celui de la piste (voir plus bas) |
@@ -227,7 +229,7 @@ grit ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'un filtre OF
 | **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en noir sur la couleur du thème. Les réglages restent ; pendant 4 s (cinq carrés jaunes en bas), **GLO** les remet comme avant ALL au début de la mesure suivante (GLO encore avant la mesure : ils restent) |
 | **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage (avec GLO tenu aussi : sur les 4 pistes) |
 | **REC tenu** (pas) | efface la piste de pas affichée : ses trigs, ses locks, ses aléatoires (et les câbles d'une piste) |
-| **GLO + REC tenus 3 s** | **ERASE ALL**, depuis n'importe quelle page : tout revient comme dans un projet neuf (INIT) sauf **les quatre sons** (leurs modèles et leurs réglages : le son, l'enveloppe de Plaits, la gate, la hauteur), **le tempo, la gamme et sa tonique** : plus de pas, de locks, d'aléatoires (aucun potard RND), de câbles ni d'Endless ; les niveaux comme neufs, les pans au centre, pas de filtre (ni l'EQ, ni le filtre de piste : OFF), aucun envoi, le grit à zéro, les LFO, les effets (delay, réverbe, Warps coupé), le duck et le bus master comme neufs, pas de swing, la dose d'aléatoire à 0. La sortie, la qualité de Warps et le thème restent |
+| **GLO + REC tenus 3 s** | **ERASE ALL**, depuis n'importe quelle page : tout revient comme dans un projet neuf (INIT) sauf **les quatre sons** (leurs modèles et leurs réglages : le son, l'enveloppe de Plaits, la gate, la hauteur), **le tempo, la gamme et sa tonique** : plus de pas, de locks, d'aléatoires (aucun potard RND), de câbles ni d'Endless ; les niveaux comme neufs, les pans au centre, pas de filtre (ni l'EQ, ni le filtre de piste : OFF), aucun envoi, le circuit bending coupé, les LFO, les effets (delay, réverbe, Warps coupé), le duck et le bus master comme neufs, pas de swing, la dose d'aléatoire à 0. La sortie, la qualité de Warps et le thème restent |
 | **REC + SEL tenus 1,5 s** | efface **tous les câbles** (les modulations des LFO, de toutes les pistes et globales) |
 
 Les appuis tenus (SAVE, REC pour effacer ou charger, SEL pour la matrice) affichent en bas ce qu'ils vont faire et
@@ -329,15 +331,26 @@ COLUMN…). **ENV**, première page : l'enveloppe. Les modèles qui ont la leur 
 batteries, DECAY s'ajoute à leur decay (leur MORPH) : il marche sur toutes les pistes, avec ses locks et son
 aléatoire. Un potard grisé tourne toujours, mais ne change rien au son dans l'état présent.
 
-**Le grit** (EDIT, deuxième ensemble de la piste) : ce qui salit la voix de la piste, avant Warps et le mixer.
-**DRIVE** monte le gain des petits signaux jusqu'à ×25 (la pleine échelle reste la pleine échelle) à travers une
-**SHAPE** : Soft (une saturation douce), Hard (écrêtée) ou Fold (ce qui dépasse repart dans l'autre sens, comme un
-wavefolder). **RATE** garde chaque échantillon un moment (un sample & hold : de 44,1 kHz jusqu'à 689 Hz, le repliement
-voulu) et **BITS** arrondit les échantillons (de 16 bits à 2 : à fond, une voix discrète disparaît dans le premier
-pas). Chacun n'agit que relevé ; le tout se locke pas par pas, a son aléatoire et un LFO peut le moduler. L'écran
-montre ce que les réglages font d'une sinusoïde.
+**Le circuit bending** (EDIT, deuxième ensemble de la piste ; 0.7, à la place du grit) : de quoi casser le son,
+musicalement. **Première page, les bits**, avant le filtre, à la manière du Biscuit d'OTO Machines (une boîte 8 bits
+avec un interrupteur par bit) : **CLOCK** retient chaque échantillon (un sample & hold) sur un multiple de la note
+jouée, de x48 à x2 : le repliement reste accordé ; **BITS** arrondit les échantillons, de 12 bits à 1 ; **MASK** lit
+chaque échantillon comme un mot de 8 bits et allume, inverse ou coupe ses bits (douze masques : les bits bas coupés ou
+inversés, des trous au milieu, le bit de signe inversé, trois bits seulement, un peigne… ; la partie sous le mot est
+gardée tant que son dernier bit n'est pas coupé) ; **SHAPE**, une forme numérique d'abord : Rect (redressé, une octave
+au-dessus), Down et Down 3 (le signe retourné tous les deux ou trois cycles, comme un diviseur : une octave, une
+octave et une quinte en dessous), Fold (replié) ou Swap (les deux moitiés du mot échangées). Un condensateur de
+liaison enlève le continu qu'un redresseur ou un bit retourné laissent. L'écran montre ce que les bits font d'une
+sinusoïde et les huit interrupteurs (allumé, inversé, coupé). **Deuxième page (SELECT), le glitch**, après le
+filtre, à la manière du Data Bender de Qu-Bit : à chaque double croche, **GLITCH** est la chance que la piste bégaie ;
+elle prend alors une tranche du son qui passe (**SIZE** : 1/64, 1/32, 1/16 ou 1/8, divisée par deux tant qu'elle ne
+tient pas dans la mémoire) et la rejoue jusqu'à ce qu'une double croche en décide autrement ; **BEND** rend chaque
+répétition plus lente et plus grave (une bande qui s'arrête) ou plus rapide et plus aiguë ; **DROP** est la chance
+qu'une répétition ait un accident (jouée à l'envers ou un trou). Les tranches sont gardées en 8 bits mu-law à
+22,05 kHz, 4 Ko par piste (186 ms : le FM-1 n'a plus de mémoire à donner), un peu lo-fi, comme un sampler tordu.
+Tout se locke pas par pas, a son aléatoire, et les potards continus se modulent par les câbles.
 
-**Le filtre** (EDIT, troisième ensemble de la piste : après le grit, avant Warps et le mixer). **ALGORITHM** choisit le
+**Le filtre** (EDIT, troisième ensemble de la piste : entre les bits et le glitch, avant Warps et le mixer). **ALGORITHM** choisit le
 modèle (GLO tenu : sur les quatre pistes). OFF par défaut : il ne coûte alors rien, et ses potards sont grisés.
 
 | Modèle | D'où il vient | Types (TYPE) | Ce que DRIVE y fait |
@@ -426,7 +439,8 @@ ce qui en sortirait n'est jamais tiré : l'enveloppe de hauteur (son glissando),
 qui sonne à n'importe quelle hauteur), HARMONICS là où c'est un intervalle (les accords de CHORD, STRING MACHINE et
 CHIPTUNE, le désaccord du VIRTUAL ANALOG, l'écart de SWARM et de PARTICLE), le décalage de Warps en décaleur de
 fréquence. Le reste : HARMONICS ailleurs, TIMBRE, MORPH, DECAY, COLOUR et les enveloppes de Plaits (sur une batterie
-FM, ses réglages), la gate, le grit entier (DRIVE, SHAPE, RATE, BITS : à forte dose, une note sur deux sale), le
+FM, ses réglages), la gate, les bits (CLOCK, BITS, MASK, SHAPE) et le glitch (GLITCH, SIZE, BEND, DROP : à forte dose, des notes qui
+bégaient), le
 filtre (CUTOFF jusqu'à ±3,4 octaves, RESO, ENV, DECAY, DRIVE, FM, KEY, NOISE, COLOR, ATTACK ; au-delà de 60 % son
 TYPE aussi, LP, BP ou HP, sur un trig sur deux à 100 % ; pas son modèle : un filtre OFF le reste, son CPU avec),
 l'EQ et le pan. **Les envois d'effets**, de temps en temps et légèrement : à 100 %, un trig sur sept environ part
@@ -470,7 +484,7 @@ qualité de Warps, le thème reste quand on charge un autre projet ; il est gard
 Un projet sauvegardé avec les 0.1.4 à 0.2.6 se recharge : ses réglages, ses modèles, ses câbles (sauf ceux qui
 partaient de Marbles), ses pas, ses locks et Endless ; le tempo de Marbles devient le tempo, et les effets nouveaux
 démarrent neutres (rien vers le delay, aucune piste de pas d'effet). Ceux des 0.3 aussi (l'EQ y est à plat, le grit
-coupé). En 0.4, les deux Tides laissent la place aux trois LFO : les câbles qui partaient de Tides A1, A2 et A3
+coupé ; depuis 0.7, le grit d'un projet plus ancien est oublié : le circuit bending prend sa place, coupé). En 0.4, les deux Tides laissent la place aux trois LFO : les câbles qui partaient de Tides A1, A2 et A3
 partent des LFO 1, 2 et 3, les autres sont retirés, et les LFO démarrent comme ceux d'un projet neuf ; les potards de
 Warps passent sur leurs nouvelles faces (MIX à 100 %, DRY et Freq shift dans MODE), avec leurs locks et leurs
 aléatoires ; le delay est en SYNC.

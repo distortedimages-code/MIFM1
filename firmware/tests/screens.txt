@@ -1,5 +1,5 @@
 # MIFM1 in fm1-base's host simulator: the intro at power-on, the default patch playing, the pages (a face sliding in), a knob turned, a
-# track's sets (its sound's second page, ENV's two pages, EDIT to its grit, its filter: the models, TYPE, its second page), a Euclidean rhythm, the three LFOs, the mixer's filters, the effects (the delay, FREE too, the reverb,
+# track's sets (its sound's second page, ENV's two pages, EDIT to its bending (the bits, the glitch), its filter: the models, TYPE, its second page), a Euclidean rhythm, the three LFOs, the mixer's filters, the effects (the delay, FREE too, the reverb,
 # Warps, their steps), a cable made in MOD mode (hold an LFO's key, turn a knob), the random dose (OCT- held,
 # SELECT: its own screen, its fills), the matrix, every cable erased (REC and SEL held), the global page (the machine: Warps HQ, another theme), STEP mode (REC: a step held and locked, the lanes on
 # the black keys, the delay's lane and a lock on its time, the pages on OCT- OCT+), the RANDOM page, ENV held, GLO
@@ -40,13 +40,25 @@ shot 05a2_edit_sound.png
 tap EDIT
 wait 400
 turn K1 25
-turn K3 20
-turn K4 20
+turn K2 18
+turn K3 5
+turn K4 4
 wait 400
-shot 05b_grit.png
+shot 05b_bits.png
 turn K1 -25
-turn K3 -20
-turn K4 -20
+turn K2 -18
+turn K3 -5
+turn K4 -4
+turn SELECT 1
+wait 400
+turn K1 30
+turn K3 8
+turn K4 10
+wait 1500
+shot 05b2_glitch.png
+turn K1 -30
+turn K3 -8
+turn K4 -10
 tap EDIT
 wait 400
 shot 05c_filter_off.png

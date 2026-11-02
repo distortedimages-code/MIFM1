@@ -143,10 +143,11 @@ static project_t scratch;                /* a project read or made before it rep
 #define VP_ENV2(t) (ENG_NPAGES + 16 + (t))
 #define VP_SYS (ENG_NPAGES + 20)
 enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS };
-/* a track's pages in four sets: EDIT goes from one to the next of the first three (its sound, its grit, its filter),
+/* a track's pages in four sets: EDIT goes from one to the next of the first three (its sound, its bending: the bits
+ * and the glitch, its filter),
  * ENV to the envelopes; SELECT through a set's pages; ALGO changes what the page shows (the sound's model, the
  * filter's), where there is a choice */
-enum { CAT_NONE, CAT_SOUND, CAT_GRIT, CAT_FILTER, CAT_ENV };
+enum { CAT_NONE, CAT_SOUND, CAT_BEND, CAT_FILTER, CAT_ENV };
 static const uint8_t RND_TP[4] = {TP_PAN, TP_DECAY, TP_NOTE, TP_RATCHET};   /* the RANDOM page's knobs */
 static const char *const RND_NAME[4] = {"Pan", "Decay", "Tune", "Ratch"};
 
@@ -211,7 +212,7 @@ static int track_cat(int page)           /* the set a track's page is in */
     switch (ptype(page)) {
     case PT_PLAITS1: case PT_PLAITS3: case PT_SON2: return CAT_SOUND;
     case PT_PLAITS2: return drum_track(ptrack(page)) ? CAT_SOUND : CAT_ENV;   /* (an FM drum's knobs 4..7) */
-    case PT_GRIT: return CAT_GRIT;
+    case PT_BEND: case PT_GLITCH: return CAT_BEND;
     case PT_VFLT1: case PT_VFLT2: case PT_FILT1: case PT_FILT2: case PT_FILT3: return CAT_FILTER;
     case PT_ENV2: return CAT_ENV;
     default: return CAT_NONE;
@@ -229,7 +230,7 @@ static int cat_pages(int cat, int t, int *f)   /* a set's pages on track t, in o
         }
         f[1] = VP_SON2(t);
         return 2;
-    case CAT_GRIT: f[0] = PG_GRIT(t); return 1;
+    case CAT_BEND: f[0] = PG_BEND(t); f[1] = PG_GLITCH(t); return 2;
     case CAT_FILTER: f[0] = VP_FLT1(t); f[1] = VP_FLT2(t); return 2;
     default:
         if (drum_track(t)) {             /* (an FM drum: its own envelopes; the filter's) */
@@ -257,7 +258,7 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
 {
     int t = ptrack(page);
     switch (ptype(page)) {
-    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_GRIT: case PT_FILT1: case PT_FILT2: case PT_FILT3:
+    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_BEND: case PT_GLITCH: case PT_FILT1: case PT_FILT2: case PT_FILT3:
     case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2:
         return cat_pages(track_cat(page), t, f);
     case PT_LFO:                         /* the three LFOs */
@@ -316,7 +317,7 @@ static int page_first(int page)
     return f[0];
 }
 /* the page whose ALGORITHM the encoder turns from this one (-1: none): the sound's model on its pages, the filter's on
- * its, a module's own on its first page (the delay's mode, the bus's); not the grit, not the envelopes */
+ * its, a module's own on its first page (the delay's mode, the bus's); not the bending, not the envelopes */
 static int algo_page(int page)
 {
     int c = track_cat(page);
@@ -419,10 +420,10 @@ static const char *knob_name(int page, int k, int param)   /* its name: the para
 static const char *module_name(int page)
 {
     switch (ptype(page)) {
-    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_GRIT: case PT_FILT1: case PT_FILT2: case PT_FILT3:
+    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_BEND: case PT_GLITCH: case PT_FILT1: case PT_FILT2: case PT_FILT3:
     case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2: {
         int c = track_cat(page);
-        return c == CAT_GRIT ? "Grit" : c == CAT_FILTER ? "Filter" : c == CAT_ENV ? "Envelope"
+        return c == CAT_BEND ? "Bend" : c == CAT_FILTER ? "Filter" : c == CAT_ENV ? "Envelope"
                                                                         : drum_track(ptrack(page)) ? "FM drum" : "Plaits";
     }
     case PT_LFO: {
@@ -477,7 +478,7 @@ static uint16_t page_accent(int page)
     case PT_DUCK: return track_accent(0);    /* T1's: it ducks the others */
     case PT_COMP: return AC2;
     case PT_OTT: return AC3;
-    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_GRIT: case PT_FILT1: case PT_FILT2: case PT_FILT3:
+    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_BEND: case PT_GLITCH: case PT_FILT1: case PT_FILT2: case PT_FILT3:
     case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2:
         return model_accent(p->algo[PG_TRACK(ptrack(page), 0)]);
     case PT_EUC: return lane_accent(eng_page_lane(page));
@@ -904,7 +905,7 @@ typedef struct {
 } vop_t;
 enum { IC_MODEL = 0, IC_WAVE = ENG_MODELS, IC_MIX = IC_WAVE + LW_N, IC_REV, IC_GLO, IC_NEW, IC_DEMO, IC_SAVED, IC_STRESS,
        IC_STEPS, IC_DICE,
-       IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, IC_EQ, IC_GRIT, IC_EUC, NICON };
+       IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, IC_EQ, IC_BEND, IC_EUC, NICON };
 #define IOPS 10
 static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 4, 24, 12, 8}, {'L', 12, 8, 12, 24}, {'L', 12, 24, 20, 8}, {'L', 20, 8, 20, 24}, {'L', 20, 24, 28, 16}},
@@ -986,8 +987,9 @@ static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 5, 27, 27, 27}, {'L', 5, 27, 5, 5}, {'L', 5, 27, 16, 14}, {'L', 16, 14, 27, 10}},        /* a knee */
     {{'R', 4, 14, 6, 12}, {'R', 13, 8, 6, 18}, {'R', 22, 12, 6, 14}, {'L', 4, 6, 28, 6}},            /* OTT: 3 bands */
     {{'L', 4, 26, 9, 11}, {'L', 9, 11, 23, 11}, {'L', 23, 11, 28, 26}, {'L', 16, 5, 16, 8}},         /* the filters */
-    {{'L', 4, 22, 10, 22}, {'L', 10, 22, 10, 10}, {'L', 10, 10, 16, 10}, {'L', 16, 10, 16, 6},
-     {'L', 16, 6, 22, 6}, {'L', 22, 6, 22, 24}, {'L', 22, 24, 28, 24}},                              /* the grit */
+    {{'L', 4, 11, 12, 11}, {'L', 12, 11, 16, 4}, {'L', 16, 4, 16, 11}, {'L', 16, 11, 28, 11},
+     {'R', 4, 18, 6, 7}, {'R', 13, 18, 6, 7}, {'D', 25, 21, 2, 0}},                                  /* the bending: a
+                                                                                                     * bent line, bits */
     {{'C', 16, 16, 10, 0}, {'D', 16, 6, 3, 0}, {'D', 25, 21, 3, 0}, {'D', 7, 21, 3, 0}},           /* Euclid */
 };
 
@@ -1465,7 +1467,6 @@ static void panel_eq(void)
     }
 }
 
-/* the grit: its settings, and what they make of a sine (a cycle, 200 samples, over 84 px) */
 /* the filter (PG_FILT): its response as it is now (its cutoff moved by the envelope, FM, the key) in the ring, its
  * model, its type and the cutoff in Hz; OFF: what ALGO does */
 static float filt_db(int m, int ty, float w, float q)   /* its response at w (the cutoff's multiple), dB, a sketch */
@@ -1593,62 +1594,110 @@ static void panel_env2(int t, uint16_t ac)
         seg(87.0f, (float)y0, 87.0f, (float)y0 - (float)h * (0.3f + 0.7f * ping), 2.0f, on ? HI : DIM);
 }
 
-static void panel_grit(int t)
+/* the bending's bits (CLOCK, BITS, MASK, SHAPE): a cycle of a sine through them, as the engine has them now, and
+ * the 8-bit word's switches as Biscuit shows them (the most significant first): lit on, the accent inverted, dim
+ * muted */
+static void panel_bend(int t)
 {
     char s[48], v[16];
-    float d = eng_final(PG_GRIT(t) * 4), r = eng_final(PG_GRIT(t) * 4 + 2), b = eng_final(PG_GRIT(t) * 4 + 3);
-    int shape = (int)(eng_final(PG_GRIT(t) * 4 + 1) + 0.5f);
-    hero_icon(IC_GRIT, track_accent(t));
-    int y = hero_title("GRIT");
+    int pg = PG_BEND(t);
+    float ck = eng_final(pg * 4), cr = eng_final(pg * 4 + 1);
+    int mask = (int)(eng_final(pg * 4 + 2) + 0.5f), shape = (int)(eng_final(pg * 4 + 3) + 0.5f);
+    uint16_t c = track_accent(t);
+    hero_icon(IC_BEND, c);
+    int y = hero_title("BITS");
     s[0] = 0;
-    if (d < 0.005f && r < 0.005f && b < 0.005f) {
-        text_cat(s, "OFF", sizeof s);
+    if (ck < 0.005f && cr < 0.005f && !mask && !shape) {
+        text_cat(s, "CLEAN", sizeof s);
     } else {
-        eng_param_text(PG_GRIT(t) * 4 + 1, (float)shape, v, sizeof v);
-        text_cat(s, d < 0.005f ? "CLEAN" : v, sizeof s);
-        eng_param_text(PG_GRIT(t) * 4 + 2, r, v, sizeof v);
+        eng_param_text(pg * 4, ck, v, sizeof v);
+        text_cat(s, ck < 0.005f ? "CLOCK OFF" : v, sizeof s);
         text_cat(s, "|", sizeof s);
+        eng_param_text(pg * 4 + 1, cr, v, sizeof v);
         text_cat(s, v, sizeof s);
-        eng_param_text(PG_GRIT(t) * 4 + 3, b, v, sizeof v);
         text_cat(s, "|", sizeof s);
+        eng_param_text(pg * 4 + 2, (float)mask, v, sizeof v);
         text_cat(s, v, sizeof s);
+        if (shape) {
+            text_cat(s, "|", sizeof s);
+            eng_param_text(pg * 4 + 3, (float)shape, v, sizeof v);
+            text_cat(s, v, sizeof s);
+        }
     }
     char u[48];
-    label_text(s, u, sizeof u);          /* (the knobs' words: in capitals here) */
+    label_text(s, u, sizeof u);
     hero_line(y, u);
-    const int x0 = 150, w = 84, yc = 22;  /* (over the line under the name: it runs long) */
-    uint16_t c = track_accent(t);
+    const int x0 = 150, w = 84, yc = 20;
+    float wave[85];
+    eng_bend_preview(t, wave, w + 1);
     cv_rect(x0, yc, w + 1, 1, RULE);
-    float k = 24.0f * d * d, rate = r < 0.005f ? 1.0f : fm_exp2f(-6.0f * r), q = b < 0.005f ? 0.0f : fm_exp2f(15.0f - 14.0f * b);
-    float hold = 0.0f, cnt = 1.0f;
     int py = yc;
     for (int i = 0; i <= w; i++) {
-        float x = 0.8f * fm_sinf(6.2831853f * (float)i / (float)w);
-        if (k > 0.0f) {
-            if (shape == GS_HARD) {
-                x = fm_clampf((1.0f + k) * x, -1.0f, 1.0f);
-            } else if (shape == GS_FOLD) {
-                float u = ((1.0f + k) * x + 1.0f) * 0.25f;
-                u -= fm_floorf(u);
-                x = 1.0f - 4.0f * fm_fabsf(u - 0.5f);
-            } else {
-                x = (1.0f + k) * x / (1.0f + k * fm_fabsf(x));
-            }
-        }
-        cnt += rate * 2.38f;             /* (200 samples over 84 px) */
-        if (cnt >= 1.0f) {
-            cnt -= fm_floorf(cnt);
-            hold = x;
-        }
-        x = hold;
-        if (q > 0.0f)
-            x = fm_floorf(x * q + 0.5f) / q;
-        int yy = yc - (int)(x * 17.0f + (x < 0.0f ? -0.5f : 0.5f));
+        int yy = yc - (int)(wave[i] * 15.0f + (wave[i] < 0.0f ? -0.5f : 0.5f));
         if (i) {
             cv_line(x0 + i - 1, py, x0 + i, yy, c);
             cv_line(x0 + i - 1, py + 1, x0 + i, yy + 1, c);
         }
         py = yy;
+    }
+    uint8_t inv = 0, cut = 0;            /* the switches, under the line */
+    eng_bend_mask(t, &inv, &cut);
+    for (int b = 7; b >= 0; b--) {
+        int x = 85 + (7 - b) * 13, m = 1 << b;
+        if (cut & m) {
+            cv_rect(x, 62, 10, 1, DIM), cv_rect(x, 70, 10, 1, DIM), cv_rect(x, 62, 1, 9, DIM), cv_rect(x + 9, 62, 1, 9, DIM);
+        } else {
+            cv_rect(x, 62, 10, 9, (inv & m) ? c : MUTED);
+        }
+    }
+    cv_text(85 + 8 * 13 + 4, 60, &FONT_XS, "MSB  LSB", DIM);
+}
+
+/* the bending's glitch (GLITCH, SIZE, BEND, DROP): its chance, then a beat of what it does, the slice repeated its
+ * size wide, each repeat lower or higher (BEND), the dropped ones dotted (DROP); lit while it repeats */
+static void panel_glitch(int t)
+{
+    char s[48], v[16];
+    int pg = PG_GLITCH(t), reps = 0;
+    float sp = 1.0f;
+    float gl = eng_final(pg * 4), bend = eng_final(pg * 4 + 2), drop = eng_final(pg * 4 + 3);
+    int size = (int)(eng_final(pg * 4 + 1) + 0.5f), st = eng_glitch_state(t, &reps, &sp);
+    uint16_t c = track_accent(t);
+    hero_icon(IC_BEND, st == 2 ? HI : c);
+    int y = hero_title("GLITCH");
+    s[0] = 0;
+    if (gl < 0.005f) {
+        text_cat(s, "OFF", sizeof s);
+    } else {
+        eng_param_text(pg * 4, gl, v, sizeof v);
+        text_cat(s, v, sizeof s);
+        text_cat(s, "|", sizeof s);
+        eng_param_text(pg * 4 + 1, (float)size, v, sizeof v);
+        text_cat(s, v, sizeof s);
+        text_cat(s, "|", sizeof s);
+        eng_param_text(pg * 4 + 2, bend, v, sizeof v);
+        text_cat(s, v, sizeof s);
+    }
+    char u[48];
+    label_text(s, u, sizeof u);
+    hero_line(y, u);
+    const int x0 = 85, w = 148, yb = 74;  /* a beat under the line: the slices, each repeat's height its pitch */
+    static const int SW[4] = {9, 18, 37, 74};
+    int sw = SW[size < 0 ? 0 : size > 3 ? 3 : size];
+    float h = 7.0f, mult = fm_exp2f(bend * 0.5f);
+    uint32_t r = 0x9E3779B9u;
+    cv_rect(x0, yb, w + 1, 1, RULE);
+    for (int x = x0, i = 0; x + 2 <= x0 + w; x += sw, i++) {
+        r = r * 1664525u + 1013904223u;
+        int dropped = i > 0 && (float)(r >> 8) * (1.0f / 16777216.0f) < drop;
+        int hh = (int)fm_clampf(h, 2.0f, 14.0f), ww = sw - 2 < 1 ? 1 : sw - 2;
+        uint16_t col = gl < 0.005f ? DIM : (st == 2 && i <= reps) ? HI : i == 0 ? c : tint(c, BG, 5);
+        if (dropped) {
+            for (int k = 0; k < ww; k += 3) cv_rect(x + k, yb - hh, 1, 1, col);
+        } else {
+            cv_rect(x, yb - hh, ww, hh, col);
+        }
+        if (i > 0) h *= mult;
     }
 }
 
@@ -1961,10 +2010,19 @@ static void draw_panel(void)
         s[2] = (int)p->val[PG_GLOBAL * 4 + 1] | (int)p->val[PG_GLOBAL * 4 + 2] << 4 |
                (int)(p->val[PG_GLOBAL * 4 + 3] * 100.0f) << 8 | (int)(p->val[PG_GLOBAL * 4] * 1000.0f) << 16;
         break;
-    case PT_GRIT:
+    case PT_BEND:
         for (int k = 0; k < 4; k++)
             s[2] = s[2] * 131 + (int)(eng_final(ui.page * 4 + k) * 100.0f);
         break;
+    case PT_GLITCH: {                    /* (its knobs, and the glitch as it plays: taking, repeating, how many) */
+        int reps = 0;
+        float sp = 1.0f;
+        int st = eng_glitch_state(tr, &reps, &sp);
+        for (int k = 0; k < 4; k++)
+            s[2] = s[2] * 131 + (int)(eng_final(ui.page * 4 + k) * 100.0f);
+        s[2] = s[2] * 7 + st + 3 * (reps & 15);
+        break;
+    }
     case PT_SON2: {
         int pg = PG_TRACK(tr, 2);
         s[2] = eng_note(tr) | (int)((eng_gates() >> tr) & 1u) << 8 | (int)(eng_final(pg * 4) * 50.0f + 50.0f) << 9;
@@ -2024,7 +2082,8 @@ static void draw_panel(void)
     case PT_LFO: panel_lfo(ui.page - PG_LFO(0)); break;
     case PT_MIX: case PT_PAN: panel_mixer(pt == PT_PAN); break;
     case PT_EQ: panel_eq(); break;
-    case PT_GRIT: panel_grit(tr); break;
+    case PT_BEND: panel_bend(tr); break;
+    case PT_GLITCH: panel_glitch(tr); break;
     case PT_VFLT1: case PT_VFLT2: panel_filter(tr, page_accent(ui.page)); break;
     case PT_EUC: panel_euclid(eng_page_lane(ui.page)); break;
     case PT_DUCK: panel_duck(); break;
@@ -3493,10 +3552,10 @@ static void module_button(int b)
 {
     int pt = ptype(ui.page), here = !ui.matrix, next = page_at(ui.page, page_face(ui.page) + 1);
     switch (b) {
-    case B_EDIT: {                       /* the track's sets: its sound, then its grit, its filter (from anywhere else:
-                                          * its sound) */
+    case B_EDIT: {                       /* the track's sets: its sound, then its bending, its filter (from anywhere
+                                          * else: its sound) */
         int c = here ? track_cat(ui.page) : CAT_NONE, f[MAXFACES];
-        cat_pages(c == CAT_SOUND ? CAT_GRIT : c == CAT_GRIT ? CAT_FILTER : CAT_SOUND, ui.track, f);
+        cat_pages(c == CAT_SOUND ? CAT_BEND : c == CAT_BEND ? CAT_FILTER : CAT_SOUND, ui.track, f);
         go_page(f[0]);
         (void)next;
         break;
@@ -3607,7 +3666,7 @@ static void erase_all(void)              /* GLO and REC held 3 s: the project as
                                           * sound, the envelope, the pitch), the tempo, the scale and its root, and
                                           * the machine's settings (the output, Warps' quality, the colours). So: no
                                           * steps, locks, randoms, cables or Endless; the levels as new, the pans in
-                                          * the middle, no filter, no send, the grit off, the LFOs, the effects, the
+                                          * the middle, no filter, no send, the bending off, the LFOs, the effects, the
                                           * duck and the bus as new, no swing, the random dose at 0 */
 {
     project_t *p = eng_project();
@@ -4082,7 +4141,7 @@ static void input(void)
             [PT_MIX] = B_HOME, [PT_PAN] = B_HOME, [PT_REVERB] = B_FX, [PT_RSEND] = B_FX, [PT_DELAY1] = B_FX,
             [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
             [PT_ARP] = B_ARP, [PT_WARPS1] = B_FX, [PT_WARPS2] = B_FX, [PT_DUCK] = B_HOME, [PT_COMP] = B_HOME,
-            [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_GRIT] = B_EDIT, [PT_EUC] = B_SEQ, [PT_RND] = B_SEQ,
+            [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_BEND] = B_EDIT, [PT_GLITCH] = B_EDIT, [PT_EUC] = B_SEQ, [PT_RND] = B_SEQ,
             [PT_FILT1] = B_EDIT, [PT_FILT2] = B_EDIT, [PT_FILT3] = B_EDIT, [PT_SON2] = B_EDIT, [PT_VFLT1] = B_EDIT,
             [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;

@@ -41,7 +41,8 @@ static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, 
     {54.7f, 67.9f, 28.5f},
     {110.1f, 151.5f, 31.1f},
 };
-static const float kWebGrit = 30.9f;   /* the grit, one of its knobs up */
+static const float kWebBend = 30.9f;   /* the bits, one of their knobs up (0.7: the grit's, measured so) */
+static const float kWebGlitch = 9.0f;   /* the glitch, taking or repeating its slice (estimated: a few loads a sample) */
 static const float kWebWarps[2][6] = {   /* Warps, its algorithm's mark (Eco, HQ) */
     {569.6f, 567.0f, 637.7f, 538.2f, 585.4f, 602.8f},
     {983.6f, 978.4f, 1119.7f, 920.9f, 1015.1f, 1050.0f},
