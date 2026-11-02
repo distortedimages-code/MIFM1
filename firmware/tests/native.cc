@@ -2333,6 +2333,36 @@ int main(int argc, char** argv) {
       ++failures, printf("FAIL: ZERO\n");
   }
 
+  // 43. the dose (0.8.3) moves what is on, never turns on what costs once on: T1's filter (SEM) with FM 0, DRIVE 0,
+  // NOISE 0, its bits and glitch off: at 100 %, 64 trigs, they stay at 0; T2's with FM, DRIVE and NOISE up: moved
+  {
+    eng_play(0);
+    eng_blank(p);
+    eng_fresh();
+    for (int t = 0; t < 2; ++t) {
+      p->algo[PG_FILT(t, 0)] = MF_SEM;
+      for (int s2 = 0; s2 < 16; ++s2) eng_trig_set(t, s2, 1);
+    }
+    int pf = eng_track_param(1, TP_FM), pd = eng_track_param(1, TP_FDRIVE), pn = eng_track_param(1, TP_NOISE);
+    p->val[pf] = 0.3f, p->val[pd] = 0.4f, p->val[pn] = 0.3f;
+    p->dice = 100;
+    p->dice_seed = 3;
+    static const int kOff[8] = {TP_FDRIVE, TP_FM, TP_NOISE, TP_CLOCK, TP_CRUSH, TP_MASK, TP_BSHAPE, TP_GLITCH};
+    float on_t1 = 0.0f, moved_t2 = 0.0f;
+    eng_play(1);
+    for (int b = 0; b < 344 * 8; ++b) {
+      eng_render(l, r, n);
+      for (int i = 0; i < 8; ++i) on_t1 = std::max(on_t1, std::fabs(eng_now(eng_track_param(0, kOff[i]))));
+      moved_t2 = std::max(moved_t2, std::fabs(eng_now(pf) - 0.3f) + std::fabs(eng_now(pd) - 0.4f));
+    }
+    eng_play(0);
+    p->dice = 0;
+    printf("the dose at 100 %%: what is off stays off (%.3f at most), what is on moves (%.2f)\n", on_t1, moved_t2);
+    if (on_t1 > 0.0f || moved_t2 < 0.05f) ++failures, printf("FAIL: the dose's costly parts\n");
+    eng_defaults(p);
+    eng_fresh();
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

@@ -400,7 +400,8 @@ float src_value(int s) { return s > SRC_NONE && s < NSRC ? src[s] : 0.0f; }
 // its TYPE too, on a trig in two at 100 %), the EQ, the pan, the effects' colours (the delay's feedback, filter,
 // drive, resonance, wow; the reverb's; Warps' ALGORITHM but as a frequency shift, TIMBRE and levels). Nothing that
 // leaves the scale (the pitch envelope, a ringing filter's ping, a shift), the levels, the time (divisions, rates,
-// lengths, tempo), the scale, the patching; not the filter's model (OFF stays OFF: its CPU). The sends (0.5.7: the
+// lengths, tempo), the scale, the patching; not the filter's model (OFF stays OFF: its CPU), nor its DRIVE, FM,
+// NOISE, the bits and the glitch where they are off (0.8.3: dice_costly, their CPU too). The sends (0.5.7: the
 // sound thrown, not drowned in the effects) only now and then, lightly: a trig in seven at 100 %, into one effect
 float dice_span(int param) {
   if (param < 0 || param >= ENG_NPARAMS) return 0.0f;
@@ -430,6 +431,15 @@ float dice_span(int param) {
   }
 }
 
+// what the dose moves but never turns on (0.8.3): the filter's DRIVE, FM and NOISE, the bits and the glitch, where
+// they are off (their knob, lock and random at 0) they stay off. Each costs the FM-1 a lot once on (the FM: the
+// filter's coefficients every sample, 2 to 5 % of a block a track); thrown on everywhere at 100 %, they took the
+// stress test from 79 to 89 % a core (counted), its worst block over the edge. Where they are on, thrown as ever
+int dice_keeps_off = 1;
+inline int dice_costly(int tp) {
+  return tp == TP_FDRIVE || tp == TP_FM || tp == TP_NOISE || tp == TP_CLOCK || tp == TP_CRUSH || tp == TP_MASK ||
+         tp == TP_BSHAPE || tp == TP_GLITCH;
+}
 float rand01();
 int dice_type[ENG_TRACKS] = {-1, -1, -1, -1};   // a track's filter TYPE as this trig's dose threw it (-1: its knob's)
 // the spans, in RAM (made once, eng_init: dice_span asks the flash's tables): a track's parameters', in 0.05s; the
@@ -707,6 +717,8 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
       int iv = dice_interval(proj.algo[PG_TRACK(lane, 0)]);
       for (int tp = 0; tp < ENG_NTP; ++tp) {
         if (!tp_dice[lane][tp] || (tp == 1 && iv)) continue;
+        if (dice_keeps_off && dice_costly(tp) &&
+            fm_fabsf(fin[eng_track_param(lane, tp)] + tdelta[lane][tp]) < 0.005f) continue;
         float off = a * 0.05f * static_cast<float>(tp_dice[lane][tp]) * (2.0f * rand01() - 1.0f);   // (in 0.05s)
         if (tp == 0) off = static_cast<float>(iround(off * 24.0f)) * (1.0f / 24.0f);   // FREQ: whole semitones
         tdelta[lane][tp] += off;
