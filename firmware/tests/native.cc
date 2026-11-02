@@ -1208,10 +1208,11 @@ int main(int argc, char** argv) {
       far50 = std::max(far50, std::fabs(d50[i]));
     }
     int keep[] = {PG_MIX * 4 + 0, PG_PAN * 4 + 1, PG_GLOBAL * 4 + 0, PG_GLOBAL * 4 + 2, PG_LFO(0) * 4 + 1,
-                  PG_DELAY(0) * 4 + 0, PG_WARPS(0) * 4 + 0, PG_WARPS(0) * 4 + 3, PG_STEP(0) * 4 + 0, PG_EUC(0) * 4 + 0};
+                  PG_DELAY(0) * 4 + 0, PG_WARPS(0) * 4 + 0, PG_WARPS(0) * 4 + 3, PG_STEP(0) * 4 + 0, PG_EUC(0) * 4 + 0,
+                  PG_RSEND * 4 + 2, PG_DSEND * 4 + 1};   // (0.5.7: not the sends)
     for (int k : keep)
       if (eng_dice_span(k) != 0.0f) ++wrong, printf("FAIL: the dose moves parameter %d\n", k);
-    int sound[] = {PG_TRACK(0, 0) * 4 + 0, PG_TRACK(1, 0) * 4 + 3, PG_TRACK(2, 1) * 4 + 0, PG_RSEND * 4 + 2,
+    int sound[] = {PG_TRACK(0, 0) * 4 + 0, PG_TRACK(1, 0) * 4 + 3, PG_TRACK(2, 1) * 4 + 0, PG_REVERB * 4 + 1,
                    PG_EQ * 4 + 1, PG_TRACK(3, 2) * 4 + 2};
     for (int k : sound)
       if (eng_dice_span(k) == 0.0f) ++wrong, printf("FAIL: the dose leaves parameter %d\n", k);
