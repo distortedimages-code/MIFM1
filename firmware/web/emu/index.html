@@ -219,6 +219,45 @@ use.fi { fill: none; stroke: #000; stroke-width: 2.6; stroke-linecap: round; str
            padding: 22px; margin-top: 2px; }
 .vactrol p { margin: 0; font-size: 15.5px; }
 .pingl { stroke: #000; stroke-width: 2; }
+/* the filters' history: a timeline of cards (the line along their tops, a dot for each date); the old photographs
+   hotlinked from Wikimedia Commons, in grey like an archive's (in colour under the pointer) */
+.eras { list-style: none; margin: 1.6rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 34px 2px; }
+.era { position: relative; background: var(--paper); border-top: 2px solid #000; padding: 14px 18px 20px; display: flex; flex-direction: column; }
+.era::before { content: ""; position: absolute; top: -8px; left: 16px; width: 14px; height: 14px; border-radius: 50%; background: var(--orange); }
+.era .when { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; }
+.era .yr { font-size: 2.5rem; line-height: 1; font-weight: 850; font-stretch: 125%; letter-spacing: -.03em; }
+.era .to { font-size: 11px; font-weight: 800; letter-spacing: .06em; padding: .3em .7em; border-radius: 999px; background: #000; color: #fff; white-space: nowrap; }
+.era .pic { margin: 12px -18px 0; }
+.era .pic img, .era .pic svg { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #1b1b1a; }
+.era .pic img { filter: grayscale(1) contrast(1.08); transition: filter .5s ease; }
+.era:hover .pic img { filter: none; }
+.era .pic figcaption { font-size: 11.5px; line-height: 1.35; color: var(--grey); padding: .45rem 18px 0; }
+.era .pic figcaption a { color: inherit; }
+.era .pic.gone img { display: none; }   /* (an image Commons does not give: its caption and link stay) */
+.era .pic.gone::before { content: "Image indisponible"; display: grid; place-items: center; aspect-ratio: 4 / 3; background: #e9e9e4; color: var(--grey); font-size: 13px; }
+.era .pic.eqs svg { background: #fff; }
+.eqs .eq { font: 500 19px "SFMono-Regular", Menlo, Consolas, monospace; fill: #000; }
+.eqs .eqn { font-size: 12px; font-weight: 700; letter-spacing: .04em; fill: var(--grey); text-transform: uppercase; }
+.eqs .acc { fill: var(--orange); } .eqs .rule { stroke: #deded8; stroke-width: 1; }
+.era h3 { margin: 1rem 0 0; font-size: 1.2rem; font-weight: 800; line-height: 1.15; }
+.era .who { margin: .15rem 0 .55rem; color: var(--grey); font-weight: 600; font-size: 14px; }
+.era > p:last-child { margin: 0; font-size: 14.5px; line-height: 1.45; color: #2a2a27; }
+@media (prefers-reduced-motion: no-preference) {
+  .js .era.anim::before { transform: scale(0); transition: transform .5s cubic-bezier(.3, 1.6, .5, 1) .25s; }
+  .js .era.anim.seen::before { transform: none; }
+  .js .era.anim .pic img { opacity: .4; transform: scale(1.04); transition: opacity 1s ease, transform 1.4s cubic-bezier(.2, .7, .1, 1), filter .5s ease; }
+  .js .era.anim.seen .pic img { opacity: 1; transform: none; }
+}
+@media (max-width: 860px) { .eras { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {   /* a phone: the timeline swiped sideways, one card and the next one's edge */
+  .eras { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 2px; padding-top: 10px; margin-inline: -16px; padding-inline: 16px;
+          scroll-padding-inline: 16px; scrollbar-width: none; }
+  .eras::-webkit-scrollbar { display: none; }
+  .era { flex: 0 0 82%; scroll-snap-align: start; padding: 12px 14px 16px; }
+  .era .pic { margin-inline: -14px; } .era .pic figcaption { padding-inline: 14px; }
+  .era .yr { font-size: 2rem; } .era > p:last-child { font-size: 13px; line-height: 1.4; }
+}
+
 /* the grit, the effects, the sequencer */
 .grits { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; margin-top: 1.2rem; }
 .grits figure { margin: 0; background: var(--paper); padding: 16px; }
@@ -476,7 +515,7 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
 
 <section class="part" aria-labelledby="h-start">
   <h2 id="h-start">Prise en main</h2>
-  <figure class="shot anim"><img src="img/exp_03.webp" alt="Une main règle les potards d'un synthétiseur posé parmi des sphères de verre." width="546" height="461" loading="lazy" decoding="async"><figcaption>Expérience 3. La main sur la machine.</figcaption></figure>
+  <figure class="shot anim"><img src="img/exp_01.webp" alt="Un chercheur en blouse et lunettes de protection, un casque sur l'oreille, écoute." width="545" height="461" loading="lazy" decoding="async"><figcaption>Expérience 1. L'écoute.</figcaption></figure>
   <div>
     <ol class="steps anim">
       <li><svg class="mini" viewBox="0 0 160 84" aria-hidden="true"><rect x="2" y="2" width="156" height="80" rx="14" class="body"/><circle cx="80" cy="42" r="22" class="orange breathe"/><path d="M73 31 L91 42 L73 53 Z" class="blk"/></svg>
@@ -557,7 +596,6 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
 <section class="band" aria-label="Le laboratoire">
   <div class="reel" id="reel">
     <figure><img src="img/lab_01.webp" alt="Une chercheuse, un casque autour du cou, observe un tube de verre traversé de lumière orange." width="544" height="457" loading="lazy" decoding="async"></figure>
-    <figure><img src="img/exp_01.webp" alt="Un chercheur en blouse et lunettes de protection, un casque sur l'oreille, écoute." width="545" height="461" loading="lazy" decoding="async"></figure>
     <figure><img src="img/lab_02.webp" alt="Une main tourne un potard d'un petit synthétiseur relié à un clavier." width="537" height="457" loading="lazy" decoding="async"></figure>
     <figure><img src="img/lab_03.webp" alt="Un chercheur en combinaison, de dos, devant un banc d'appareils et un grand disque lumineux." width="548" height="457" loading="lazy" decoding="async"></figure>
     <figure><img src="img/lab_04.webp" alt="Un chercheur au casque joue sur un clavier devant un écran de spectre." width="544" height="463" loading="lazy" decoding="async"></figure>
@@ -632,7 +670,7 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
 <path d="M300 46 V92 H22 V55" class="fb"/><text x="160" y="104" text-anchor="middle" class="note">résonance : −k × sortie</text>
 </svg>
   <p>L'échelle à transistors de Robert Moog : quatre étages RC en cascade, chacun avec sa paire différentielle, et la sortie réinjectée à l'entrée pour la résonance. Ici le modèle « amélioré » de Stefano D'Angelo et Vesa Välimäki (2013) : chaque étage sature en tanh comme son transistor, et l'auto-oscillation sort du circuit lui-même, pas d'un oscillateur ajouté. Passe-bas 24 dB par octave ; passe-haut et passe-bande pris sur les étages, comme sur l'Oberheim Xpander.</p>
-  <button type="button" class="try" data-kind="1" data-idx="1" aria-label="Essayer le filtre Allumer sur la piste jouée">Essayer</button>
+  <button type="button" class="try" data-kind="1" data-idx="1" aria-label="Essayer le filtre LADDER sur la piste jouée">Essayer</button>
 </article>
 <article class="anim filt">
   <header><h3>MS-20</h3><p class="kind">Le Korg 35</p></header>
@@ -703,6 +741,61 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
         frappe le filtre à chaque trig (avec de la résonance, il sonne seul, comme un tom), la <b>FM</b> par sa propre
         sortie, échantillon par échantillon, et un <b>bruit coloré</b> (plus sombre, blanc ou plus brillant) injecté dans le filtre.</p>
     </div>
+  </div>
+</section>
+
+<section class="part wide" aria-labelledby="h-hist">
+  <h2 id="h-hist">D'où viennent les filtres</h2>
+  <div>
+    <p>Avant d'être des lignes de code, ces filtres ont été une voix synthétique, un brevet, des modules à câbler, des
+      puces maison. Les gens qui les ont inventés, dans l'ordre, et ce que MIFM1 leur doit.</p>
+    <ol class="eras">
+<li class="era anim">
+  <div class="when"><span class="yr">1939</span><span class="to">VOX</span></div>
+  <figure class="pic"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/VODER_demonstrated_on_1939_New_York_World_Fair_-_The_VODER_fascinates_the_crowds_-_Bell_Telephone_Quarterly_%28January_1940%29.jpg?width=500" srcset="https://commons.wikimedia.org/wiki/Special:FilePath/VODER_demonstrated_on_1939_New_York_World_Fair_-_The_VODER_fascinates_the_crowds_-_Bell_Telephone_Quarterly_%28January_1940%29.jpg?width=500 500w, https://commons.wikimedia.org/wiki/Special:FilePath/VODER_demonstrated_on_1939_New_York_World_Fair_-_The_VODER_fascinates_the_crowds_-_Bell_Telephone_Quarterly_%28January_1940%29.jpg?width=960 960w" sizes="(max-width: 600px) 80vw, 30vw" alt="Le Voder présenté à la foule de l'Exposition universelle de New York, en 1939." loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('gone')"><figcaption>Le Voder à New York, Bell Telephone Quarterly, 1940 · <a href="https://commons.wikimedia.org/wiki/File:VODER_demonstrated_on_1939_New_York_World_Fair_-_The_VODER_fascinates_the_crowds_-_Bell_Telephone_Quarterly_%28January_1940%29.jpg" rel="noopener">Wikimedia Commons</a></figcaption></figure>
+  <h3>Le Voder</h3><p class="who">Homer Dudley, Bell Labs</p>
+  <p>À l'Exposition universelle de New York, une machine parle. Un bourdon et un souffle passent dans dix filtres passe-bande, joués au clavier par des opératrices qui ont mis des mois à l'apprendre. Une voyelle, ce sont quelques bosses dans le spectre : les formants. En 1952, Peterson et Barney les mesurent sur 76 voix ; leurs moyennes sont la table du VOX.</p>
+</li>
+<li class="era anim">
+  <div class="when"><span class="yr">1966</span><span class="to">LADDER</span></div>
+  <figure class="pic"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/1st_commercial_Moog_synthesizer_%281964%2C_commissioned_by_the_Alwin_Nikolai_Dance_Theater_of_NY%29_%40_Stearns_Collection_%28Stearns_2035%29%2C_University_of_Michigan.jpg?width=500" srcset="https://commons.wikimedia.org/wiki/Special:FilePath/1st_commercial_Moog_synthesizer_%281964%2C_commissioned_by_the_Alwin_Nikolai_Dance_Theater_of_NY%29_%40_Stearns_Collection_%28Stearns_2035%29%2C_University_of_Michigan.jpg?width=500 500w, https://commons.wikimedia.org/wiki/Special:FilePath/1st_commercial_Moog_synthesizer_%281964%2C_commissioned_by_the_Alwin_Nikolai_Dance_Theater_of_NY%29_%40_Stearns_Collection_%28Stearns_2035%29%2C_University_of_Michigan.jpg?width=960 960w" sizes="(max-width: 600px) 80vw, 30vw" alt="Le premier synthétiseur Moog vendu, en 1964 : des modules à câbler dans un meuble de bois." loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('gone')"><figcaption>Le premier Moog vendu (1964), Stearns Collection, université du Michigan · <a href="https://commons.wikimedia.org/wiki/File:1st_commercial_Moog_synthesizer_%281964%2C_commissioned_by_the_Alwin_Nikolai_Dance_Theater_of_NY%29_%40_Stearns_Collection_%28Stearns_2035%29%2C_University_of_Michigan.jpg" rel="noopener">Wikimedia Commons</a></figcaption></figure>
+  <h3>L'échelle</h3><p class="who">Robert Moog</p>
+  <p>Le 10 octobre 1966, Robert Moog dépose un filtre où les transistors font eux-mêmes les résistances : des paires montées en barreaux d'échelle, un condensateur entre chaque paire. Accordé en 1969 (<a href="https://patents.google.com/patent/US3475623A/en" rel="noopener">US 3 475 623</a>), c'est le seul brevet qu'il prendra sur son synthétiseur. Le Minimoog le rend célèbre dès 1970.</p>
+</li>
+<li class="era anim">
+  <div class="when"><span class="yr">1970</span><span class="to">VACTROL</span></div>
+  <figure class="pic"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/Buchla_200_%281%29_%40_nordcafe%2C_Teknisca_Museet.jpg?width=500" srcset="https://commons.wikimedia.org/wiki/Special:FilePath/Buchla_200_%281%29_%40_nordcafe%2C_Teknisca_Museet.jpg?width=500 500w, https://commons.wikimedia.org/wiki/Special:FilePath/Buchla_200_%281%29_%40_nordcafe%2C_Teknisca_Museet.jpg?width=960 960w" sizes="(max-width: 600px) 80vw, 30vw" alt="Un synthétiseur modulaire Buchla de la série 200, exposé dans un musée." loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('gone')"><figcaption>Une série 200 au Tekniska museet de Stockholm · <a href="https://commons.wikimedia.org/wiki/File:Buchla_200_%281%29_%40_nordcafe%2C_Teknisca_Museet.jpg" rel="noopener">Wikimedia Commons</a></figcaption></figure>
+  <h3>La low pass gate</h3><p class="who">Don Buchla</p>
+  <p>À San Francisco, Don Buchla imagine une musique électronique sans clavier noir et blanc. Sa série 200 a des lopass gates : un filtre et un VCA d'un seul geste, pilotés par des vactrols, une LED collée à une photorésistance qui s'allume vite et s'éteint lentement. La note se ferme comme celle d'un marimba. Émilie Gillet en a fait le LPG de Plaits ; l'enveloppe de chaque filtre de MIFM1 en garde les coefficients.</p>
+</li>
+<li class="era anim">
+  <div class="when"><span class="yr">1974</span><span class="to">SEM</span></div>
+  <figure class="pic"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/Tomoberheim.com_SEM_%28Synthesizer_Expander_Module%29.jpg?width=500" srcset="https://commons.wikimedia.org/wiki/Special:FilePath/Tomoberheim.com_SEM_%28Synthesizer_Expander_Module%29.jpg?width=500 500w, https://commons.wikimedia.org/wiki/Special:FilePath/Tomoberheim.com_SEM_%28Synthesizer_Expander_Module%29.jpg?width=960 960w" sizes="(max-width: 600px) 80vw, 30vw" alt="Le Synthesizer Expander Module d'Oberheim, un petit module à potards." loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('gone')"><figcaption>Un SEM, tomoberheim.com · <a href="https://commons.wikimedia.org/wiki/File:Tomoberheim.com_SEM_%28Synthesizer_Expander_Module%29.jpg" rel="noopener">Wikimedia Commons</a></figcaption></figure>
+  <h3>Le SEM</h3><p class="who">Tom Oberheim</p>
+  <p>Tom Oberheim veut un module qui joue sous son séquenceur DS-2 : ce sera le Synthesizer Expander Module, deux oscillateurs, deux enveloppes et un filtre à variables d'état de 12 dB, qui glisse du passe-bas au passe-haut en passant par la réjection. En 1975 et 1976, quatre puis huit SEM côte à côte font le Four Voice et l'Eight Voice, ses premiers polyphoniques.</p>
+</li>
+<li class="era anim">
+  <div class="when"><span class="yr">1978</span><span class="to">MS-20</span></div>
+  <figure class="pic"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/Korg_MS-20.jpg?width=500" srcset="https://commons.wikimedia.org/wiki/Special:FilePath/Korg_MS-20.jpg?width=500 500w, https://commons.wikimedia.org/wiki/Special:FilePath/Korg_MS-20.jpg?width=960 960w" sizes="(max-width: 600px) 80vw, 30vw" alt="Un Korg MS-20, ses potards et son panneau de câblage." loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('gone')"><figcaption>Un MS-20 · <a href="https://commons.wikimedia.org/wiki/File:Korg_MS-20.jpg" rel="noopener">Wikimedia Commons</a></figcaption></figure>
+  <h3>Le Korg 35</h3><p class="who">Fumio Mieda, Korg</p>
+  <p>Chez Korg, Fumio Mieda se donne six mois pour sortir une famille de synthés à câbler. Dans le MS-20, deux filtres en série, passe-haut puis passe-bas, chacun sur un petit module noir maison, le Korg 35 : cinq transistors, six résistances et une résonance qui crie. Les MS-20 suivants passent à une puce OTA plus sage ; en 2013, Mieda dirige sa réédition, le MS-20 mini.</p>
+</li>
+<li class="era anim">
+  <div class="when"><span class="yr">2012</span><span class="to">LES QUATRE</span></div>
+  <figure class="pic eqs"><svg viewBox="0 0 400 300" role="img" aria-label="Les équations : le filtre à un pôle en TPT de Zavalishin et l'échelle de D'Angelo et Välimäki">
+<text x="24" y="40" class="eqn">TPT, Zavalishin 2012</text>
+<text x="24" y="76" class="eq">g = tan(π · fc / fs)</text>
+<text x="24" y="108" class="eq">v = g · (x − s) / (1 + g)</text>
+<text x="24" y="140" class="eq">y = v + s<tspan x="196" class="acc">s ← y + v</tspan></text>
+<line x1="24" y1="166" x2="376" y2="166" class="rule"/>
+<text x="24" y="196" class="eqn">L'échelle, D'Angelo et Välimäki 2013</text>
+<text x="24" y="232" class="eq">ẏₖ = ωc · (tanh yₖ₋₁ − tanh yₖ)</text>
+<text x="24" y="264" class="eq">y₀ = x − 4k · <tspan class="acc">y₄</tspan></text>
+</svg><figcaption>Ce que MIFM1 résout, 44 100 fois par seconde et par piste</figcaption></figure>
+  <h3>Les équations</h3><p class="who">Zavalishin, D'Angelo, Välimäki</p>
+  <p>Les circuits deviennent des équations qu'on résout à chaque échantillon. En 2012, Vadim Zavalishin publie chez Native Instruments <i>The Art of VA Filter Design</i> : boucler un filtre numérique sans le retard d'un échantillon. En 2013, Stefano D'Angelo et Vesa Välimäki refont le modèle de l'échelle Moog à partir de ses transistors. MIFM1 fait tourner les deux sur les deux cœurs du FM-1.</p>
+</li>
+    </ol>
   </div>
 </section>
 
@@ -870,6 +963,8 @@ kbd { font: 600 .85em "Archivo", Arial, sans-serif; background: var(--paper); bo
   <p>MIFM1 est construit sur le code ouvert de Mutable Instruments (Émilie Gillet, MIT), les voix du LXR-02 d'Erica
     Synths (GPL-3.0) et fm1-base de Charles Vestal (MPL-2.0), dont vient aussi ce panneau. Ce n'est pas un produit
     M-VAVE.</p>
+  <p>Les photographies historiques viennent de Wikimedia Commons : leurs auteurs et leurs licences sont sur la page de
+    chacune, liée sous l'image.</p>
   <p><a href="../install/">Installer MIFM1 sur un FM-1</a></p>
   <p><a href="https://github.com/distortedimages-code/MIFM1">Le code source</a></p>
   <details class="speak" id="speak">
