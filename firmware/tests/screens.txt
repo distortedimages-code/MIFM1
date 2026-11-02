@@ -6,7 +6,7 @@
 # held: ALL, Endless (recorded, played,
 # transposed by a key), Warps (off, patched, its algorithms, its oscillator, the frequency shifter), a save kept across
 # a power-off and in a backup, a new project (INIT: GLO, SELECT, REC held), the saved one back, the stress test (on
-# Plaits, then on the FM drums: their pages, a model chosen bringing its kit; ARC, its knobs), an FM-1 without the
+# Plaits, then on the FM drums: their pages, a model chosen bringing its kit; ZERO, its knobs), an FM-1 without the
 # module tables, then the tables arriving. Screenshots in the output folder.
 wait 1500
 shot 00_intro.png
@@ -504,13 +504,13 @@ wait 400
 shot 18o_fm_snare_kit.png
 turn ALGO 3
 wait 400
-shot 18p_arc.png
-wav arc.wav
+shot 18p_zero.png
+wav zero.wav
 wait 4000
 wavstop
 turn SELECT 1
 wait 400
-shot 18q_arc_2.png
+shot 18q_zero_2.png
 tap PLAY
 wait 300
 res 0

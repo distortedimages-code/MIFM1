@@ -203,11 +203,11 @@ static int ptrack(int page)              /* the track a page belongs to, -1: non
     return page >= VP_SYS ? -1 : page >= ENG_NPAGES ? (page - ENG_NPAGES) % 4 : eng_page_track(page);
 }
 
-static int drum_track(int t)             /* an FM drum on it (or ARC): its eight knobs on the sound's pages */
+static int drum_track(int t)             /* an FM drum on it (or ZERO): its eight knobs on the sound's pages */
 {
     return t >= 0 && t < ENG_TRACKS && eng_project()->algo[PG_TRACK(t, 0)] >= ENG_LX0;
 }
-static int arc_track(int t) { return t >= 0 && t < ENG_TRACKS && eng_project()->algo[PG_TRACK(t, 0)] == ENG_ARC; }
+static int zero_track(int t) { return t >= 0 && t < ENG_TRACKS && eng_project()->algo[PG_TRACK(t, 0)] == ENG_ZERO; }
 static int track_cat(int page)           /* the set a track's page is in */
 {
     switch (ptype(page)) {
@@ -425,7 +425,7 @@ static const char *module_name(int page)
     case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2: {
         int c = track_cat(page);
         return c == CAT_BEND ? "Bend" : c == CAT_FILTER ? "Filter" : c == CAT_ENV ? "Envelope"
-                                                                        : arc_track(ptrack(page)) ? "Arc"
+                                                                        : zero_track(ptrack(page)) ? "Zero"
                                                                         : drum_track(ptrack(page)) ? "FM drum" : "Plaits";
     }
     case PT_LFO: {
@@ -491,13 +491,13 @@ static uint16_t page_accent(int page)
 static uint16_t mod_colour(uint16_t ac) { return ac == AC1 ? AC3 : AC1; }   /* where the cables take a knob */
 
 /* the models in four letters or so (the tracks' row), their banks: Plaits' three, the FM drums (the LXR-02's), MIFM1's own
- * (ARC) */
+ * (ZERO) */
 static const char *const SHORT[ENG_MODELS] = {"VCF", "PD", "6OP1", "6OP2", "6OP3", "TERR", "SMCH", "CHIP",
                                               "VA", "SHPR", "FM", "FRMT", "HARM", "WTBL", "CHRD", "SPCH",
                                               "SWRM", "NOIS", "PART", "STRG", "MODL", "KICK", "SNAR", "HHAT",
-                                              "FDRM", "FSNR", "FCYM", "FHAT", "ARC"};
+                                              "FDRM", "FSNR", "FCYM", "FHAT", "ZERO"};
 static const char *const BANK[5] = {"PLAITS 1.2", "PITCHED", "NOISE & DRUMS", "FM DRUMS", "MIFM1"};
-static int bank_of(int m) { return m >= ENG_ARC ? 4 : m / 8; }
+static int bank_of(int m) { return m >= ENG_ZERO ? 4 : m / 8; }
 
 /* ------------------------------------------------------------------ text --- */
 static int iabs(int v) { return v < 0 ? -v : v; }
@@ -901,7 +901,7 @@ static void led(float cx, float cy, float r, uint16_t c, int lvl)   /* an LED: l
     disc(cx, cy, r, col);
 }
 
-/* the icons, as strokes in a 32-unit box: the 29 models (Plaits' 24, the FM drums, ARC), the LFOs' waves, the mixer, the reverb, the global page,
+/* the icons, as strokes in a 32-unit box: the 29 models (Plaits' 24, the FM drums, ZERO), the LFOs' waves, the mixer, the reverb, the global page,
  * the projects, the steps, Warps' algorithms, the delay. L a line, C a circle, D a dot, R a rectangle (x y w h) */
 typedef struct {
     char op;
@@ -952,9 +952,9 @@ static const vop_t ICONS[NICON][IOPS] = {
      {'L', 10, 28, 22, 28}},                                                                        /* FM cymbal */
     {{'L', 5, 11, 27, 11}, {'L', 5, 15, 27, 15}, {'D', 16, 7, 2, 0}, {'L', 16, 15, 16, 28},
      {'L', 10, 22, 22, 22}},                                                                        /* FM hi-hat */
-    {{'C', 16, 10, 5, 0}, {'L', 16, 15, 16, 27}, {'L', 10, 27, 22, 27}, {'L', 21, 8, 25, 4}, {'L', 25, 4, 25, 9},
-     {'L', 25, 9, 29, 6}, {'L', 11, 12, 7, 10}, {'L', 7, 10, 7, 15}, {'L', 7, 15, 3, 13}},          /* ARC: a Tesla
-                                                                                                     * coil, its arcs */
+    {{'C', 16, 16, 11, 0}, {'L', 6, 16, 9, 11}, {'L', 9, 11, 12, 11}, {'L', 12, 11, 16, 16}, {'L', 16, 16, 20, 21},
+     {'L', 20, 21, 23, 21}, {'L', 23, 21, 26, 16}},                                                 /* ZERO: a sine
+                                                                                                     * through zero */
     {{'L', 4, 16, 7, 10}, {'L', 7, 10, 10, 7}, {'L', 10, 7, 13, 10}, {'L', 13, 10, 16, 16}, {'L', 16, 16, 19, 22},
      {'L', 19, 22, 22, 25}, {'L', 22, 25, 25, 22}, {'L', 25, 22, 28, 16}},                          /* sine */
     {{'L', 4, 16, 10, 7}, {'L', 10, 7, 22, 25}, {'L', 22, 25, 28, 16}},                             /* triangle */
@@ -1136,13 +1136,16 @@ static void draw_header(void)
     int32_t s[6] = {ui.page | ui.matrix << 8 | mode << 10 | (ui.held_step & 127) << 13 | key << 20, load,
                     eng_playing() | dirty << 1 | page_count(ui.page) << 2 | algo_here(ui.page) << 6,
                     (int32_t)lane_accent(key) | ui.track << 16 | ui.grid << 19, ac, 0};
+    const char *name = ui.matrix ? "Matrix" : module_name(ui.page);
     for (int i = 0; i < ENG_TRACKS; i++)
         s[5] = s[5] * 31 + (int32_t)track_accent(i);
+    for (const char *c = name; *c; c++)  /* (its name too: another model can change it, Plaits to an FM drum or ZERO) */
+        s[5] = s[5] * 31 + *c;
     if (!ui.full && !ui.anim && !memcmp(s, ui.head_shown, sizeof s))
         return;
     memcpy(ui.head_shown, s, sizeof s);
     cv_begin(240, HEAD_H, BG);
-    label_text(ui.matrix ? "Matrix" : module_name(ui.page), t, sizeof t);
+    label_text(name, t, sizeof t);
     cv_text(10, 6, &FONT_B, dec(t, 0), TXT);
     x = 10 + text_w(&FONT_B, t);         /* (its place: the name's, not the letters' on the way) */
     {

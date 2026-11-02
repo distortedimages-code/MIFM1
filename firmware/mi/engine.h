@@ -121,7 +121,7 @@ int eng_model_enveloped(int model);      /* 1: a Plaits model with its own envel
  * parameters from the knobs after FREQ: HARMONICS, TIMBRE, MORPH, the envelope page's four, the pitch envelope's */
 #define ENG_MODELS 29
 #define ENG_LX0 24
-#define ENG_ARC 28                       /* MIFM1's own (mi_arc.cc, 0.8): after the FM drums, their knobs' places */
+#define ENG_ZERO 28                      /* MIFM1's own (mi_zero.cc, 0.8.1): after the FM drums, their knobs' places */
 void eng_set_model(int t, int model);    /* a track's model (an FM drum new to it: its kit on those knobs) */
 int eng_lx_knob(int param);              /* an FM drum's knob (0..7) that parameter is now, -1 none */
 float eng_lx_step(int param, float v, int detents);   /* an FM drum's knob turned: one of its values a detent (its

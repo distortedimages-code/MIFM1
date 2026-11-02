@@ -2130,28 +2130,33 @@ int main(int argc, char** argv) {
     eng_play(0);
   }
 
-  // 42. ARC (mi_arc.cc, 0.7): on a track, its name, its knobs (named, its defaults, written in %, its envelopes
-  // either way), its sound through the engine; the voice itself: SPARK at 0 a pure sine on the note (its harmonics
-  // under -90 dB); LOOP at the end the same sixteen sounds again, sample for sample (VARY up: not the same each
-  // trig), LOOP at 0 others; any setting finite and bounded
+  // 42. ZERO (mi_zero.cc, 0.8.1): on a track, its name, its knobs (named, its defaults, written as it writes them), its
+  // sound through the engine; the voice itself: INDEX 0 a pure sine on the note (its harmonics under -90 dB); deep
+  // through-zero FM on a ratio of 1 still a tone on the note (each period the same, its first harmonic the strongest
+  // band); a saw modulator high up, its alias under the half-band; BEAT a round pulse of the level at its rate; VARY to
+  // the left the same sixteen sounds again, sample for sample (not the same each trig), to the right others; any
+  // setting finite and bounded
   {
     eng_play(0);
     eng_defaults(p);
     eng_fresh();
-    eng_set_model(0, ENG_ARC);
+    eng_set_model(0, ENG_ZERO);
     float kd[8];
-    arc_defaults(kd);
-    int setup_ok = std::strcmp(eng_algo_name(PG_TRACK(0, 0), ENG_ARC), "ARC") == 0;
+    zero_defaults(kd);
+    int setup_ok = std::strcmp(eng_algo_name(PG_TRACK(0, 0), ENG_ZERO), "ZERO") == 0;
     for (int i = 0; i < 8; ++i) {
       int param = PG_TRACK(0, 0) * 4 + 1 + i;
       float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
-      if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), arc_knob_name(i)) != 0) setup_ok = 0;
+      if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), zero_knob_name(i)) != 0) setup_ok = 0;
     }
-    char tx[24], tx2[24];
-    eng_param_text(PG_TRACK(0, 0) * 4 + 1, p->val[PG_TRACK(0, 0) * 4 + 1], tx, sizeof tx);       // SPARK 30 %
-    eng_param_text(PG_TRACK(0, 2) * 4 + 0, eng_pdef(PG_TRACK(0, 2) * 4)->kind == K_BIP ? -1.0f : 0.0f, tx2,
-                   sizeof tx2);                                                                    // P.ENV at its left
-    setup_ok &= std::strcmp(tx, "30%") == 0 && std::strcmp(tx2, "-100%") == 0;
+    char tx[24], tx2[24], tx3[24], tx4[24];
+    eng_param_text(PG_TRACK(0, 0) * 4 + 2, p->val[PG_TRACK(0, 0) * 4 + 2], tx, sizeof tx);   // RATIO x1
+    float st = eng_lx_step(PG_TRACK(0, 0) * 4 + 2, p->val[PG_TRACK(0, 0) * 4 + 2], 3);         // three detents on: x3
+    eng_param_text(PG_TRACK(0, 0) * 4 + 2, st, tx2, sizeof tx2);
+    eng_param_text(PG_TRACK(0, 0) * 4 + 1, 1.0f, tx3, sizeof tx3);                             // INDEX at the end
+    eng_param_text(PG_TRACK(0, 1) * 4 + 1, p->val[PG_TRACK(0, 1) * 4 + 1], tx4, sizeof tx4);   // BEAT .72Hz
+    setup_ok &= std::strcmp(tx, "x1") == 0 && std::strcmp(tx2, "x3") == 0 && std::strcmp(tx3, "5.00") == 0 &&
+                std::strcmp(tx4, ".72Hz") == 0;
     eng_cut();
     for (int b = 0; b < 3; ++b) eng_render(l, r, n);
     float pk_eng = 0.0f;
@@ -2170,16 +2175,7 @@ int main(int argc, char** argv) {
     eng_defaults(p);
     eng_cut();
 
-    // the voice: SPARK 0, VARY 0, held (DECAY at the end), C3
     static float buf[44100];
-    float k[8] = {0.0f, 0.35f, 0.0f, 1.0f, 1.0f, 0.5f, 0.0f, 0.5f};
-    arc_init();
-    arc_set(0, 48.0f, k);
-    arc_gate(0, 1);
-    for (uint32_t i = 0; i < 44100; i += 32) arc_render(0, &buf[i], 32);   // (its rise, its first second)
-    for (uint32_t i = 0; i < 44100; i += 32) arc_render(0, &buf[i], 32);
-    int zc = 0;
-    for (uint32_t i = 1; i < 44100; ++i) zc += buf[i - 1] < 0.0f && buf[i] >= 0.0f;
     auto level = [&](double hz) {        // a Hann-windowed Goertzel: the level at hz, against a full sine
       double w = 2.0 * M_PI * hz / 44100.0, c = 2.0 * std::cos(w), s1 = 0.0, s2 = 0.0;
       for (uint32_t i = 0; i < 44100; ++i) {
@@ -2189,68 +2185,118 @@ int main(int argc, char** argv) {
       }
       return std::sqrt(s1 * s1 + s2 * s2 - c * s1 * s2) / (44100.0 * 0.25);
     };
+    auto held = [&](float note, const float* k, int skip_s) {   // a held note: its second second (or later)
+      zero_init();
+      zero_set(0, note, k);
+      zero_gate(0, 1);
+      for (int s = 0; s < skip_s; ++s)
+        for (uint32_t i = 0; i < 44100; i += 49) zero_render(0, &buf[i], i + 49 > 44100 ? 44100 - i : 49);
+      for (uint32_t i = 0; i < 44100; i += 49) zero_render(0, &buf[i], i + 49 > 44100 ? 44100 - i : 49);
+    };
+    // INDEX 0, BEAT off, VARY in the middle, held: a pure sine on C3
+    float k0[8] = {0.0f, 2.5f / 11.0f, 0.0f, 1.0f, 0.0f, 0.5f, 0.5f, 0.5f};
+    held(48.0f, k0, 1);
+    int zc = 0;
+    for (uint32_t i = 1; i < 44100; ++i) zc += buf[i - 1] < 0.0f && buf[i] >= 0.0f;
     double f0 = 130.8128, a1 = level(f0), hmax = 0.0;
     for (int h = 2; h <= 9; ++h) hmax = std::max(hmax, level(f0 * h));
     double thd = 20.0 * std::log10(hmax / a1 + 1e-12);
-    int pure_ok = zc >= 129 && zc <= 132 && a1 > 0.5 && thd < -90.0;
-
-    // LOOP: 32 trigs (VARY, SPARK up, short), each after silence; the 16 after the 16 first
-    auto trigs = [&](float loop, float* sig, float* rms) {
-      float kk[8] = {0.6f, 0.5f, 0.9f, 0.0f, loop, 0.8f, 0.3f, 0.6f};
+    int pure_ok = zc >= 130 && zc <= 132 && a1 > 0.5 && thd < -90.0;
+    // through zero: INDEX 3, a sine modulator at x1, on 110.25 Hz (400 samples a period): each period the same; its
+    // first harmonic the strongest of its bands, nothing between them
+    float kz[8] = {std::sqrt(3.0f / 5.0f), 2.5f / 11.0f, 0.0f, 1.0f, 0.0f, 0.5f, 0.5f, 0.5f};
+    float nz = 69.0f + 12.0f * std::log2(110.25f / 440.0f);
+    held(nz, kz, 1);
+    float per = 0.0f, pk_z = 0.0f;
+    for (uint32_t i = 0; i + 400 < 44100; ++i) per = std::max(per, std::fabs(buf[i + 400] - buf[i]));
+    for (uint32_t i = 0; i < 44100; ++i) pk_z = std::max(pk_z, std::fabs(buf[i]));
+    double hz_band[6], between = 0.0;
+    for (int h = 1; h <= 6; ++h) hz_band[h - 1] = level(110.25 * h), between = std::max(between, level(110.25 * h + 55.0));
+    double strongest = 0.0;
+    for (int h = 0; h < 6; ++h) strongest = std::max(strongest, hz_band[h]);
+    int tz_ok = per < 0.005f * pk_z && 20.0 * std::log10(between / strongest + 1e-12) < -60.0;
+    // the alias: a saw modulator at x3, INDEX 3, on C6 (1046.5 Hz): the level between the harmonics (aliases land there)
+    float ka[8] = {std::sqrt(3.0f / 5.0f), 5.5f / 11.0f, 1.0f, 1.0f, 0.0f, 0.5f, 0.5f, 0.5f};
+    held(84.0f, ka, 1);
+    double tot = 0.0, alias = 0.0;
+    for (int h = 1; h <= 19; ++h) tot += std::pow(level(1046.502 * h), 2.0);
+    for (double hz = 100.0; hz < 20000.0; hz += 23.0) {   // (between the harmonics, 40 Hz off them)
+      double off = std::fmod(hz, 1046.502);
+      if (off > 40.0 && off < 1006.5) alias = std::max(alias, level(hz));
+    }
+    double alias_db = 20.0 * std::log10(alias / std::sqrt(tot) + 1e-12);
+    // BEAT 0.5 (2 Hz), PULSE to the level, INDEX 0: the level pulses twice a second, roundly (no corner)
+    float kb[8] = {0.0f, 2.5f / 11.0f, 0.0f, 1.0f, 0.5f, 0.5f, 0.5f, 0.0f};
+    held(48.0f, kb, 1);
+    float env_lo = 9.0f, env_hi = 0.0f, envs[100];
+    for (uint32_t i = 0; i < 100; ++i) {   // the level every 10 ms
+      float e = 0.0f;
+      for (uint32_t j = 0; j < 441; ++j) e = std::max(e, std::fabs(buf[i * 441 + j]));
+      envs[i] = e;
+      env_lo = std::min(env_lo, e), env_hi = std::max(env_hi, e);
+    }
+    int peaks = 0;                       // (its rises through the middle: one a pulse)
+    for (int i = 1; i < 100; ++i) peaks += envs[i - 1] < 0.5f * (env_lo + env_hi) && envs[i] >= 0.5f * (env_lo + env_hi);
+    int beat_ok = peaks >= 2 && peaks <= 3 && env_hi > env_lo * 2.5f;
+    // VARY: 32 short trigs, each after silence; to the left the 16 after the 16 first the same
+    auto trigs = [&](float vary, float* sig, float* rms) {
+      float kk[8] = {0.6f, 2.5f / 11.0f, 0.6f, 0.15f, 0.4f, 0.8f, vary, 0.6f};
       static float tb[32][8192];
-      arc_init();
+      zero_init();
       for (int tr = 0; tr < 32; ++tr) {
-        arc_set(0, 43.0f, kk);
-        arc_gate(0, 1);
+        zero_set(0, 43.0f, kk);
+        zero_gate(0, 1);
         for (uint32_t i = 0; i < 8192; i += 32) {
-          if (i == 2048) arc_gate(0, 0);
-          arc_render(0, &tb[tr][i], 32);
+          if (i == 2048) zero_gate(0, 0);
+          zero_render(0, &tb[tr][i], 32);
         }
         float tmp[32];
-        for (int b = 0; b < 4000; ++b) arc_render(0, tmp, 32);   // (3 s: silent again)
+        for (int b = 0; b < 6000; ++b) zero_render(0, tmp, 32);   // (4.4 s: silent again)
         double e = 0.0;
         for (int i = 0; i < 8192; ++i) e += static_cast<double>(tb[tr][i]) * tb[tr][i];
         rms[tr] = static_cast<float>(std::sqrt(e / 8192.0));
       }
-      float diff = 0.0f;                 // the most a sample differs, a trig against the one 16 before
+      float diff = 0.0f;
       for (int tr = 16; tr < 32; ++tr)
         for (int i = 0; i < 8192; ++i) diff = std::max(diff, std::fabs(tb[tr][i] - tb[tr - 16][i]));
       *sig = diff;
     };
     float d_locked, d_free, rms_l[32], rms_f[32];
-    trigs(1.0f, &d_locked, rms_l);
-    trigs(0.0f, &d_free, rms_f);
+    trigs(0.0f, &d_locked, rms_l);       // (VARY all to the left: a loop)
+    trigs(1.0f, &d_free, rms_f);         // (all to the right: new each trig)
     float lo = 1e9f, hi = 0.0f;
     for (int tr = 0; tr < 16; ++tr) lo = std::min(lo, rms_l[tr]), hi = std::max(hi, rms_l[tr]);
-    int loop_ok = d_locked == 0.0f && d_free > 0.05f && hi > lo * 1.15f;
-
+    int loop_ok = d_locked == 0.0f && d_free > 0.05f && hi > lo * 1.1f;
     // anything: 300 settings drawn, a trig each, its half second
     uint32_t sd = 12345u;
     auto rnd = [&]() { sd = sd * 1664525u + 1013904223u; return static_cast<float>(sd >> 8) / 16777216.0f; };
     float pk_any = 0.0f;
     int nan_any = 0;
-    arc_init();
+    zero_init();
     for (int s = 0; s < 300; ++s) {
       float kk[8];
       for (int i = 0; i < 8; ++i) kk[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();
-      arc_set(s & 3, 12.0f + 100.0f * rnd(), kk);
-      arc_gate(s & 3, 1);
+      zero_set(s & 3, 12.0f + 100.0f * rnd(), kk);
+      zero_gate(s & 3, 1);
       for (int b = 0; b < 690; ++b) {
-        if (b == 300) arc_gate(s & 3, 0);
+        if (b == 300) zero_gate(s & 3, 0);
         float tmp[32];
-        arc_render(s & 3, tmp, 32);
+        zero_render(s & 3, tmp, 32);
         for (int i = 0; i < 32; ++i) {
           if (!std::isfinite(tmp[i])) nan_any = 1;
           pk_any = std::max(pk_any, std::fabs(tmp[i]));
         }
       }
     }
-    arc_init();
-    printf("ARC: %s (its knobs, %s, %s), through the engine peak %.2f; SPARK 0: %d cycles a second (C3), its harmonics "
-           "%.0f dB; LOOP at the end: %.6f apart (each trig's level %.2f..%.2f), at 0: %.2f apart; 300 settings: peak "
-           "%.2f%s\n", setup_ok ? "ok" : "WRONG", tx, tx2, pk_eng, zc, thd, d_locked, lo, hi, d_free, pk_any,
-           nan_any ? ", NaN" : "");
-    if (!setup_ok || !pure_ok || !loop_ok || nan_any || pk_any > 1.6f) ++failures, printf("FAIL: ARC\n");
+    zero_init();
+    printf("ZERO: %s (%s, %s, INDEX %s, BEAT %s), through the engine peak %.2f; INDEX 0: %d cycles a second (C3), its "
+           "harmonics %.0f dB; through zero (INDEX 3): a period %.4f apart, between its bands %.0f dB; a saw at x3 on C6: "
+           "alias %.0f dB; BEAT 2 Hz: %d pulses a second, %.1f dB deep; VARY to the left: %.6f apart (each trig's level "
+           "%.2f..%.2f), to the right: %.2f apart; 300 settings: peak %.2f%s\n",
+           setup_ok ? "ok" : "WRONG", tx, tx2, tx3, tx4, pk_eng, zc, thd, per, 20.0 * std::log10(between / strongest + 1e-12),
+           alias_db, peaks, 20.0 * std::log10(env_hi / env_lo), d_locked, lo, hi, d_free, pk_any, nan_any ? ", NaN" : "");
+    if (!setup_ok || !pure_ok || !tz_ok || alias_db > -60.0 || !beat_ok || !loop_ok || nan_any || pk_any > 1.2f)
+      ++failures, printf("FAIL: ZERO\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

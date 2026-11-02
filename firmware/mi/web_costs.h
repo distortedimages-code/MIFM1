@@ -33,7 +33,7 @@ static const float kWebModel[29] = {   /* a voice playing, by model */
     187.5f,  /* 25 FM SNARE */
     226.8f,  /* 26 FM CYMBAL */
     235.4f,  /* 27 FM HI-HAT */
-    317.5f,  /* 28 ARC */
+    309.8f,  /* 28 ZERO */
 };
 static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, VOX): plain, its FM's extra, its NOISE's */
     {0.0f, 0.0f, 0.0f},
