@@ -24,9 +24,9 @@ et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la base de
   calé sur le tempo ou relancé par les trigs d'une piste, avec un **slew** ;
 - une **matrice de câbles** : les 3 LFO vers presque tous les paramètres, 8 câbles par piste et 8 globaux, posés en
   tenant la touche d'un LFO et en tournant un potard (en atténuverteur) ;
-- une **dose d'aléatoire** cachée (OCT− tenu, SELECT), sur son propre écran, qui pousse tout le son à la fois
-  (hauteurs, timbres, filtres ; pas les envois d'effets), plus ou moins, le rend tel quel à 0, et dans son dernier quart ajoute des
-  **fills** en fin de mesure ;
+- une **dose d'aléatoire** cachée (OCT− tenu, SELECT), sur son propre écran, qui relance tout le son à chaque trig
+  de chaque piste (hauteurs, timbres, grit, filtres entiers, pans ; pas les envois d'effets), plus ou moins loin, le
+  rend tel quel à 0, et dans son dernier quart ajoute des **fills** en fin de mesure ;
 - **trois effets, chacun avec sa propre piste de pas** : un **delay** inspiré des potards du Zen Delay (temps en
   divisions du tempo ou libre en millisecondes, feedback, filtre passe-bas / passe-haut avec résonance, drive, mono ou ping-pong, une légère
   modulation de bande), la **réverbe de Clouds** et **Warps**. Sans pas, l'effet est toujours ouvert ; avec des pas,
@@ -351,7 +351,8 @@ vactrol (celle du low-pass gate de Plaits), **F.ATK** sa montée (instantanée �
 **F.DECAY** sa chute, qui ralentit en descendant (de 5 ms à plus d'une seconde, puis sa queue), et **PING**, une
 impulsion dans le filtre à chaque trig : avec de la résonance, il sonne tout seul (une percussion, même sur une voix
 silencieuse). **F.KEY** (deuxième page du son) fait suivre la note (100 % : une octave par octave). Tout se locke pas
-par pas (sauf TYPE), a son aléatoire, se module par les câbles, et la dose d'aléatoire bouge CUTOFF, RESO et ENV. À
+par pas (sauf TYPE), a son aléatoire, se module par les câbles, et la dose d'aléatoire relance ses douze réglages à
+chaque trig (son TYPE aussi à partir de 50 %). À
 STOP, les enveloppes se ferment et les filtres s'éteignent en ~23 ms (une auto-oscillation, un ping qui sonne encore,
 leur bruit) jusqu'au trig suivant. L'écran du filtre dessine sa réponse telle qu'elle est (son enveloppe, sa FM, la
 touche), sa fréquence et ce qu'il coûte au cœur qui le joue (CPU, en % du bloc : la part du filtre dans T1..T4 de la
@@ -410,18 +411,22 @@ remplace).
 La machine passe sur **son écran à elle** : la troisième couleur du thème s'ouvre depuis le centre, RAN / DOM s'écrit
 en grand, en blanc, ses lettres arrivant de gauche à droite à travers des signes ; plus la dose monte, plus ses
 lettres se mettent à changer (une à quelques %, les six à 100 %, toutes relancées à chaque cran) et plus les cases du
-fond tremblent. Dessous, la dose, sa barre (le dernier quart marqué) et ce que font les fills. Chaque réglage du son
-est poussé d'un écart au hasard qui lui est propre, plus ou moins loin selon la dose : FREQ (jusqu'à ±6 demi-tons à
-100 %, dans la gamme), la transposition (±7), l'enveloppe de hauteur, HARMONICS, TIMBRE, MORPH, DECAY, COLOUR et les
-enveloppes de Plaits, le drive du grit, l'EQ, le feedback, le filtre, le
-drive, la résonance et le pleurage du delay, la réverbe, l'algorithme (d'un repère à un autre : entre deux, Warps
-calcule les deux algorithmes, deux fois plus de travail), le timbre et les niveaux de Warps. Rien de ce
-qui tient le temps (divisions, tempo, vitesses, longueurs, pas), ni les envois vers les effets (le son secoué, pas noyé dans le delay et la réverbe), les pans, les niveaux, la gamme
-ou le branchement :
-ça reste musical. On lâche OCT− : retour à la page, la dose reste (en bas, un trait de la largeur de la dose ; les
-potards montrent jusqu'où elle les emmène, RANDOM dessous). Revenir à 0 rend le son exact de départ, comme
-l'annulation d'ALL ; remonter depuis 0 tire un autre hasard. Pendant le geste, l'octave du clavier (ou la page de pas)
-ne bouge pas.
+fond tremblent. Dessous, la dose, sa barre (le dernier quart marqué) et ce que font les fills. **À chaque trig de
+chaque piste**, tous ses réglages du son sont relancés au hasard, chacun de son côté, plus ou moins loin selon la
+dose (à 100 %, jusqu'au bout de sa plage) : chaque note est un autre son, rien ne boucle. FREQ (jusqu'à ±6 demi-tons
+à 100 %, dans la gamme), la transposition (±7), l'enveloppe de hauteur, la gate, HARMONICS, TIMBRE, MORPH, DECAY,
+COLOUR et les enveloppes de Plaits (sur une batterie FM, ses huit réglages), le grit entier (DRIVE, SHAPE, RATE,
+BITS : à forte dose, une note sur deux sale), le filtre entier (CUTOFF jusqu'à ±3,4 octaves, RESO, ENV, DECAY,
+DRIVE, PING, FM, KEY, NOISE, COLOR, ATTACK ; à partir de 50 % son TYPE aussi, LP, BP ou HP, sur un trig sur deux à
+100 % ; pas son modèle : un filtre OFF le reste, son CPU avec), l'EQ et le pan. Les effets, eux, sont relancés à
+chaque temps : le feedback, le filtre, le drive, la résonance et le pleurage du delay, la réverbe, l'algorithme de
+Warps (d'un repère à un autre : entre deux, Warps calcule les deux algorithmes, deux fois plus de travail), son timbre
+et ses niveaux. Rien de ce qui tient le temps (divisions, tempo, vitesses, longueurs, pas), ni les envois vers les
+effets (le son secoué, pas noyé dans le delay et la réverbe), les niveaux, la gamme ou le branchement. On lâche
+OCT− : retour à la page, la dose reste (en bas, un trait de la largeur de la dose ; les potards montrent la valeur
+que le dernier trig a tirée, RANDOM dessous). Revenir à 0 rend le son exact de départ dès le trig suivant, comme
+l'annulation d'ALL. Pendant le geste, l'octave du clavier (ou la page de pas) ne bouge pas. (Jusqu'en 0.6.1, la dose
+tirait un seul écart par réglage, gardé à chaque trig : un son déplacé, mais le même à chaque note.)
 
 **Les fills** (le dernier quart de la dose, 76 à 100 %) : des trigs en plus à la fin des mesures (comptées depuis
 PLAY), comme un batteur, sur les pistes qui jouent des pas (pas sur Endless). À 76 %, un fill sur le dernier temps

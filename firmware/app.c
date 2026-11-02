@@ -2199,11 +2199,15 @@ static void draw_knob_at(int page, int k, int force)
             text_cat(under, "LOCK", sizeof under);
     } else {
         ncab = cables_on(param, c, sizeof c, &hash);
-        if (!ncab && p->dice && (f - v > 0.0005f || v - f > 0.0005f)) {   /* the random dose: where it takes it */
-            c[0] = 0;
-            text_cat(c, "RANDOM", sizeof c);
-            ncab = 1;
-            hash = 0x5EED;
+        if (p->dice && eng_dice_span(param) != 0.0f) {   /* the random dose: where it takes it, the value this trig
+                                                          * (a track's) or this beat (an effect's) threw */
+            f = eng_now(param);
+            if (!ncab) {
+                c[0] = 0;
+                text_cat(c, "RANDOM", sizeof c);
+                ncab = 1;
+                hash = 0x5EED;
+            }
         }
         eng_param_text(param, ncab ? f : v, txt, sizeof txt);
     }
@@ -3099,7 +3103,7 @@ static void rand_scene(uint32_t t, int d, uint32_t tick, uint32_t shake)
             }
     }
     line[0] = 0;
-    text_cat(line, d ? "PITCH  TONE  FILTERS" : "THE SOUND AS SET", sizeof line);
+    text_cat(line, d ? "EVERY TRIG ANOTHER SOUND" : "THE SOUND AS SET", sizeof line);
     if (t >= 200u)
         cv_text((240 - text_w(&FONT_XS, line)) / 2, 18, &FONT_XS, line, soft);
     rand_word("RAN", 0, 46, t, n, tick, white);

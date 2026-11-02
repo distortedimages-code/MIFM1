@@ -1179,76 +1179,78 @@ int main(int argc, char** argv) {
     eng_defaults(p);
   }
 
-  // 29. the random dose: at 0 the sound as set (every parameter as its knob), at 50 % the sound's parameters moved (the
-  // pitches, the timbres, the filters, the sends), not the time, the pans, the levels, the scale, Warps' patching; at
-  // 100 % twice as far; another seed elsewhere; back to 0: the sound as it was
+  // 29. the random dose: at 0 every trig plays the knobs; at 50 % each trig of each track throws every sound parameter
+  // of its own anew (the pitches, the timbres, the gate, the grit, the whole filter, the EQ, the pan: another value at
+  // each trig, within half its span), never the sends, the levels, the time; the effects' colours anew at each beat,
+  // Warps' ALGORITHM from mark to mark; at 100 % twice as wide; back to 0: the knobs again at the next trig
   {
     eng_play(0);
     eng_defaults(p);
-    for (int g = 0; g <= ENG_TRACKS; ++g)                 // (no cables: the LFOs would move what they patch)
-      for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c].depth = 0;
-    p->dice = 0;
-    eng_render(l, r, n);
-    int same0 = 0;                                        // (the knobs as set: but a Euclidean LENGTH of 0 is 1)
-    for (int i = 0; i < ENG_NPARAMS; ++i) same0 += eng_final(i) == p->val[i] || eng_pdef(i)->kind == K_INT;
-    static float base[ENG_NPARAMS];
-    for (int i = 0; i < ENG_NPARAMS; ++i) base[i] = eng_final(i);
-    p->dice = 50;
-    p->dice_seed = 7;
-    eng_render(l, r, n);
-    int moved = 0, wrong = 0;
-    float far50 = 0.0f;
-    static float d50[ENG_NPARAMS];
-    for (int i = 0; i < ENG_NPARAMS; ++i) {
-      d50[i] = eng_final(i) - base[i];
-      if (std::fabs(d50[i]) > 1e-6f) {
-        ++moved;
-        if (eng_dice_span(i) == 0.0f) ++wrong;
+    for (int g = 0; g <= ENG_TRACKS; ++g)                 // (no cables: the LFOs would move what they patch; no locks,
+      for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c].depth = 0;   // no randoms of the knobs: the dose alone)
+    for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i].lane = 0xFF;
+    for (int l = 0; l < ENG_LANES; ++l)
+      for (int tp = 0; tp < ENG_NTP; ++tp) p->rnd[l][tp] = 0;
+    p->algo[PG_FILT(1, 0)] = MF_LADDER;                  // (a filter to throw)
+    p->val[PG_WARPS(0) * 4 + 2] = 0.4f;                  // (Warps' ALGORITHM on a mark)
+    const int fdbk = PG_DELAY(0) * 4 + 1, wa = PG_WARPS(0) * 4 + 2;
+    struct Stat { int trigs, wrong, kept_wrong, changed, marks_off; float far, fx_lo, fx_hi; };
+    auto run = [&](int dose, float bars) {
+      Stat st = {0, 0, 0, 0, 0, 0.0f, 1e9f, -1e9f};
+      p->dice = static_cast<uint8_t>(dose);
+      uint32_t r0[ENG_TRACKS];
+      for (int t = 0; t < ENG_TRACKS; ++t) r0[t] = eng_rises(t);
+      static float last[ENG_TRACKS][ENG_NTP];
+      int seen[ENG_TRACKS] = {0, 0, 0, 0};
+      float a = static_cast<float>(dose) * 0.01f;
+      for (uint32_t b = 0; b < static_cast<uint32_t>(bars * 2.0f * 44100.0f / n); ++b) {
+        eng_render(l, r, n);
+        float fx = eng_final(fdbk);
+        st.fx_lo = std::min(st.fx_lo, fx), st.fx_hi = std::max(st.fx_hi, fx);
+        float m = eng_final(wa) * 5.0f;
+        st.marks_off += std::fabs(m - std::floor(m + 0.5f)) > 1e-4f;
+        for (int t = 0; t < ENG_TRACKS; ++t) {
+          if (eng_rises(t) == r0[t]) continue;
+          r0[t] = eng_rises(t);
+          ++st.trigs;
+          int diff = 0;
+          for (int tp = 0; tp < ENG_NTP; ++tp) {
+            int param = eng_track_param(t, tp);
+            if (param < 0 || tp == TP_NOTE || tp == TP_PROB || tp == TP_RATCHET) continue;
+            float now = eng_now(param), dev = now - eng_final(param), sp = eng_dice_span(param);
+            if (sp == 0.0f) {
+              st.kept_wrong += std::fabs(dev) > 1e-6f;   // (the sends, the levels, the time: the knobs)
+              continue;
+            }
+            if (std::fabs(dev) > a * sp + 1e-4f) ++st.wrong;
+            st.far = std::max(st.far, std::fabs(dev) / sp);
+            diff += seen[t] && std::fabs(now - last[t][tp]) > 1e-6f;
+            last[t][tp] = now;
+          }
+          st.changed += diff >= 8;                        // (another sound: most of its parameters elsewhere)
+          seen[t] = 1;
+        }
       }
-      far50 = std::max(far50, std::fabs(d50[i]));
-    }
-    int keep[] = {PG_MIX * 4 + 0, PG_PAN * 4 + 1, PG_GLOBAL * 4 + 0, PG_GLOBAL * 4 + 2, PG_LFO(0) * 4 + 1,
-                  PG_DELAY(0) * 4 + 0, PG_WARPS(0) * 4 + 0, PG_WARPS(0) * 4 + 3, PG_STEP(0) * 4 + 0, PG_EUC(0) * 4 + 0,
-                  PG_RSEND * 4 + 2, PG_DSEND * 4 + 1};   // (0.5.7: not the sends)
-    for (int k : keep)
-      if (eng_dice_span(k) != 0.0f) ++wrong, printf("FAIL: the dose moves parameter %d\n", k);
-    int sound[] = {PG_TRACK(0, 0) * 4 + 0, PG_TRACK(1, 0) * 4 + 3, PG_TRACK(2, 1) * 4 + 0, PG_REVERB * 4 + 1,
-                   PG_EQ * 4 + 1, PG_TRACK(3, 2) * 4 + 2};
-    for (int k : sound)
-      if (eng_dice_span(k) == 0.0f) ++wrong, printf("FAIL: the dose leaves parameter %d\n", k);
-    p->dice = 100;
-    eng_render(l, r, n);
-    int twice = 0, n2 = 0;
-    for (int i = 0; i < ENG_NPARAMS; ++i) {
-      if (std::fabs(d50[i]) < 1e-3f || i == PG_WARPS(0) * 4 + 2) continue;   // (Warps' ALGORITHM: mark to mark)
-      const eng_pdef_t* d = eng_pdef(i);
-      float v = eng_final(i), lo = d->kind == K_UNI ? 0.0f : d->kind == K_BIP ? -1.0f : d->lo;
-      float hi = d->kind == K_UNI || d->kind == K_BIP ? 1.0f : d->hi;
-      if (v <= lo + 1e-4f || v >= hi - 1e-4f) continue;   // (clamped)
-      ++n2;
-      twice += std::fabs((v - base[i]) - 2.0f * d50[i]) < 1e-3f;
-    }
-    int marks = 0;                                        // Warps' ALGORITHM on a mark: on marks, for every seed
-    for (int sd = 0; sd < 32; ++sd) {
-      p->dice_seed = static_cast<uint8_t>(sd);
-      eng_render(l, r, n);
-      float m = eng_final(PG_WARPS(0) * 4 + 2) * 5.0f;
-      marks += std::fabs(m - std::floor(m + 0.5f)) < 1e-4f;
-    }
-    p->dice_seed = 8;
-    eng_render(l, r, n);
-    int other = 0;
-    for (int i = 0; i < ENG_NPARAMS; ++i) other += std::fabs((eng_final(i) - base[i]) - 2.0f * d50[i]) > 1e-3f;
-    p->dice = 0;
-    eng_render(l, r, n);
-    int back = 0;
-    for (int i = 0; i < ENG_NPARAMS; ++i) back += eng_final(i) == base[i];
-    printf("the random dose: %d parameters moved at 50 %% (as far as %.2f), %d of %d twice as far at 100 %%, "
-           "%d other with another seed, %d of %d back at 0, Warps' ALGORITHM on a mark %d times of 32\n", moved, far50,
-           twice, n2, other, back, ENG_NPARAMS, marks);
-    if (wrong || moved < 40 || twice != n2 || n2 < 20 || other < 40 || back != ENG_NPARAMS || same0 != ENG_NPARAMS ||
-        marks != 32)
+      return st;
+    };
+    eng_fresh();
+    eng_play(1);
+    Stat s0 = run(0, 2.0f), s50 = run(50, 4.0f), s100 = run(100, 4.0f);
+    run(0, 0.5f);                                        // (back to 0: the knobs again from the next trig)
+    Stat back = run(0, 2.0f);
+    float k = p->val[fdbk];
+    printf("the random dose: at 0 %d trigs, %d moved; at 50 %% %d trigs, %d of them another sound, as far as %.2f of "
+           "the span, %d past it, %d kept parameters moved, the delay's FEEDBACK %.2f..%.2f (its knob %.2f), Warps "
+           "off its marks %d blocks; at 100 %% as far as %.2f; back at 0 %d moved\n", s0.trigs,
+           s0.wrong + s0.kept_wrong + static_cast<int>(s0.far > 0.0f), s50.trigs, s50.changed, s50.far,
+           s50.wrong, s50.kept_wrong, s50.fx_lo, s50.fx_hi, k, s50.marks_off + s100.marks_off, s100.far,
+           back.wrong + back.kept_wrong + static_cast<int>(back.far > 0.0f));
+    if (s0.trigs < 10 || s0.far > 0.0f || s0.kept_wrong || s0.fx_hi - s0.fx_lo > 1e-6f || s50.trigs < 20 ||
+        s50.changed < s50.trigs - 8 || s50.far > 0.5f + 1e-3f || s50.far < 0.3f || s50.wrong || s50.kept_wrong ||
+        s50.fx_hi - s50.fx_lo < 0.03f || s50.fx_hi > k + 0.1f + 1e-4f || s50.fx_lo < k - 0.1f - 1e-4f ||
+        s50.marks_off + s100.marks_off || s100.far < 0.6f || s100.wrong || back.far > 0.0f || back.kept_wrong)
       ++failures, printf("FAIL: the random dose\n");
+    eng_play(0);
     eng_defaults(p);
   }
 

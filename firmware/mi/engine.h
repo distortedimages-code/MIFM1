@@ -247,6 +247,8 @@ void eng_core1(int on);                  /* the second core takes its share when
 
 /* what the screen shows */
 float eng_final(int param);              /* the value after the cables */
+float eng_now(int param);                /* the value playing: a track's, as its last trig made it (its lock, its random,
+                                          * the dose's throw) over the cables */
 float eng_src(int src);                  /* a source's value: -1..1 */
 float eng_lfo_phase(int i);              /* an LFO's phase now, 0..1 (MOD mode: its key blinks with it) */
 uint32_t eng_gates(void);                /* bit t: track t's gate now */
