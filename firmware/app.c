@@ -126,12 +126,23 @@ static int cpu2_ok;
 static int save_hold, dirty;
 static project_t scratch;                /* a project read or made before it replaces the live one */
 
-/* the screen's own pages, after the engine's: a track's RANDOM page (its steps' second face), the project and the
- * machine (GLO's second face) */
+/* the screen's own pages, after the engine's, four of each (a track's): the RANDOM page (its steps' second face); the
+ * sound's second (GATE, TRANSP, OCTAVE, the filter's KEY); the filter's two (TYPE, CUTOFF, RESO, ENV; DRIVE, NOISE,
+ * COLOR, FM); the envelopes' second (P.ENV, the filter's ATTACK, DECAY, PING); then the project and the machine (GLO's
+ * second face) */
 #define VP_RND(t) (ENG_NPAGES + (t))
-#define VP_SYS (ENG_NPAGES + ENG_TRACKS)
-enum { PT_RND = NPT, PT_SYS };
+#define VP_SON2(t) (ENG_NPAGES + 4 + (t))
+#define VP_FLT1(t) (ENG_NPAGES + 8 + (t))
+#define VP_FLT2(t) (ENG_NPAGES + 12 + (t))
+#define VP_ENV2(t) (ENG_NPAGES + 16 + (t))
+#define VP_SYS (ENG_NPAGES + 20)
+enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS };
+/* a track's pages in four sets: EDIT goes from one to the next of the first three (its sound, its grit, its filter),
+ * ENV to the envelopes; SELECT through a set's pages; ALGO changes what the page shows (the sound's model, the
+ * filter's), where there is a choice */
+enum { CAT_NONE, CAT_SOUND, CAT_GRIT, CAT_FILTER, CAT_ENV };
 static const uint8_t RND_TP[4] = {TP_PAN, TP_DECAY, TP_NOTE, TP_RATCHET};   /* the RANDOM page's knobs */
+static const char *const RND_NAME[4] = {"Pan", "Decay", "Tune", "Ratch"};
 
 static struct {
     int page;                            /* the page shown: the engine's (engine.h), or VP_RND, VP_SYS */
@@ -176,10 +187,63 @@ static struct {
 } ui;
 
 /* ------------------------------------------------------------ the pages --- */
-static int ptype(int page) { return page >= VP_SYS ? PT_SYS : page >= VP_RND(0) ? PT_RND : eng_page_type(page); }
+static int ptype(int page)
+{
+    return page >= VP_SYS ? PT_SYS : page >= ENG_NPAGES ? PT_RND + (page - ENG_NPAGES) / 4 : eng_page_type(page);
+}
 static int ptrack(int page)              /* the track a page belongs to, -1: none */
 {
-    return page >= VP_SYS ? -1 : page >= VP_RND(0) ? page - VP_RND(0) : eng_page_track(page);
+    return page >= VP_SYS ? -1 : page >= ENG_NPAGES ? (page - ENG_NPAGES) % 4 : eng_page_track(page);
+}
+
+static int drum_track(int t)             /* an FM drum on it: its eight knobs on the sound's pages */
+{
+    return t >= 0 && t < ENG_TRACKS && eng_project()->algo[PG_TRACK(t, 0)] >= ENG_LX0;
+}
+static int track_cat(int page)           /* the set a track's page is in */
+{
+    switch (ptype(page)) {
+    case PT_PLAITS1: case PT_PLAITS3: case PT_SON2: return CAT_SOUND;
+    case PT_PLAITS2: return drum_track(ptrack(page)) ? CAT_SOUND : CAT_ENV;   /* (an FM drum's knobs 4..7) */
+    case PT_GRIT: return CAT_GRIT;
+    case PT_VFLT1: case PT_VFLT2: case PT_FILT1: case PT_FILT2: case PT_FILT3: return CAT_FILTER;
+    case PT_ENV2: return CAT_ENV;
+    default: return CAT_NONE;
+    }
+}
+static int cat_pages(int cat, int t, int *f)   /* a set's pages on track t, in order; how many */
+{
+    switch (cat) {
+    case CAT_SOUND:
+        f[0] = PG_TRACK(t, 0);
+        if (drum_track(t)) {
+            f[1] = PG_TRACK(t, 1);
+            f[2] = VP_SON2(t);
+            return 3;
+        }
+        f[1] = VP_SON2(t);
+        return 2;
+    case CAT_GRIT: f[0] = PG_GRIT(t); return 1;
+    case CAT_FILTER: f[0] = VP_FLT1(t); f[1] = VP_FLT2(t); return 2;
+    default:
+        if (drum_track(t)) {             /* (an FM drum: its own envelopes; the filter's) */
+            f[0] = VP_ENV2(t);
+            return 1;
+        }
+        f[0] = PG_TRACK(t, 1);
+        f[1] = VP_ENV2(t);
+        return 2;
+    }
+}
+static int shown_page(int page)          /* the page the screen shows for one it keeps out of sight (the engine's
+                                          * Plaits pitch page, its filter's pages: their knobs are elsewhere) */
+{
+    int t = ptrack(page);
+    switch (ptype(page)) {
+    case PT_PLAITS3: return VP_SON2(t);
+    case PT_FILT1: case PT_FILT2: case PT_FILT3: return VP_FLT1(t);
+    default: return page;
+    }
 }
 
 #define MAXFACES 6
@@ -187,14 +251,9 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
 {
     int t = ptrack(page);
     switch (ptype(page)) {
-    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_GRIT: case PT_FILT1: case PT_FILT2:
-        f[0] = PG_TRACK(t, 0);           /* Plaits' three, the grit, the filter's two */
-        f[1] = PG_TRACK(t, 1);
-        f[2] = PG_TRACK(t, 2);
-        f[3] = PG_GRIT(t);
-        f[4] = PG_FILT(t, 0);
-        f[5] = PG_FILT(t, 1);
-        return 6;
+    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_GRIT: case PT_FILT1: case PT_FILT2: case PT_FILT3:
+    case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2:
+        return cat_pages(track_cat(page), t, f);
     case PT_LFO:                         /* the three LFOs */
         f[0] = PG_LFO(0), f[1] = PG_LFO(1), f[2] = PG_LFO(2);
         return 3;
@@ -250,18 +309,40 @@ static int page_first(int page)
     module_pages(page, f);
     return f[0];
 }
+/* the page whose ALGORITHM the encoder turns from this one (-1: none): the sound's model on its pages, the filter's on
+ * its, a module's own on its first page (the delay's mode, the bus's); not the grit, not the envelopes */
+static int algo_page(int page)
+{
+    int c = track_cat(page);
+    if (c == CAT_SOUND)
+        return PG_TRACK(ptrack(page), 0);
+    if (c == CAT_FILTER)
+        return PG_FILT(ptrack(page), 0);
+    if (c != CAT_NONE || page >= ENG_NPAGES)
+        return -1;
+    return eng_algo_count(page_first(page)) ? page_first(page) : -1;
+}
+static int algo_here(int page)           /* ALGO does something here: the header says so */
+{
+    int pt = ptype(page);
+    return algo_page(page) >= 0 || pt == PT_WARPS1 || pt == PT_WARPS2 || pt == PT_DELAY1 || pt == PT_DELAY2 ||
+           pt == PT_DSEND || pt == PT_COMP || pt == PT_OTT;
+}
+
 static int page_at(int page, int face)   /* its module's page at face (wrapping) */
 {
     int f[MAXFACES], n = module_pages(page, f);
     return f[((face % n) + n) % n];
 }
-static int track_page(int page, int t)   /* the same page on track t */
+static int track_page(int page, int t)   /* the same page on track t (a track's sets: the same set, the same place in
+                                          * it, or its last) */
 {
+    int c = track_cat(page);
+    if (c != CAT_NONE) {
+        int f[MAXFACES], n = cat_pages(c, t, f), i = page_face(page);
+        return f[i < n ? i : n - 1];
+    }
     switch (ptype(page)) {
-    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: return PG_TRACK(t, page_face(page));
-    case PT_GRIT: return PG_GRIT(t);
-    case PT_FILT1: return PG_FILT(t, 0);
-    case PT_FILT2: return PG_FILT(t, 1);
     case PT_EUC: return ptrack(page) >= 0 ? PG_EUC(t) : page;
     case PT_STEP: return PG_STEP(t);
     case PT_ARP: return PG_ARP(t);
@@ -286,6 +367,27 @@ static int page_lane(int page)
  * randoms) */
 static int knob_param(int page, int k)
 {
+    int t = ptrack(page);
+    switch (ptype(page)) {
+    case PT_SON2: {                      /* GATE, TRANSP, OCTAVE, the filter's KEY (an FM drum: its eighth knob for
+                                          * GATE: it has none) */
+        static const uint8_t TP[4] = {TP_LENGTH, TP_TRANSPOSE, TP_OCTAVE, TP_KEY};
+        return k == 0 && drum_track(t) ? PG_TRACK(t, 2) * 4 : eng_track_param(t, TP[k]);
+    }
+    case PT_VFLT1: {
+        static const uint8_t TP[4] = {TP_FTYPE, TP_CUTOFF, TP_RESO, TP_FENV};
+        return eng_track_param(t, TP[k]);
+    }
+    case PT_VFLT2: {
+        static const uint8_t TP[4] = {TP_FDRIVE, TP_NOISE, TP_COLOR, TP_FM};
+        return eng_track_param(t, TP[k]);
+    }
+    case PT_ENV2: {                      /* the pitch envelope (an FM drum: the filter's ENV again), the filter's */
+        static const uint8_t TP[4] = {TP_PITCHENV, TP_FATTACK, TP_FDECAY, TP_PING};
+        return eng_track_param(t, k == 0 && drum_track(t) ? TP_FENV : TP[k]);
+    }
+    default: break;
+    }
     if (ptype(page) == PT_RND)
         return eng_track_param(ptrack(page), RND_TP[k]);
     if (ptype(page) == PT_EUC && k >= 2)  /* the Euclidean face: then the lane's LENGTH and PROB */
@@ -293,11 +395,30 @@ static int knob_param(int page, int k)
     return page * 4 + k;
 }
 
+static const char *knob_name(int page, int k, int param)   /* its name: the parameter's, but where the page mixes
+                                                             * the sound's with the filter's, the filter's say so */
+{
+    int t = ptrack(page);
+    switch (ptype(page)) {
+    case PT_RND: return RND_NAME[k];
+    case PT_SON2: return k == 3 ? "F.Key" : eng_param_name(param);
+    case PT_ENV2: {
+        static const char *const N[4] = {"P.Env", "F.Atk", "F.Decay", "Ping"};
+        return k == 0 && drum_track(t) ? "F.Env" : N[k];
+    }
+    default: return eng_param_name(param);
+    }
+}
+
 static const char *module_name(int page)
 {
     switch (ptype(page)) {
-    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_GRIT: return "Plaits";
-    case PT_FILT1: case PT_FILT2: return "Filter";
+    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_GRIT: case PT_FILT1: case PT_FILT2: case PT_FILT3:
+    case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2: {
+        int c = track_cat(page);
+        return c == CAT_GRIT ? "Grit" : c == CAT_FILTER ? "Filter" : c == CAT_ENV ? "Envelope"
+                                                                        : drum_track(ptrack(page)) ? "FM drum" : "Plaits";
+    }
     case PT_LFO: {
         static const char *const N[3] = {"LFO 1", "LFO 2", "LFO 3"};
         return N[clamp(page - PG_LFO(0), 0, 2)];
@@ -350,8 +471,9 @@ static uint16_t page_accent(int page)
     case PT_DUCK: return track_accent(0);    /* T1's: it ducks the others */
     case PT_COMP: return AC2;
     case PT_OTT: return AC3;
-    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_GRIT: case PT_FILT1: case PT_FILT2:
-        return model_accent(p->algo[page_first(page)]);
+    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_GRIT: case PT_FILT1: case PT_FILT2: case PT_FILT3:
+    case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2:
+        return model_accent(p->algo[PG_TRACK(ptrack(page), 0)]);
     case PT_EUC: return lane_accent(eng_page_lane(page));
     case PT_LFO: return accent3(page - PG_LFO(0));   /* LFO 1, 2, 3: the three colours */
     default: return lane_accent(eng_page_lane(page));
@@ -989,7 +1111,8 @@ static void draw_header(void)
         load_at = plat_ms();
     }
     int32_t s[6] = {ui.page | ui.matrix << 8 | mode << 10 | (ui.held_step & 127) << 13 | key << 20, load,
-                    eng_playing() | dirty << 1, (int32_t)lane_accent(key) | ui.track << 16 | ui.grid << 19, ac, 0};
+                    eng_playing() | dirty << 1 | page_count(ui.page) << 2 | algo_here(ui.page) << 6,
+                    (int32_t)lane_accent(key) | ui.track << 16 | ui.grid << 19, ac, 0};
     for (int i = 0; i < ENG_TRACKS; i++)
         s[5] = s[5] * 31 + (int32_t)track_accent(i);
     if (!ui.full && !ui.anim && !memcmp(s, ui.head_shown, sizeof s))
@@ -1010,14 +1133,32 @@ static void draw_header(void)
         } else if (mode) {
             text_cat(m, M[mode], sizeof m);
         }
+        /* what the encoders do here: SELECT the pages (their LEDs between two arrows), ALGO a choice (a ringed A) */
         int faces = !ui.matrix && page_count(ui.page) > 1 ? page_count(ui.page) : 0;
-        int pw = mode ? text_w(&FONT_T, m) + 10 : 0, lx = x + (faces ? 6 + faces * 9 : 0);
-        if (mode && lx + 8 + pw > SQ_X - 4) {   /* no room for both: the faces' LEDs give way to the mode */
+        int alg = !ui.matrix && algo_here(ui.page);
+        int pw = mode ? text_w(&FONT_T, m) + 10 : 0, lx = x + (faces ? 15 + faces * 9 : 0) + (alg ? 18 : 0);
+        if (mode && lx + 8 + pw > SQ_X - 4 && alg) {   /* no room for all: the A gives way to the mode, then the LEDs */
+            alg = 0;
+            lx -= 18;
+        }
+        if (mode && lx + 8 + pw > SQ_X - 4) {
             faces = 0;
             lx = x;
         }
+        if (faces) {
+            int rx = x + 14 + (faces - 1) * 9 + 6;
+            for (int i = 0; i < 4; i++) {
+                cv_rect(x + 5 + i, 14 - i, 1, 2 * i + 1, MUTED);
+                cv_rect(rx + 3 - i, 14 - i, 1, 2 * i + 1, MUTED);
+            }
+        }
         for (int f = 0; f < faces; f++)  /* the faces: an LED each, the one shown lit */
-            led((float)(x + 9 + f * 9), 14.0f, 3.0f, ac, f == page_face(ui.page) ? 8 : 0);
+            led((float)(x + 14 + f * 9), 14.0f, 3.0f, ac, f == page_face(ui.page) ? 8 : 0);
+        if (alg) {
+            float cx = (float)(x + (faces ? 15 + faces * 9 : 0) + 9);
+            ring(cx, 14.0f, 6.5f, 1.4f, ac);
+            cv_text((int)cx - (text_w(&FONT_T, "A") + 1) / 2, 8, &FONT_T, "A", ac);
+        }
         if (mode == 3 && knock)          /* ALL in yellow and black: white on black here, black on yellow there */
             text_pill(lx + 8 + pw / 2, 7, &FONT_T, m, HI, BG);
         else if (mode == 5)
@@ -1161,7 +1302,7 @@ static void panel_plaits(int t, int face, uint16_t ac)
             px = (float)x;
             py = y;
         }
-    } else {                             /* the note now, the gate's length, the envelope on the pitch */
+    } else {                             /* the note now, the gate's length, its octave and transposition */
         int pg = PG_TRACK(t, 2), on = (int)((eng_gates() >> t) & 1u), x;
         char v[12];
         note_text(eng_note(t), n);
@@ -1172,16 +1313,20 @@ static void panel_plaits(int t, int face, uint16_t ac)
         text_cat(s, "GATE ", sizeof s);
         eng_param_text(pg * 4 + 1, eng_final(pg * 4 + 1), v, sizeof v);
         text_cat(s, v, sizeof s);
-        if (m >= ENG_LX0) {             /* an FM drum's own (its pitch envelope's depth, a drive) */
+        if (m >= ENG_LX0) {             /* an FM drum's own (its pitch envelope's depth, a drive): no gate */
             char u[16];
+            s[0] = 0;
             label_text(eng_param_name(pg * 4), u, sizeof u);
-            text_cat(s, "|", sizeof s);
             text_cat(s, u, sizeof s);
             text_cat(s, " ", sizeof s);
-        } else {
-            text_cat(s, "|PITCH ENV ", sizeof s);
+            eng_param_text(pg * 4, eng_final(pg * 4), v, sizeof v);
+            text_cat(s, v, sizeof s);
         }
-        eng_param_text(pg * 4, eng_final(pg * 4), v, sizeof v);
+        text_cat(s, "|OCT ", sizeof s);
+        eng_param_text(pg * 4 + 3, eng_final(pg * 4 + 3), v, sizeof v);
+        text_cat(s, v, sizeof s);
+        text_cat(s, "|TR ", sizeof s);
+        eng_param_text(pg * 4 + 2, eng_final(pg * 4 + 2), v, sizeof v);
         text_cat(s, v, sizeof s);
         hero_line(44, s);
     }
@@ -1305,7 +1450,7 @@ static void panel_eq(void)
 
 /* the grit: its settings, and what they make of a sine (a cycle, 200 samples, over 84 px) */
 /* the filter (PG_FILT): its response as it is now (its cutoff moved by the envelope, FM, the key) in the ring, its
- * model, its type and the cutoff in Hz; OFF: what ALGO and SELECT do */
+ * model, its type and the cutoff in Hz; OFF: what ALGO does */
 static float filt_db(int m, int ty, float w, float q)   /* its response at w (the cutoff's multiple), dB, a sketch */
 {
     float w2 = w * w, re = 1.0f - w2, d2 = re * re + w2 / (q * q), a;
@@ -1324,7 +1469,7 @@ static float filt_db(int m, int ty, float w, float q)   /* its response at w (th
 static void panel_filter(int t, uint16_t ac)
 {
     project_t *p = eng_project();
-    int m = p->algo[PG_FILT(t, 0)], ty = p->algo[PG_FILT(t, 1)];
+    int m = p->algo[PG_FILT(t, 0)], ty = clamp((int32_t)(p->val[PG_FILT(t, 2) * 4] + 0.5f), 0, MF_TYPES - 1);
     float res = eng_final(PG_FILT(t, 0) * 4 + 1), hz = m ? eng_filter_hz(t) : 1000.0f, env = eng_filter_env(t);
     float q = m == MF_SEM ? 0.5f + 12.0f * res * res * res : m == MF_LADDER ? 0.5f + 6.0f * res * res : 0.6f + 5.0f * res;
     char s[48], v[16];
@@ -1354,7 +1499,7 @@ static void panel_filter(int t, uint16_t ac)
     int y = hero_title(mf_model_name(m));
     s[0] = 0;
     if (!m) {
-        text_cat(s, "ALGO: MODEL|SELECT: TYPE", sizeof s);
+        text_cat(s, "ALGO: A MODEL", sizeof s);
     } else {
         static const char *const TY[MF_TYPES] = {"LOW PASS", "BAND PASS", "HIGH PASS"};
         static const char *const VO[MF_TYPES] = {"LOW VOICE", "MID VOICE", "HIGH VOICE"};
@@ -1387,6 +1532,42 @@ static void panel_filter(int t, uint16_t ac)
         }
     }
     hero_line(y, s);
+}
+
+/* the filter's envelope (ENV's second page): its vactrol's rise (ATTACK) and fall (DECAY), the ping its trigs give
+ * (a spike), where it is now (the ring); the filter OFF: dim */
+static void panel_env2(int t, uint16_t ac)
+{
+    project_t *p = eng_project();
+    int on = p->algo[PG_FILT(t, 0)] != MF_OFF, y0 = 68, h = 48;
+    float at = eng_final(PG_FILT(t, 2) * 4 + 3), dc = eng_final(PG_FILT(t, 0) * 4 + 3);
+    float ping = eng_final(PG_FILT(t, 1) * 4 + 1), env = on ? eng_filter_env(t) : 0.0f;
+    float rise = 1.0f + 60.0f * at * at, k = 0.004f + 0.16f * (1.0f - dc) * (1.0f - dc) * (1.0f - dc);
+    uint16_t c = on ? ac : DIM, fill = tint(c, BG, 2);
+    float px = 0.0f, py = (float)y0;
+    arc(HX, HY, 22.0f, 27.0f, 0.0f, 1.0f, TRACK);   /* the ring: the envelope now */
+    if (env > 0.004f)
+        lit_arc(HX, HY, 22.0f, 27.0f, 0.0f, fm_minf(env, 1.0f), c);
+    cv_text(HX - text_w(&FONT_XS, "ENV") / 2, HY - 8, &FONT_XS, "ENV", on ? MUTED : DIM);
+    cv_text(84, 0, &FONT_XS, dec(on ? "FILTER ENVELOPE" : "FILTER OFF", 1), MUTED);
+    if (ping > 0.02f)
+        cv_text(232 - text_w(&FONT_XS, "PING"), 0, &FONT_XS, "PING", on ? c : DIM);
+    int reveal = anim_p >= 1.0f ? 146 : (int)(146.0f * (1.0f - (1.0f - anim_p) * (1.0f - anim_p)));
+    for (int x = 0; x < reveal; x++) {   /* (a page changed: the curve drawn in) */
+        float e = (float)x < rise ? 1.0f - fm_exp2f(-(float)x * 4.0f / rise) * (1.0f - (float)x / rise)
+                                  : fm_exp2f(-((float)x - rise) * k * 1.4427f);
+        float y = (float)y0 - e * (float)h;
+        if (!(x % 3) && y < (float)y0 - 2.0f)
+            cv_rect(86 + x, (int)y + 3, 1, y0 - (int)y - 2, fill);
+        if (x) {
+            seg(86.0f + px, py, 86.0f + (float)x, y, 5.0f, tint(c, BG, 2));
+            seg(86.0f + px, py, 86.0f + (float)x, y, 2.0f, c);
+        }
+        px = (float)x;
+        py = y;
+    }
+    if (ping > 0.02f)                    /* the ping: a spike at the trig, as tall as it is */
+        seg(87.0f, (float)y0, 87.0f, (float)y0 - (float)h * (0.3f + 0.7f * ping), 2.0f, on ? HI : DIM);
 }
 
 static void panel_grit(int t)
@@ -1721,7 +1902,7 @@ static void draw_panel(void)
 {
     project_t *p = eng_project();
     int pt = ptype(ui.page), tr = ptrack(ui.page);
-    int32_t s[3] = {ui.page, eng_algo_count(page_first(ui.page)) ? p->algo[page_first(ui.page)] : -1, 0};
+    int32_t s[3] = {ui.page, algo_page(ui.page) >= 0 ? p->algo[algo_page(ui.page)] : -1, 0};
     int fx = pt == PT_DELAY1 || pt == PT_DELAY2 || pt == PT_DSEND || pt == PT_REVERB || pt == PT_RSEND ||
              pt == PT_WARPS1 || pt == PT_WARPS2 || pt == PT_LANE || pt == PT_DUCK || pt == PT_COMP || pt == PT_OTT;
     if (pt == PT_COMP || pt == PT_OTT)
@@ -1761,9 +1942,21 @@ static void draw_panel(void)
         for (int k = 0; k < 4; k++)
             s[2] = s[2] * 131 + (int)(eng_final(ui.page * 4 + k) * 100.0f);
         break;
-    case PT_FILT1: case PT_FILT2:        /* its model, type, knobs and the cutoff as it moves (its envelope, FM) */
-        s[2] = p->algo[PG_FILT(tr, 0)] | p->algo[PG_FILT(tr, 1)] << 3;
-        for (int k = 0; k < 8; k++)
+    case PT_SON2: {
+        int pg = PG_TRACK(tr, 2);
+        s[2] = eng_note(tr) | (int)((eng_gates() >> tr) & 1u) << 8 | (int)(eng_final(pg * 4) * 50.0f + 50.0f) << 9;
+        for (int k = 1; k < 4; k++)
+            s[2] = s[2] * 131 + (int)(eng_final(pg * 4 + k) * 100.0f);
+        break;
+    }
+    case PT_ENV2:                        /* the filter's envelope: its knobs, where it is */
+        s[2] = p->algo[PG_FILT(tr, 0)] | (int)(eng_filter_env(tr) * 24.0f) << 3;
+        for (int k = 0; k < 12; k++)
+            s[2] = s[2] * 131 + (int)(eng_final(PG_FILT(tr, k / 4) * 4 + k % 4) * 100.0f);
+        break;
+    case PT_VFLT1: case PT_VFLT2:        /* its model, type, knobs and the cutoff as it moves (its envelope, FM) */
+        s[2] = p->algo[PG_FILT(tr, 0)];
+        for (int k = 0; k < 12; k++)
             s[2] = s[2] * 131 + (int)(eng_final(PG_FILT(tr, k / 4) * 4 + k % 4) * 100.0f);
         s[2] = s[2] * 7 + (int)(fm_log2f(fm_maxf(eng_filter_hz(tr), 10.0f)) * 12.0f);
         s[2] = s[2] * 11 + (int)(eng_filter_load(tr) / 5u);
@@ -1801,12 +1994,15 @@ static void draw_panel(void)
     memcpy(ui.panel_shown, s, sizeof s);
     cv_begin(240, PANEL_H, BG);
     switch (pt) {
-    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: panel_plaits(tr, page_face(ui.page), page_accent(ui.page)); break;
+    case PT_PLAITS1: case PT_PLAITS3: panel_plaits(tr, 0, page_accent(ui.page)); break;
+    case PT_PLAITS2: panel_plaits(tr, drum_track(tr) ? 0 : 1, page_accent(ui.page)); break;   /* (an FM drum's knobs) */
+    case PT_SON2: panel_plaits(tr, 2, page_accent(ui.page)); break;
+    case PT_ENV2: panel_env2(tr, page_accent(ui.page)); break;
     case PT_LFO: panel_lfo(ui.page - PG_LFO(0)); break;
     case PT_MIX: case PT_PAN: panel_mixer(pt == PT_PAN); break;
     case PT_EQ: panel_eq(); break;
     case PT_GRIT: panel_grit(tr); break;
-    case PT_FILT1: case PT_FILT2: panel_filter(tr, page_accent(ui.page)); break;
+    case PT_VFLT1: case PT_VFLT2: panel_filter(tr, page_accent(ui.page)); break;
     case PT_EUC: panel_euclid(eng_page_lane(ui.page)); break;
     case PT_DUCK: panel_duck(); break;
     case PT_COMP: case PT_OTT: panel_bus(pt == PT_OTT); break;
@@ -1937,6 +2133,8 @@ static int knob_idle(int param)
         return eng_model_enveloped(eng_project()->algo[page - 1]) && eng_project()->algo[page - 1] < ENG_LX0;
     if (page == PG_COMP || page == PG_OTT)
         return bus_mode() != (page == PG_OTT ? MB_OTT : MB_COMP);
+    if (page >= PG_FILT(0, 0) && page <= PG_FILT(ENG_TRACKS - 1, 2))   /* the filter OFF: its knobs */
+        return eng_project()->algo[PG_FILT((page - PG_FILT(0, 0)) / 3, 0)] == MF_OFF;
     if (ptype(page) == PT_LANE && k != 3)
         return !eng_lane_has_trigs(eng_page_lane(page));
     return 0;
@@ -1968,7 +2166,6 @@ static int track_knobs(int page)
 
 static void draw_knob_at(int page, int k, int force)
 {
-    static const char *const RND_NAME[4] = {"Pan", "Decay", "Tune", "Ratch"};
     project_t *p = eng_project();
     int param = knob_param(page, k), t, tp, view = knob_view(page, param, &t, &tp), locked = 0, rnd = 0;
     const eng_pdef_t *d = eng_pdef(param);
@@ -2014,7 +2211,7 @@ static void draw_knob_at(int page, int k, int force)
     if (tk)
         lab[0] = 0, text_cat(lab, LANE_SHORT[k], sizeof lab);
     else
-        label_text(ptype(page) == PT_RND ? RND_NAME[k] : eng_param_name(param), lab, sizeof lab);
+        label_text(knob_name(page, k, param), lab, sizeof lab);
     int32_t s[4] = {(int32_t)(view == KV_RND ? (float)(rnd + 100) : knob_u(param, v) * 270.0f) |
                     (int32_t)(knob_u(param, f) * 270.0f) << 10 | view << 20 | locked << 22,
                     text_hash(txt) * 31 + text_hash(lab), hash, hot | ui.mod << 1 | (int32_t)ac << 2 | act << 18};
@@ -3061,6 +3258,7 @@ static void set_lane(int l)              /* the steps shown: their page kept if 
  * another module, at once. The lane follows the page whose knobs a lane's steps lock */
 static void go_page_dir(int page, int dir)
 {
+    page = shown_page(page);
     int g = ptype(page) == PT_GLOBAL || ptype(page) == PT_SYS, l = page_lane(page);
     if (g && ptype(ui.page) != PT_GLOBAL && ptype(ui.page) != PT_SYS)
         ui.prev_page = ui.page;          /* GLO again goes back there */
@@ -3268,10 +3466,14 @@ static void module_button(int b)
 {
     int pt = ptype(ui.page), here = !ui.matrix, next = page_at(ui.page, page_face(ui.page) + 1);
     switch (b) {
-    case B_EDIT:
-        go_page(here && (pt <= PT_PLAITS3 || pt == PT_GRIT || pt == PT_FILT1 || pt == PT_FILT2) ? next
-                                                                                     : PG_TRACK(ui.track, 0));
+    case B_EDIT: {                       /* the track's sets: its sound, then its grit, its filter (from anywhere else:
+                                          * its sound) */
+        int c = here ? track_cat(ui.page) : CAT_NONE, f[MAXFACES];
+        cat_pages(c == CAT_SOUND ? CAT_GRIT : c == CAT_GRIT ? CAT_FILTER : CAT_SOUND, ui.track, f);
+        go_page(f[0]);
+        (void)next;
         break;
+    }
     case B_LFO:                          /* the LFOs: 1, then 2, 3 */
         go_page(here && pt == PT_LFO ? next : PG_LFO(0));
         break;
@@ -3531,9 +3733,15 @@ static void button_up(int b)
             all_up();
         ui.full = 1;
         break;
-    case B_ENV:                          /* a tap: the track's envelope (PLAITS 2/3); held with a knob: its random */
-        if (!ui.used[b])
-            go_page(PG_TRACK(ui.track, 1));
+    case B_ENV:                          /* a tap: the track's envelopes (again: their next page); held with a knob: its
+                                          * random */
+        if (!ui.used[b]) {
+            int f[MAXFACES];
+            if (!ui.matrix && track_cat(ui.page) == CAT_ENV)
+                go_page(page_at(ui.page, page_face(ui.page) + 1));
+            else
+                cat_pages(CAT_ENV, ui.track, f), go_page(f[0]);
+        }
         ui.full = 1;
         break;
     case B_OCTDN: case B_OCTUP:          /* the random dose: it stays as turned */
@@ -3735,16 +3943,6 @@ static void input(void)
             p->dice_seed++;
         p->dice = (uint8_t)clamp((int32_t)p->dice + e * (e > 1 || e < -1 ? 5 : 2), 0, 100);
         dirty = 1;
-    } else if (e && !ui.matrix && (ptype(ui.page) == PT_FILT1 || ptype(ui.page) == PT_FILT2)) {
-        project_t *p = eng_project();    /* the filter: SELECT its type (LP, BP, HP; VOX: its voices); EDIT its faces */
-        int t = ptrack(ui.page), ty = clamp((int32_t)p->algo[PG_FILT(t, 1)] + (e > 0 ? 1 : -1), 0, MF_TYPES - 1);
-        for (int i = 0; i < ENG_TRACKS; i++)
-            if (i == t || held(B_GLO))   /* (GLO held: the four tracks') */
-                p->algo[PG_FILT(i, 1)] = (uint8_t)ty;
-        if (held(B_GLO))
-            ui.used[B_GLO] = 1;
-        dirty = 1;
-        ui.body_panel = 1;
     } else if (e && !ui.matrix && page_count(ui.page) > 1)
         go_page_dir(page_at(ui.page, page_face(ui.page) + (e > 0 ? 1 : -1)), e > 0 ? 1 : -1);
     e = plat_enc(EN_ALGO);
@@ -3773,7 +3971,7 @@ static void input(void)
         if (m != MB_OFF && ui.page != (m == MB_OTT ? PG_OTT : PG_COMP))
             go_page_dir(m == MB_OTT ? PG_OTT : PG_COMP, e > 0 ? 1 : -1);
         ui.full = ui.slide_dir ? ui.full : 1;
-    } else if (e && !ui.matrix && (ptype(ui.page) == PT_FILT1 || ptype(ui.page) == PT_FILT2)) {
+    } else if (e && !ui.matrix && track_cat(ui.page) == CAT_FILTER) {
         project_t *p = eng_project();    /* the filter's model (OFF, LADDER, MS-20, SEM, VOX); GLO held: the four's */
         int t = ptrack(ui.page), m = clamp((int32_t)p->algo[PG_FILT(t, 0)] + e, 0, MF_MODELS - 1);
         for (int i = 0; i < ENG_TRACKS; i++)
@@ -3785,16 +3983,16 @@ static void input(void)
         ui.body_panel = 1;
         ui.anim = 1;                     /* (its name written again) */
         ui.anim_at = now;
-    } else if (e && !ui.matrix && ui.page < ENG_NPAGES) {
+    } else if (e && !ui.matrix && algo_page(ui.page) >= 0) {
         project_t *p = eng_project();
-        int first = page_first(ui.page), n = eng_algo_count(first);
+        int first = algo_page(ui.page), n = eng_algo_count(first), snd = track_cat(ui.page) == CAT_SOUND;
         if (n) {
             int a = clamp((int32_t)p->algo[first] + e, 0, n - 1);
-            if (held(B_GLO) && ptype(ui.page) <= PT_PLAITS3) {   /* GLO held: the four tracks on that model */
+            if (held(B_GLO) && snd) {    /* GLO held: the four tracks on that model */
                 for (int t = 0; t < ENG_TRACKS; t++)
                     eng_set_model(t, a);
                 ui.used[B_GLO] = 1;
-            } else if (ptype(ui.page) <= PT_PLAITS3) {
+            } else if (snd) {
                 eng_set_model(eng_page_track(first), a);   /* (an FM drum: its kit on its knobs) */
             } else {
                 p->algo[first] = (uint8_t)a;
@@ -3858,13 +4056,14 @@ static void input(void)
             [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
             [PT_ARP] = B_ARP, [PT_WARPS1] = B_FX, [PT_WARPS2] = B_FX, [PT_DUCK] = B_HOME, [PT_COMP] = B_HOME,
             [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_GRIT] = B_EDIT, [PT_EUC] = B_SEQ, [PT_RND] = B_SEQ,
-            [PT_FILT1] = B_EDIT, [PT_FILT2] = B_EDIT,
-            [PT_SYS] = B_GLO};
+            [PT_FILT1] = B_EDIT, [PT_FILT2] = B_EDIT, [PT_FILT3] = B_EDIT, [PT_SON2] = B_EDIT, [PT_VFLT1] = B_EDIT,
+            [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
         uint32_t bb = ui.dice ? 1u << B_OCTDN : 0, kk = ui.keys;
         int pt = ptype(ui.page);
         if (!ui.matrix)
-            bb |= 1u << (pt == PT_EUC && ptrack(ui.page) < 0 ? B_FX : PAGE_BTN[pt]);
+            bb |= 1u << (pt == PT_EUC && ptrack(ui.page) < 0 ? B_FX : track_cat(ui.page) == CAT_ENV ? B_ENV
+                         : track_cat(ui.page) != CAT_NONE ? B_EDIT : PAGE_BTN[pt]);
         if (ui.mod || ui.matrix)
             bb |= 1u << B_SEL;
         if (ui.grid || ui.page == VP_SYS || (ui.erec >= 0 && (now / 250u) & 1u))   /* recording Endless: it blinks */

@@ -57,6 +57,7 @@ const float kDivMult[kDivs] = {0.5f, 2.0f / 3.0f, 1.0f, 4.0f / 3.0f, 1.5f, 2.0f,
                                12.0f, 16.0f};   // in sixteenths
 const char* const kDelayMode[2] = {"Mono", "Ping-pong"};
 const char* const kGritShape[3] = {"Soft", "Hard", "Fold"};
+const char* const kFiltTypes[3] = {"LP", "BP", "HP"};   // (VOX: its voices, eng_param_text)
 
 // the knobs' names: the modules' own, short (a word, 52 px at most on the screen: the knobs apart)
 const eng_pdef_t kPages[NPT][4] = {
@@ -91,6 +92,7 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Fills", K_INT, 0, 64, 0}, {"Rotate", K_INT, 0, 63, 0}, {"Length", K_INT, 1, 64, 0}, {"Prob", K_UNI, 0, 0, 0}},
   {{"Cutoff", K_UNI, 0, 0, 0}, {"Reso", K_UNI, 0, 0, 0}, {"Env", K_BIP, 0, 0, 0}, {"Decay", K_UNI, 0, 0, 0}},
   {{"Drive", K_UNI, 0, 0, 0}, {"Ping", K_UNI, 0, 0, 0}, {"FM", K_BIP, 0, 0, 0}, {"Key", K_UNI, 0, 0, 0}},
+  {{"Type", K_ENUM, 0, 2, kFiltTypes}, {"Noise", K_UNI, 0, 0, 0}, {"Color", K_BIP, 0, 0, 0}, {"Attack", K_UNI, 0, 0, 0}},
 };
 const char* const kBusModes[3] = {"OFF", "COMP", "OTT"};
 const char* const kDelayAlgos[2] = {"SYNC", "FREE"};
@@ -134,7 +136,7 @@ const char* const kLfoRatioNames[9] = {"4 / beat", "2 / beat", "1 / beat", "1 / 
                                          "1 / 2 bars", "1 / 4 bars", "1 / 8 bars", "1 / 16 bars"};
 
 int page_type(int page) {
-  if (page >= PG_FILT(0, 0)) return (page - PG_FILT(0, 0)) % 2 ? PT_FILT2 : PT_FILT1;
+  if (page >= PG_FILT(0, 0)) return PT_FILT1 + (page - PG_FILT(0, 0)) % 3;
   if (page < 12) return PT_PLAITS1 + page % 3;
   if (page < 16) return PT_LFO;
   if (page < PG_STEP(0)) {
@@ -905,7 +907,7 @@ Grit grit[ENG_TRACKS];
 volatile uint8_t filt_stop;             // the transport stopped: the filters to close
 volatile uint32_t filt_ticks[ENG_TRACKS];   // the filter's time in its voice's task, the last block (the screen's)
 float filt_cost[ENG_TRACKS];
-const float mf_off_knobs[MF_KNOBS] = {1.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f};
+const float mf_off_knobs[MF_KNOBS] = {1.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 
 void set_grit(int t) {
   Grit& g = grit[t];
@@ -920,14 +922,14 @@ void set_grit(int t) {
 // a track's filter (PG_FILT, mi_filter.cc): its model and type (the pages' ALGORITHM), its knobs as the trig sees
 // them (locks, randoms, the dose, the cables), the note for its KEY
 void set_filter(int t) {
-  int m = proj.algo[PG_FILT(t, 0)];
+  int m = proj.algo[PG_FILT(t, 0)];   // (TYPE: not a lock's nor a random's, a new type starts it again)
   if (m <= MF_OFF || m >= MF_MODELS) {
     mf_set(t, MF_OFF, MF_LP, mf_off_knobs, 60.0f);
     return;
   }
   float k[MF_KNOBS];
   for (int i = 0; i < MF_KNOBS; ++i) k[i] = E(t, TP_CUTOFF + i);
-  mf_set(t, m, proj.algo[PG_FILT(t, 1)], k, vnote[t]);
+  mf_set(t, m, iround(proj.val[PG_FILT(t, 2) * 4]), k, vnote[t]);
 }
 
 void apply_grit(int t, float* x, uint32_t n) {
@@ -1344,7 +1346,7 @@ int eng_page_type(int page) { return page_type(page); }
 int eng_page_track(int page) {
   if (page < 12) return page / 3;
   if (page >= PG_GRIT(0) && page < PG_GRIT(ENG_TRACKS)) return page - PG_GRIT(0);
-  if (page >= PG_FILT(0, 0) && page < PG_FILT(ENG_TRACKS, 0)) return (page - PG_FILT(0, 0)) / 2;
+  if (page >= PG_FILT(0, 0) && page < PG_FILT(ENG_TRACKS, 0)) return (page - PG_FILT(0, 0)) / 3;
   if (page >= PG_EUC(0) && page < PG_EUC(ENG_TRACKS)) return page - PG_EUC(0);
   if (page >= PG_ARP(0) && page < PG_ARP(0) + ENG_TRACKS) return page - PG_ARP(0);
   return page >= PG_STEP(0) && page < PG_STEP(ENG_TRACKS) ? page - PG_STEP(0) : -1;
@@ -1425,15 +1427,15 @@ int eng_param_tp(int param, int* lane) {
     l = page - PG_GRIT(0);
     tp = TP_DRIVE + k;
   } else if (page >= PG_FILT(0, 0) && page < PG_FILT(ENG_TRACKS, 0)) {
-    l = (page - PG_FILT(0, 0)) / 2;
-    tp = TP_CUTOFF + ((page - PG_FILT(0, 0)) % 2) * 4 + k;
+    l = (page - PG_FILT(0, 0)) / 3;
+    tp = TP_CUTOFF + ((page - PG_FILT(0, 0)) % 3) * 4 + k;
   }
   if (lane) *lane = l;
   return tp;
 }
 
-int eng_tp_lockable(int lane, int tp) {   // (not Warps' patching: CARRIER, MOD, MODE)
-  return tp >= 0 && tp < eng_lane_params(lane) && !(lane == 0 && tp == TP_DUCK) &&
+int eng_tp_lockable(int lane, int tp) {   // (not Warps' patching: CARRIER, MOD, MODE; nor a filter's TYPE)
+  return tp >= 0 && tp < eng_lane_params(lane) && !(lane == 0 && tp == TP_DUCK) && !(lane < ENG_TRACKS && tp == TP_FTYPE) &&
          !(lane == LANE_WARPS && (tp == 0 || tp == 1 || tp == 7));
 }
 
@@ -1461,8 +1463,6 @@ const char* eng_param_name(int param) {
     int m = proj.algo[param / 4];
     return kModelKnobs[m < 0 || m > 23 ? 0 : m][param % 4 - 1];
   }
-  if (page_type(param / 4) == PT_FILT2 && param % 4 == 0)   // the filter's own knob: its model's
-    return mf_special_name(proj.algo[param / 4 - 1]);
   return eng_pdef(param)->name;
 }
 
@@ -1550,6 +1550,9 @@ void eng_param_text(int param, float v, char* b, int n) {
   } else if (pt == PT_WARPS1 && k == 0 && i_of(v) >= WC_OSC1) {   // the oscillator's shape, as the algorithm uses it
     int o = i_of(v) > WC_OSC3 ? 2 : i_of(v) - WC_OSC1;
     put(b, n, Pi(PG_WARPS(1), 3) == WM_SHIFT ? kWarpsCarrier[WC_OSC1 + o] : kOscXmod[o]);
+  } else if (pt == PT_FILT3 && k == 0) {  // TYPE: LP BP HP, VOX's voices
+    int i = iround(v);
+    put(b, n, mf_type_name(proj.algo[(param / 4) - 2], i < 0 ? 0 : i > 2 ? 2 : i));
   } else if (d->kind == K_ENUM) {
     int i = static_cast<int>(v + 0.5f);
     put(b, n, d->names[i < d->lo ? d->lo : i > d->hi ? d->hi : i]);
@@ -1637,7 +1640,27 @@ void eng_param_text(int param, float v, char* b, int n) {
       put_num(b, n, static_cast<int32_t>(t * 10.0f + 0.5f), 1, 0);
       put_end(b, n, " s");
     }
-  } else if ((pt == PT_FILT1 && k == 1) || (pt == PT_FILT2 && (k == 0 || k == 1 || k == 3))) {
+  } else if (pt == PT_FILT3 && k == 2) {  // COLOR: the noise darker, white, brighter
+    int32_t q = static_cast<int32_t>(v * 100.0f + (v < 0 ? -0.5f : 0.5f));
+    if (q > -3 && q < 3) {
+      put(b, n, "White");
+    } else {
+      put(b, n, q < 0 ? "Dk " : "Br ");
+      put_num(b + 3, n - 3, q < 0 ? -q : q, 0, 0);
+    }
+  } else if (pt == PT_FILT3 && k == 3) {  // ATTACK: the envelope's rise
+    float t = 25.0f * fm_exp2f(12.0f * clampf(v, 0.0f, 1.0f)) / kSr;
+    if (t < 0.0095f) {
+      put_num(b, n, static_cast<int32_t>(t * 10000.0f + 0.5f), 1, 0);
+      put_end(b, n, " ms");
+    } else if (t < 1.0f) {
+      put_num(b, n, static_cast<int32_t>(t * 1000.0f + 0.5f), 0, 0);
+      put_end(b, n, " ms");
+    } else {
+      put_num(b, n, static_cast<int32_t>(t * 10.0f + 0.5f), 1, 0);
+      put_end(b, n, " s");
+    }
+  } else if ((pt == PT_FILT1 && k == 1) || (pt == PT_FILT2 && (k == 0 || k == 1 || k == 3)) || (pt == PT_FILT3 && k == 1)) {
     put_num(b, n, static_cast<int32_t>(v * 100.0f + 0.5f), 0, 0);
     put_end(b, n, pt == PT_FILT2 && k == 3 ? "%" : "");
   } else if (pt == PT_GRIT && k >= 2) {  // RATE: the rate it holds at; BITS: how many
@@ -1748,7 +1771,6 @@ int eng_algo_count(int page) {
   switch (page_type(page)) {
     case PT_PLAITS1: return ENG_MODELS;
     case PT_FILT1: return MF_MODELS;
-    case PT_FILT2: return MF_TYPES;
     case PT_DELAY1: return 2;
     case PT_COMP: return 3;
     default: return 0;
@@ -1760,7 +1782,6 @@ const char* eng_algo_name(int page, int a) {
   if (!n) return "";
   a = a < 0 ? 0 : a >= n ? n - 1 : a;
   if (page_type(page) == PT_FILT1) return mf_model_name(a);
-  if (page_type(page) == PT_FILT2) return mf_type_name(proj.algo[page - 1], a);
   return page_type(page) == PT_PLAITS1 ? kModels[a] : page_type(page) == PT_COMP ? kBusModes[a] : kDelayAlgos[a];
 }
 
@@ -1850,8 +1871,8 @@ void eng_blank(project_t* p) {
   }
   p->algo[PG_COMP] = MB_COMP;
   for (int t = 0; t < ENG_TRACKS; ++t) {                 // the filters: off, LP; ready at 1.2 kHz, some resonance
-    static const float kF[8] = {0.6f, 0.3f, 0.3f, 0.35f, 0.0f, 0.0f, 0.0f, 0.0f};   // and envelope
-    for (int k = 0; k < 8; ++k) p->val[PG_FILT(t, k / 4) * 4 + k % 4] = kF[k];
+    static const float kF[12] = {0.6f, 0.3f, 0.3f, 0.35f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};   // and
+    for (int k = 0; k < 12; ++k) p->val[PG_FILT(t, k / 4) * 4 + k % 4] = kF[k];               // envelope
   }
   p->val[PG_GLOBAL * 4 + 0] = 0.60206f;                  // 30 x 2^(0.60206 x 3.3219) = 120 BPM
   p->val[PG_GLOBAL * 4 + 1] = 1.0f;                      // major
@@ -1940,15 +1961,14 @@ void eng_stress(project_t* p) {
   p->val[PG_TRACK(1, 2) * 4 + 1] = 0.3f;                 // the bass: short notes
   // the filters, one model each (0.5.8): LADDER driven on the kick, MS-20 on the bass (its envelope, half its key),
   // SEM's noise on the chords (its FM: a sample at a time), VOX on the resonator, pinged
-  static const int kFm[4] = {MF_LADDER, MF_MS20, MF_SEM, MF_VOX}, kFt[4] = {MF_LP, MF_LP, MF_LP, MF_MID};
-  static const float kFk[4][8] = {{0.78f, 0.3f, 0.3f, 0.3f, 0.4f, 0.0f, 0.0f, 0.0f},
-                                  {0.45f, 0.6f, 0.5f, 0.35f, 0.6f, 0.0f, 0.0f, 0.5f},
-                                  {0.62f, 0.5f, 0.3f, 0.5f, 0.3f, 0.0f, 0.3f, 0.0f},
-                                  {0.5f, 0.6f, 0.4f, 0.6f, 0.2f, 0.5f, 0.0f, 0.0f}};
+  static const int kFm[4] = {MF_LADDER, MF_MS20, MF_SEM, MF_VOX};
+  static const float kFk[4][12] = {{0.78f, 0.3f, 0.3f, 0.3f, 0.4f, 0.0f, 0.0f, 0.0f, MF_LP, 0.0f, 0.0f, 0.0f},
+                                   {0.45f, 0.6f, 0.5f, 0.35f, 0.6f, 0.0f, 0.0f, 0.5f, MF_LP, 0.0f, 0.0f, 0.0f},
+                                   {0.62f, 0.5f, 0.3f, 0.5f, 0.0f, 0.0f, 0.3f, 0.0f, MF_LP, 0.55f, -0.4f, 0.0f},
+                                   {0.5f, 0.6f, 0.4f, 0.6f, 0.0f, 0.5f, 0.0f, 0.0f, MF_MID, 0.35f, 0.0f, 0.1f}};
   for (int t = 0; t < ENG_TRACKS; ++t) {
     p->algo[PG_FILT(t, 0)] = static_cast<uint8_t>(kFm[t]);
-    p->algo[PG_FILT(t, 1)] = static_cast<uint8_t>(kFt[t]);
-    for (int k = 0; k < 8; ++k) p->val[PG_FILT(t, k / 4) * 4 + k % 4] = kFk[t][k];
+    for (int k = 0; k < 12; ++k) p->val[PG_FILT(t, k / 4) * 4 + k % 4] = kFk[t][k];
   }
   p->val[PG_GRIT(0) * 4 + 0] = 0.35f;                    // the kick driven (soft)
   p->val[PG_GRIT(1) * 4 + 0] = 0.25f;                    // the bass clipped, a little decimated
@@ -2171,6 +2191,71 @@ void upgrade_v12(project_t* p, const project_v12& o) {   // its pages and lane p
   }
 }
 
+// 0.5.8's and 0.5.9's (version 13): the filters in two pages each (52 + 2 t: CUTOFF, RESO, ENV, DECAY; the model's
+// own knob, PING, FM, KEY), the type the second's ALGORITHM; 60 pages, 33 lane parameters
+struct project_v13 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[60 * 4];
+  uint8_t algo[60];
+  uint8_t out_mode, warps_hq, theme, dice, dice_seed;
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+  int8_t rnd[ENG_LANES][33];
+  uint16_t seed[ENG_LANES];
+  plock_t lock[ENG_PLOCKS];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+  uint8_t rseed[ENG_LANES][33];
+};
+
+int v13_param(int q) {                  // a 0.5.8 parameter's place now: its filters' two pages moved, a third added
+  if (q < 52 * 4) return q;
+  int pg = q / 4 - 52;
+  return PG_FILT(pg / 2, pg % 2) * 4 + q % 4;
+}
+
+void upgrade_v13(project_t* p, const project_v13& o) {
+  eng_blank(p);
+  for (int i = 0; i < 60 * 4; ++i) p->val[v13_param(i)] = o.val[i];
+  for (int i = 0; i < 52; ++i) p->algo[i] = o.algo[i];
+  for (int t = 0; t < ENG_TRACKS; ++t) {  // the model; the type, an ALGORITHM then; SEM's NOISE and VOX's BREATH, their
+    int m = o.algo[52 + 2 * t];           // own knob then, now NOISE (DRIVE back at 0)
+    p->algo[PG_FILT(t, 0)] = static_cast<uint8_t>(m);
+    p->val[PG_FILT(t, 2) * 4 + 0] = static_cast<float>(o.algo[52 + 2 * t + 1] % 3);
+    if (m == MF_SEM || m == MF_VOX) {
+      float sp = o.val[(52 + 2 * t + 1) * 4];
+      p->val[PG_FILT(t, 2) * 4 + 1] = m == MF_SEM ? 0.94f * sp : fm_sqrtf(0.83f * sp);   // (the same noise)
+      p->val[PG_FILT(t, 1) * 4 + 0] = 0.0f;
+    }
+  }
+  p->out_mode = o.out_mode;
+  p->warps_hq = o.warps_hq;
+  p->theme = o.theme;
+  p->dice = o.dice;
+  p->dice_seed = o.dice_seed;
+  for (int g = 0; g <= ENG_TRACKS; ++g)
+    for (int c = 0; c < ENG_CABLES; ++c) {
+      p->cable[g][c] = o.cable[g][c];
+      p->cable[g][c].dst = static_cast<uint8_t>(v13_param(o.cable[g][c].dst));
+    }
+  for (int l = 0; l < ENG_LANES; ++l) {
+    for (int i = 0; i < ENG_STEPS / 8; ++i) p->trig[l][i] = o.trig[l][i];
+    for (int i = 0; i < 33; ++i) {        // (the lane parameters' order kept: the filter's new four after)
+      p->rnd[l][i] = o.rnd[l][i];
+      p->rseed[l][i] = o.rseed[l][i];
+    }
+    p->seed[l] = o.seed[l];
+  }
+  for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i] = o.lock[i];
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    for (int i = 0; i < ENG_ENDLESS; ++i) p->endless[t][i] = o.endless[t][i];
+    p->endless_len[t] = o.endless_len[t];
+    p->endless_key[t] = o.endless_key[t];
+  }
+}
+
 // versions 7 to 9: their pages first, their lane parameters first (what came after is new)
 void blank_v9(project_t* p);
 
@@ -2353,9 +2438,17 @@ int eng_upgrade(project_t* p, int bytes) {
     project_v8 v8;
     project_v9 v9;
     project_v12 v12;
+    project_v13 v13;
   } u;
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
+  if (v == 13 && bytes == static_cast<int>(sizeof(project_v13)) && p->size == sizeof(project_v13)) {
+    const uint8_t* from = reinterpret_cast<const uint8_t*>(p);
+    uint8_t* to = reinterpret_cast<uint8_t*>(&u.v13);
+    for (uint32_t i = 0; i < sizeof(project_v13); ++i) to[i] = from[i];
+    upgrade_v13(p, u.v13);
+    return 1;
+  }
   if (((v == 10 || v == 11) && bytes == static_cast<int>(kV11Bytes) && p->size == kV11Bytes) ||
       (v == 12 && bytes == static_cast<int>(sizeof(project_v12)) && p->size == sizeof(project_v12))) {
     const uint8_t* from = reinterpret_cast<const uint8_t*>(p);   // (0.4's and 0.5's: 0.5.6's, its draws 0; 0.4's

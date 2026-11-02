@@ -26,7 +26,7 @@ extern "C" {
 #define LANE_REVERB 5
 #define LANE_WARPS 6
 #define ENG_CABLES 8                     /* per track, and as many global */
-#define ENG_NPAGES 60
+#define ENG_NPAGES 64
 #define ENG_NPARAMS (ENG_NPAGES * 4)
 #define ENG_STEPS 64                     /* the steps a lane: four pages of 16 */
 #define ENG_PLOCKS 384                   /* parameter locks, for all the lanes' steps */
@@ -61,13 +61,13 @@ extern "C" {
 #define PG_EUC(l) (45 + (l))             /* a lane's Euclidean rhythm (its steps' last face): FILLS spread as evenly
                                           * as they go over the lane's LENGTH, ROTATE; turning them writes its trigs
                                           * (the screen: its third and fourth knobs are the lane's LENGTH and PROB) */
-#define PG_FILT(t, f) (52 + (t) * 2 + (f))   /* a track's filter (Plaits' fifth and sixth faces, mi_filter.cc): CUTOFF,
-                                          * RESO, ENV, DECAY; its model's own (DRIVE, NOISE, BREATH), PING, FM, KEY.
-                                          * ALGORITHM: the first's the model (OFF, LADDER, MS-20, SEM, VOX), the
-                                          * second's the type (LP, BP, HP; VOX: low, mid, high voices) */
+#define PG_FILT(t, f) (52 + (t) * 3 + (f))   /* a track's filter (mi_filter.cc), three pages of four (the screen shows
+                                          * them otherwise: app.c): CUTOFF, RESO, ENV, DECAY; DRIVE, PING, FM, KEY;
+                                          * TYPE (LP, BP, HP; VOX: low, mid, high voices), NOISE, COLOR, ATTACK. The
+                                          * first's ALGORITHM: the model (OFF, LADDER, MS-20, SEM, VOX) */
 enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_LFO, PT_MIX, PT_PAN, PT_REVERB, PT_RSEND, PT_DELAY1,
        PT_DELAY2, PT_DSEND, PT_STEP, PT_LANE, PT_GLOBAL, PT_ARP, PT_WARPS1, PT_WARPS2, PT_DUCK, PT_COMP, PT_OTT, PT_EQ,
-       PT_GRIT, PT_EUC, PT_FILT1, PT_FILT2, NPT };
+       PT_GRIT, PT_EUC, PT_FILT1, PT_FILT2, PT_FILT3, NPT };
 enum { GS_SOFT, GS_HARD, GS_FOLD };    /* the grit's shapes */
 enum { MB_OFF, MB_COMP, MB_OTT };       /* the master bus's mode (PG_COMP's ALGORITHM) */
 /* Warps' carrier (PG_WARPS(0)'s first knob): none (Warps off), a track, or the module's internal oscillator, its three
@@ -84,7 +84,7 @@ enum { DL_SYNC, DL_FREE };              /* the delay's ALGORITHM: its time in di
  * (eng_lane_params) */
 enum { TP_DECAY = 4, TP_PITCHENV = 8, TP_LENGTH, TP_TRANSPOSE, TP_OCTAVE, TP_LEVEL, TP_SEND, TP_PAN, TP_NOTE, TP_PROB,
        TP_RATCHET, TP_DSEND, TP_DUCK, TP_EQ, TP_DRIVE, TP_SHAPE, TP_RATE, TP_BITS, TP_CUTOFF, TP_RESO, TP_FENV,
-       TP_FDECAY, TP_FSPECIAL, TP_PING, TP_FM, TP_KEY, ENG_NTP };
+       TP_FDECAY, TP_FDRIVE, TP_PING, TP_FM, TP_KEY, TP_FTYPE, TP_NOISE, TP_COLOR, TP_FATTACK, ENG_NTP };
                                          /* (T1 has no TP_DUCK: it ducks the others) */
 int eng_track_param(int lane, int tp);   /* its parameter (an effect lane: its effect's knob tp) */
 int eng_param_tp(int param, int *lane);  /* a parameter's tp and lane, -1 if none */
@@ -140,7 +140,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 13u              /* (12: 0.5.6's, without the filters (8 pages, 8 lane parameters): read, the
+#define PROJECT_VERSION 14u              /* (13: 0.5.8's and 0.5.9's, their filters in two pages (the type an
+                                          * ALGORITHM, no NOISE as such, COLOR, ATTACK): read; 12: 0.5.6's, without the filters (8 pages, 8 lane parameters): read, the
                                           * filters off; 11: 0.5's, without the looped randoms' draws (rseed) either: read, 0 each; 10: 0.4's,
                                           * the same but without the FM drums either: read as it is; 9: 0.3.9's and 0.3.10's, with Tides, Warps' faces as they were, no random
                                           * dose; 8: 0.3.8's,

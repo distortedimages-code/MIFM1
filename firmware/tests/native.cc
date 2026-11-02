@@ -1624,6 +1624,54 @@ int main(int argc, char** argv) {
       printf("a version %d project: %s\n", v, ok ? "read" : "REFUSED");
       if (!ok) ++failures, printf("FAIL: a version %d project\n", v);
     }
+    struct V13 {                                         // (engine.cc's project_v13: 0.5.8's two filter pages a track)
+      uint32_t magic;
+      uint16_t version, size;
+      float val[60 * 4];
+      uint8_t algo[60];
+      uint8_t out_mode, warps_hq, theme, dice, dice_seed;
+      cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+      uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+      int8_t rnd[ENG_LANES][33];
+      uint16_t seed[ENG_LANES];
+      plock_t lock[ENG_PLOCKS];
+      uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+      uint8_t endless_len[ENG_TRACKS];
+      int8_t endless_key[ENG_TRACKS];
+      uint8_t rseed[ENG_LANES][33];
+    };
+    {                                                    // its filters: T2 a SEM high pass (its NOISE knob then on
+      static project_t cur, q;                           // its second page), T3 a ladder band pass driven, a cable on
+      static V13 o;                                      // T2's RESO
+      eng_defaults(&cur);
+      memset(&o, 0, sizeof o);
+      o.magic = PROJECT_MAGIC;
+      o.version = 13;
+      o.size = sizeof o;
+      for (int i = 0; i < 52 * 4; ++i) o.val[i] = cur.val[i];
+      for (int i = 0; i < 52; ++i) o.algo[i] = cur.algo[i];
+      for (int l = 0; l < ENG_LANES; ++l) {
+        for (int i = 0; i < 33; ++i) o.rnd[l][i] = cur.rnd[l][i], o.rseed[l][i] = 7;
+        for (int i = 0; i < ENG_STEPS / 8; ++i) o.trig[l][i] = cur.trig[l][i];
+        o.seed[l] = cur.seed[l];
+      }
+      for (int i = 0; i < ENG_PLOCKS; ++i) o.lock[i] = cur.lock[i];
+      for (int t = 0; t < ENG_TRACKS; ++t) o.val[(52 + 2 * t) * 4] = 0.7f, o.val[(52 + 2 * t) * 4 + 3] = 0.4f;
+      o.algo[52 + 2] = MF_SEM, o.algo[52 + 3] = MF_HP;
+      o.val[(52 + 2) * 4] = 0.3f, o.val[(52 + 3) * 4] = 0.5f, o.val[(52 + 3) * 4 + 1] = 0.6f;
+      o.algo[52 + 4] = MF_LADDER, o.algo[52 + 5] = MF_BP;
+      o.val[(52 + 5) * 4] = 0.8f;
+      o.cable[1][0] = cable_t{SRC_L1, static_cast<uint8_t>((52 + 2) * 4 + 1), 50, 0};
+      memcpy(&q, &o, sizeof o);
+      int ok = eng_upgrade(&q, sizeof o) && eng_check(&q) && q.algo[PG_FILT(1, 0)] == MF_SEM &&
+               q.val[PG_FILT(1, 2) * 4] == MF_HP && std::fabs(q.val[PG_FILT(1, 2) * 4 + 1] - 0.47f) < 0.001f &&
+               q.val[PG_FILT(1, 0) * 4] == 0.3f && q.val[PG_FILT(1, 1) * 4] == 0.0f && q.val[PG_FILT(1, 1) * 4 + 1] == 0.6f &&
+               q.algo[PG_FILT(2, 0)] == MF_LADDER && q.val[PG_FILT(2, 2) * 4] == MF_BP && q.val[PG_FILT(2, 1) * 4] == 0.8f &&
+               q.val[PG_FILT(2, 2) * 4 + 1] == 0.0f && q.algo[PG_FILT(0, 0)] == MF_OFF && q.val[PG_FILT(3, 0) * 4 + 3] == 0.4f &&
+               q.cable[1][0].dst == PG_FILT(1, 0) * 4 + 1 && q.rseed[2][TP_NOTE] == 7 && q.rnd[2][TP_FTYPE] == 0;
+      printf("a version 13 project (0.5.8's filters): %s\n", ok ? "read, its filters in their new places" : "REFUSED");
+      if (!ok) ++failures, printf("FAIL: a version 13 project\n");
+    }
   }
 
   // 39. a looped random brought back to 0 draws another loop: T4's looped tune, two passes the same; its knob back to
@@ -1812,7 +1860,8 @@ int main(int argc, char** argv) {
     float worst = 0.0f;
     for (int trial = 0; trial < 240; ++trial) {          // driven anyhow
       int m = MF_LADDER + trial % 4, ty = (trial / 4) % 3;
-      float k[MF_KNOBS] = {rnd(), rnd(), rnd() * 2.0f - 1.0f, rnd(), rnd(), rnd(), rnd() * 2.0f - 1.0f, rnd()}, buf[128];
+      float k[MF_KNOBS] = {rnd(), rnd(), rnd() * 2.0f - 1.0f, rnd(), rnd(), rnd(), rnd() * 2.0f - 1.0f, rnd(), 0.0f,
+                           rnd(), rnd() * 2.0f - 1.0f, rnd()}, buf[128];   // (its noise, colour, attack too)
       mf_init();
       for (int b = 0; b < 120; ++b) {
         mf_set(0, m, ty, k, 24.0f + rnd() * 72.0f);
@@ -1841,7 +1890,8 @@ int main(int argc, char** argv) {
       if (after < before * 8.0f) ok = 0;
     }
     {                                                    // STOP: a self-oscillation, a ring, the noise, silent at
-      float k[MF_KNOBS] = {0.6f, 1.0f, 0.5f, 0.2f, 1.0f, 1.0f, 0.3f, 0.0f}, buf[128];   // once; the noise is its envelope's
+      float k[MF_KNOBS] = {0.6f, 1.0f, 0.5f, 0.2f, 1.0f, 1.0f, 0.3f, 0.0f, 0.0f, 0.6f, 0.0f, 0.0f}, buf[128];   // once;
+                                                                                    // the noise is its envelope's
       float before = 0.0f, after = 0.0f, woke = 0.0f, quiet_noise = 0.0f;
       for (int m = MF_LADDER; m < MF_MODELS; ++m) {
         mf_init();

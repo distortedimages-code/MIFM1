@@ -49,9 +49,12 @@ int lx_knob_steps(int model, int k);     /* its values a knob's turn goes throug
 enum { MF_OFF, MF_LADDER, MF_MS20, MF_SEM, MF_VOX, MF_MODELS };
 enum { MF_LP, MF_BP, MF_HP, MF_TYPES };  /* (VOX: low, mid, high voices) */
 #define MF_MID MF_BP
-enum { MF_CUTOFF, MF_RESO, MF_ENV, MF_DECAY, MF_SPECIAL, MF_PING, MF_FM, MF_KEY, MF_KNOBS };
+/* the knobs, as the engine keeps them (three pages of four): TYPE the type (0..2) */
+enum { MF_CUTOFF, MF_RESO, MF_ENV, MF_DECAY, MF_DRIVE, MF_PING, MF_FM, MF_KEY, MF_TYPE, MF_NOISE, MF_COLOR, MF_ATTACK,
+       MF_KNOBS };
 void mf_init(void);
-/* k: MF_KNOBS values (CUTOFF, RESO, DECAY, SPECIAL, PING, KEY 0..1; ENV, FM -1..1); note: MIDI (KEY's) */
+/* k: MF_KNOBS values (CUTOFF, RESO, DECAY, DRIVE, PING, KEY, NOISE, ATTACK 0..1; ENV, FM, COLOR -1..1; TYPE: the
+ * type argument's); note: MIDI (KEY's) */
 void mf_set(int t, int model, int type, const float *k, float note);
 void mf_trigger(int t, uint32_t at);     /* a trig at that sample of the next mf_process */
 void mf_process(int t, float *x, uint32_t n);   /* in place; nothing when OFF */
@@ -62,7 +65,6 @@ float mf_cutoff_hz(int t);               /* (the screen) the cutoff now, all mod
 float mf_env(int t);                     /* its envelope now, 0..1 */
 const char *mf_model_name(int m);
 const char *mf_type_name(int m, int type);
-const char *mf_special_name(int m);      /* its model's own knob: Drive, Noise, Breath */
 
 /* ---- Clouds ---- */
 #define MC_MODES 4

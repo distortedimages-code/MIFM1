@@ -5,8 +5,8 @@ et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la base de
 [fm1-base](https://github.com/charlesvestal/fm1-base) :
 
 - un **filtre** par piste, quatre modèles d'après les meilleurs modèles virtuels analogiques ouverts : **LADDER**
-  (l'échelle Moog), **MS-20** (Korg 35, la résonance qui drive), **SEM** (Oberheim, du bruit blanc dedans) et **VOX**
-  (des formants), en LP, BP ou HP, avec une enveloppe à vactrol, un **ping** et une **FM** par sa propre sortie ;
+  (l'échelle Moog), **MS-20** (Korg 35, la résonance qui drive), **SEM** (Oberheim) et **VOX** (des formants), en LP,
+  BP ou HP, avec du bruit coloré dedans, une enveloppe à vactrol, un **ping** et une **FM** par sa propre sortie ;
 - **Plaits** sur chaque piste, ses 24 modèles au complet, et un **grit** par piste (drive doux, dur ou replié,
   réduction de fréquence d'échantillonnage et de bits) ;
 - **quatre batteries FM** comme modèles de piste en plus : les voix du **LXR-02** (son firmware est open source,
@@ -115,8 +115,9 @@ Plaits, piste par piste sur la page machine. Sur l'ordinateur, il prend un quart
 LXR-02 : un oscillateur et un modulateur en FM, une enveloppe de hauteur), **FM SNARE** (un oscillateur et un bruit
 filtré), **FM CYMBAL** et **FM HI-HAT** (un oscillateur modulé en FM par deux autres). Choisir l'une d'elles sur une
 piste met ses huit réglages à ceux de son kit (le kit INIT du LXR-02, retouché pour sonner tout de suite), sur les
-potards qui suivent FREQ : les trois de la première face, les quatre de l'enveloppe (ENV), et le premier de la face
-de hauteur (à la place de P.ENV). Ils sont écrits de 0 à 127 comme sur le LXR-02, WAVE par son nom, et chaque cran
+potards qui suivent FREQ, sur les trois pages de leur son (EDIT, puis SELECT) : les trois de la première, les quatre
+de la deuxième, et le premier de la troisième (à la place de GATE). ENV n'a alors qu'une page : l'enveloppe du
+filtre (F.ENV, F.ATK, F.DECAY, PING). Ils sont écrits de 0 à 127 comme sur le LXR-02, WAVE par son nom, et chaque cran
 de potard passe à la valeur suivante (WAVE : à la forme d'onde suivante) :
 
 | | 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
@@ -152,19 +153,25 @@ de retomber sur les bons. Les noms des potards sont courts (FREQ, HARMO, T.ENV, 
 écrits plus gros et que l'écran respire ; sur les pages des quatre pistes (niveaux, pans, envois), chaque potard
 porte le numéro de sa piste dans sa couleur.
 
+En haut, à côté du nom du module, deux repères disent ce que font les deux encodeurs sur la page : **les pages du
+module**, une LED chacune (celle qu'on regarde allumée) entre deux petites flèches, quand il y en a plus d'une
+(SELECT les parcourt) ; et un **A cerclé** quand **ALGORITHM** change quelque chose ici : le modèle de la piste sur son
+son, le modèle du filtre sur son filtre, le mode du delay, du bus master, les algorithmes de Warps. Pas de A sur le
+grit ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'un filtre OFF sont grisés.
+
 | Contrôle | Effet |
 | --- | --- |
 | **KNOB 1 à 4** | les 4 paramètres de la page affichée |
-| **SELECT** | l'autre face du module (PLAITS 1/3, 2/3, 3/3…), en glissant |
-| **ALGORITHM** | le modèle de la piste (les 24 de Plaits, puis les 4 batteries FM) ; sur Warps, d'un repère d'ALGO au suivant ; sur le delay, SYNC (vers la gauche) ou FREE (vers la droite) |
+| **SELECT** | les pages de ce qu'on regarde (les deux du son de la piste, les deux de son filtre, les faces d'un effet…), en glissant |
+| **ALGORITHM** | le type de ce qu'on a devant soi, là où il y a un choix (le A cerclé en haut) : sur le son de la piste, son modèle (les 24 de Plaits, puis les 4 batteries FM) ; sur son filtre, le modèle de filtre (OFF, LADDER, MS-20, SEM, VOX) ; sur Warps, d'un repère d'ALGO au suivant ; sur le delay, SYNC (vers la gauche) ou FREE (vers la droite) |
 | **PRESETS** | la piste active, de 1 à 4 |
-| **EDIT** | Plaits de la piste active (appuis suivants : ses trois faces, GRIT, puis les deux faces du FILTRE) |
+| **EDIT** | les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **GRIT**, son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
 | **SEQ** | les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) |
 | **ARP** | Endless, celui de la piste (voir plus bas) |
 | **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leurs filtres (EQ), le DUCK, puis le bus master (COMP, OTT) ; ALGORITHM sur COMP ou OTT : le mode du bus (OFF, COMP, OTT) |
 | **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps ; SELECT parcourt leurs faces (leurs potards, les envois des pistes, leurs pas) |
-| **ENV** | l'enveloppe de la piste (PLAITS 2/3 : DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV) |
+| **ENV** | tout ce qui est enveloppe sur la piste active : l'enveloppe de Plaits (DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV) ; ENV encore (ou SELECT) : P.ENV et l'enveloppe du filtre (F.ATK, F.DECAY, PING) |
 | **PLAY** | le séquenceur tourne ou s'arrête ; **deux fois de suite** (STOP STOP, en moins de 0,4 s) : arrêté, et tout le son coupé, les queues du delay et de la réverbe comprises |
 | **REC** | **KEY** ↔ **STEP** (voir plus bas) ; sur la page d'Endless, l'enregistrement |
 | **clavier** | en KEY, joue la piste active, même à l'arrêt, avec sa TRANSP et son OCTAVE ; **OCT− / OCT+** pour l'octave du clavier (en STEP : la page de pas) ; en MOD, les trois premières touches blanches sont les LFO |
@@ -175,7 +182,7 @@ porte le numéro de sa piste dans sa couleur.
 | **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en noir sur la couleur du thème. Les réglages restent ; pendant 4 s (cinq carrés jaunes en bas), **GLO** les remet comme avant ALL au début de la mesure suivante (GLO encore avant la mesure : ils restent) |
 | **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage (avec GLO tenu aussi : sur les 4 pistes) |
 | **REC tenu** (pas) | efface la piste de pas affichée : ses trigs, ses locks, ses aléatoires (et les câbles d'une piste) |
-| **GLO + REC tenus 3 s** | **ERASE ALL**, depuis n'importe quelle page : tout revient comme dans un projet neuf (INIT) sauf **les quatre sons** (leurs modèles et leurs trois pages : le son, l'enveloppe, la hauteur), **le tempo, la gamme et sa tonique** : plus de pas, de locks, d'aléatoires (aucun potard RND), de câbles ni d'Endless ; les niveaux comme neufs, les pans au centre, pas de filtre (ni l'EQ, ni le filtre de piste : OFF), aucun envoi, le grit à zéro, les LFO, les effets (delay, réverbe, Warps coupé), le duck et le bus master comme neufs, pas de swing, la dose d'aléatoire à 0. La sortie, la qualité de Warps et le thème restent |
+| **GLO + REC tenus 3 s** | **ERASE ALL**, depuis n'importe quelle page : tout revient comme dans un projet neuf (INIT) sauf **les quatre sons** (leurs modèles et leurs réglages : le son, l'enveloppe de Plaits, la gate, la hauteur), **le tempo, la gamme et sa tonique** : plus de pas, de locks, d'aléatoires (aucun potard RND), de câbles ni d'Endless ; les niveaux comme neufs, les pans au centre, pas de filtre (ni l'EQ, ni le filtre de piste : OFF), aucun envoi, le grit à zéro, les LFO, les effets (delay, réverbe, Warps coupé), le duck et le bus master comme neufs, pas de swing, la dose d'aléatoire à 0. La sortie, la qualité de Warps et le thème restent |
 | **REC + SEL tenus 1,5 s** | efface **tous les câbles** (les modulations des LFO, de toutes les pistes et globales) |
 
 Les appuis tenus (SAVE, REC pour effacer ou charger, SEL pour la matrice) affichent en bas ce qu'ils vont faire et
@@ -206,9 +213,10 @@ son niveau, ses envois, son pan, sa note…) ; pour un effet, sur ses potards. L
 montre les pas du delay. **REC** à nouveau : retour au mode KEY.
 
 **Les pas d'une piste** (SEQ) : **NOTE**, **PROB** (probabilité), **RATCH** (les ratchets : 1 à 8 coups dans le pas) et
-**LENGTH** (le nombre de pas) ; les trois premiers se lockent aussi pas par pas. PLAITS 3/3 donne le **P.ENV**
-(l'enveloppe interne de Plaits sur la hauteur, pour des toms, des kicks qui plongent, des bulles), la **GATE** de la
-note (5 à 95 % du pas, lockable : des notes courtes et longues dans le même pattern), la transposition et l'octave.
+**LENGTH** (le nombre de pas) ; les trois premiers se lockent aussi pas par pas. La deuxième page du son (EDIT,
+SELECT) donne la **GATE** de la note (5 à 95 % du pas, lockable : des notes courtes et longues dans le même pattern),
+la transposition, l'octave et **F.KEY** (le filtre qui suit la note) ; la deuxième page d'ENV le **P.ENV** (l'enveloppe
+interne de Plaits sur la hauteur, pour des toms, des kicks qui plongent, des bulles).
 
 **Les pas d'un effet** (SEQ sur un effet, ou sa dernière face) : **DECAY** (10 ms à 5 s), **PROB**, **DEPTH** et
 **LENGTH**. Sans aucun trig, l'effet est toujours là (mode hold : en bas, la rangée des pas est pleine, de la
@@ -269,14 +277,14 @@ lisse la sortie (1 ms à 2 s : un carré arrondi, un S&H qui glisse). L'écran t
 dernières secondes ; en bas, les trois LFO, chacun dans sa couleur, allumés à leur hauteur. Les LFO remplacent les
 deux Tides des 0.3 : ils coûtent à peu près pareil (presque rien), mais se règlent d'un coup d'œil.
 
-**PLAITS 1/3** : FREQ, puis HARMONICS, TIMBRE et MORPH sous le nom (court) que leur donne le manuel de Plaits pour
+**Le son** (EDIT), première page : FREQ, puis HARMONICS, TIMBRE et MORPH sous le nom (court) que leur donne le manuel de Plaits pour
 le modèle choisi (le KICK : ATTACK, BRIGHT, DECAY ; le FM 2-OP : RATIO, INDEX, FDBK ; le WAVETABLE : BANK, ROW,
-COLUMN…). **PLAITS 2/3** (ENV) : l'enveloppe. Les modèles qui ont la leur (STRING, MODAL, KICK, SNARE, HI-HAT, et les
+COLUMN…). **ENV**, première page : l'enveloppe. Les modèles qui ont la leur (STRING, MODAL, KICK, SNARE, HI-HAT, et les
 6-OP FM dans leur preset) contournent le LPG de Plaits : LPG COLOUR est alors grisé, et pour STRING, MODAL et les trois
 batteries, DECAY s'ajoute à leur decay (leur MORPH) : il marche sur toutes les pistes, avec ses locks et son
 aléatoire. Un potard grisé tourne toujours, mais ne change rien au son dans l'état présent.
 
-**Le grit** (EDIT, quatrième face de Plaits) : ce qui salit la voix de la piste, avant Warps et le mixer.
+**Le grit** (EDIT, deuxième ensemble de la piste) : ce qui salit la voix de la piste, avant Warps et le mixer.
 **DRIVE** monte le gain des petits signaux jusqu'à ×25 (la pleine échelle reste la pleine échelle) à travers une
 **SHAPE** : Soft (une saturation douce), Hard (écrêtée) ou Fold (ce qui dépasse repart dans l'autre sens, comme un
 wavefolder). **RATE** garde chaque échantillon un moment (un sample & hold : de 44,1 kHz jusqu'à 689 Hz, le repliement
@@ -284,29 +292,34 @@ voulu) et **BITS** arrondit les échantillons (de 16 bits à 2 : à fond, une vo
 pas). Chacun n'agit que relevé ; le tout se locke pas par pas, a son aléatoire et un LFO peut le moduler. L'écran
 montre ce que les réglages font d'une sinusoïde.
 
-**Le filtre** (EDIT, cinquième et sixième faces de la piste : après le grit, avant Warps et le mixer). **ALGO**
-choisit le modèle, **SELECT** le type (sur ces deux faces, SELECT ne change pas de face : EDIT le fait) ; GLO tenu,
-les deux règlent les quatre pistes. OFF par défaut : il ne coûte alors rien.
+**Le filtre** (EDIT, troisième ensemble de la piste : après le grit, avant Warps et le mixer). **ALGORITHM** choisit le
+modèle (GLO tenu : sur les quatre pistes). OFF par défaut : il ne coûte alors rien, et ses potards sont grisés.
 
-| Modèle | D'où il vient | Types | Son réglage propre |
+| Modèle | D'où il vient | Types (TYPE) | Ce que DRIVE y fait |
 | --- | --- | --- | --- |
-| **LADDER** | l'échelle à transistors du Moog, d'après le modèle « amélioré » de Stefano D'Angelo et Vesa Välimäki (2013 ; leur code de référence, licence ISC) : la saturation de chaque paire de transistors à chacun des quatre étages, l'auto-oscillation du circuit | LP 24 dB ; HP 24 et BP pris sur ses étages (les mélanges de l'Oberheim Xpander) | **DRIVE** (ce qui entre dans les transistors) |
-| **MS-20** | le Korg 35 (MS-10, premiers MS-20), d'après Will Pirkle (note AN-5) sur les filtres à rétroaction sans délai de Vadim Zavalishin, la saturation **dans** la boucle de résonance : elle drive et chante | LP 12 dB, HP 6 dB, BP (un passe-haut puis le passe-bas, comme les deux filtres du MS-20 en série) | **DRIVE** (la saturation de la boucle) |
-| **SEM** | le filtre d'état 12 dB de l'Oberheim SEM (Pirkle, Zavalishin) : il résonne sans s'auto-osciller, comme le vrai | LP, BP, HP | **NOISE** (du bruit blanc dans le filtre : la résonance souffle et siffle) |
-| **VOX** | trois formants, les trois premières résonances des voyelles (moyennes mesurées de Peterson et Barney, 1952) : CUTOFF passe de A à E, I, O, U, la résonance les aiguise | voix basse, moyenne, haute | **BREATH** (du bruit dans les formants : un murmure) |
+| **LADDER** | l'échelle à transistors du Moog, d'après le modèle « amélioré » de Stefano D'Angelo et Vesa Välimäki (2013 ; leur code de référence, licence ISC) : la saturation de chaque paire de transistors à chacun des quatre étages, l'auto-oscillation du circuit | LP 24 dB ; HP 24 et BP pris sur ses étages (les mélanges de l'Oberheim Xpander) | ce qui entre dans les transistors |
+| **MS-20** | le Korg 35 (MS-10, premiers MS-20), d'après Will Pirkle (note AN-5) sur les filtres à rétroaction sans délai de Vadim Zavalishin, la saturation **dans** la boucle de résonance : elle drive et chante | LP 12 dB, HP 6 dB, BP (un passe-haut puis le passe-bas, comme les deux filtres du MS-20 en série) | la saturation de la boucle |
+| **SEM** | le filtre d'état 12 dB de l'Oberheim SEM (Pirkle, Zavalishin) : il résonne sans s'auto-osciller, comme le vrai | LP, BP, HP | l'entrée saturée (la courbe d'un OTA) |
+| **VOX** | trois formants, les trois premières résonances des voyelles (moyennes mesurées de Peterson et Barney, 1952) : CUTOFF passe de A à E, I, O, U, la résonance les aiguise | voix basse, moyenne, haute | l'entrée saturée |
 
-Première face : **CUTOFF** (20 Hz à 18 kHz ; VOX : la voyelle), **RESO**, **ENV** (de combien l'enveloppe ouvre ou
-ferme, ±8 octaves), **DECAY**. Deuxième face : le réglage du modèle, **PING**, **FM**, **KEY**. L'**enveloppe** est
-celle d'un vactrol (celle du low-pass gate de Plaits) : une montée très rapide à chaque trig, une chute qui ralentit
-en descendant (DECAY : de 5 ms à plus d'une seconde, puis sa queue). **PING** envoie une impulsion dans le filtre à
-chaque trig : avec de la résonance, il sonne tout seul (une percussion, même sur une voix silencieuse). **FM** renvoie
-la sortie du filtre dans sa fréquence de coupure, échantillon par échantillon, d'un côté ou de l'autre : de la
-rugosité, puis du chaos. **KEY** fait suivre la note (100 % : une octave par octave). Tout se locke pas par pas, a son
-aléatoire, se module par les câbles, et la dose d'aléatoire bouge CUTOFF, RESO et ENV. Le bruit de SEM et de VOX suit
-l'enveloppe (il souffle aux trigs, pas en continu). À STOP, les enveloppes se ferment et les filtres s'éteignent en
-~23 ms (une auto-oscillation, un ping qui sonne encore, leur bruit) jusqu'au trig suivant. L'écran dessine la réponse
-du filtre telle qu'elle est (son enveloppe, sa FM, la touche), sa fréquence et ce qu'il coûte au cœur qui le joue
-(CPU, en % du bloc : la part du filtre dans T1..T4 de la page machine).
+**Première page** : **TYPE** (LP, BP, HP ; VOX : LOW, MID, HIGH), **CUTOFF** (20 Hz à 18 kHz ; VOX : la voyelle),
+**RESO**, **ENV** (de combien l'enveloppe ouvre ou ferme, ±8 octaves). **Deuxième page** (SELECT) : **DRIVE**,
+**NOISE** (du bruit dans le filtre, sur tous les modèles : la résonance souffle et siffle ; il suit l'enveloppe, il
+souffle aux trigs, pas en continu), **COLOR** (le bruit : plus sombre à gauche, blanc au centre, plus brillant à
+droite), **FM** (la sortie du filtre renvoyée dans sa fréquence de coupure, échantillon par échantillon, d'un côté ou
+de l'autre : de la rugosité, puis du chaos). L'**enveloppe** du filtre est sur ENV (deuxième page) : celle d'un
+vactrol (celle du low-pass gate de Plaits), **F.ATK** sa montée (instantanée à gauche, jusqu'à une montée lente),
+**F.DECAY** sa chute, qui ralentit en descendant (de 5 ms à plus d'une seconde, puis sa queue), et **PING**, une
+impulsion dans le filtre à chaque trig : avec de la résonance, il sonne tout seul (une percussion, même sur une voix
+silencieuse). **F.KEY** (deuxième page du son) fait suivre la note (100 % : une octave par octave). Tout se locke pas
+par pas (sauf TYPE), a son aléatoire, se module par les câbles, et la dose d'aléatoire bouge CUTOFF, RESO et ENV. À
+STOP, les enveloppes se ferment et les filtres s'éteignent en ~23 ms (une auto-oscillation, un ping qui sonne encore,
+leur bruit) jusqu'au trig suivant. L'écran du filtre dessine sa réponse telle qu'elle est (son enveloppe, sa FM, la
+touche), sa fréquence et ce qu'il coûte au cœur qui le joue (CPU, en % du bloc : la part du filtre dans T1..T4 de la
+page machine) ; celui de l'enveloppe, sa courbe (la montée, la chute, le ping) et, dans l'anneau, où elle en est.
+
+Les projets d'avant 0.6.0 sont relus tels quels : le type de filtre passe sur TYPE, le NOISE de SEM et le BREATH de
+VOX sur NOISE (au même niveau de bruit).
 
 **Les rythmes euclidiens** (SEQ, troisième face ; sur les effets, la dernière face) : **FILLS** coups répartis aussi
 régulièrement que possible sur la longueur de la piste, **ROTATE** les décale ; LENGTH et PROB sont ceux de la piste
