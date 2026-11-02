@@ -24,12 +24,13 @@
 //
 // -----------------------------------------------------------------------------
 //
-// Clouds' reverb (clouds/dsp/fx/reverb.h), its delay lines in floats.
+// Clouds' reverb (clouds/dsp/fx/reverb.h), its delay lines in 16-bit words.
 //
 // MIFM1 (Yoann, 2026): the same Griesinger / Dattorro topology, the same delays, the same code, with two changes:
-// the delay lines hold floats instead of Clouds' 12-bit words (FORMAT_12_BIT: a step of 1/4096, the grain and the
-// hiss heard in the tail, kept on the module to fit its RAM), and the LFOs' rates are in Hz at 44.1 kHz instead of
-// Clouds' 32 kHz. The vendored copy in third_party/clouds stays as it is.
+// the delay lines hold 16-bit words instead of Clouds' 12-bit ones (FORMAT_16_BIT: a step of 1/32768, sixteen
+// times finer, the grain and the hiss of the module's tail gone; 0.5 to 0.6 held floats, 0.7 gave their other half
+// to the glitch's slices), and the LFOs' rates are in Hz at 44.1 kHz instead of Clouds' 32 kHz. The vendored copy in
+// third_party/clouds stays as it is.
 
 #ifndef MIFM1_MI_REVERB_H_
 #define MIFM1_MI_REVERB_H_
@@ -43,12 +44,12 @@ namespace mifm1 {
 
 class Reverb {
  public:
-  typedef clouds::FxEngine<16384, clouds::FORMAT_32_BIT> E;
+  typedef clouds::FxEngine<16384, clouds::FORMAT_16_BIT> E;
 
   Reverb() { }
   ~Reverb() { }
 
-  void Init(float* buffer, float sample_rate) {
+  void Init(uint16_t* buffer, float sample_rate) {
     engine_.Init(buffer);
     engine_.SetLFOFrequency(clouds::LFO_1, 0.5f / sample_rate);
     engine_.SetLFOFrequency(clouds::LFO_2, 0.3f / sample_rate);

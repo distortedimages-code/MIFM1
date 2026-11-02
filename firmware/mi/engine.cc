@@ -252,8 +252,8 @@ float src[NSRC];
 #ifndef ENG_ARENA_BYTES
 #if UINTPTR_MAX > 0xFFFFFFFFu           /* a computer's 64-bit pointers: a little more */
 #define ENG_ARENA_BYTES (292u * 1024u)
-#else                                   /* the FM-1: 4 Plaits 100 KB, the reverb in floats 64, the delay 103, Warps 10
-                                         * (283 KB) */
+#else                                   /* the FM-1: 4 Plaits 100 KB, the reverb 32 (16-bit words), the delay 103,
+                                         * Warps 8, the glitch's slices 32 (276 KB) */
 #define ENG_ARENA_BYTES (280u * 1024u)
 #endif
 #endif
@@ -1094,12 +1094,11 @@ void apply_bend(int t, float* x, uint32_t n) {
 // the glitch (after Qu-Bit's Data Bender, a circuit-bent buffer): at each sixteenth, GLITCH's chance that the track
 // stutters. Its slice (SIZE, halved until it fits) is taken as it plays, then played again and again until a
 // sixteenth says otherwise; BEND turns each repeat slower and lower (a tape stopping) or faster and higher; DROP is
-// each repeat's chance of an accident, backwards or a hole. The slices in 8-bit mu-law at 22.05 kHz, 4 KB a track
-// (186 ms; the FM-1 has no more to give): the repeats a little lo-fi, as a bent sampler's
-const uint32_t kGlBytes = 4096u;
-uint8_t gl_pool[2][kGlBytes] PLAT_POOL;  // (two in the pool, two in the RAM: what is left of each)
-uint8_t gl_ram[2][kGlBytes];
-inline uint8_t* gl_buf(int t) { return t < 2 ? gl_pool[t] : gl_ram[t - 2]; }
+// each repeat's chance of an accident, backwards or a hole. The slices in 8-bit mu-law at 44.1 kHz, 8 KB a track
+// (186 ms), in the engine's arena: what the reverb's delay lines gave back in 16 bits (the FM-1 had no other 32 KB)
+const uint32_t kGlBytes = 8192u;
+uint8_t* gl_mem[ENG_TRACKS];
+inline uint8_t* gl_buf(int t) { return gl_mem[t]; }
 int16_t mu_dec[256];
 void make_mu() {
   for (int i = 0; i < 256; ++i) {       // G.711's mu-law
@@ -1123,10 +1122,8 @@ const float kMuScale = 1.0f / (8031.0f * 4.0f);
 
 struct Glitch {
   int on;                               // 0 live, 1 taking its slice (the live goes on), 2 repeating
-  uint32_t len, rec;                    // the slice's half-rate samples, those taken
-  float acc;                            // (taking: two samples averaged)
-  int half;
-  float pos, speed;                     // the repeat's place (half-rate samples), its speed
+  uint32_t len, rec;                    // the slice's samples, those taken
+  float pos, speed;                     // the repeat's place, its speed
   int rev, mute, reps;
   float mix;                            // the repeats over the live (0..1), glided
 };
@@ -1141,13 +1138,11 @@ void glitch_event(int t) {              // a sixteenth: repeat (or go on repeati
   if (playing && p > 0.005f && rand01() < p) {
     if (g.on) return;
     int sz = iround(E(t, TP_GSIZE));
-    float len = gl_six * (sz <= GL_64 ? 0.25f : sz == GL_32 ? 0.5f : sz == GL_16 ? 1.0f : 2.0f) * 0.5f;
+    float len = gl_six * (sz <= GL_64 ? 0.25f : sz == GL_32 ? 0.5f : sz == GL_16 ? 1.0f : 2.0f);
     while (len > static_cast<float>(kGlBytes) && len > 64.0f) len *= 0.5f;
     g.len = static_cast<uint32_t>(len);
     if (g.len < 32u) g.len = 32u;
     g.rec = 0u;
-    g.acc = 0.0f;
-    g.half = 0;
     g.pos = 0.0f;
     g.speed = 1.0f;
     g.rev = g.mute = 0;
@@ -1168,13 +1163,8 @@ void apply_glitch(int t, float* x, uint32_t n) {
     if (static_cast<int>(i) == gl_at[t]) glitch_event(t);
     float live = x[i], rep = 0.0f, target = 0.0f;
     if (g.on == 1) {                    // taking the slice: the live heard
-      g.acc += live;
-      if (++g.half == 2) {
-        buf[g.rec++] = mu_enc(g.acc * 0.5f);
-        g.acc = 0.0f;
-        g.half = 0;
-        if (g.rec >= g.len) g.on = 2, g.pos = 0.0f;
-      }
+      buf[g.rec++] = mu_enc(live);
+      if (g.rec >= g.len) g.on = 2, g.pos = 0.0f;
     } else if (g.on == 2) {             // repeating
       float L = static_cast<float>(g.len);
       float q = g.rev ? L - 1.0f - g.pos : g.pos;
@@ -1186,7 +1176,7 @@ void apply_glitch(int t, float* x, uint32_t n) {
       float e = fm_minf(1.0f, fm_minf(g.pos, L - 1.0f - g.pos) * (1.0f / 24.0f));   // (the slice's ends faded)
       rep = g.mute ? 0.0f : s * fm_maxf(e, 0.0f);
       target = 1.0f;
-      g.pos += 0.5f * g.speed;
+      g.pos += g.speed;
       if (g.pos >= L - 1.0f) {          // the next repeat: its speed, its accident
         g.pos = 0.0f;
         ++g.reps;
@@ -2969,7 +2959,7 @@ int eng_init(void) {
   make_mu();                            // (the glitch's slices)
   for (int t = 0; t < ENG_TRACKS; ++t) gl_at[t] = -1;
   need = 4u * ((mp_size() + 7u) & ~7u) + ((mrv_size() + 7u) & ~7u) +
-         ((mw_size() + 7u) & ~7u) + ((mdl_size() + 7u) & ~7u) + ((mms_size() + 7u) & ~7u);
+         ((mw_size() + 7u) & ~7u) + ((mdl_size() + 7u) & ~7u) + ((mms_size() + 7u) & ~7u) + ENG_TRACKS * kGlBytes;
   if (need > sizeof(arena)) return -1;
   for (int t = 0; t < ENG_TRACKS; ++t) {
     voice[t] = arena + a;
@@ -2992,6 +2982,10 @@ int eng_init(void) {
   master = arena + a;
   a += (mms_size() + 7u) & ~7u;
   mms_init(master);
+  for (int t = 0; t < ENG_TRACKS; ++t) {  // the glitch's slices
+    gl_mem[t] = arena + a;
+    a += kGlBytes;
+  }
   for (int l = 0; l < ENG_LANES; ++l)
     for (int tp = 0; tp < ENG_NTP; ++tp) {
       lane_param[l][tp] = static_cast<int16_t>(eng_track_param(l, tp));

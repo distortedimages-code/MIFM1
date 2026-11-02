@@ -46,8 +46,9 @@ et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la base de
 - un **mixer simple** (un niveau et un pan par piste, à puissance constante : une piste garde le même volume où
   qu'elle soit dans l'image ; ses gains glissent échantillon par échantillon, un pan ou un niveau aléatoire ou locké
   ne claque pas), un **EQ** par piste (un passe-bas ou un passe-haut raide sur un seul potard, pour lui faire de la
-  place), un envoi par piste vers le delay et un vers la réverbe (ses lignes de retard en flottants : la
-  réverbe du module les stockait sur 12 bits, d'où un grain et un souffle).
+  place), un envoi par piste vers le delay et un vers la réverbe (ses lignes de retard sur 16 bits : la
+  réverbe du module les stockait sur 12, d'où un grain et un souffle ; 0.5 et 0.6 les gardaient en flottants, 0.7
+  donne l'autre moitié aux tranches du glitch).
 - un **duck** : T2, T3 et T4 baissent à chaque trig de T1 (sa profondeur par piste, un DECAY commun), avant leurs
   envois : ce qu'elles envoient au delay et à la réverbe baisse avec elles ;
 - un **bus master** : un compresseur (seuil, ratio, release, gain) ou un mode **OTT** (trois bandes compressées vers
@@ -346,8 +347,8 @@ filtre, à la manière du Data Bender de Qu-Bit : à chaque double croche, **GLI
 elle prend alors une tranche du son qui passe (**SIZE** : 1/64, 1/32, 1/16 ou 1/8, divisée par deux tant qu'elle ne
 tient pas dans la mémoire) et la rejoue jusqu'à ce qu'une double croche en décide autrement ; **BEND** rend chaque
 répétition plus lente et plus grave (une bande qui s'arrête) ou plus rapide et plus aiguë ; **DROP** est la chance
-qu'une répétition ait un accident (jouée à l'envers ou un trou). Les tranches sont gardées en 8 bits mu-law à
-22,05 kHz, 4 Ko par piste (186 ms : le FM-1 n'a plus de mémoire à donner), un peu lo-fi, comme un sampler tordu.
+qu'une répétition ait un accident (jouée à l'envers ou un trou). Les tranches sont gardées en 8 bits mu-law à 44,1 kHz, 8 Ko par piste (186 ms), dans la mémoire que la réverbe a rendue
+en passant ses lignes de retard sur 16 bits : un peu de grain, comme un sampler tordu.
 Tout se locke pas par pas, a son aléatoire, et les potards continus se modulent par les câbles.
 
 **Le filtre** (EDIT, troisième ensemble de la piste : entre les bits et le glitch, avant Warps et le mixer). **ALGORITHM** choisit le

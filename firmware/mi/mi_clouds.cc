@@ -107,15 +107,15 @@ const char* mc_mode_name(int mode) { return mode >= 0 && mode < MC_MODES ? kMode
 }  // extern "C"
 
 // ---- Clouds' reverb alone (clouds/dsp/fx/reverb.h: the Griesinger topology of Dattorro's paper), as a send ----
-// Its 16384 delay cells at 12 bits (32 KB) in the object; at 44.1 kHz instead of Clouds' 32 its room is 0.73 x as
+// Its 16384 delay cells at 16 bits (32 KB) in the object; at 44.1 kHz instead of Clouds' 32 its room is 0.73 x as
 // large. Fully wet: the engine sets the return level.
 namespace {
 
 const uint32_t kRvChunk = 32;
 
-struct ReverbFx {                       // mi/mi_reverb.h: Clouds' reverb, its delay lines in floats
+struct ReverbFx {                       // mi/mi_reverb.h: Clouds' reverb, its delay lines in 16-bit words
   mifm1::Reverb reverb;
-  float buffer[16384];
+  uint16_t buffer[16384];
   clouds::FloatFrame frames[kRvChunk];
 };
 
@@ -127,7 +127,7 @@ uint32_t mrv_size(void) { return sizeof(ReverbFx); }
 
 void mrv_init(void* mem) {
   ReverbFx* r = new (mem) ReverbFx();
-  for (uint32_t i = 0; i < 16384; ++i) r->buffer[i] = 0.0f;
+  for (uint32_t i = 0; i < 16384; ++i) r->buffer[i] = 0u;
   r->reverb.Init(r->buffer, 44100.0f);
   r->reverb.set_amount(1.0f);
   r->reverb.set_input_gain(0.2f);
