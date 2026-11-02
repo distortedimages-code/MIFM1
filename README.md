@@ -361,8 +361,8 @@ par pas (sauf TYPE), a son aléatoire, se module par les câbles, et la dose d'a
 trig (pas son PING ; son TYPE aussi au-delà de 60 %). À
 STOP, les enveloppes se ferment et les filtres s'éteignent en ~23 ms (une auto-oscillation, un ping qui sonne encore,
 leur bruit) jusqu'au trig suivant. L'écran du filtre dessine sa réponse telle qu'elle est (son enveloppe, sa FM, la
-touche), sa fréquence et ce qu'il coûte au cœur qui le joue (CPU, en % du bloc : la part du filtre dans T1..T4 de la
-page machine) ; celui de l'enveloppe, sa courbe (la montée, la chute, le ping) et, dans l'anneau, où elle en est.
+touche), sa fréquence et, dans un petit cadre à côté de son nom, ce qu'il coûte au cœur qui le joue (en % du
+bloc : la part du filtre dans T1..T4 de la page machine) ; celui de l'enveloppe, sa courbe (la montée, la chute, le ping) et, dans l'anneau, où elle en est.
 
 Les projets d'avant 0.6.0 sont relus tels quels : le type de filtre passe sur TYPE, le NOISE de SEM et le BREATH de
 VOX sur NOISE (au même niveau de bruit).

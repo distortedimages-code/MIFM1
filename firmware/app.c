@@ -1242,7 +1242,8 @@ static int hero_title(const char *name)  /* the name: one line of L, two cut at 
     return 44;
 }
 
-static void hero_line(int y, const char *s)   /* the line under the name: its parts ('|') apart, a dot between */
+static void hero_line(int y, const char *s)   /* the line under the name: its parts ('|') apart, a dot between; a
+                                                 * part that would run off the screen is left out, and the rest */
 {
     char part[40];
     int x = 85, n = 0;
@@ -1253,6 +1254,8 @@ static void hero_line(int y, const char *s)   /* the line under the name: its pa
             continue;
         }
         part[n] = 0;
+        if (x + text_w(&FONT_XS, part) > 238)
+            break;
         x = cv_text(x, y, &FONT_XS, part, MUTED);
         n = 0;
         if (!*s)
@@ -1524,19 +1527,25 @@ static void panel_filter(int t, uint16_t ac)
             text_cat(s, v, sizeof s);
             text_cat(s, " HZ", sizeof s);
         }
-        if (eng_playing() || eng_filter_load(t)) {   /* its time on its core (the machine page's T1..T4 hold it) */
-            uint32_t ld = eng_filter_load(t);
-            text_cat(s, "|CPU ", sizeof s);
-            int_text((int32_t)(ld / 10u), v);
-            text_cat(s, v, sizeof s);
-            text_cat(s, ".", sizeof s);
-            v[0] = (char)('0' + ld % 10u);
-            v[1] = 0;
-            text_cat(s, v, sizeof s);
-            text_cat(s, "%", sizeof s);
-        }
     }
     hero_line(y, s);
+    if (m && (eng_playing() || eng_filter_load(t))) {   /* its time on its core (the machine page's T1..T4 hold it):
+                                                         * the percentage alone, in a small frame beside the name */
+        uint32_t ld = eng_filter_load(t);
+        int_text((int32_t)(ld / 10u), v);
+        if (ld < 100u) {                 /* (under 10 %: a tenth) */
+            text_cat(v, ".", sizeof v);
+            char d[2] = {(char)('0' + ld % 10u), 0};
+            text_cat(v, d, sizeof v);
+        }
+        text_cat(v, "%", sizeof v);
+        int tw = text_w(&FONT_XS, v), w = tw + 12, x = 233 - w;
+        if (84 + text_w(&FONT_L, mf_model_name(m)) + 6 <= x) {
+            pill(x, 15, w, 15, DIM);
+            pill(x + 1, 16, w - 2, 13, BG);
+            cv_text(x + 6, 15 + (15 - FONT_XS.h) / 2 + 1, &FONT_XS, v, MUTED);
+        }
+    }
 }
 
 /* the filter's envelope (ENV's second page): its vactrol's rise (ATTACK) and fall (DECAY), the ping its trigs give
