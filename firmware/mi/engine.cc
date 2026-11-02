@@ -27,6 +27,10 @@ extern "C" {
 #include <new>
 #include "stmlib/dsp/filter.h"
 
+#ifdef PLAT_HOST
+float eng_test_prebus[2][128];           // (the tests: the master before its bus, what the USB channels sum to)
+#endif
+
 namespace {
 
 // ---------------------------------------------------------------- parameters ---
@@ -270,6 +274,19 @@ float w_gate = 1.0f, w_gmix = 1.0f;     // its gain now; the one the last mix en
 int w_idle;                             // its job left out: the gate shut
 float vaux[ENG_TRACKS][kN];
 float wet_l[kN], wet_r[kN], echo_l[kN], echo_r[kN];
+// the USB audio input's channels (eng_usb_frames): each track as the mix takes it (its level, pan, filter, duck and
+// Warps; no delay, no reverb, no master bus), then the effects' return (the delay's and the reverb's), 16-bit at the
+// master's own scale on the USB (1.0: 8,300,000 at 24 bits, 32,422 at 16): their sum is the master before its bus.
+// Made only while the host records (usb_req, from eng_usb_frames' calls, counted down a block at a time)
+alignas(4) int16_t usb_ch[kN * ENG_USB_CH];
+volatile uint8_t usb_req;
+uint8_t usb_now, usb_ok;                // this block's mix makes them; they hold this block's (else silence)
+const float kUsbScale = 8300000.0f / 256.0f;
+inline int16_t usb16(float x) {
+  float v = x * kUsbScale;
+  v = v > 32767.0f ? 32767.0f : v < -32768.0f ? -32768.0f : v;
+  return static_cast<int16_t>(v + (v >= 0.0f ? 0.5f : -0.5f));
+}
 float meter[ENG_TRACKS + 2];
 int8_t hist[NSRC][ENG_HIST];
 uint32_t hist_at, hist_div;
@@ -979,6 +996,18 @@ void mix_job(uint32_t n) {
     fx_dry_r[i] = dr;
   }
   for (int t = 0; t < ENG_TRACKS; ++t) mj.pk[t] = pk[t];
+  if (!usb_now) return;
+  for (int t = 0; t < ENG_TRACKS; ++t) {  // the USB input's tracks: the same gains, sample by sample
+    float a = mj.gl[t], b = mj.gr[t];
+    const float* x = mbuf[t];
+    int16_t* u = usb_ch + 2 * t;
+    for (uint32_t i = 0; i < n; ++i, u += ENG_USB_CH) {
+      a += mj.dgl[t];
+      b += mj.dgr[t];
+      u[0] = usb16(a * x[i]);
+      u[1] = usb16(b * x[i]);
+    }
+  }
 }
 
 void fx_job(uint32_t n) {
@@ -998,6 +1027,22 @@ void fx_job(uint32_t n) {
   }
   fx_pk[0] = pr;
   fx_pk[1] = pd;
+  if (usb_now) {                        // the USB input's effects' return: the same ramps
+    float a = fx_ret0, b = fx_dret0;
+    int16_t* u = usb_ch + 2 * ENG_TRACKS;
+    for (uint32_t i = 0; i < n; ++i, u += ENG_USB_CH) {
+      a += dret;
+      b += deret;
+      u[0] = usb16(a * wet_l[i] + b * echo_l[i]);
+      u[1] = usb16(a * wet_r[i] + b * echo_r[i]);
+    }
+  }
+#ifdef PLAT_HOST
+  for (uint32_t i = 0; i < n; ++i) {    // (the tests: the master before its bus, what the USB channels sum to)
+    eng_test_prebus[0][i] = fx_out_l[i];
+    eng_test_prebus[1][i] = fx_out_r[i];
+  }
+#endif
   mms_process(master, fx_out_l, fx_out_r, n);   // the master bus: the compressor or OTT, the limiter
   for (uint32_t i = 0; i < n; ++i) {     // then a soft limit, the output's mode
     float ol = sat(fx_out_l[i]), orr = sat(fx_out_r[i]);
@@ -2193,7 +2238,17 @@ void eng_cut(void) {
 }
 int eng_cut_pending(void) { return cut_req != 0; }
 
+const int16_t* eng_usb_frames(uint32_t n, int live) {
+  usb_req = 2;                          // the host records: the next blocks make them
+  if (!live || !usb_ok || n > kN) {     // (none made for this block: silence)
+    for (uint32_t i = 0; i < kN * ENG_USB_CH; ++i) usb_ch[i] = 0;
+    usb_ok = 0;
+  }
+  return usb_ch;
+}
+
 void eng_render(float* l, float* r, uint32_t n) {
+  usb_ok = 0;
   if (!ready || n > kN || n < kFrames || !eng_check(&proj)) {
     for (uint32_t i = 0; i < n; ++i) l[i] = r[i] = 0.0f;
     return;
@@ -2208,6 +2263,8 @@ void eng_render(float* l, float* r, uint32_t n) {
   // 0. what can start at once, on core 1 while core 0 prepares the block: the effects (the last block's mix) and
   // Warps (the last block's carrier and modulator), their knobs set at the end of the last block
   job_n = n;
+  usb_now = usb_req != 0;               // the host records: the effects' job (the last block's mix) makes its channels
+  if (usb_req) usb_req = static_cast<uint8_t>(usb_req - 1u);
   uint32_t early = fx_n ? 1u << kTaskFx : 0u;
   if (w_job) {
     early |= 1u << kTaskWarps;
@@ -2348,12 +2405,18 @@ void eng_render(float* l, float* r, uint32_t n) {
     l[i] = fx_n == n ? fx_out_l[i] : 0.0f;
     r[i] = fx_n == n ? fx_out_r[i] : 0.0f;
   }
+  usb_ok = usb_now && fx_n == n;
   if (cut_req == 1) {                   // STOP twice: faded out over this block, the modules made new at the next
     float g = 1.0f, dg = 1.0f / static_cast<float>(n);
     for (uint32_t i = 0; i < n; ++i) {
       g -= dg;
       l[i] *= g;
       r[i] *= g;
+      if (usb_ok)
+        for (uint32_t c = 0; c < ENG_USB_CH; ++c) {
+          int16_t* u = &usb_ch[i * ENG_USB_CH + c];
+          *u = static_cast<int16_t>(static_cast<float>(*u) * g);
+        }
     }
     cut_req = 2;
   }

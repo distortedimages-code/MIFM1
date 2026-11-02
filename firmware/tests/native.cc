@@ -1564,6 +1564,56 @@ int main(int argc, char** argv) {
     if (!ok) ++failures, printf("FAIL: a version 10 project\n");
   }
 
+  // 37. the USB audio input's 10 channels (eng_usb_frames): silence until the host has recorded a block, then the
+  // four tracks and the effects' return, each sounding, their sum the master before its bus (to the 16-bit steps,
+  // where none of them is clipped); on the demo patch and on the stress test (Warps in a track's place, OTT)
+  {
+    extern float eng_test_prebus[2][128];
+    const float k = 8300000.0f / 256.0f;
+    for (int stress = 0; stress < 2; ++stress) {
+      eng_play(0);
+      if (stress) eng_stress(p);
+      else eng_defaults(p);
+      eng_fresh();
+      eng_cut();
+      for (int b = 0; b < 8; ++b) eng_render(l, r, n);   // (no request: none made)
+      eng_play(1);
+      eng_render(l, r, n);
+      const int16_t* u = eng_usb_frames(n, 1);
+      int first_silent = 1;
+      for (uint32_t i = 0; i < n * ENG_USB_CH; ++i)
+        if (u[i]) first_silent = 0;
+      float pk[ENG_USB_CH / 2] = {0, 0, 0, 0, 0}, err = 0.0f;
+      long checked = 0;
+      for (int b = 0; b < 44100 * 4 / static_cast<int>(n); ++b) {
+        eng_render(l, r, n);
+        u = eng_usb_frames(n, 1);
+        if (b < 2) continue;                              // (the request reaches the next block's mix)
+        for (uint32_t i = 0; i < n; ++i) {
+          const int16_t* f = u + i * ENG_USB_CH;
+          float s[2] = {0.0f, 0.0f};
+          int clip = 0;
+          for (int c = 0; c < ENG_USB_CH; ++c) {
+            s[c & 1] += static_cast<float>(f[c]) / k;
+            if (f[c] == 32767 || f[c] == -32768) clip = 1;
+            pk[c / 2] = std::max(pk[c / 2], std::fabs(static_cast<float>(f[c]) / k));
+          }
+          if (clip) continue;
+          for (int c = 0; c < 2; ++c) err = std::max(err, std::fabs(s[c] - eng_test_prebus[c][i]));
+          ++checked;
+        }
+      }
+      int ok = first_silent && err < 6.0f / k && checked > 44100 * 3;
+      for (int c = 0; c < ENG_USB_CH / 2; ++c)
+        if (pk[c] < 0.01f) ok = 0;
+      printf("USB, 10 channels (%s): first block %s, peaks %.2f %.2f %.2f %.2f, effects %.2f; the sum against the "
+             "master before its bus: %.1f steps at most (%ld frames)\n", stress ? "stress test" : "demo",
+             first_silent ? "silent" : "NOT SILENT", pk[0], pk[1], pk[2], pk[3], pk[4], err * k, checked);
+      if (!ok) ++failures, printf("FAIL: the USB channels\n");
+    }
+    eng_play(0);
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

@@ -207,6 +207,12 @@ void eng_endless_key(int t, int note);   /* a key: its transposition */
 int eng_endless_pos(int t);              /* the note playing, -1 none */
 void eng_render(float *l, float *r, uint32_t n);   /* audio interrupt: the last block out (the effects and the master
                                           * bus play a block behind the voices: 2.9 ms) */
+/* the USB audio input's channels for the block eng_render just gave (the audio interrupt, after it; its calls tell the
+ * engine the host records: it makes them from the next block on, silence until then or when live is 0): 16-bit,
+ * interleaved, T1 L R .. T4 L R (each track after its level, pan, filter, duck and Warps), then the delay's and the
+ * reverb's return L R, at the master's scale on the USB: their sum is the master before its bus */
+#define ENG_USB_CH 10
+const int16_t *eng_usb_frames(uint32_t n, int live);
 void eng_play(int on);                   /* the transport: the steps run or stop (from their start) */
 void eng_cut(void);                      /* STOP twice: stopped, every sound cut (the voices, Warps, the effects' tails:
                                           * silent until the next trig) */

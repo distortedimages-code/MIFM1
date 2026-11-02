@@ -30,8 +30,8 @@ vendored = ["third_party/"]
 words = "words.tsv"
 ble = false                    # no radio: its RAM goes to the modules
 usb_audio_in = true            # the FM-1 recordable over the cable: a USB sound card (class compliant, no driver),
-                               # the master output, 16-bit stereo at 44.1 kHz, at full level (MASTER: the speaker
-                               # and headphones only; app.c)
+                               # 10 inputs, 16-bit at 44.1 kHz: the four tracks and the effects' return, stereo each
+                               # (app.h FM1B_UAC_CH, patches/fm1-base-usb-multi.patch), MASTER not on them
 usb_audio_out = false          # (a computer playing through it: not asked for, and not made the default output)
 cpu2 = true                    # the second core: tracks 3 and 4
 cpu2_fallback = true           # a failure of it: one core until power-off, not a restart

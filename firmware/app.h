@@ -16,8 +16,13 @@ void app_splash(void);
 #define APP_PALETTE 2                     /* gfx.c's CYAN */
 #define APP_BLOCK 128u                    /* frames per audio block: 2.9 ms at 44.1 kHz, the control rate's step */
 #define APP_CANVAS_PX (240u * 84u)        /* gfx.c's canvas: the module's display (240 x 82), a knob (60 x 100) */
-#define FM1B_UAC_DEEP 1                   /* USB audio input: a block more in hand (4 KB, in the pool), the renders taking
-                                          * most of their time (past ~40 % the ring runs dry: holds in the recording) */
+/* the USB audio input (fm1.toml usb_audio_in; patches/fm1-base-usb-multi.patch): 10 channels, the four tracks and the
+ * effects' return (app_uac_frames, mi/engine.h eng_usb_frames); a block more in hand, the renders taking most of their
+ * time (past ~40 % the ring runs dry: holds in the recording); its ring (512 frames of 10: 10 KB) in RAM, not the pool */
+#define FM1B_UAC_CH 10
+#define FM1B_UAC_DEEP 1
+#define FM1B_UAC_RING_POOL 0
+const int16_t *app_uac_frames(uint32_t n);
 
 /* the store: the project (knobs, models, cables) and the panel's calibration (the platform's, where every fm1-base
  * firmware keeps it). 0xD8000: clear of the sectors other firmwares save in */

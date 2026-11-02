@@ -505,6 +505,7 @@ void app_backup_restored(void)
 
 /* ---------------------------------------------------------------- audio --- */
 static float out_l[APP_BLOCK], out_r[APP_BLOCK];
+static int usb_live;                     /* the engine rendered this block: its USB channels are this block's */
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
@@ -512,16 +513,25 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     float g = (float)master_q12 * (8300000.0f / 4096.0f);
     if (n > APP_BLOCK)
         n = APP_BLOCK;
+    usb_live = 0;
     if (halted || !data_ok || !engine_ok) {
         for (i = 0; i < 2u * n; i++)
             lr[i] = 0;
         return;
     }
     eng_render(out_l, out_r, n);
+    usb_live = 1;
     for (i = 0; i < n; i++) {
         lr[2 * i] = (int32_t)(fm_clampf(out_l[i], -1.0f, 1.0f) * g);
         lr[2 * i + 1] = (int32_t)(fm_clampf(out_r[i], -1.0f, 1.0f) * g);
     }
+}
+
+/* the USB audio input (the audio interrupt, after app_render, while the host records): 10 channels, T1..T4 and the
+ * effects' return, stereo each */
+const int16_t *app_uac_frames(uint32_t n)
+{
+    return eng_usb_frames(n, usb_live);
 }
 
 void app_panic(void)                     /* an update, a restore or the tables' transfer: nothing reads the flash */
@@ -532,8 +542,6 @@ void app_panic(void)                     /* an update, a restore or the tables' 
 void app_init(void)
 {
     cpu2_ok = plat_cpu2_set(1) == 0;     /* the one time it may start: here, at power-on */
-    plat_usb_audio_full(1);              /* the USB audio input at full level (the limiter's), MASTER for the speaker
-                                          * and headphones only: a recording's level whatever MASTER says */
     data_ok = data_check();
     project_load();
     engine_ok = data_ok && eng_init() == 0;   /* (not before the tables: the modules' set-up may read them) */

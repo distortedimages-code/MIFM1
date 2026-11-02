@@ -58,12 +58,28 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 
 ## Enregistrer dans un DAW (USB)
 
-Branché en USB, le FM-1 est aussi une **carte son** (class compliant : aucun pilote, sur Mac, Windows, Linux, iPad) :
-une entrée stéréo 16 bits à 44,1 kHz, nommée « MIFM1 FM-1 », qui reçoit la sortie master (après le compresseur ou
-l'OTT et le limiteur). Dans le DAW : choisir cette entrée, armer une piste stéréo, enregistrer ; le MIDI passe par le
-même câble. Le niveau USB est **plein**, quel que soit MASTER : le potard ne règle que le haut-parleur et le casque
-(on peut couper le FM-1 et écouter par le DAW). Projet du DAW en 44,1 kHz (le FM-1 ne propose que ce taux). Latence
-de l'entrée : environ 7 ms. Le sens inverse (l'ordinateur qui joue dans le FM-1) n'est pas activé.
+Branché en USB, le FM-1 est aussi une **carte son multipiste** (class compliant : aucun pilote, sur Mac, Windows,
+Linux, iPad), nommée « MIFM1 FM-1 » : **10 entrées**, 16 bits à 44,1 kHz, une paire stéréo par piste et une pour les
+effets.
+
+| Entrées | Ce qu'elles reçoivent |
+| --- | --- |
+| 1-2 | T1 |
+| 3-4 | T2 |
+| 5-6 | T3 |
+| 7-8 | T4 |
+| 9-10 | le retour des effets : delay et réverbe |
+
+Chaque piste sort après son niveau, son pan, son EQ et le duck, avec son grit et Warps (quand Warps prend la place
+d'une piste, c'est lui qu'on entend sur elle), mais sans delay ni réverbe : ce sont des bus partagés, leur retour
+arrive sur 9-10. **La somme des 10 entrées, c'est le master avant son bus** (compresseur ou OTT, limiteur), à refaire
+dans le DAW si on le veut ; le master avec son bus n'est pas sur l'USB (la sortie casque l'a).
+
+Dans le DAW : 5 pistes stéréo, une par paire d'entrées, armées ensemble ; le MIDI passe par le même câble. Le
+niveau ne dépend pas de MASTER (le potard ne règle que le haut-parleur et le casque : on peut couper le FM-1 et
+écouter par le DAW). Projet en 44,1 kHz (le FM-1 ne propose que ce taux). Latence : environ 7 ms. Sur Windows, les
+DAW en ASIO passent par FlexASIO ou ASIO4ALL (ou leur mode WASAPI). Le sens inverse (l'ordinateur qui joue dans le
+FM-1) n'est pas activé.
 
 ## Jouer
 

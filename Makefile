@@ -10,7 +10,7 @@ OUT = build
 SRC = $(wildcard firmware/mi/*.cc) $(shell find firmware/third_party -name '*.cc')
 OBJ = $(patsubst %.cc,$(OUT)/obj/%.o,$(SRC))
 
-.PHONY: all test lxr-check device-check firmware host clean
+.PHONY: all test lxr-check uac-multi base-patch device-check firmware host clean
 all: test
 
 $(OUT)/obj/%.o: %.cc
@@ -24,7 +24,7 @@ $(OUT)/native: firmware/tests/native.cc $(OBJ)
 	$(CC) $(OUT)/obj/native.o $(OBJ) -lm -o $@
 
 # the engine on a computer: the default patch plays, every track and model sounds, no NaN; WAVs in build/wav
-test: $(OUT)/native lxr-check
+test: $(OUT)/native lxr-check uac-multi
 	@mkdir -p $(OUT)/wav
 	$(OUT)/native $(OUT)/wav 16
 
@@ -41,17 +41,28 @@ lxr-check: $(OUT)/lxr_port $(OUT)/lxr_ref
 	$(OUT)/lxr_ref $(OUT)/lxr_ref.raw
 	$(OUT)/lxr_port $(OUT)/lxr_ref.raw
 
+# MIFM1's changes to fm1-base (patches/), applied to base/ once
+base-patch:
+	sh tools/patch_base.sh
+
+# the USB audio input's 10 channels on felucca-bsp's usb.c as patched: the descriptors, then 60 s of streaming as on
+# the FM-1, every frame of every channel recorded once, in order
+uac-multi: base-patch
+	@mkdir -p $(OUT)
+	$(CC) -std=c99 -O2 -w -I$(BASE)/bsp/chip -I$(BASE)/bsp/boards/fm1 tools/uac_multi_test.c -o $(OUT)/uac_multi_test
+	$(OUT)/uac_multi_test
+
 # the FM-1's constraints checked with the computer's clang: no C++ library, no libm, a float-only FPU (any double
 # left in the code links soft-double routines and shows here as an undefined symbol)
 device-check:
 	sh tools/device_check.sh
 
 # the firmware (JieLi toolchain and AC79 SDK: see base/README.md): firmware/build/mifm1.fwsc
-firmware:
+firmware: base-patch
 	cd $(BASE) && python3 tools/build.py ../firmware
 
 # fm1-base's host simulator, with the real platform code
-host:
+host: base-patch
 	cd $(BASE) && python3 tools/build.py ../firmware --host
 
 clean:
