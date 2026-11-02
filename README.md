@@ -498,7 +498,8 @@ son pire bloc au-delà du bord ; ainsi, la dose à 100 % ne lui coûte presque r
 dans le delay ou dans la réverbe (un envoi de 20 à 35 %, en plus du sien), presque jamais à mi-course. Les effets
 eux-mêmes sont relancés à chaque temps : le feedback, le filtre, le drive, la résonance et le pleurage du delay, la
 réverbe, l'algorithme de Warps (d'un repère à un autre : entre deux, Warps calcule les deux algorithmes, deux fois
-plus de travail), son timbre et ses niveaux. Rien de ce qui tient le temps (divisions, tempo, vitesses, longueurs,
+plus de travail), son timbre et ses niveaux (sauf LEVEL 1 quand Warps joue son propre oscillateur : c'est sa note,
+qui reste où elle est depuis 0.8.6). Rien de ce qui tient le temps (divisions, tempo, vitesses, longueurs,
 pas), ni les niveaux, la gamme ou le branchement. On lâche OCT− : retour à la page, la dose reste (en bas, un trait
 de la largeur de la dose ; les potards montrent la valeur que le dernier trig a tirée, RANDOM dessous). Revenir à 0
 rend le son exact de départ dès le trig suivant, comme l'annulation d'ALL. Pendant le geste, l'octave du clavier (ou

@@ -398,7 +398,8 @@ float src_value(int s) { return s > SRC_NONE && s < NSRC ? src[s] : 0.0f; }
 // drum's own), the gate, the bits (CLOCK, BITS, MASK, SHAPE) and the glitch (GLITCH, SIZE, BEND, DROP), the filter
 // (eleven knobs, not its PING; from 60 %
 // its TYPE too, on a trig in two at 100 %), the pan (not the EQ, 0.8.5: Yoann's call), the effects' colours (the delay's feedback, filter,
-// drive, resonance, wow; the reverb's; Warps' ALGORITHM but as a frequency shift, TIMBRE and levels). Nothing that
+// drive, resonance, wow; the reverb's; Warps' ALGORITHM but as a frequency shift, TIMBRE and levels, but LEVEL 1
+// where it is its own oscillator's note: 0.8.6). Nothing that
 // leaves the scale (the pitch envelope, a ringing filter's ping, a shift), the levels, the time (divisions, rates,
 // lengths, tempo), the scale, the patching; not the filter's model (OFF stays OFF: its CPU), nor its DRIVE, FM,
 // NOISE, the bits and the glitch where they are off (0.8.3: dice_costly, their CPU too). The sends (0.5.7: the
@@ -486,8 +487,10 @@ void apply_cables() {
     if (!dice_on) make_dice();
     float a = dice_curve();
     int shift = iround(proj.val[PG_WARPS(1) * 4 + 3]) == WM_SHIFT;
+    int osc = iround(proj.val[PG_WARPS(0) * 4 + 0]) >= WC_OSC1;   // (Warps' own oscillator: LEVEL 1 is its note)
     for (int j = 0; j < n_fx_dice; ++j)
-      if (!(shift && fx_dice[j] == PG_WARPS(0) * 4 + 2)) fin[fx_dice[j]] += a * fx_off[j];
+      if (!(shift && fx_dice[j] == PG_WARPS(0) * 4 + 2) && !(osc && fx_dice[j] == PG_WARPS(1) * 4 + 1))
+        fin[fx_dice[j]] += a * fx_off[j];   // (not the shift, not the oscillator's note: 0.8.6, Yoann's call)
     // Warps' ALGORITHM on a mark (one cross-modulation): thrown to another mark, never between two (there Warps plays
     // both algorithms, blended: twice its work)
     const int wa = PG_WARPS(0) * 4 + 2;

@@ -2363,6 +2363,34 @@ int main(int argc, char** argv) {
     eng_fresh();
   }
 
+  // 44. the dose leaves Warps' own oscillator's note (LEVEL 1, its carrier the oscillator) where it is (0.8.6), and
+  // still moves LEVEL 1 when the carrier is a track (there a level)
+  {
+    eng_play(0);
+    eng_blank(p);
+    eng_fresh();
+    const int car = PG_WARPS(0) * 4 + 0, lv1 = PG_WARPS(1) * 4 + 1;
+    float dev[2];
+    for (int c = 0; c < 2; ++c) {
+      p->val[car] = static_cast<float>(c ? WC_T1 : WC_OSC1);
+      p->val[lv1] = 0.5f;
+      p->dice = 100;
+      p->dice_seed = 5;
+      dev[c] = 0.0f;
+      eng_play(1);
+      for (int b = 0; b < 344 * 4; ++b) {
+        eng_render(l, r, n);
+        dev[c] = std::max(dev[c], std::fabs(eng_final(lv1) - 0.5f));
+      }
+      eng_play(0);
+      p->dice = 0;
+    }
+    printf("the dose and Warps' LEVEL 1: its oscillator's note %.3f off at most, a track's level %.2f\n", dev[0], dev[1]);
+    if (dev[0] > 0.0f || dev[1] < 0.05f) ++failures, printf("FAIL: the dose on Warps' oscillator\n");
+    eng_defaults(p);
+    eng_fresh();
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }
