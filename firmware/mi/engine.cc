@@ -312,9 +312,10 @@ float src_value(int s) { return s > SRC_NONE && s < NSRC ? src[s] : 0.0f; }
 
 // the random dose (proj.dice, OCT- and OCT+ held on the panel): each sound parameter moved by its own random offset
 // (one draw a seed: the same each block), at most its span: the pitches (FREQ, TRANSP, the pitch envelope), the
-// timbres (Plaits' HARMONICS, TIMBRE, MORPH, the envelope's knobs, the grit's DRIVE), the filters, the sends, the
-// effects' colours (the delay's feedback, filter, drive, resonance, wow; the reverb's; Warps' ALGORITHM, TIMBRE and
-// levels). Not the time (divisions, rates, lengths, tempo), the pans, the levels, the scale, the patching
+// timbres (Plaits' HARMONICS, TIMBRE, MORPH, the envelope's knobs, the grit's DRIVE), the filters, the effects'
+// colours (the delay's feedback, filter, drive, resonance, wow; the reverb's; Warps' ALGORITHM, TIMBRE and levels).
+// Not the sends (0.5.7: the sound thrown, not drowned in the effects), the time (divisions, rates, lengths, tempo), the
+// pans, the levels, the scale, the patching
 float dice_span(int param) {
   if (param < 0 || param >= ENG_NPARAMS) return 0.0f;
   int pt = page_type(param / 4), k = param % 4;
@@ -324,7 +325,6 @@ float dice_span(int param) {
     case PT_PLAITS3: return k == 0 ? 1.0f : k == 2 ? 7.0f : 0.0f;   // the pitch envelope, TRANSP: +/-7
     case PT_GRIT: return k == 0 ? 0.5f : 0.0f;
     case PT_EQ: return 0.35f;                                  // (to keep the track: a third of the way)
-    case PT_RSEND: case PT_DSEND: return 0.5f;
     case PT_DELAY1: return k == 1 ? 0.2f : k == 2 ? 0.6f : k == 3 ? 0.5f : 0.0f;
     case PT_DELAY2: return k == 0 || k == 2 ? 0.5f : 0.0f;
     case PT_REVERB: return k < 3 ? 0.4f : 0.0f;

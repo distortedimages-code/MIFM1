@@ -22,7 +22,7 @@ et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la base de
 - une **matrice de câbles** : les 3 LFO vers presque tous les paramètres, 8 câbles par piste et 8 globaux, posés en
   tenant la touche d'un LFO et en tournant un potard (en atténuverteur) ;
 - une **dose d'aléatoire** cachée (OCT− tenu, SELECT), sur son propre écran, qui pousse tout le son à la fois
-  (hauteurs, timbres, filtres, envois), plus ou moins, le rend tel quel à 0, et dans son dernier quart ajoute des
+  (hauteurs, timbres, filtres ; pas les envois d'effets), plus ou moins, le rend tel quel à 0, et dans son dernier quart ajoute des
   **fills** en fin de mesure ;
 - **trois effets, chacun avec sa propre piste de pas** : un **delay** inspiré des potards du Zen Delay (temps en
   divisions du tempo ou libre en millisecondes, feedback, filtre passe-bas / passe-haut avec résonance, drive, mono ou ping-pong, une légère
@@ -333,10 +333,11 @@ lettres se mettent à changer (une à quelques %, les six à 100 %, toutes relan
 fond tremblent. Dessous, la dose, sa barre (le dernier quart marqué) et ce que font les fills. Chaque réglage du son
 est poussé d'un écart au hasard qui lui est propre, plus ou moins loin selon la dose : FREQ (jusqu'à ±6 demi-tons à
 100 %, dans la gamme), la transposition (±7), l'enveloppe de hauteur, HARMONICS, TIMBRE, MORPH, DECAY, COLOUR et les
-enveloppes de Plaits, le drive du grit, l'EQ, les envois vers le delay et la réverbe, le feedback, le filtre, le
+enveloppes de Plaits, le drive du grit, l'EQ, le feedback, le filtre, le
 drive, la résonance et le pleurage du delay, la réverbe, l'algorithme (d'un repère à un autre : entre deux, Warps
 calcule les deux algorithmes, deux fois plus de travail), le timbre et les niveaux de Warps. Rien de ce
-qui tient le temps (divisions, tempo, vitesses, longueurs, pas), ni les pans, les niveaux, la gamme ou le branchement :
+qui tient le temps (divisions, tempo, vitesses, longueurs, pas), ni les envois vers les effets (le son secoué, pas noyé dans le delay et la réverbe), les pans, les niveaux, la gamme
+ou le branchement :
 ça reste musical. On lâche OCT− : retour à la page, la dose reste (en bas, un trait de la largeur de la dose ; les
 potards montrent jusqu'où elle les emmène, RANDOM dessous). Revenir à 0 rend le son exact de départ, comme
 l'annulation d'ALL ; remonter depuis 0 tire un autre hasard. Pendant le geste, l'octave du clavier (ou la page de pas)

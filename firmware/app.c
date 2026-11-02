@@ -2797,7 +2797,7 @@ static void rand_scene(uint32_t t, int d, uint32_t tick, uint32_t shake)
             }
     }
     line[0] = 0;
-    text_cat(line, d ? "PITCH  TONE  FILTERS  SENDS" : "THE SOUND AS SET", sizeof line);
+    text_cat(line, d ? "PITCH  TONE  FILTERS" : "THE SOUND AS SET", sizeof line);
     if (t >= 200u)
         cv_text((240 - text_w(&FONT_XS, line)) / 2, 18, &FONT_XS, line, soft);
     rand_word("RAN", 0, 46, t, n, tick, white);
