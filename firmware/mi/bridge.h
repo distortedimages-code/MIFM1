@@ -42,6 +42,21 @@ void lx_knob_text(int model, int k, float v, char *b, int n);   /* as the LXR-02
 void lx_defaults(int model, float *k);   /* the knobs as the model's kit has them */
 int lx_knob_steps(int model, int k);     /* its values a knob's turn goes through: 128 (MIDI's), a wave's 6 */
 
+/* ---- the drums (mi_drum.cc, 0.9): MIFM1's, after Sonic Charge's Microtonic, an oscillator and a noise each with its
+ * envelope, mixed and driven; six models (KICK, SNARE, CLAP, HAT, TOM, PERC), one engine. Their eight knobs as an FM
+ * drum's (k: 0..1, a bipolar knob from its middle): WAVE, SWEEP, DECAY, FILTER, N.DECAY, MIX, DRIVE, P.AMT ---- */
+#define DR_MODELS 6
+void drum_init(void);
+void drum_silence(void);
+void drum_set(int t, int model, float note, const float *k);
+void drum_gate(int t, int g);            /* a rise: a trig (at the next block) */
+void drum_render(int t, float *out, uint32_t n);
+const char *drum_model_name(int m);
+const char *drum_knob_name(int k);
+void drum_defaults(int m, float *k);
+int drum_knob_steps(int k);
+void drum_knob_text(int model, int k, float u, char *b, int n);
+
 /* ---- ZERO (mi_zero.cc, 0.8.1): MIFM1's own voice, pure sines in true through-zero FM (a sine, triangle or saw
  * modulator), round pulses, a beat (a second sine, or the modulator off its ratio), each trig another sound or a loop
  * of sixteen. Its eight knobs as an FM drum's (k: 0..1, a bipolar knob from its middle): INDEX, RATIO, SHAPE, DECAY,

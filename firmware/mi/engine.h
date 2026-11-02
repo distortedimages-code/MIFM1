@@ -117,11 +117,21 @@ const char *eng_param_name(int param);   /* its name as the module prints it: Pl
                                           * model (the kick's MORPH is its Decay) */
 int eng_model_enveloped(int model);      /* 1: a Plaits model with its own envelope, the LPG bypassed (6-op FM,
                                           * string, modal, the drums), or an FM drum */
-/* the models: Plaits' 24, then the four FM drums (the LXR-02's voices, mi_lxr.cc). An FM drum takes its eight
- * parameters from the knobs after FREQ: HARMONICS, TIMBRE, MORPH, the envelope page's four, the pitch envelope's */
-#define ENG_MODELS 29
-#define ENG_LX0 24
-#define ENG_ZERO 28                      /* MIFM1's own (mi_zero.cc, 0.8.1): after the FM drums, their knobs' places */
+/* the models (0.9), in ALGORITHM's order, by bank: MIFM1's six drums (mi_drum.cc), the LXR-02's four FM drums
+ * (mi_lxr.cc), MIFM1's own voices (ZERO, mi_zero.cc), then Plaits' (its 1.2 bank, its pitched one, its noises and
+ * physical models). A model with its own knobs (a drum, an FM drum, ZERO) takes its eight parameters from the knobs
+ * after FREQ: HARMONICS, TIMBRE, MORPH, the envelope page's four, the pitch envelope's. Its kind says what plays it,
+ * its sub its index there (Plaits' engine, the LXR's voice, the drum) */
+enum { MK_PLAITS, MK_LXR, MK_ZERO, MK_DRUM };
+#define ENG_MODELS 32
+#define ENG_BANKS 6
+int eng_model_kind(int m);
+int eng_model_sub(int m);
+int eng_model_bank(int m);
+int eng_model_own(int m);                /* 1: its own eight knobs (not Plaits') */
+int eng_model_find(int kind, int sub);   /* the model a kind's sub is, -1 none */
+const char *eng_model_abbr(int m);       /* in four letters or so (the tracks' row) */
+const char *eng_bank_name(int b);
 void eng_set_model(int t, int model);    /* a track's model (an FM drum new to it: its kit on those knobs) */
 int eng_lx_knob(int param);              /* an FM drum's knob (0..7) that parameter is now, -1 none */
 float eng_lx_step(int param, float v, int detents);   /* an FM drum's knob turned: one of its values a detent (its
@@ -148,7 +158,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 15u              /* (14: 0.6's, with the grit (its four knobs where the bits are, no glitch):
+#define PROJECT_VERSION 16u              /* (15: 0.7's and 0.8's, the models numbered as they were (Plaits' 24 first):
+                                          * read, renumbered, Plaits' three drums MIFM1's; 14: 0.6's, with the grit (its four knobs where the bits are, no glitch):
                                           * read, the grit gone; 13: 0.5.8's and 0.5.9's, their filters in two pages (the type an
                                           * ALGORITHM, no NOISE as such, COLOR, ATTACK): read; 12: 0.5.6's, without the filters (8 pages, 8 lane parameters): read, the
                                           * filters off; 11: 0.5's, without the looped randoms' draws (rseed) either: read, 0 each; 10: 0.4's,

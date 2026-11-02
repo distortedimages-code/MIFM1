@@ -1,13 +1,16 @@
 # MIFM1
 
-Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient de code open source, celui de Mutable Instruments
-et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la base de
+Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient de code open source : le sien, celui de Mutable
+Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la base de
 [fm1-base](https://github.com/charlesvestal/fm1-base) :
 
 - un **filtre** par piste, quatre modèles d'après les meilleurs modèles virtuels analogiques ouverts : **LADDER**
   (l'échelle Moog), **MS-20** (Korg 35, la résonance qui drive), **SEM** (Oberheim) et **VOX** (des formants), en LP,
   BP ou HP, avec du bruit coloré dedans, une enveloppe à vactrol, un **ping** et une **FM** par sa propre sortie ;
-- **Plaits** sur chaque piste, ses 24 modèles au complet, et un **circuit bending** par piste (0.7, à la place du
+- **six batteries** écrites pour MIFM1 (0.9), d'après le Microtonic de Sonic Charge : KICK, SNARE, CLAP, HAT, TOM,
+  PERC, un oscillateur et un bruit chacune (voir plus bas) ;
+- **Plaits** sur chaque piste, 21 de ses modèles (ses trois batteries ont laissé la place à celles de MIFM1 ; la
+  FM, la voix et les puces suivront, avec les moteurs de MIFM1), et un **circuit bending** par piste (0.7, à la place du
   grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
   allumés, inversés ou coupés, des formes numériques) et son **glitch** à la manière du Data Bender de Qu-Bit (des
   répétitions calées au tempo, ralenties ou accélérées, des accidents) ;
@@ -74,7 +77,7 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
 pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
 en quatre gestes, le chemin du son (un schéma), le panneau (chaque numéro allume son repère sur la machine ;
-« Repères » les montre tous), les 29 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
+« Repères » les montre tous), les 32 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
 et ce qu'ils modélisent, les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le circuit bending,
 les effets, le séquenceur, la dose d'aléatoire, les spécifications, et des jauges de la charge du FM-1. « Essayer »,
 sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_try). Pour écouter MIFM1 sur un autre système (une
@@ -162,7 +165,30 @@ drums* (le cinquième choix) joue le même patch, les mêmes câbles et les mêm
 quatre batteries FM (chacune sur son kit, à sa hauteur) : ce que coûtent les voix du LXR-02 à côté de celles de
 Plaits, piste par piste sur la page machine. Sur l'ordinateur, il prend un quart du temps du stress test.
 
-**Les batteries FM** (ALGORITHM après HI-HAT, la banque FM DRUMS) : **FM DRUM** (la voix grosse caisse et toms du
+**Les batteries** (0.9 ; ALGORITHM au début, la banque DRUMS) : celles de MIFM1, d'après le
+[Microtonic](https://soniccharge.com/microtonic) de Sonic Charge (Magnus Lidström, 2003), un synthétiseur de batterie
+qui ne lit aucun échantillon. Chacune tient en deux sources mélangées puis saturées : un **oscillateur** (sinus,
+triangle ou dent de scie, entre les trois ; sa hauteur modulée, qui tombe d'en haut ou monte d'en bas, ou suit une
+sinusoïde jusqu'à 2 kHz : du métal ; une attaque nette ou douce, une décroissance exponentielle) et un **bruit** blanc
+passé dans un filtre à variables d'état (passe-bas, passe-bande ou passe-haut), son enveloppe exponentielle, linéaire
+(coupée net : une caisse claire « gated ») ou modulée (relancée trois fois en quelques millisecondes avant de tomber :
+un clap). Puis le **drive** (à droite des harmoniques impaires, dur ; à gauche des paires, chaud ; antirepliement ADAA).
+Six modèles, un seul moteur : **KICK**, **SNARE**, **CLAP**, **HAT**, **TOM** et **PERC** (cloches, cowbell, rimshot)
+diffèrent par leur kit (la hauteur de l'oscillateur en do 3, le mode de sa modulation, son attaque, le filtre du bruit
+et son Q, l'enveloppe du bruit) et par les valeurs de départ de leurs potards. Les huit potards sont les mêmes pour
+toutes, aux places de ceux des batteries FM :
+
+| 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **WAVE** (sinus, triangle, dent de scie) | **SWEEP** (la modulation de hauteur : sa durée, 3 ms à 1,5 s ; ou sa vitesse, jusqu'à 2 kHz) | **DECAY** (l'oscillateur, 10 ms à 4 s) | **FILTER** (le bruit, 30 Hz à 18 kHz) | **N.DECAY** (le bruit, 10 ms à 4 s) | **MIX** (− l'oscillateur, + le bruit) | **DRIVE** (− chaud, + dur) | **P.AMT** (la profondeur de la modulation de hauteur, ±48 demi-tons) |
+
+Choisir une batterie met ses potards à son kit et l'OCTAVE de la piste à 0 : un pas en do 3 joue la hauteur du kit,
+FREQ, la note, TRANSP et OCTAVE la déplacent. Un trig la relance, son enveloppe fait le reste ; un trig sur un son qui
+sonne encore l'enchaîne sans clic. Elles coûtent au FM-1 5 à 7 % d'un bloc par voix (le KICK de Plaits : 14 %). Les
+projets d'avant la 0.9 se lisent, leurs modèles renumérotés ; le KICK, la SNARE et le HI-HAT de Plaits y deviennent
+ceux de MIFM1 (KICK, SNARE, HAT), à leur kit.
+
+**Les batteries FM** (ALGORITHM après PERC, la banque FM DRUMS) : **FM DRUM** (la voix grosse caisse et toms du
 LXR-02 : un oscillateur et un modulateur en FM, une enveloppe de hauteur), **FM SNARE** (un oscillateur et un bruit
 filtré), **FM CYMBAL** et **FM HI-HAT** (un oscillateur modulé en FM par deux autres). Choisir l'une d'elles sur une
 piste met ses huit réglages à ceux de son kit (le kit INIT du LXR-02, retouché pour sonner tout de suite), sur les
@@ -373,10 +399,10 @@ dernières secondes ; en bas, les trois LFO, chacun dans sa couleur, allumés à
 deux Tides des 0.3 : ils coûtent à peu près pareil (presque rien), mais se règlent d'un coup d'œil.
 
 **Le son** (EDIT), première page : FREQ, puis HARMONICS, TIMBRE et MORPH sous le nom (court) que leur donne le manuel de Plaits pour
-le modèle choisi (le KICK : ATTACK, BRIGHT, DECAY ; le FM 2-OP : RATIO, INDEX, FDBK ; le WAVETABLE : BANK, ROW,
-COLUMN…). **ENV**, première page : l'enveloppe. Les modèles qui ont la leur (STRING, MODAL, KICK, SNARE, HI-HAT, et les
-6-OP FM dans leur preset) contournent le LPG de Plaits : LPG COLOUR est alors grisé, et pour STRING, MODAL et les trois
-batteries, DECAY s'ajoute à leur decay (leur MORPH) : il marche sur toutes les pistes, avec ses locks et son
+le modèle choisi (le FM 2-OP : RATIO, INDEX, FDBK ; le WAVETABLE : BANK, ROW, COLUMN…) ; sur une batterie, une
+batterie FM ou ZERO, leurs huit réglages à eux. **ENV**, première page : l'enveloppe. Les modèles qui ont la leur
+(STRING, MODAL, les 6-OP FM dans leur preset) contournent le LPG de Plaits : LPG COLOUR est alors grisé, et pour
+STRING et MODAL, DECAY s'ajoute à leur decay (leur MORPH) : il marche sur toutes les pistes, avec ses locks et son
 aléatoire. Un potard grisé tourne toujours, mais ne change rien au son dans l'état présent.
 
 **Le circuit bending** (EDIT, deuxième ensemble de la piste ; 0.7, à la place du grit) : de quoi casser le son,

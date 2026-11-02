@@ -203,11 +203,11 @@ static int ptrack(int page)              /* the track a page belongs to, -1: non
     return page >= VP_SYS ? -1 : page >= ENG_NPAGES ? (page - ENG_NPAGES) % 4 : eng_page_track(page);
 }
 
-static int drum_track(int t)             /* an FM drum on it (or ZERO): its eight knobs on the sound's pages */
+static int drum_track(int t)             /* a model with its own eight knobs on it (a drum, an FM drum, ZERO) */
 {
-    return t >= 0 && t < ENG_TRACKS && eng_project()->algo[PG_TRACK(t, 0)] >= ENG_LX0;
+    return t >= 0 && t < ENG_TRACKS && eng_model_own(eng_project()->algo[PG_TRACK(t, 0)]);
 }
-static int zero_track(int t) { return t >= 0 && t < ENG_TRACKS && eng_project()->algo[PG_TRACK(t, 0)] == ENG_ZERO; }
+static int track_kind(int t) { return t >= 0 && t < ENG_TRACKS ? eng_model_kind(eng_project()->algo[PG_TRACK(t, 0)]) : -1; }
 static int track_cat(int page)           /* the set a track's page is in */
 {
     switch (ptype(page)) {
@@ -425,8 +425,10 @@ static const char *module_name(int page)
     case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2: {
         int c = track_cat(page);
         return c == CAT_BEND ? "Bend" : c == CAT_FILTER ? "Filter" : c == CAT_ENV ? "Envelope"
-                                                                        : zero_track(ptrack(page)) ? "Zero"
-                                                                        : drum_track(ptrack(page)) ? "FM drum" : "Plaits";
+                                                                        : track_kind(ptrack(page)) == MK_ZERO ? "Zero"
+                                                                        : track_kind(ptrack(page)) == MK_DRUM ? "Drum"
+                                                                        : track_kind(ptrack(page)) == MK_LXR ? "FM drum"
+                                                                        : "Plaits";
     }
     case PT_LFO: {
         static const char *const N[3] = {"LFO 1", "LFO 2", "LFO 3"};
@@ -452,10 +454,11 @@ static const char *const LANE_SHORT[ENG_LANES] = {"T1", "T2", "T3", "T4", "DL", 
 /* the colours of a module's state, as its icons print them (in Mutable's: teal, orange, pink) */
 static uint16_t accent3(int i) { return i <= 0 ? AC1 : i == 1 ? AC2 : AC3; }
 
-static uint16_t model_accent(int m)      /* Plaits' banks: teal the classic models, pink the noisy and the drums,
-                                          * orange the eight of 1.2 */
+static uint16_t model_accent(int m)      /* by bank: orange Plaits' 1.2, teal its pitched models, pink the drums, the
+                                          * noises and the physical models, ZERO */
 {
-    return m < 8 ? AC2 : m < 16 ? AC1 : AC3;
+    int b = eng_model_bank(m);
+    return b == 3 ? AC2 : b == 4 ? AC1 : AC3;
 }
 static uint16_t track_accent(int t) { return model_accent(eng_project()->algo[PG_TRACK(t, 0)]); }
 
@@ -490,14 +493,6 @@ static uint16_t page_accent(int page)
 }
 static uint16_t mod_colour(uint16_t ac) { return ac == AC1 ? AC3 : AC1; }   /* where the cables take a knob */
 
-/* the models in four letters or so (the tracks' row), their banks: Plaits' three, the FM drums (the LXR-02's), MIFM1's own
- * (ZERO) */
-static const char *const SHORT[ENG_MODELS] = {"VCF", "PD", "6OP1", "6OP2", "6OP3", "TERR", "SMCH", "CHIP",
-                                              "VA", "SHPR", "FM", "FRMT", "HARM", "WTBL", "CHRD", "SPCH",
-                                              "SWRM", "NOIS", "PART", "STRG", "MODL", "KICK", "SNAR", "HHAT",
-                                              "FDRM", "FSNR", "FCYM", "FHAT", "ZERO"};
-static const char *const BANK[5] = {"PLAITS 1.2", "PITCHED", "NOISE & DRUMS", "FM DRUMS", "MIFM1"};
-static int bank_of(int m) { return m >= ENG_ZERO ? 4 : m / 8; }
 
 /* ------------------------------------------------------------------ text --- */
 static int iabs(int v) { return v < 0 ? -v : v; }
@@ -901,7 +896,7 @@ static void led(float cx, float cy, float r, uint16_t c, int lvl)   /* an LED: l
     disc(cx, cy, r, col);
 }
 
-/* the icons, as strokes in a 32-unit box: the 29 models (Plaits' 24, the FM drums, ZERO), the LFOs' waves, the mixer, the reverb, the global page,
+/* the icons, as strokes in a 32-unit box: the 32 models (as ALGORITHM orders them), the LFOs' waves, the mixer, the reverb, the global page,
  * the projects, the steps, Warps' algorithms, the delay. L a line, C a circle, D a dot, R a rectangle (x y w h) */
 typedef struct {
     char op;
@@ -912,6 +907,24 @@ enum { IC_MODEL = 0, IC_WAVE = ENG_MODELS, IC_MIX = IC_WAVE + LW_N, IC_REV, IC_G
        IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, IC_EQ, IC_BEND, IC_EUC, NICON };
 #define IOPS 10
 static const vop_t ICONS[NICON][IOPS] = {
+    {{'C', 16, 16, 9, 0}, {'D', 16, 16, 3, 0}},                                                     /* KICK */
+    {{'R', 6, 11, 20, 12}, {'L', 6, 15, 26, 15}, {'L', 9, 4, 15, 9}, {'L', 23, 4, 17, 9}},          /* SNARE */
+    {{'L', 4, 26, 7, 8}, {'L', 7, 8, 9, 26}, {'L', 9, 26, 12, 10}, {'L', 12, 10, 14, 26}, {'L', 14, 26, 17, 6},
+     {'L', 17, 6, 28, 26}},                                                                         /* CLAP: its bursts */
+    {{'L', 5, 13, 16, 8}, {'L', 16, 8, 27, 13}, {'L', 5, 16, 16, 20}, {'L', 16, 20, 27, 16}, {'L', 16, 20, 16, 28}}, /* HAT */
+    {{'R', 7, 13, 18, 12}, {'L', 7, 17, 25, 17}, {'L', 16, 3, 16, 9}, {'L', 13, 6, 16, 9}, {'L', 19, 6, 16, 9}}, /* TOM */
+    {{'L', 11, 7, 21, 7}, {'L', 21, 7, 25, 25}, {'L', 25, 25, 7, 25}, {'L', 7, 25, 11, 7}, {'D', 16, 21, 2, 0}}, /* PERC */
+    {{'C', 16, 16, 11, 0}, {'L', 9, 17, 12, 12}, {'L', 12, 12, 16, 20}, {'L', 16, 20, 20, 12},
+     {'L', 20, 12, 23, 17}},                                                                        /* FM drum */
+    {{'R', 6, 13, 20, 11}, {'L', 6, 17, 26, 17}, {'L', 7, 9, 11, 5}, {'L', 11, 5, 15, 9}, {'L', 15, 9, 19, 5},
+     {'L', 19, 5, 23, 9}},                                                                          /* FM snare */
+    {{'L', 3, 13, 16, 8}, {'L', 16, 8, 29, 13}, {'L', 3, 13, 29, 13}, {'L', 16, 13, 16, 28},
+     {'L', 10, 28, 22, 28}},                                                                        /* FM cymbal */
+    {{'L', 5, 11, 27, 11}, {'L', 5, 15, 27, 15}, {'D', 16, 7, 2, 0}, {'L', 16, 15, 16, 28},
+     {'L', 10, 22, 22, 22}},                                                                        /* FM hi-hat */
+    {{'C', 16, 16, 11, 0}, {'L', 6, 16, 9, 11}, {'L', 9, 11, 12, 11}, {'L', 12, 11, 16, 16}, {'L', 16, 16, 20, 21},
+     {'L', 20, 21, 23, 21}, {'L', 23, 21, 26, 16}},                                                 /* ZERO: a sine
+                                                                                                     * through zero */
     {{'L', 4, 24, 12, 8}, {'L', 12, 8, 12, 24}, {'L', 12, 24, 20, 8}, {'L', 20, 8, 20, 24}, {'L', 20, 24, 28, 16}},
     {{'L', 4, 16, 8, 7}, {'L', 8, 7, 12, 7}, {'L', 12, 7, 20, 25}, {'L', 20, 25, 24, 25}, {'L', 24, 25, 28, 16}},
     {{'D', 9, 9, 2, 0}, {'D', 16, 9, 2, 0}, {'D', 23, 9, 2, 0}, {'D', 9, 23, 2, 0}, {'D', 16, 23, 2, 0}, {'D', 23, 23, 2, 0},
@@ -941,20 +954,6 @@ static const vop_t ICONS[NICON][IOPS] = {
     {{'D', 8, 9, 2, 0}, {'D', 20, 7, 2, 0}, {'D', 14, 15, 2, 0}, {'D', 25, 17, 2, 0}, {'D', 9, 23, 2, 0}, {'D', 19, 25, 2, 0}},
     {{'L', 8, 5, 8, 27}, {'L', 16, 5, 20, 16}, {'L', 20, 16, 16, 27}, {'L', 24, 5, 24, 27}},
     {{'C', 16, 16, 11, 0}, {'C', 16, 16, 6, 0}, {'D', 16, 16, 2, 0}},
-    {{'C', 16, 16, 9, 0}, {'D', 16, 16, 3, 0}},
-    {{'R', 6, 11, 20, 12}, {'L', 6, 15, 26, 15}, {'L', 9, 4, 15, 9}, {'L', 23, 4, 17, 9}},
-    {{'L', 5, 13, 16, 8}, {'L', 16, 8, 27, 13}, {'L', 5, 16, 16, 20}, {'L', 16, 20, 27, 16}, {'L', 16, 20, 16, 28}},
-    {{'C', 16, 16, 11, 0}, {'L', 9, 17, 12, 12}, {'L', 12, 12, 16, 20}, {'L', 16, 20, 20, 12},
-     {'L', 20, 12, 23, 17}},                                                                        /* FM drum */
-    {{'R', 6, 13, 20, 11}, {'L', 6, 17, 26, 17}, {'L', 7, 9, 11, 5}, {'L', 11, 5, 15, 9}, {'L', 15, 9, 19, 5},
-     {'L', 19, 5, 23, 9}},                                                                          /* FM snare */
-    {{'L', 3, 13, 16, 8}, {'L', 16, 8, 29, 13}, {'L', 3, 13, 29, 13}, {'L', 16, 13, 16, 28},
-     {'L', 10, 28, 22, 28}},                                                                        /* FM cymbal */
-    {{'L', 5, 11, 27, 11}, {'L', 5, 15, 27, 15}, {'D', 16, 7, 2, 0}, {'L', 16, 15, 16, 28},
-     {'L', 10, 22, 22, 22}},                                                                        /* FM hi-hat */
-    {{'C', 16, 16, 11, 0}, {'L', 6, 16, 9, 11}, {'L', 9, 11, 12, 11}, {'L', 12, 11, 16, 16}, {'L', 16, 16, 20, 21},
-     {'L', 20, 21, 23, 21}, {'L', 23, 21, 26, 16}},                                                 /* ZERO: a sine
-                                                                                                     * through zero */
     {{'L', 4, 16, 7, 10}, {'L', 7, 10, 10, 7}, {'L', 10, 7, 13, 10}, {'L', 13, 10, 16, 16}, {'L', 16, 16, 19, 22},
      {'L', 19, 22, 22, 25}, {'L', 22, 25, 25, 22}, {'L', 25, 22, 28, 16}},                          /* sine */
     {{'L', 4, 16, 10, 7}, {'L', 10, 7, 22, 25}, {'L', 22, 25, 28, 16}},                             /* triangle */
@@ -1295,7 +1294,7 @@ static void panel_plaits(int t, int face, uint16_t ac)
     if (face == 0) {                     /* the model */
         int y = hero_title(eng_algo_name(PG_TRACK(t, 0), m));
         s[0] = 0;
-        text_cat(s, BANK[bank_of(m)], sizeof s);
+        text_cat(s, eng_bank_name(eng_model_bank(m)), sizeof s);
         text_cat(s, "|", sizeof s);
         int_text(m + 1, n);
         text_cat(s, n, sizeof s);
@@ -1312,7 +1311,7 @@ static void panel_plaits(int t, int face, uint16_t ac)
         int m = p->algo[PG_TRACK(t, 0)];
         if (eng_model_enveloped(m)) {    /* its own envelope: the LPG is out of its way */
             int y = hero_title("ENVELOPE");
-            hero_line(y, m >= 19 ? "NO LPG|DECAY: ITS DECAY" : "NO LPG|IN ITS PRESET");
+            hero_line(y, eng_model_own(m) || eng_model_sub(m) >= 19 ? "NO LPG|DECAY: ITS DECAY" : "NO LPG|IN ITS PRESET");
             return;
         }
         cv_text(84, 0, &FONT_XS, dec("LOW-PASS GATE", 1), MUTED);
@@ -1342,7 +1341,7 @@ static void panel_plaits(int t, int face, uint16_t ac)
         text_cat(s, "GATE ", sizeof s);
         eng_param_text(pg * 4 + 1, eng_final(pg * 4 + 1), v, sizeof v);
         text_cat(s, v, sizeof s);
-        if (m >= ENG_LX0) {             /* an FM drum's own (its pitch envelope's depth, a drive): no gate */
+        if (eng_model_own(m)) {         /* a drum's, an FM drum's, ZERO's own (its eighth knob): no gate */
             char u[16];
             s[0] = 0;
             label_text(eng_param_name(pg * 4), u, sizeof u);
@@ -2067,7 +2066,7 @@ static void draw_panel(void)
         break;
     case PT_MIX: case PT_PAN:
         for (int t = 0; t < ENG_TRACKS; t++)
-            s[2] |= meter_lit(t) << (t * 3) | (int)(p->algo[PG_TRACK(t, 0)] / 8) << (12 + t * 2);
+            s[2] |= meter_lit(t) << (t * 3) | eng_model_bank(p->algo[PG_TRACK(t, 0)]) << (12 + t * 3);
         break;
     case PT_WARPS1: case PT_WARPS2:
         s[2] = (int)(eng_final(PG_WARPS(0) * 4 + 2) * 64.0f) | (int)p->val[PG_WARPS(0) * 4] << 7 |
@@ -2222,7 +2221,7 @@ static int knob_idle(int param)
 {
     int page = param / 4, k = param % 4;
     if (page < 12 && page % 3 == 1 && k == 1)    /* (an FM drum's: one of its own) */
-        return eng_model_enveloped(eng_project()->algo[page - 1]) && eng_project()->algo[page - 1] < ENG_LX0;
+        return eng_model_enveloped(eng_project()->algo[page - 1]) && !eng_model_own(eng_project()->algo[page - 1]);
     if (page == PG_COMP || page == PG_OTT)
         return bus_mode() != (page == PG_OTT ? MB_OTT : MB_COMP);
     if (page >= PG_FILT(0, 0) && page <= PG_FILT(ENG_TRACKS - 1, 2))   /* the filter OFF: its knobs */
@@ -2980,7 +2979,7 @@ static void draw_footer(void)
                 n[1] = ' ';
                 n[2] = 0;
                 text_cat(t, n, sizeof t);
-                text_cat(t, SHORT[p->algo[PG_TRACK(i, 0)] % ENG_MODELS], sizeof t);
+                text_cat(t, eng_model_abbr(p->algo[PG_TRACK(i, 0)]), sizeof t);
                 if (act) {               /* the track played: knocked out of a block of its colour */
                     uint16_t tc = track_accent(i);
                     cv_rect(x - 4, 7, 52, 25, tc);

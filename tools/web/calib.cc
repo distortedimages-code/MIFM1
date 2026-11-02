@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
     secs = argc > 2 ? static_cast<float>(atof(argv[2])) : 4.0f;
   } else if (!strcmp(what, "blank")) {                   // (the tracks on an FM drum: silent until a trig, they
     eng_blank(p);                                        // rest; INIT's Plaits sound without one)
-    for (int t = 0; t < ENG_TRACKS; ++t) eng_set_model(t, ENG_LX0);
+    for (int t = 0; t < ENG_TRACKS; ++t) eng_set_model(t, eng_model_find(MK_LXR, 0));
     for (int l = 0; l < ENG_LANES; ++l)
       for (int s = 0; s < ENG_STEPS; ++s) eng_trig_set(l, s, 0);
     secs = argc > 2 ? static_cast<float>(atof(argv[2])) : 2.0f;
@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
     eng_blank(p);
     for (int l = 0; l < ENG_LANES; ++l)
       for (int s = 0; s < ENG_STEPS; ++s) eng_trig_set(l, s, 0);
-    for (int t = 1; t < ENG_TRACKS; ++t) eng_set_model(t, ENG_LX0);   // (resting)
+    for (int t = 1; t < ENG_TRACKS; ++t) eng_set_model(t, eng_model_find(MK_LXR, 0));   // (resting)
     eng_set_model(0, model);
     p->val[PG_TRACK(0, 1) * 4 + 0] = 0.6f;               // DECAY
     p->val[PG_TRACK(0, 2) * 4 + 1] = 0.9f;               // GATE: long
@@ -82,7 +82,7 @@ int main(int argc, char** argv) {
                                   static_cast<float>(WM_WARPS)};
       for (int k = 0; k < 8; ++k) p->val[PG_WARPS(k / 4) * 4 + k % 4] = kW[k];
       p->val[PG_WARPS(0) * 4 + 2] = static_cast<float>(warps) / 5.0f;
-      eng_set_model(1, 8);
+      eng_set_model(1, eng_model_find(MK_PLAITS, 8));
       p->val[PG_TRACK(1, 2) * 4 + 1] = 0.9f;
       for (int s = 0; s < 16; ++s) eng_trig_set(1, s, 1);
     }

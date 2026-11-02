@@ -32,6 +32,8 @@ FLAGS = ["-O2", "-ffp-contract=off", "-DTEST", "-DPLAT_HOST", "-fno-exceptions",
          "-fno-threadsafe-statics", "-fno-tree-vectorize", "-fno-tree-slp-vectorize", "-w"]
 INC = [f"-I{FW}", f"-I{FW / 'third_party'}", f"-I{FW / 'third_party' / 'lxr'}", f"-I{ROOT / 'base' / 'include'}"]
 SECS = 2.0
+NAMES = re.findall(r'\{"([^"]+)", "[^"]*", MK_', (FW / "mi" / "engine.cc").read_text())   # (the models, in order)
+VA = NAMES.index("VIRTUAL ANALOG")                   # (the filters', the bus', Warps' runs: under a VA)
 
 
 def build():
@@ -80,25 +82,25 @@ def count(exe, *args):
 def main():
     exe = build()
     jobs = {"blank": ("blank", SECS), "stress": ("stress", SECS * 2)}
-    for m in range(29):                                  # ENG_MODELS: the 24 Plaits, the 4 FM drums, ZERO
+    for m in range(len(NAMES)):                          # every model (engine.cc's kModelDef)
         jobs[f"model{m}"] = ("one", m, 0, 0, 0, 0, 0, -1, 0, SECS)
     for f in range(1, 5):                                # MF_LADDER..MF_VOX, under the VA (8)
         for v, (fm, nz) in enumerate(((0, 0), (0.5, 0), (0, 0.5))):
-            jobs[f"filter{f}.{v}"] = ("one", 8, f, fm, nz, 0, 0, -1, 0, SECS)
-    jobs["bend"] = ("one", 8, 0, 0, 0, 1, 0, -1, 0, SECS)
+            jobs[f"filter{f}.{v}"] = ("one", VA, f, fm, nz, 0, 0, -1, 0, SECS)
+    jobs["bend"] = ("one", VA, 0, 0, 0, 1, 0, -1, 0, SECS)
     for b in range(3):
-        jobs[f"bus{b}"] = ("one", 8, 0, 0, 0, 0, b, -1, 0, SECS)
+        jobs[f"bus{b}"] = ("one", VA, 0, 0, 0, 0, b, -1, 0, SECS)
     for e in (1, 2, 4):
-        jobs[f"fx{e}"] = ("one", 8, 0, 0, 0, 0, 0, -1, 0, SECS, e)
+        jobs[f"fx{e}"] = ("one", VA, 0, 0, 0, 0, 0, -1, 0, SECS, e)
     for hq in range(2):
         for a in range(6):
-            jobs[f"warps{hq}.{a}"] = ("one", 8, 0, 0, 0, 0, 0, a, hq, SECS)
+            jobs[f"warps{hq}.{a}"] = ("one", VA, 0, 0, 0, 0, 0, a, hq, SECS)
     with ThreadPoolExecutor(os.cpu_count() or 2) as ex:
         res = dict(zip(jobs, ex.map(lambda a: count(exe, *a), jobs.values())))
     rest = res["blank"]["voice"] / 4.0                   # a resting voice's render (its silence), each block
-    va = res["model8"]
+    va = res[f"model{VA}"]
     k = lambda ir, rate: ir / 1000.0 * rate              # instructions a block -> the FM-1's us a block
-    model = [k(res[f"model{m}"]["voice"] - 3 * rest, K_VOICE) for m in range(29)]
+    model = [k(res[f"model{m}"]["voice"] - 3 * rest, K_VOICE) for m in range(len(NAMES))]
     filt = [[0.0, 0.0, 0.0]] + [[k(res[f"filter{f}.{v}"]["filter"] - va["filter"], K_VOICE) for v in range(3)]
                                 for f in range(1, 5)]
     bend = k(res["bend"]["voice"] - va["voice"], K_VOICE)   # (apply_bend inlined in render_voice)
@@ -118,10 +120,7 @@ def main():
     s = res["stress"]
     print(f"stress: voices {k(s['voice'], K_VOICE):.0f} us, Warps {k(s['warps'], K_WARPS):.0f}, effects "
           f"{k(s['tasks'] - s['voice'] - s['warps'], K_FX):.0f}, preparation {prep_s:.0f} (the FM-1's block: 2902 us)")
-    names = ["VA VCF", "PHASE DIST", "6-OP FM 1", "6-OP FM 2", "6-OP FM 3", "WAVE TERRAIN", "STRING MACH", "CHIPTUNE",
-             "VIRTUAL ANALOG", "WAVESHAPING", "FM 2-OP", "GRAIN", "ADDITIVE", "WAVETABLE", "CHORD", "SPEECH", "SWARM",
-             "NOISE", "PARTICLE", "STRING", "MODAL", "KICK", "SNARE", "HI-HAT", "FM DRUM", "FM SNARE", "FM CYMBAL",
-             "FM HI-HAT", "ZERO"]
+    names = NAMES
     f1 = lambda v: f"{v:.1f}f"
     h = ["/* SPDX-License-Identifier: MPL-2.0",
          " * Copyright (C) 2026 Yoann */",
@@ -129,8 +128,8 @@ def main():
          " * (2902 us), from the instructions it runs (tools/web/calibrate.py writes this file: see there how). */",
          "#pragma once",
          f"static const float kWebRest = {f1(k(rest, K_VOICE))};   /* a resting voice */",
-         "static const float kWebModel[29] = {   /* a voice playing, by model */"]
-    for m in range(29):
+         f"static const float kWebModel[{len(NAMES)}] = {{   /* a voice playing, by model */"]
+    for m in range(len(NAMES)):
         h.append(f"    {f1(model[m])},{' ' * (8 - len(f1(model[m])))}/* {m:2d} {names[m]} */")
     h += ["};",
           "static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, VOX): plain, its FM's extra, "

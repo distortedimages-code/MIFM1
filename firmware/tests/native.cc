@@ -252,7 +252,7 @@ int main(int argc, char** argv) {
   for (int tr = 0; tr < ENG_TRACKS; ++tr) eng_trig_set(tr, tr * 4, 1);
   for (int g = 0; g <= ENG_TRACKS; ++g)
     for (int c = 0; c < ENG_CABLES; ++c) cables += p->cable[g][c].depth != 0;
-  for (int tr = 0; tr < ENG_TRACKS; ++tr) models += p->algo[PG_TRACK(tr, 0)] == 8;
+  for (int tr = 0; tr < ENG_TRACKS; ++tr) models += p->algo[PG_TRACK(tr, 0)] == eng_model_find(MK_PLAITS, 8);
   snprintf(path, sizeof path, "%s/init.wav", dir);
   Wav wi;
   const uint32_t iblocks = 8u * 44100u / n;
@@ -277,7 +277,7 @@ int main(int argc, char** argv) {
   }
   wi.close();
   printf("init: %d cables, %d lanes with steps, %d tracks on VIRTUAL ANALOG (%s), a step each: rms %.3f, gates %u %u %u %u\n",
-         cables, steps, models, eng_algo_name(PG_TRACK(0, 0), 8), std::sqrt(ie / (iblocks * n)), irises[0], irises[1],
+         cables, steps, models, eng_algo_name(PG_TRACK(0, 0), eng_model_find(MK_PLAITS, 8)), std::sqrt(ie / (iblocks * n)), irises[0], irises[1],
          irises[2], irises[3]);
   if (cables || steps || models != ENG_TRACKS || inan || ie < 1e-3) ++failures, printf("FAIL: the INIT project\n");
   for (int tr = 0; tr < ENG_TRACKS; ++tr)
@@ -384,7 +384,7 @@ int main(int argc, char** argv) {
   {
     eng_play(0);
     eng_blank(p);
-    p->algo[PG_TRACK(0, 0)] = 12;
+    p->algo[PG_TRACK(0, 0)] = static_cast<uint8_t>(eng_model_find(MK_PLAITS, 12));
     p->val[eng_track_param(0, TP_DECAY)] = 0.75f;
     p->val[eng_track_param(0, TP_SEND)] = 0.0f;
     for (int s = 0; s < 16; ++s) eng_trig_set(0, s, 1);
@@ -592,7 +592,7 @@ int main(int argc, char** argv) {
     printf("a version 4 project: %s, track 2 model %d, output %d, a cable %s, knob %.2f, Endless %d notes, warps %s\n",
            ok ? "read" : "REFUSED", q->algo[PG_TRACK(1, 0)], q->out_mode, q->cable[0][0].depth == 33 ? "kept" : "LOST",
            q->val[5], q->endless_len[0], q->val[PG_WARPS(0) * 4] == WC_OFF ? "off" : "ON");
-    if (!ok || !eng_check(q) || q->algo[PG_TRACK(1, 0)] != 17 || q->out_mode != 2 || q->cable[0][0].depth != 33 ||
+    if (!ok || !eng_check(q) || q->algo[PG_TRACK(1, 0)] != eng_model_find(MK_PLAITS, 17) || q->out_mode != 2 || q->cable[0][0].depth != 33 ||
         q->val[5] != 0.25f || q->endless_len[0] != 3 || q->endless[0][0] != 60 || q->val[PG_WARPS(0) * 4] != WC_OFF)
       ++failures, printf("FAIL: the version 4 project\n");
   }
@@ -697,7 +697,7 @@ int main(int argc, char** argv) {
            (q->trig[1][0] >> 4) & 1, haslock);
     if (!ok || !eng_check(q) || q->val[PG_GLOBAL * 4] != 0.7f || lv != 0.33f || q->val[PG_REVERB * 4] != 0.8f ||
         q->val[PG_STEP(0) * 4 + 3] != 12.0f || q->val[PG_GLOBAL * 4 + 1] != 3.0f || q->val[PG_WARPS(0) * 4] != 2.0f ||
-        q->val[PG_LFO(1) * 4 + 2] != LM_SYNC || q->algo[PG_TRACK(2, 0)] != 19 || q->cable[0][0].depth != 40 ||
+        q->val[PG_LFO(1) * 4 + 2] != LM_SYNC || q->algo[PG_TRACK(2, 0)] != eng_model_find(MK_PLAITS, 19) || q->cable[0][0].depth != 40 ||
         q->cable[0][0].src != SRC_L1 || q->cable[0][0].dst != PG_MIX * 4 + 1 || q->cable[0][1].depth != 0 ||
         q->cable[0][2].depth != 0 || haslock != 200)
       ++failures, printf("FAIL: the version 5 project\n");
@@ -753,7 +753,7 @@ int main(int argc, char** argv) {
   // 20. the delay: one note (a kick), its echoes a quarter (0.5 s) apart, ping-pong: left at a quarter, right at two
   {
     eng_blank(p);
-    p->algo[PG_TRACK(0, 0)] = 21;
+    p->algo[PG_TRACK(0, 0)] = static_cast<uint8_t>(eng_model_find(MK_DRUM, 0));
     eng_trig_set(0, 0, 1);
     p->val[PG_STEP(0) * 4 + 3] = 64.0f;                   // one note in four bars
     p->val[eng_track_param(0, TP_DSEND)] = 1.0f;
@@ -817,7 +817,7 @@ int main(int argc, char** argv) {
       eng_play(0);
       eng_blank(p);
       p->algo[PG_COMP] = MB_OFF;
-      p->algo[PG_TRACK(0, 0)] = 21;
+      p->algo[PG_TRACK(0, 0)] = static_cast<uint8_t>(eng_model_find(MK_DRUM, 0));
       p->val[eng_track_param(0, TP_LEVEL)] = 0.0f;         // (T1 itself silent: T2 alone heard)
       for (int st = 0; st < 16; st += 4) eng_trig_set(0, st, 1);
       for (int st = 0; st < 16; ++st) eng_trig_set(1, st, 1);
@@ -898,7 +898,7 @@ int main(int argc, char** argv) {
     printf("a version 6 project: %s, track 4 model %d, a knob %.2f, the delay's lane %d%d, a random %d, duck %.2f, bus %d\n",
            ok ? "read" : "REFUSED", q->algo[PG_TRACK(3, 0)], q->val[100], q->trig[LANE_DELAY][0] & 1,
            (q->trig[LANE_DELAY][0] >> 2) & 1, q->rnd[2][TP_DSEND], q->val[PG_DUCK * 4 + 2], q->algo[PG_COMP]);
-    if (!ok || !eng_check(q) || q->algo[PG_TRACK(3, 0)] != 23 || q->val[100] != 0.25f || q->trig[LANE_DELAY][0] != 0x05 ||
+    if (!ok || !eng_check(q) || q->algo[PG_TRACK(3, 0)] != eng_model_find(MK_DRUM, 3) || q->val[100] != 0.25f || q->trig[LANE_DELAY][0] != 0x05 ||
         q->rnd[2][TP_DSEND] != -40 || q->val[PG_DUCK * 4 + 2] != 0.0f || q->algo[PG_COMP] != MB_COMP)
       ++failures, printf("FAIL: the version 6 project\n");
   }
@@ -1354,7 +1354,7 @@ int main(int argc, char** argv) {
   {
     eng_play(0);
     eng_defaults(p);
-    p->algo[PG_TRACK(0, 0)] = 21;                         // the kick
+    p->algo[PG_TRACK(0, 0)] = static_cast<uint8_t>(eng_model_find(MK_DRUM, 0));                         // the kick
     p->val[PG_TRACK(0, 0) * 4 + 3] = 1.0f;                // its decay (MORPH) at full
     p->val[PG_TRACK(0, 1) * 4 + 0] = 1.0f;                // and Plaits' DECAY
     p->val[PG_RSEND * 4 + 0] = 1.0f;
@@ -1541,7 +1541,7 @@ int main(int argc, char** argv) {
     float pk[4];
     char tx[24];
     for (int m = 0; m < LX_MODELS; ++m) {
-      eng_set_model(0, ENG_LX0 + m);
+      eng_set_model(0, eng_model_find(MK_LXR, m));
       float k[LX_KNOBS];
       lx_defaults(m, k);
       for (int i = 0; i < LX_KNOBS; ++i) {
@@ -1567,7 +1567,7 @@ int main(int argc, char** argv) {
       }
       if (nan || pk[m] < 0.02f) sound_ok = 0;
     }
-    eng_set_model(0, ENG_LX0);                           // the drum: its Wave written, its Decay 0..127
+    eng_set_model(0, eng_model_find(MK_LXR, 0));                           // the drum: its Wave written, its Decay 0..127
     eng_param_text(PG_TRACK(0, 1) * 4 + 1, p->val[PG_TRACK(0, 1) * 4 + 1], tx, sizeof tx);
     int text_ok = std::strcmp(tx, "Sine") == 0;
     eng_param_text(PG_TRACK(0, 1) * 4 + 0, 21.0f / 127.0f, tx, sizeof tx);
@@ -1714,7 +1714,7 @@ int main(int argc, char** argv) {
       o.lock[0] = plock_t{2, 5, TP_NOTE, 200};
       memcpy(&q, &o, sizeof o);
       int bytes = v == 12 ? static_cast<int>(sizeof o) : 3104;
-      int ok = eng_upgrade(&q, bytes) && eng_check(&q) && q.algo[PG_TRACK(2, 0)] == 7 && q.dice == 33 &&
+      int ok = eng_upgrade(&q, bytes) && eng_check(&q) && q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 7) && q.dice == 33 &&
                q.rnd[3][TP_NOTE] == cur.rnd[3][TP_NOTE] && q.rseed[1][3] == (v == 12 ? 5 : 0) && !q.rseed[1][30] &&
                q.lock[0].lane == 2 && q.lock[0].tp == TP_NOTE && q.algo[PG_FILT(1, 0)] == MF_OFF &&
                q.val[PG_FILT(1, 0) * 4] > 0.5f && q.val[PG_MIX * 4 + 1] == cur.val[PG_MIX * 4 + 1];
@@ -2174,10 +2174,10 @@ int main(int argc, char** argv) {
     eng_play(0);
     eng_defaults(p);
     eng_fresh();
-    eng_set_model(0, ENG_ZERO);
+    eng_set_model(0, eng_model_find(MK_ZERO, 0));
     float kd[8];
     zero_defaults(kd);
-    int setup_ok = std::strcmp(eng_algo_name(PG_TRACK(0, 0), ENG_ZERO), "ZERO") == 0;
+    int setup_ok = std::strcmp(eng_algo_name(PG_TRACK(0, 0), eng_model_find(MK_ZERO, 0)), "ZERO") == 0;
     for (int i = 0; i < 8; ++i) {
       int param = PG_TRACK(0, 0) * 4 + 1 + i;
       float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
@@ -2389,6 +2389,119 @@ int main(int argc, char** argv) {
     if (dev[0] > 0.0f || dev[1] < 0.05f) ++failures, printf("FAIL: the dose on Warps' oscillator\n");
     eng_defaults(p);
     eng_fresh();
+  }
+
+  // 45. the drums (mi_drum.cc, 0.9): on a track, their kit (knobs named, written as they are), each sounding; the
+  // engine itself: KICK's pitch, at C3 its kit's 50 Hz once its sweep has gone; CLAP's bursts, three before its tail;
+  // a retrig over a ringing TOM without a step; any setting finite and bounded
+  {
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    int kit_ok = 1, sound_ok = 1;
+    float pk[DR_MODELS];
+    for (int m = 0; m < DR_MODELS; ++m) {
+      eng_set_model(0, eng_model_find(MK_DRUM, m));
+      float kd[8];
+      drum_defaults(m, kd);
+      for (int i = 0; i < 8; ++i) {
+        int param = PG_TRACK(0, 0) * 4 + 1 + i;
+        float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
+        if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), drum_knob_name(i)) != 0) kit_ok = 0;
+      }
+      if (std::strcmp(eng_algo_name(PG_TRACK(0, 0), eng_model_find(MK_DRUM, m)), drum_model_name(m)) != 0) kit_ok = 0;
+      eng_cut();
+      for (int b = 0; b < 3; ++b) eng_render(l, r, n);
+      pk[m] = 0.0f;
+      for (int b = 0; b < 200; ++b) {
+        if (b % 50 == 0) eng_key(0, 48, 1);
+        if (b % 50 == 10) eng_key(0, 48, 0);
+        eng_render(l, r, n);
+        for (uint32_t i = 0; i < n; ++i) {
+          if (!std::isfinite(l[i])) sound_ok = 0;
+          pk[m] = std::max(pk[m], std::fabs(l[i]));
+        }
+      }
+      if (pk[m] < 0.02f) sound_ok = 0;
+    }
+    char tx[24];
+    eng_set_model(0, eng_model_find(MK_DRUM, 0));
+    eng_param_text(PG_TRACK(0, 0) * 4 + 1, p->val[PG_TRACK(0, 0) * 4 + 1], tx, sizeof tx);   // KICK's WAVE: Sine
+    kit_ok &= std::strcmp(tx, "Sine") == 0;
+    eng_defaults(p);
+    eng_cut();
+    // the engine: KICK at C3, held a second, its zero crossings from 0.4 s on (its sweep long gone)
+    static float buf[44128];
+    float k[8];
+    drum_init();
+    drum_defaults(0, k);
+    k[2] = 1.0f;                                         // (a long decay)
+    drum_set(0, 0, 48.0f, k);
+    drum_gate(0, 1);
+    for (uint32_t i = 0; i < 44100; i += 32) drum_render(0, &buf[i], 32);
+    int zc = 0;
+    for (uint32_t i = 17640 + 1; i < 44100; ++i) zc += buf[i - 1] < 0.0f && buf[i] >= 0.0f;
+    float hz = static_cast<float>(zc) / 0.6f;
+    // CLAP: its noise's bursts (the level a millisecond, rising past half the hit's peak from under a fifth): three
+    // bursts, then the tail
+    drum_init();
+    drum_defaults(2, k);
+    k[5] = 1.0f;                                         // (the noise alone)
+    drum_set(0, 2, 48.0f, k);
+    drum_gate(0, 1);
+    for (uint32_t i = 0; i < 4416; i += 32) drum_render(0, &buf[i], 32);
+    float env[100], top = 0.0f;
+    for (int w = 0; w < 100; ++w) {
+      double e = 0.0;
+      for (int j = 0; j < 44; ++j) e += buf[w * 44 + j] * buf[w * 44 + j];
+      env[w] = static_cast<float>(std::sqrt(e / 44.0));
+      top = std::max(top, env[w]);
+    }
+    int rises = 0, low = 1;
+    for (int w = 0; w < 100; ++w) {
+      if (low && env[w] > 0.5f * top) ++rises, low = 0;
+      else if (env[w] < 0.2f * top) low = 1;
+    }
+    // TOM ringing, retriggered: its largest step around the retrig, against a fresh hit's first ones
+    drum_init();
+    drum_defaults(4, k);
+    drum_set(0, 4, 48.0f, k);
+    drum_gate(0, 1);
+    for (uint32_t i = 0; i < 4416; i += 32) drum_render(0, &buf[i], 32);
+    float typ = 0.0f, step = 0.0f;
+    for (uint32_t i = 1; i < 60; ++i) typ = std::max(typ, std::fabs(buf[i] - buf[i - 1]));
+    drum_gate(0, 0);
+    drum_gate(0, 1);
+    for (uint32_t i = 4416; i < 8832; i += 32) drum_render(0, &buf[i], 32);
+    for (uint32_t i = 4380; i < 4480; ++i) step = std::max(step, std::fabs(buf[i] - buf[i - 1]));
+    // anything: 300 settings, a trig each
+    uint32_t sd = 777u;
+    auto rnd = [&]() { sd = sd * 1664525u + 1013904223u; return static_cast<float>(sd >> 8) / 16777216.0f; };
+    float pk_any = 0.0f;
+    int nan_any = 0;
+    drum_init();
+    for (int s2 = 0; s2 < 300; ++s2) {
+      for (int i = 0; i < 8; ++i) k[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();
+      drum_set(s2 & 3, s2 % DR_MODELS, 12.0f + 100.0f * rnd(), k);
+      drum_gate(s2 & 3, 1);
+      for (int b = 0; b < 300; ++b) {
+        float tmp[32];
+        if (b == 20) drum_gate(s2 & 3, 0);
+        drum_render(s2 & 3, tmp, 32);
+        for (int i = 0; i < 32; ++i) {
+          if (!std::isfinite(tmp[i])) nan_any = 1;
+          pk_any = std::max(pk_any, std::fabs(tmp[i]));
+        }
+      }
+    }
+    drum_init();
+    printf("the drums: kits %s, sounding %s (peaks %.2f %.2f %.2f %.2f %.2f %.2f); KICK at C3 %.1f Hz; CLAP's rises %d; "
+           "a retrig over a TOM: a step of %.3f (a fresh hit's %.3f); 300 settings: peak %.2f%s\n", kit_ok ? "ok" : "WRONG",
+           sound_ok ? "ok" : "NO", pk[0], pk[1], pk[2], pk[3], pk[4], pk[5], hz, rises, step, typ, pk_any,
+           nan_any ? ", NaN" : "");
+    if (!kit_ok || !sound_ok || std::fabs(hz - 50.0f) > 1.5f || rises < 3 || rises > 5 || step > 1.5f * typ + 0.02f ||
+        nan_any || pk_any > 1.5f)
+      ++failures, printf("FAIL: the drums\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
