@@ -14,6 +14,7 @@ repository, at the commit the package names.
 | fm1-base and felucca-bsp | `base/` (a submodule) | MPL-2.0 |
 | MIFM1's changes to them (the USB audio input's 10 channels), applied to `base/` before a build | `patches/`, `tools/patch_base.sh` | MPL-2.0, as the files they change |
 | The browser emulator's page, fm1-base's (Copyright Charles Vestal) in French and with MIFM1's parts; its worklet part and exports | `firmware/web/emu/index.html`, `firmware/web/emu/app_worklet.js`, `firmware/web.c` | MPL-2.0 |
+| The page's photographs (the lab), Yoann's; the historical photographs are not in the repository: the page shows them from Wikimedia Commons, each linked to its page (its author, its licence) | `firmware/web/emu/img/` | Yoann's, for MIFM1's page: not under the code's licences |
 | Mutable Instruments' code (Emilie Gillet) | `firmware/third_party/` (stmlib, Plaits, Clouds, Warps, Tides 2, Marbles) | MIT (`firmware/third_party/LICENSE-eurorack`, `LICENSE-stmlib`) |
 | The LXR-02's drum voices (Copyright Erica Synths), MIFM1's port of them and the code that reuses theirs | `firmware/third_party/lxr/`, `firmware/mi/mi_lxr.cc`, `tools/vendor_lxr.py`, `tools/lxr_check.cc` | GPL-3.0-only with the additional permission and terms of `firmware/third_party/lxr/NOTICE.md` |
 
