@@ -397,7 +397,7 @@ float src_value(int s) { return s > SRC_NONE && s < NSRC ? src[s] : 0.0f; }
 // but where it is an interval (the chords, the detune, a swarm's spread), TIMBRE, MORPH, the envelope's knobs; an FM
 // drum's own), the gate, the bits (CLOCK, BITS, MASK, SHAPE) and the glitch (GLITCH, SIZE, BEND, DROP), the filter
 // (eleven knobs, not its PING; from 60 %
-// its TYPE too, on a trig in two at 100 %), the EQ, the pan, the effects' colours (the delay's feedback, filter,
+// its TYPE too, on a trig in two at 100 %), the pan (not the EQ, 0.8.5: Yoann's call), the effects' colours (the delay's feedback, filter,
 // drive, resonance, wow; the reverb's; Warps' ALGORITHM but as a frequency shift, TIMBRE and levels). Nothing that
 // leaves the scale (the pitch envelope, a ringing filter's ping, a shift), the levels, the time (divisions, rates,
 // lengths, tempo), the scale, the patching; not the filter's model (OFF stays OFF: its CPU), nor its DRIVE, FM,
@@ -420,7 +420,7 @@ float dice_span(int param) {
                                                                                      // any pitch, off the scale);
     case PT_FILT3: return k == 0 ? 0.0f : k == 1 ? 0.35f : k == 2 ? 1.0f : 0.35f;   // NOISE, COLOR, ATTACK (TYPE:
                                                                                      // dice_type)
-    case PT_EQ: return 0.35f;                                  // (to keep the track: a third of the way)
+    case PT_EQ: return 0.0f;                                   // (0.8.5: not thrown, the track's tone kept)
     case PT_PAN: return 0.6f;
     case PT_DELAY1: return k == 1 ? 0.2f : k == 2 ? 0.6f : k == 3 ? 0.5f : 0.0f;
     case PT_DELAY2: return k == 0 || k == 2 ? 0.5f : 0.0f;

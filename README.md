@@ -491,7 +491,7 @@ FM, ses réglages), la gate, les bits (CLOCK, BITS, MASK, SHAPE) et le glitch (G
 bégaient), le
 filtre (CUTOFF jusqu'à ±3,4 octaves, RESO, ENV, DECAY, DRIVE, FM, KEY, NOISE, COLOR, ATTACK ; au-delà de 60 % son
 TYPE aussi, LP, BP ou HP, sur un trig sur deux à 100 % ; pas son modèle : un filtre OFF le reste, son CPU avec),
-l'EQ et le pan. **Ce qui coûte cher une fois allumé, la dose ne l'allume pas** (0.8.3) : le DRIVE, la FM et le NOISE
+et le pan (pas l'EQ depuis 0.8.5 : la couleur de la piste reste la sienne). **Ce qui coûte cher une fois allumé, la dose ne l'allume pas** (0.8.3) : le DRIVE, la FM et le NOISE
 du filtre, les bits et le glitch, s'ils sont à 0 (le potard, son lock et son aléatoire), y restent ; allumés, elle les
 relance comme le reste. Allumés partout à 100 %, ils faisaient passer le stress test de 79 à 89 % par cœur (compté),
 son pire bloc au-delà du bord ; ainsi, la dose à 100 % ne lui coûte presque rien de plus (80 %). **Les envois d'effets**, de temps en temps et légèrement : à 100 %, un trig sur sept environ part
