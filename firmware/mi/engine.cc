@@ -360,6 +360,19 @@ int8_t hist[NSRC][ENG_HIST];
 uint32_t hist_at, hist_div;
 
 volatile uint32_t load0, load1, peak, peak_hold_blocks;
+// the CPU guard (0.8.2): a block over 92 % of its time lightens the filters' FM for the next 0.3 s (its coefficients
+// every 2nd sample), a late one (over 100 %: a click) more (every 4th), a second late one within 0.3 s the FM off;
+// then a level back every 0.3 s. Where the FM-1 is that full the sound is moving everywhere: a lighter FM for a moment
+// does not show, a click would (Yoann's call). What it saves (the stress test with the dose at 100 %, counted): 3, 5,
+// 6 points a core. Off on a computer (its clock is not the FM-1's), but for the tests that ask for it
+#ifdef PLAT_HOST
+int guard_on = 0;
+#else
+int guard_on = 1;
+#endif
+volatile int guard;
+int guard_hold, guard_late;               // (guard_late: blocks since a late one, counting down; 0 none lately)
+volatile uint32_t guard_blocks;
 // the worst block of the last second, its own figures (what made the peak): each task's ticks (0: not played), core
 // 0's preparation, core 0's and core 1's totals, the whole render; the preparation's parts (the start and the LFOs,
 // the cables, the sequencer, the effects' lanes, the voices' knobs); its frames
@@ -1275,9 +1288,10 @@ void render_voice(int t, uint32_t n) {
   uint32_t fq = plat_ticks24();
 #ifdef PLAT_WEB
   {
+    static const float kGuardFm[4] = {1.0f, 0.55f, 0.3f, 0.0f};   // (the guard: the FM's coefficients fewer)
     int fm = proj.algo[PG_FILT(t, 0)];
     if (fm > MF_OFF && fm < MF_MODELS)
-      web_spend((kWebFilter[fm][0] + (fm_fabsf(E(t, TP_FM)) > 0.005f ? kWebFilter[fm][1] : 0.0f) +
+      web_spend((kWebFilter[fm][0] + (fm_fabsf(E(t, TP_FM)) > 0.005f ? kWebFilter[fm][1] * kGuardFm[guard & 3] : 0.0f) +
                  (E(t, TP_NOISE) > 0.005f ? kWebFilter[fm][2] : 0.0f)) * static_cast<float>(n) / 128.0f);
   }
 #endif
@@ -3417,6 +3431,20 @@ void eng_render(float* l, float* r, uint32_t n) {
     for (int i = 1; i < 5; ++i) peak_of[kTasks + 4 + i] = pp[i] - pp[i - 1];
     peak_n = n;
   }
+  if (guard_on) {
+    int lv = pt >= 1000u ? (guard_late ? 3 : 2) : pt >= 920u ? 1 : 0;
+    if (pt >= 1000u) guard_late = 103;
+    else if (guard_late) --guard_late;
+    if (lv && lv >= guard) {
+      guard = lv;
+      guard_hold = 103;                 // (0.3 s)
+    } else if (guard && --guard_hold <= 0) {
+      --guard;
+      guard_hold = 103;
+    }
+    mf_guard(guard);
+    if (guard) ++guard_blocks;
+  }
 }
 
 float eng_final(int param) { return param >= 0 && param < ENG_NPARAMS ? fin[param] : 0.0f; }
@@ -3457,6 +3485,12 @@ uint32_t eng_peak_part(int i) {         // the worst block's: 0..3 the voices, 4
 }                                                                      // 10..14 the preparation's parts
 uint32_t eng_prep_load(void) { return ready ? pct10(static_cast<uint32_t>(prep_cost), kN) : 0u; }
 uint32_t eng_peak(void) { return peak; }
+int eng_guard(void) { return guard; }
+uint32_t eng_guard_blocks(void) { return guard_blocks; }
+void eng_guard_test(int on, int level) {   // (the tests: the guard on, or held at a level)
+  guard_on = on;
+  if (level >= 0) guard = level, mf_guard(level);
+}
 float eng_meter(int t) { return t >= 0 && t < ENG_TRACKS + 2 ? meter[t] : 0.0f; }
 float eng_duck(void) { return duck_s; }
 float eng_gr(int band) { return ready ? mms_gain(master, band) : 0.0f; }

@@ -73,6 +73,8 @@ void mf_set(int t, int model, int type, const float *k, float note);
 void mf_trigger(int t, uint32_t at);     /* a trig at that sample of the next mf_process */
 void mf_process(int t, float *x, uint32_t n);   /* in place; nothing when OFF */
 void mf_reset(int t);
+void mf_guard(int level);                /* the CPU guard: its FM's coefficients every sample (0), every 2nd (1), every
+                                          * 4th (2), none (3: the FM off) */
 void mf_stop(int t);                     /* the transport stopped: its envelope closed, faded out (~23 ms), then silent
                                           * (a self-oscillation, a ring, its noise) until its next trig */
 float mf_cutoff_hz(int t);               /* (the screen) the cutoff now, all modulations in */

@@ -254,8 +254,10 @@ inline float vactrol(Filter& f, float vs, int* ramp) {
 // trigs (a ping: an impulse into the filter), then the model alone, its type a mix of its outputs (no branch a sample)
 struct Run {
   float oct, doct, vs, y1, fm5, ping, nv;   // nv: the noise now (its amount by the envelope)
-  int ramp, ti, fm_on;
+  int ramp, ti, fm_on, skip;            // (skip: the FM's coefficients at the samples i & skip == 0)
 };
+// the CPU guard (engine.cc): the FM's coefficients every sample (0), every 2nd (1), every 4th (3); -1: no FM
+volatile int fm_skip = 0;
 
 __attribute__((noinline)) void sub_block(Filter& f, Run& r, uint32_t i0, uint32_t i1, uint32_t* ping_at) {
   *ping_at = 0xFFFFFFFFu;
@@ -299,7 +301,7 @@ void run_ladder(Filter& f, Run& r, float* x, uint32_t n) {
     uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
     sub_block(f, r, i0, i1, &ping_at);
     for (uint32_t i = i0; i < i1; ++i) {
-      if (r.fm_on) fm_coefs(f, r);
+      if (r.fm_on && !(i & r.skip)) fm_coefs(f, r);
       float in = x[i] + (i == ping_at ? r.ping : 0.0f);
       if (r.nv != 0.0f) in += r.nv * cnoise(f);
       float g = f.g, u = drive * in - res * V[3];
@@ -332,7 +334,7 @@ void run_ms20(Filter& f, Run& r, float* x, uint32_t n) {
     uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
     sub_block(f, r, i0, i1, &ping_at);
     for (uint32_t i = i0; i < i1; ++i) {
-      if (r.fm_on) fm_coefs(f, r);
+      if (r.fm_on && !(i & r.skip)) fm_coefs(f, r);
       float G = f.G, K = f.K, in = x[i] + (i == ping_at ? r.ping : 0.0f), y;
       if (r.nv != 0.0f) in += r.nv * cnoise(f);
       if (bp) {                          // the band: a one-pole high pass first (the MS-20's HPF, then its LPF)
@@ -374,7 +376,7 @@ void run_sem(Filter& f, Run& r, float* x, uint32_t n) {
     uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
     sub_block(f, r, i0, i1, &ping_at);
     for (uint32_t i = i0; i < i1; ++i) {
-      if (r.fm_on) fm_coefs(f, r);
+      if (r.fm_on && !(i & r.skip)) fm_coefs(f, r);
       float lp, hp, in = x[i] + (i == ping_at ? r.ping : 0.0f);
       if (r.nv != 0.0f) in += r.nv * cnoise(f);   // (the noise: its envelope's)
       if (k > 0.0f) in = drive_in(f, in, dg, bias, sb, lvl);
@@ -393,7 +395,7 @@ void run_vox(Filter& f, Run& r, float* x, uint32_t n) {
     uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
     sub_block(f, r, i0, i1, &ping_at);
     for (uint32_t i = i0; i < i1; ++i) {
-      if (r.fm_on) fm_coefs(f, r);
+      if (r.fm_on && !(i & r.skip)) fm_coefs(f, r);
       float lp, hp, sum = 0.0f, in = x[i] + (i == ping_at ? 4.0f * r.ping : 0.0f);
       if (r.nv != 0.0f) in += 1.5f * r.nv * cnoise(f);   // (narrow formants: more of it)
       if (k > 0.0f) in = drive_in(f, in, dg, bias, sb, lvl);
@@ -416,7 +418,9 @@ void process(Filter& f, float* x, uint32_t n) {
   r.y1 = f.y1;
   r.ramp = f.ramp;
   r.ti = 0;
-  r.fm_on = f.fm != 0.0f;
+  int sk = fm_skip;
+  r.fm_on = f.fm != 0.0f && sk >= 0;
+  r.skip = sk < 0 ? 0 : sk;
   r.fm5 = f.fm * 5.0f;
   r.ping = f.ping * 3.0f;
   if (f.ntrig) f.still = 0, f.fade = 0;   // (a trig wakes it)
@@ -540,6 +544,8 @@ void mf_reset(int t) {
   flt[t].ramp = 0;
   flt[t].ntrig = 0;
 }
+
+void mf_guard(int level) { fm_skip = level <= 0 ? 0 : level == 1 ? 1 : level == 2 ? 3 : -1; }
 
 float mf_cutoff_hz(int t) { return t >= 0 && t < MF_TRACKS ? hz_of(flt[t].now_oct) : 0.0f; }
 float mf_env(int t) { return t >= 0 && t < MF_TRACKS ? flt[t].vs : 0.0f; }

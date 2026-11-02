@@ -2499,7 +2499,16 @@ static void draw_machine(int force)      /* the machine, where the knobs are */
         }
         case 1:
             l = "Peak over a second";
-            int_text((int32_t)((eng_peak() + 5u) / 10u), v);
+            v[0] = 0;
+            if (eng_guard()) {           /* the CPU guard at work: the filters' FM lightened */
+                char n[4] = {'G', (char)('0' + eng_guard()), ' ', 0};
+                text_cat(v, n, sizeof v);
+            }
+            {
+                char n[8];
+                int_text((int32_t)((eng_peak() + 5u) / 10u), n);
+                text_cat(v, n, sizeof v);
+            }
             text_cat(v, "%", sizeof v);
             if (eng_peak() >= 900u)
                 c = AC3;

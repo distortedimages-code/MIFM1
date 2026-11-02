@@ -291,6 +291,13 @@ le cœur 1 les prend à la fin de son premier travail, sans attendre que le cœu
 lui passer (sur le stress test, cette attente faisait monter le pic de 70 à 96 %). Une voix silencieuse depuis un moment, sa note finie, se repose jusqu'à son
 trig suivant (elle ne coûte plus rien).
 
+**Le garde-fou** (0.8.2) : quand un bloc dépasse 92 % de son temps, la FM des filtres s'allège pendant 0,3 s (ses
+coefficients recalculés un échantillon sur deux) ; quand un bloc arrive en retard (plus de 100 % : un clic), un sur
+quatre ; deux retards en 0,3 s, la FM des filtres coupée ; puis un cran de moins toutes les 0,3 s. Quand la machine est
+si pleine, le son bouge de partout : une FM un peu plus légère un instant ne s'entend pas, un clic si. La page machine
+l'affiche devant le pic (G1, G2, G3). Ce qu'il gagne reste modeste (sur le stress test avec la dose à 100 %, compté :
+3, 5 et 6 points par cœur) : il évite les clics au bord, il ne remplace pas une machine moins chargée.
+
 **Le mode STEP** (REC) : les 16 touches blanches sont les pas de la page (allumés : un trig, celui qui joue
 clignote), les **7 premières touches noires choisissent la piste de pas** : 1 à 4 les pistes, 5 le delay, 6 la
 réverbe, 7 Warps (l'écran passe sur la piste ou l'effet choisi) ; OCT− et OCT+ changent de page (16 pas chacune,

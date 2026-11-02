@@ -1973,6 +1973,40 @@ int main(int argc, char** argv) {
     }
     printf("filters driven anyhow (240 settings, FM, pings, loud noise): %d NaN, peak %.2f\n", nan, worst);
     if (nan || worst > 2.001f) ok = 0;
+    {                                                    // the CPU guard: the FM's coefficients every 2nd, 4th sample,
+      float lv[4][4];                                    // then the FM off: finite, near the level (a self-FM is
+      int gnan = 0;                                      // chaotic: not the same samples)
+      for (int m = MF_LADDER; m < MF_MODELS; ++m)
+        for (int g = 0; g < 4; ++g) {
+          mf_init();
+          eng_guard_test(0, g);
+          float k[MF_KNOBS] = {0.5f, 0.5f, 0.0f, 0.5f, 0.3f, 0.0f, 0.6f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+          float ph = 0.0f;
+          double e = 0.0;
+          for (int b = 0; b < 344; ++b) {
+            float buf[128];
+            mf_set(0, m, MF_LP, k, 60.0f);
+            for (int i = 0; i < 128; ++i) {   // a saw at 110 Hz
+              ph += 110.0f / 44100.0f;
+              ph -= ph >= 1.0f ? 1.0f : 0.0f;
+              buf[i] = 0.5f * (2.0f * ph - 1.0f);
+            }
+            mf_process(0, buf, 128);
+            for (int i = 0; i < 128; ++i) {
+              if (!std::isfinite(buf[i])) gnan = 1;
+              if (b >= 40) e += buf[i] * buf[i];
+            }
+          }
+          lv[m - 1][g] = static_cast<float>(10.0 * std::log10(e / (304.0 * 128.0) + 1e-12));
+        }
+      eng_guard_test(0, 0);
+      float lvd = 0.0f;
+      for (int m = 0; m < 4; ++m)
+        for (int g = 1; g < 4; ++g) lvd = std::max(lvd, std::fabs(lv[m][g] - lv[m][0]));
+      printf("the CPU guard on the filters' FM (strong, on a saw): its levels %.1f dB from the FM's at most%s\n", lvd,
+             gnan ? ", NaN" : "");
+      if (gnan || lvd > 6.0f) ok = 0;
+    }
     {                                                    // the envelope opens it at a trig
       mf_init();
       float k[MF_KNOBS] = {0.3f, 0.2f, 1.0f, 0.6f, 0.0f, 0.0f, 0.0f, 0.0f}, buf[128] = {0};
