@@ -1,7 +1,7 @@
 # MIFM1 in fm1-base's host simulator: the intro at power-on, the default patch playing, the pages (a face sliding in), a knob turned, a
 # track's grit, a Euclidean rhythm, the three LFOs, the mixer's filters, the effects (the delay, FREE too, the reverb,
-# Warps, their steps), a cable made in MOD mode (hold an LFO's key, turn a knob), the random dose (OCT- and OCT+ held,
-# SELECT), the matrix, every cable erased (REC and SEL held), the global page (the machine: Warps HQ, another theme), STEP mode (REC: a step held and locked, the lanes on
+# Warps, their steps), a cable made in MOD mode (hold an LFO's key, turn a knob), the random dose (OCT- held,
+# SELECT: its own screen, its fills), the matrix, every cable erased (REC and SEL held), the global page (the machine: Warps HQ, another theme), STEP mode (REC: a step held and locked, the lanes on
 # the black keys, the delay's lane and a lock on its time, the pages on OCT- OCT+), the RANDOM page, ENV held, GLO
 # held: ALL, Endless (recorded, played,
 # transposed by a key), Warps (off, patched, its algorithms, its oscillator, the frequency shifter), a save kept across
@@ -114,23 +114,28 @@ shot 13_cable_lfo3_morph.png
 tap SEL
 wait 300
 press OCT-
-press OCT+
 turn SELECT 10
+wait 120
+shot 13a_random_opening.png
 wait 200
+shot 13a2_random_landing.png
+wait 500
 shot 13b_random_dose.png
 wait 60
 shot 13b2_random_thrown.png
-turn SELECT 40
+turn SELECT 26
 wait 200
-shot 13c_random_full.png
-release OCT+
+shot 13c_random_fills.png
+turn SELECT 14
+wait 200
+shot 13c2_random_full.png
 release OCT-
 wait 300
 shot 13d_random_kept.png
 press OCT-
 press OCT+
 turn SELECT -50
-wait 200
+wait 800
 shot 13e_random_zero.png
 release OCT+
 release OCT-

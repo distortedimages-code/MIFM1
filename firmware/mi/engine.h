@@ -135,7 +135,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 11u              /* (10: 0.4's, the same but without the FM drums: read as it is; 9: 0.3.9's and 0.3.10's, with Tides, Warps' faces as they were, no random
+#define PROJECT_VERSION 12u              /* (11: 0.5's, without the looped randoms' draws (rseed): read, 0 each; 10: 0.4's,
+                                          * the same but without the FM drums either: read as it is; 9: 0.3.9's and 0.3.10's, with Tides, Warps' faces as they were, no random
                                           * dose; 8: 0.3.8's,
                                           * without the grit and the Euclidean rhythms either; 7: 0.3.3's to
                                           * 0.3.7's, without the filter either; 6: 0.3.0's to 0.3.2's, without
@@ -149,8 +150,8 @@ typedef struct {
     uint8_t out_mode;                    /* the output: 0 stereo, 1 a headset with a mic (the right inverted), 2 mono */
     uint8_t warps_hq;                    /* Warps: 0 ECO (its cross-modulations at 3x), 1 HQ (6x, the module's) */
     uint8_t theme;                       /* the screen's colours (app.c's THEMES) */
-    uint8_t dice;                        /* the random dose (OCT- and OCT+ held, SELECT): 0..100 % of a random offset on
-                                          * the sound's knobs (eng_dice), 0 the sound as set */
+    uint8_t dice;                        /* the random dose (OCT- held, SELECT): 0..100 % of a random offset on the
+                                          * sound's knobs (eng_dice), 0 the sound as set; its last quarter adds fills */
     uint8_t dice_seed;                   /* which random: a new one each time the dose leaves 0 */
     cable_t cable[ENG_TRACKS + 1][ENG_CABLES];   /* the tracks' cables, then the global ones */
     uint8_t trig[ENG_LANES][ENG_STEPS / 8];      /* the steps with a trig, a bit each */
@@ -160,9 +161,16 @@ typedef struct {
     uint8_t endless[ENG_TRACKS][ENG_ENDLESS];   /* Endless: the notes recorded (MIDI), ENDLESS_REST a rest */
     uint8_t endless_len[ENG_TRACKS];     /* 0: none (the track plays its steps) */
     int8_t endless_key[ENG_TRACKS];      /* the transposition the last key set */
+    uint8_t rseed[ENG_LANES][ENG_NTP];   /* each looped random's own draw: another each time its knob comes back to
+                                          * 0 (eng_rnd_redraw), so the loop side plays a new one (0: 0.5.5's loops) */
 } project_t;
+void eng_rnd_redraw(project_t *p, int lane, int tp);   /* a random knob back at 0: its next loop another */
 int eng_algo_count(int page);            /* 0: the page has no ALGORITHM choice */
 float eng_dice_span(int param);          /* how far the random dose moves a parameter at 100 % (0: not at all) */
+/* the random dose's fills (its last quarter, 76..100 %; none under): a fill every so many bars (4, 2, 1), over the
+ * bar's last beat or two, on so many of the tracks that play steps (1..4); 0 when the dose gives none */
+void eng_fills(int dice, int *every, int *beats, int *tracks);
+uint32_t eng_fill_trigs(int t);          /* the fills' trigs track t played, since power-on */
 const char *eng_algo_name(int page, int a);
 
 /* Warps as it plays: its algorithm (0..5 the cross-modulations, 6 the frequency shifter; -1 off), its name, the track

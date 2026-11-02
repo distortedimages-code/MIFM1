@@ -166,11 +166,32 @@ int main(int argc, char** argv) {
     for (uint32_t i = 0; i < n; ++i) ke += static_cast<double>(l[i]) * l[i];
   }
   eng_key(1, 60, 0);
-  int kn = eng_note(1);
-  printf("keyboard, stopped: rms %.3f, note %d\n", std::sqrt(ke / (100.0 * n)), kn);
-  if (ke < 1e-3 || kn != 60) {
+  int kn = eng_note(1), koct = static_cast<int>(std::lround(eng_project()->val[PG_TRACK(1, 2) * 4 + 3]));
+  printf("keyboard, stopped: rms %.3f, note %d (OCTAVE %d)\n", std::sqrt(ke / (100.0 * n)), kn, koct);
+  if (ke < 1e-3 || kn != 60 + 12 * koct) {
     printf("FAIL: the keyboard does not play track 2\n");
     ++failures;
+  }
+  {                                     // the track's OCTAVE moves the keyboard's notes too (as TRANSP does)
+    float* oct = &eng_project()->val[PG_TRACK(1, 2) * 4 + 3];
+    float was = *oct;
+    *oct = 1.0f;
+    eng_key(1, 60, 1);
+    for (int b = 0; b < 4; ++b) eng_render(l, r, n);
+    int up = eng_note(1);
+    eng_key(1, 60, 0);
+    *oct = -2.0f;
+    eng_key(1, 60, 1);
+    for (int b = 0; b < 4; ++b) eng_render(l, r, n);
+    int down = eng_note(1);
+    eng_key(1, 60, 0);
+    *oct = was;
+    for (int b = 0; b < 200; ++b) eng_render(l, r, n);
+    printf("keyboard, OCTAVE +1: note %d, -2: note %d\n", up, down);
+    if (up != 72 || down != 36) {
+      printf("FAIL: the track's OCTAVE does not move the keyboard\n");
+      ++failures;
+    }
   }
 
   // 3. every model on track 1, a second each
@@ -351,7 +372,9 @@ int main(int argc, char** argv) {
   run(4, sr, slo, shi, &ok_scale);
   printf("endless: %u notes in 2 bars (24 expected), %d..%d; transposed by a key: %d..%d, %s\n", e1, e1lo, e1hi, slo[0],
          shi[0], ok_scale ? "in the scale" : "OUT OF THE SCALE");
-  if (e1 + 1 < 24 || e1 > 25 || e1lo != 60 || e1hi != 67 || slo[0] != 65 || shi[0] != 72 || !ok_scale)
+  const int eo = 12 * static_cast<int>(std::lround(p->val[PG_TRACK(0, 2) * 4 + 3]));   // (the track's OCTAVE)
+  if (e1 + 1 < 24 || e1 > 25 || e1lo != 60 + eo || e1hi != 67 + eo || slo[0] != 65 + eo || shi[0] != 72 + eo ||
+      !ok_scale)
     ++failures, printf("FAIL: Endless\n");
   eng_endless_clear(0);
 
@@ -1553,15 +1576,152 @@ int main(int argc, char** argv) {
     if (wrong) ++failures, printf("FAIL: the FM drums' envelope\n");
   }
 
-  // 36. 0.4's projects (version 10): read as they are
-  {
+  // 36. 0.4's and 0.5's projects (versions 10 and 11, 3104 bytes: this one without the looped randoms' draws): read,
+  // their draws 0 (their loops as they were)
+  for (int v = 10; v <= 11; ++v) {
     static project_t q;
     eng_defaults(&q);
-    q.version = 10;
+    q.version = static_cast<uint16_t>(v);
+    q.size = 3104;
     q.algo[PG_TRACK(2, 0)] = 7;
-    int ok = eng_upgrade(&q, static_cast<int>(sizeof q)) && eng_check(&q) && q.algo[PG_TRACK(2, 0)] == 7;
-    printf("a version 10 project: %s\n", ok ? "read" : "REFUSED");
-    if (!ok) ++failures, printf("FAIL: a version 10 project\n");
+    q.rseed[0][0] = 99;                                  // (what was past its end: anything)
+    q.rseed[ENG_LANES - 1][ENG_NTP - 1] = 42;
+    int ok = eng_upgrade(&q, 3104) && eng_check(&q) && q.algo[PG_TRACK(2, 0)] == 7 && !q.rseed[0][0] &&
+             !q.rseed[ENG_LANES - 1][ENG_NTP - 1];
+    printf("a version %d project: %s\n", v, ok ? "read" : "REFUSED");
+    if (!ok) ++failures, printf("FAIL: a version %d project\n", v);
+  }
+
+  // 39. a looped random brought back to 0 draws another loop: T4's looped tune, two passes the same; its knob back to
+  // 0 and to the loop again (eng_rnd_redraw, as the screen does): another tune, itself a loop; T3's own loop as it was
+  {
+    auto tune = [&](int t, int* out, int nmax) {         // the notes of track t's next nmax trigs
+      int got = 0;
+      uint32_t r0 = eng_rises(t);
+      while (got < nmax) {
+        eng_render(l, r, n);
+        if (eng_rises(t) != r0) {
+          r0 = eng_rises(t);
+          out[got++] = eng_note(t);
+        }
+      }
+    };
+    eng_play(0);
+    eng_defaults(p);
+    for (int t = 0; t < ENG_TRACKS; ++t) p->val[PG_STEP(t) * 4 + 3] = 16.0f;
+    p->rnd[3][TP_NOTE] = -100;
+    p->rnd[2][TP_NOTE] = -100;
+    for (int t = 2; t < 4; ++t) p->rnd[t][TP_RATCHET] = 0;
+    eng_fresh();
+    eng_cut();
+    for (int b = 0; b < 3; ++b) eng_render(l, r, n);
+    eng_play(1);
+    int c = 0;                                           // (T4's trigs a pass)
+    for (int s2 = 0; s2 < 16; ++s2) c += eng_trig(3, s2);
+    int a1[64], a2[64], b1[64], t3a[64], t3b[64];
+    tune(3, a1, c);
+    tune(3, a2, c);
+    eng_play(0);
+    eng_cut();
+    for (int b = 0; b < 3; ++b) eng_render(l, r, n);
+    eng_play(1);
+    int c3 = 0;
+    for (int s2 = 0; s2 < 16; ++s2) c3 += eng_trig(2, s2);
+    tune(2, t3a, c3);
+    p->rnd[3][TP_NOTE] = 0;                              // back to 0, then the loop side again
+    eng_rnd_redraw(p, 3, TP_NOTE);
+    p->rnd[3][TP_NOTE] = -100;
+    eng_play(0);
+    eng_cut();
+    for (int b = 0; b < 3; ++b) eng_render(l, r, n);
+    eng_play(1);
+    tune(3, b1, c);
+    eng_play(0);
+    eng_cut();
+    for (int b = 0; b < 3; ++b) eng_render(l, r, n);
+    eng_play(1);
+    tune(2, t3b, c3);
+    int same = 1, differ = 0, t3same = 1;
+    for (int i = 0; i < c; ++i) {
+      if (a1[i] != a2[i]) same = 0;
+      if (a1[i] != b1[i]) differ = 1;
+    }
+    for (int i = 0; i < c3; ++i)
+      if (t3a[i] != t3b[i]) t3same = 0;
+    printf("a looped random back to 0: T4's loop %s, then %s; T3's %s (%d and %d trigs a pass)\n",
+           same ? "the same each pass" : "NOT A LOOP", differ ? "another" : "THE SAME", t3same ? "kept" : "CHANGED", c,
+           c3);
+    if (c < 3 || !same || !differ || !t3same) ++failures, printf("FAIL: a looped random's new draw\n");
+    eng_play(0);
+  }
+
+  // 38. the random dose's fills: none up to 75 %; at 80 % on the last beat of every fourth bar, one track; at 100 % on
+  // the last two beats of every bar, on every track that plays steps; a fill's trigs heard (more gates than at 75 %)
+  {
+    struct Run { uint32_t fills[ENG_TRACKS], rises; int bad_pos, bars_with, tracks_max, early; };
+    auto run_dose = [&](int dose, Run* o) {
+      eng_play(0);
+      eng_defaults(p);
+      for (int t = 0; t < ENG_TRACKS; ++t) p->val[PG_STEP(t) * 4 + 3] = 16.0f;   // (the bar: T1's step)
+      p->dice = static_cast<uint8_t>(dose);
+      p->dice_seed = 7;
+      eng_fresh();
+      eng_cut();
+      for (int b = 0; b < 3; ++b) eng_render(l, r, n);
+      uint32_t f0[ENG_TRACKS], r0 = 0;
+      for (int t = 0; t < ENG_TRACKS; ++t) f0[t] = eng_fill_trigs(t), r0 += eng_rises(t);
+      eng_play(1);
+      int bar = 0, last = -1, minpos = 16, bar_tracks = 0, bar_has = 0;
+      uint32_t prev[ENG_TRACKS];
+      for (int t = 0; t < ENG_TRACKS; ++t) prev[t] = f0[t];
+      *o = Run{{0, 0, 0, 0}, 0, 0, 0, 0, 0};
+      while (bar < 16) {
+        eng_render(l, r, n);
+        int pos = eng_step_now(0);
+        if (pos < last) {               // a new bar
+          if (bar_has) ++o->bars_with;
+          o->tracks_max = std::max(o->tracks_max, bar_tracks);
+          bar_tracks = bar_has = 0;
+          ++bar;
+        }
+        last = pos;
+        for (int t = 0; t < ENG_TRACKS; ++t) {
+          uint32_t f = eng_fill_trigs(t);
+          if (f != prev[t]) {
+            if (!(bar_has & (1 << t))) ++bar_tracks;
+            bar_has |= 1 << t;
+            minpos = std::min(minpos, pos);
+            if (dose < 90 && bar % 4 != 3) ++o->early;   // (80 %: only every fourth bar)
+            prev[t] = f;
+          }
+        }
+      }
+      for (int t = 0; t < ENG_TRACKS; ++t) o->fills[t] = eng_fill_trigs(t) - f0[t];
+      for (int t = 0; t < ENG_TRACKS; ++t) o->rises += eng_rises(t);
+      o->rises -= r0;
+      o->bad_pos = minpos;
+      eng_play(0);
+    };
+    Run d0, d75, d80, d100;
+    run_dose(0, &d0);
+    run_dose(75, &d75);
+    run_dose(80, &d80);
+    run_dose(100, &d100);
+    uint32_t s0 = 0, s75 = 0, s80 = 0, s100 = 0;
+    int t100 = 0;
+    for (int t = 0; t < ENG_TRACKS; ++t) {
+      s0 += d0.fills[t], s75 += d75.fills[t], s80 += d80.fills[t], s100 += d100.fills[t];
+      t100 += d100.fills[t] > 0;
+    }
+    int stepping = 0;
+    for (int t = 0; t < ENG_TRACKS; ++t) stepping += eng_lane_has_trigs(t);
+    printf("the dose's fills over 16 bars: 0 %%: %u, 75 %%: %u, 80 %%: %u (%d bars, %d track at most, from the "
+           "sixteenth %d), 100 %%: %u (%d bars, on %d tracks of %d, from the sixteenth %d); gates %u at 75 %%, %u at "
+           "100 %%\n", s0, s75, s80, d80.bars_with, d80.tracks_max, d80.bad_pos, s100, d100.bars_with, t100, stepping,
+           d100.bad_pos, d75.rises, d100.rises);
+    if (s0 || s75 || !s80 || d80.bars_with > 4 || d80.tracks_max != 1 || d80.bad_pos < 12 || d80.early ||
+        d100.bars_with < 15 || t100 != stepping || d100.bad_pos < 8 || d100.rises <= d75.rises)
+      ++failures, printf("FAIL: the dose's fills\n");
   }
 
   // 37. the USB audio input's 10 channels (eng_usb_frames): silence until the host has recorded a block, then the

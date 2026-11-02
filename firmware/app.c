@@ -36,8 +36,9 @@
  *   SEL         MOD mode: hold an LFO's key, turn a knob: a cable, as deep as turned (to the left: upside down).
  *               Held: the track's cables (MATRIX)
  *   keys        play the active track (MOD mode: the first three white keys are the LFOs, blinking at their rates)
- *   OCT- OCT+   the keyboard's octave (STEP mode: the steps' page). Both held, SELECT: the random dose, the sound's
- *               knobs (pitches, timbres, filters, sends) thrown aside, more or less; 0 the sound as set
+ *   OCT- OCT+   the keyboard's octave (STEP mode: the steps' page). OCT- held, SELECT: the random dose, on its own
+ *               screen: the sound's knobs (pitches, timbres, filters, sends) thrown aside, more or less, 0 the sound
+ *               as set; its last quarter (76..100 %) adds fills at the ends of the bars
  *
  * Part of the unity build (base/device/unity.c, base/host/plat_host.c), after the platform: gfx.c is in scope.
  * The modules' biggest tables are in the resource region (app.h), which the installer writes after the firmware:
@@ -154,7 +155,8 @@ static struct {
     int init_sel;                        /* GLO: the project REC held loads (0 new, 1 the demo, 2 the saved one, 3 the
                                           * stress test, 4 the stress test on the FM drums) */
     int octave;                          /* the keyboard's */
-    int dice;                            /* OCT- and OCT+ held: SELECT turns the random dose */
+    int dice;                            /* OCT- held (or both), SELECT turned: the random dose, on its own screen */
+    uint32_t dice_at;                    /* (its screen came at) */
     int combo;                           /* REC and SEL held together: every cable erased (REC's hold) */
     int oct_was, spage_was;              /* the octave, the steps' page before an OCT press (both: put back) */
     uint32_t play_at;                    /* PLAY's last press (again within CUT_MS: every sound cut) */
@@ -1623,42 +1625,6 @@ static void fx_meter(int force)
     blit(226, PANEL_Y + 12);
 }
 
-/* OCT- and OCT+ held: the random dose (SELECT), in the module's display. RANDOM, as many of its letters thrown as
- * the dose is high (one at a few %, all six at 100 %), thrown again every 60 ms; under it the dose, a bar */
-static void draw_dice(void)
-{
-    static int32_t shown[2];
-    static const uint8_t ORDER[6] = {3, 0, 5, 2, 4, 1};   /* the letters thrown, first to last */
-    static const char G[] = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789#%&?*+";
-    static const char W[7] = "RANDOM";
-    project_t *p = eng_project();
-    int d = p->dice > 100 ? 100 : p->dice, n = (d * 6 + 99) / 100;
-    uint32_t tick = plat_ms() / 60u, r = tick * 2654435761u ^ 0x5bd1e995u;
-    int32_t s[2] = {d, n ? (int32_t)tick : 0};
-    char c[2] = {0, 0}, line[40], v[8];
-    int thrown[6] = {0, 0, 0, 0, 0, 0};
-    if (!ui.full && !ui.body_panel && !memcmp(s, shown, sizeof s))
-        return;
-    memcpy(shown, s, sizeof s);
-    for (int i = 0; i < n; i++)
-        thrown[ORDER[i]] = 1;
-    cv_begin(240, PANEL_H, BG);
-    hero_icon(IC_DICE, d ? AC3 : DIM);
-    for (int i = 0; i < 6; i++) {        /* a letter a cell (24 px): the word stays put while its letters change */
-        r = r * 1664525u + 1013904223u;
-        c[0] = thrown[i] ? G[(r >> 24) % (sizeof G - 1u)] : W[i];
-        cv_text(84 + i * 24 + 12 - text_w(&FONT_L, c) / 2, 6, &FONT_L, c, !d ? MUTED : thrown[i] ? AC3 : HI);
-    }
-    line[0] = 0;
-    int_text(d, v);
-    text_cat(line, v, sizeof line);
-    text_cat(line, d ? " %|PITCH, TONE, FX" : " %|THE SOUND AS SET", sizeof line);
-    hero_line(44, line);
-    cv_rect(85, 66, 147, 2, TRACK);
-    cv_rect(85, 65, (147 * d + 50) / 100, 4, AC3);
-    blit(0, PANEL_Y);
-}
-
 static void draw_panel(void)
 {
     project_t *p = eng_project();
@@ -2734,6 +2700,181 @@ static void draw_intro(uint32_t t)       /* the screen in three bands of 80 rows
     }
 }
 
+/* --------------------------------------------------------------- random --- */
+/* the random dose (OCT- held, SELECT turned): the machine's own screen for it, over everything. The third colour
+ * opening from the middle (a circle, 260 ms), its cells shaken (12 px squares, lighter and darker, as many as the
+ * dose is high, thrown again every 90 ms); RAN over DOM in Syne ExtraBold (rand_font.h), white, landing left to right
+ * through signs at random, then as many of its letters thrown as the dose is high (one at a few %, all six at 100 %),
+ * a sign each every 60 ms, all of them again at each detent; the dose, its bar (the fills' quarter marked), and from
+ * 76 % the fills: how many tracks, how often, how long */
+#include "rand_font.h"
+static const char RAND_SIGNS[] = "#%+&?KXZRANDOM";
+#define RAND_OPEN_MS 260u
+#define RAND_LAND_MS 560u
+
+static uint16_t mix565(uint16_t a, uint16_t b, uint32_t k)   /* a to b, k / 256 of the way */
+{
+    uint32_t r = ((a >> 11) * (256u - k) + (b >> 11) * k) >> 8;
+    uint32_t g = (((a >> 5) & 63u) * (256u - k) + ((b >> 5) & 63u) * k) >> 8;
+    uint32_t bl = ((a & 31u) * (256u - k) + (b & 31u) * k) >> 8;
+    return (uint16_t)(r << 11 | g << 5 | bl);
+}
+
+static uint32_t rand_hash(uint32_t a, uint32_t b)
+{
+    uint32_t h = (a + 1u) * 2654435761u ^ (b + 0x7F4A7C15u) * 0x85EBCA6Bu;
+    h ^= h >> 15;
+    h *= 0x2C1B3C6Du;
+    h ^= h >> 13;
+    return h;
+}
+
+static uint32_t rand_turns;              /* the detents turned on it (each throws the letters again) */
+
+/* one of RAN, DOM (row 0, 1), centred at y: each letter landed by `land` (left to right), then thrown while its
+ * place is among the first n of the throw's order */
+static void rand_word(const char *w, int row, int32_t y, uint32_t t, int n, uint32_t tick, uint16_t c)
+{
+    static const uint8_t ORDER[6] = {3, 0, 5, 2, 4, 1};   /* the letters thrown first to last (RAN DOM: 0..5) */
+    int32_t x = (240 - text_w(&FONT_RAND, w)) / 2;
+    for (int i = 0; i < 3; i++) {
+        int idx = row * 3 + i, thrown = 0;
+        char one[2] = {w[i], 0}, r[2] = {0, 0};
+        int32_t lw = text_w(&FONT_RAND, one);
+        uint32_t land = 120u + (RAND_LAND_MS - 120u) * (uint32_t)(idx + 1) / 6u;
+        for (int k = 0; k < n; k++)
+            if (ORDER[k] == idx)
+                thrown = 1;
+        if (t < 120u)
+            ;                            /* (not yet) */
+        else if (t >= land && !thrown) {
+            cv_text(x, y, &FONT_RAND, one, c);
+        } else {                         /* a sign about as wide as the letter */
+            char fit[16];
+            int nf = 0;
+            uint32_t h = rand_hash(tick * 7u + (uint32_t)idx, rand_turns);
+            for (int k = 0; RAND_SIGNS[k] && nf < 15; k++) {
+                char o[2] = {RAND_SIGNS[k], 0};
+                if (RAND_SIGNS[k] != w[i] && text_w(&FONT_RAND, o) <= lw + 10 && text_w(&FONT_RAND, o) >= lw - 24)
+                    fit[nf++] = RAND_SIGNS[k];
+            }
+            r[0] = nf ? fit[(h >> 8) % (uint32_t)nf] : w[i];
+            cv_text(x + (lw - text_w(&FONT_RAND, r)) / 2, y, &FONT_RAND, r, c);
+        }
+        x += lw;
+    }
+}
+
+static void rand_scene(uint32_t t, int d, uint32_t tick, uint32_t shake)
+{
+    uint16_t col = AC3, light = mix565(AC3, 0xFFFFu, 46u), dark = mix565(AC3, 0x0000u, 70u);
+    uint16_t soft = mix565(AC3, 0xFFFFu, 150u), white = 0xFFFFu;
+    int n = (d * 6 + 99) / 100, every, beats, tracks;
+    char line[48], v[8];
+    float rr = 1.0f;
+    if (t < RAND_OPEN_MS) {              /* the colour from the middle: quick, then slowing */
+        float u = 1.0f - (float)t / (float)RAND_OPEN_MS;
+        rr = 1.0f - u * u * u;
+    }
+    if (rr < 1.0f) {                     /* (outside the circle: the screen's own black) */
+        float rad = 172.0f * rr;
+        cv_rect(0, 0, 240, 240, BG);
+        for (int32_t y = 0; y < 240; y++) {
+            float dy = (float)y + 0.5f - 120.0f, q = rad * rad - dy * dy;
+            if (q > 0.0f) {
+                int32_t dx = (int32_t)fm_sqrtf(q);
+                cv_rect(120 - dx, y, 2 * dx, 1, col);
+            }
+        }
+    }
+    if (d && t >= RAND_OPEN_MS) {        /* the cells shaken: as many as the dose is high (a third of them at 100 %) */
+        uint32_t share = (uint32_t)d * 34u / 10u;   /* per mille */
+        for (int j = 0; j < 20; j++)
+            for (int i = 0; i < 20; i++) {
+                uint32_t h = rand_hash((uint32_t)(j * 20 + i), shake);
+                if (h % 1000u < share)
+                    cv_rect(i * 12, j * 12, 12, 12, (h >> 12) & 1u ? light : dark);
+            }
+    }
+    line[0] = 0;
+    text_cat(line, d ? "PITCH  TONE  FILTERS  SENDS" : "THE SOUND AS SET", sizeof line);
+    if (t >= 200u)
+        cv_text((240 - text_w(&FONT_XS, line)) / 2, 18, &FONT_XS, line, soft);
+    rand_word("RAN", 0, 46, t, n, tick, white);
+    rand_word("DOM", 1, 88, t, n, tick, white);
+    if (t >= 300u) {
+        int_text(d, v);
+        line[0] = 0;
+        text_cat(line, v, sizeof line);
+        text_cat(line, " %", sizeof line);
+        cv_text((240 - text_w(&FONT_L, line)) / 2, 138, &FONT_L, line, white);
+        float u = t >= 520u ? 1.0f : (float)(t - 300u) / 220.0f;   /* the bar drawn out */
+        int32_t bw = (int32_t)(200.0f * u), fw = (int32_t)(200.0f * u * (float)d / 100.0f);
+        cv_rect(20, 184, bw, 6, dark);
+        cv_rect(20, 184, fw, 6, white);
+        if (u >= 1.0f)
+            cv_rect(20 + 150, 180, 2, 14, d > 75 ? white : soft);   /* the fills' quarter */
+    }
+    if (t >= 420u) {
+        eng_fills(d, &every, &beats, &tracks);
+        line[0] = 0;
+        if (!tracks) {
+            text_cat(line, "FILLS FROM 76 %", sizeof line);
+        } else {
+            int_text(tracks, v);
+            text_cat(line, "FILLS  ", sizeof line);
+            text_cat(line, v, sizeof line);
+            text_cat(line, tracks > 1 ? " TRACKS  " : " TRACK  ", sizeof line);
+            text_cat(line, every == 1 ? "EVERY BAR" : every == 2 ? "EVERY 2 BARS" : "EVERY 4 BARS", sizeof line);
+        }
+        cv_text((240 - text_w(&FONT_XS, line)) / 2, 200, &FONT_XS, line, tracks ? white : soft);
+        if (tracks) {
+            line[0] = 0;
+            text_cat(line, beats > 1 ? "THE LAST 2 BEATS" : "THE LAST BEAT", sizeof line);
+            cv_text((240 - text_w(&FONT_XS, line)) / 2, 218, &FONT_XS, line, soft);
+        }
+    }
+}
+
+static void draw_random(void)
+{
+    static int32_t shown[5] = {-1, -1, -1, -1, -1};
+    uint32_t t = plat_ms() - ui.dice_at;
+    int d = eng_project()->dice > 100 ? 100 : eng_project()->dice;
+    uint32_t tick = d ? plat_ms() / 60u : 0u, shake = d ? plat_ms() / 90u : 0u;
+    int32_t s[5] = {t < RAND_LAND_MS + 60u ? (int32_t)t : -2, d, (int32_t)tick, (int32_t)shake, (int32_t)rand_turns};
+    if (!ui.full && !memcmp(s, shown, sizeof s))
+        return;                          /* (nothing moved) */
+    memcpy(shown, s, sizeof s);
+    for (int b = 0; b < 3; b++) {        /* in three bands of 80 rows, each drawn in screen rows */
+        cv_begin(240, 80, AC3);
+        cv_oy = -80 * b;
+        cv_y0 = 0;
+        cv_y1 = 80;
+        rand_scene(t, d, tick, shake);
+        cv_oy = 0;
+        blit(0, (uint32_t)(80 * b));
+    }
+}
+
+static void dice_open(void)              /* the random dose's screen */
+{
+    if (!ui.dice) {
+        ui.dice = 1;
+        ui.dice_at = plat_ms();
+        ui.full = 1;
+    }
+}
+
+static void dice_close(void)             /* back to the page, all of it drawn again */
+{
+    if (ui.dice) {
+        ui.dice = 0;
+        ui.full = 1;
+        ui.head_shown[0] = -1;
+        ui.foot_shown[0] = -1;
+    }
+}
 
 static void draw(void)
 {
@@ -2756,6 +2897,13 @@ static void draw(void)
         }
         intro_on = 0;
         ui.full = 1;
+    }
+    if (ui.dice && data_ok && engine_ok) {   /* OCT- held, SELECT: the random dose's own screen, over everything */
+        draw_random();
+        poll_keys();
+        ui.full = 0;
+        ui.body_panel = ui.body_knobs = 0;
+        return;
     }
     if (ui.full && (!data_ok || !engine_ok))
         lcd_fill(0, 0, 240, 240, BG);    /* (every other screen covers it all, part by part, each in one go: drawn
@@ -2784,9 +2932,6 @@ static void draw(void)
     poll_keys();
     if (!data_ok || !engine_ok) {
         draw_missing();
-    } else if (ui.dice) {                /* OCT- and OCT+ held: the random dose, over any page */
-        draw_dice();
-        draw_row(ui.page, sh);
     } else if (ui.page == VP_SYS) {
         draw_projects();
         draw_row(VP_SYS, sh);
@@ -2923,7 +3068,8 @@ static int edit_all(int param, int32_t e)   /* GLO held: a track's parameter mov
 }
 
 /* ENV held (or the RANDOM page): a track parameter's random, -100 (a loop) .. 100 (new at each trig), 0 none: the
- * knob's own value again. GLO held too: the four tracks' */
+ * knob's own value again; back at 0, its loop is drawn again (the loop side then plays a new one). GLO held too: the
+ * four tracks' */
 static void edit_rnd(int param, int32_t e)
 {
     project_t *p = eng_project();
@@ -2937,6 +3083,8 @@ static void edit_rnd(int param, int32_t e)
             int r = p->rnd[i][tp], n = clamp(r + e * (e > 1 || e < -1 ? 5 : 2), -100, 100);
             if ((r > 0 && n < 0) || (r < 0 && n > 0))
                 n = 0;                   /* a stop at 0 on the way through */
+            if (r && !n)                 /* back at 0: the loop side's next loop another draw */
+                eng_rnd_redraw(p, i, tp);
             p->rnd[i][tp] = (int8_t)n;
         }
     dirty = 1;
@@ -3074,10 +3222,7 @@ static void button_down(int b)
                 ui.octave = ui.oct_was;
                 ui.spage = ui.spage_was;
             }
-            ui.dice = 1;
-            ui.body_panel = 1;
-            if (ui.matrix || ui.page == VP_SYS)   /* (the knobs over the matrix; the machine's row stays) */
-                ui.full = 1;
+            dice_open();
             break;
         }
         ui.oct_was = ui.octave;
@@ -3291,12 +3436,8 @@ static void button_up(int b)
         ui.full = 1;
         break;
     case B_OCTDN: case B_OCTUP:          /* the random dose: it stays as turned */
-        if (ui.dice) {
-            ui.dice = 0;
-            ui.body_panel = 1;
-            if (ui.matrix)               /* (the knobs drawn over the matrix) */
-                ui.full = 1;
-        }
+        if (ui.dice && !(held(B_OCTDN) && b == B_OCTUP))   /* (OCT+ let go, OCT- still held: it stays open) */
+            dice_close();
         break;
     default:
         break;
@@ -3479,8 +3620,16 @@ static void input(void)
         }
     }
     e = plat_enc(EN_SELECT);
+    if (e && !ui.dice && held(B_OCTDN)) {   /* OCT- held, SELECT turned: the random dose's screen (the octave, or
+                                          * the steps' page, OCT- moved put back) */
+        ui.octave = ui.oct_was;
+        ui.spage = ui.spage_was;
+        ui.used[B_OCTDN] = 1;
+        dice_open();
+    }
     if (e && ui.dice) {                  /* the random dose: 2 % a step (5 turned fast); from 0, another throw */
         project_t *p = eng_project();
+        rand_turns++;
         if (!p->dice && e > 0)
             p->dice_seed++;
         p->dice = (uint8_t)clamp((int32_t)p->dice + e * (e > 1 || e < -1 ? 5 : 2), 0, 100);
@@ -3588,7 +3737,7 @@ static void input(void)
             [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_GRIT] = B_EDIT, [PT_EUC] = B_SEQ, [PT_RND] = B_SEQ,
             [PT_SYS] = B_GLO};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
-        uint32_t bb = ui.dice ? 1u << B_OCTDN | 1u << B_OCTUP : 0, kk = ui.keys;
+        uint32_t bb = ui.dice ? 1u << B_OCTDN : 0, kk = ui.keys;
         int pt = ptype(ui.page);
         if (!ui.matrix)
             bb |= 1u << (pt == PT_EUC && ptrack(ui.page) < 0 ? B_FX : PAGE_BTN[pt]);

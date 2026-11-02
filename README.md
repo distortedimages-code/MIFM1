@@ -21,8 +21,9 @@ et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la base de
   calé sur le tempo ou relancé par les trigs d'une piste, avec un **slew** ;
 - une **matrice de câbles** : les 3 LFO vers presque tous les paramètres, 8 câbles par piste et 8 globaux, posés en
   tenant la touche d'un LFO et en tournant un potard (en atténuverteur) ;
-- une **dose d'aléatoire** cachée (OCT− et OCT+ tenus, SELECT) qui pousse tout le son à la fois (hauteurs, timbres,
-  filtres, envois), plus ou moins, et le rend tel quel à 0 ;
+- une **dose d'aléatoire** cachée (OCT− tenu, SELECT), sur son propre écran, qui pousse tout le son à la fois
+  (hauteurs, timbres, filtres, envois), plus ou moins, le rend tel quel à 0, et dans son dernier quart ajoute des
+  **fills** en fin de mesure ;
 - **trois effets, chacun avec sa propre piste de pas** : un **delay** inspiré des potards du Zen Delay (temps en
   divisions du tempo ou libre en millisecondes, feedback, filtre passe-bas / passe-haut avec résonance, drive, mono ou ping-pong, une légère
   modulation de bande), la **réverbe de Clouds** et **Warps**. Sans pas, l'effet est toujours ouvert ; avec des pas,
@@ -123,7 +124,8 @@ de potard passe à la valeur suivante (WAVE : à la forme d'onde suivante) :
 
 Les autres réglages des voix restent ceux du kit. FREQ, la note, TRANSP et OCTAVE déplacent leurs oscillateurs comme
 une note MIDI le fait sur le LXR-02 (un pas en do 3, octave 0, joue la hauteur du kit ; ce qui dépasse le demi-ton va
-sur leur accord fin). Un trig relance la voix (à pleine vélocité), son enveloppe fait le reste : GATE n'y change
+sur leur accord fin). Choisir une batterie FM remet l'OCTAVE de la piste à 0 (une piste de basse à −1 la jouerait une
+octave sous son kit). Un trig relance la voix (à pleine vélocité), son enveloppe fait le reste : GATE n'y change
 rien. Le charleston ouvert est un DECAY plus long : un lock sur DECAY. Les câbles, les locks, les aléatoires, la dose
 et le grit marchent sur elles comme sur Plaits. Leur code est celui du LXR-02, compilé tel quel (ce qui change pour le
 FM-1 est listé dans `firmware/third_party/lxr/MIFM1.md`) : le LXR-02 calcule une partie en double précision, que le
@@ -161,8 +163,8 @@ porte le numéro de sa piste dans sa couleur.
 | **ENV** | l'enveloppe de la piste (PLAITS 2/3 : DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV) |
 | **PLAY** | le séquenceur tourne ou s'arrête ; **deux fois de suite** (STOP STOP, en moins de 0,4 s) : arrêté, et tout le son coupé, les queues du delay et de la réverbe comprises |
 | **REC** | **KEY** ↔ **STEP** (voir plus bas) ; sur la page d'Endless, l'enregistrement |
-| **clavier** | en KEY, joue la piste active, même à l'arrêt ; **OCT− / OCT+** pour l'octave (en STEP : la page de pas) ; en MOD, les trois premières touches blanches sont les LFO |
-| **OCT− et OCT+ tenus + SELECT** | la **dose d'aléatoire** (voir plus bas) |
+| **clavier** | en KEY, joue la piste active, même à l'arrêt, avec sa TRANSP et son OCTAVE ; **OCT− / OCT+** pour l'octave du clavier (en STEP : la page de pas) ; en MOD, les trois premières touches blanches sont les LFO |
+| **OCT− tenu + SELECT** | la **dose d'aléatoire**, sur son écran (voir plus bas) |
 | **SEL** | le mode MOD (voir plus bas) ; **tenu** : la matrice de la piste |
 | **SAVE tenu** | sauvegarde le projet (à l'arrêt) |
 | **GLO** | TEMPO, SCALE, ROOT, SWING ; SELECT : le projet (INIT) et la machine ; GLO encore : retour |
@@ -286,7 +288,10 @@ retoucher à la main. L'écran montre les pas en cercle, les trigs allumés, cel
 **L'aléatoire** : la page RANDOM (SEQ, puis SELECT) a quatre potards, PAN, DECAY, TUNE et RATCHET. Tourné à droite,
 une nouvelle valeur au hasard à chaque trig ; à gauche, des valeurs au hasard mais qui reviennent les mêmes à chaque
 tour (une boucle) ; plus on tourne, plus l'écart est grand (100 : toute la course ; TUNE : une octave de part et
-d'autre ; RATCHET : jusqu'à 7 coups de plus). Au centre, rien : le réglage retrouve exactement sa valeur. **ENV tenu
+d'autre ; RATCHET : jusqu'à 7 coups de plus). Au centre, rien : le réglage retrouve exactement sa valeur. **Chaque
+retour au centre tire une nouvelle boucle** pour ce réglage : une boucle qui ne plaît pas, on revient à 0 (ou on passe
+côté hasard), on retourne côté boucle, c'en est une autre (les boucles des autres réglages ne bougent pas ; un projet
+sauvegardé garde les siennes). **ENV tenu
 + un potard** fait la même chose sur n'importe quel réglage d'une piste ou d'un effet.
 
 **Le quantiseur et le swing** (GLO) : TEMPO, SCALE et ROOT (chaque note, des pas, de l'aléatoire ou du clavier, va
@@ -321,17 +326,31 @@ le séquenceur tourne ou qu'on joue au clavier : à l'arrêt, il s'éteint en 30
 sous rien) et Warps ne calcule plus rien. Warps joue un bloc derrière les voix (~4 ms de latence sur la piste qu'il
 remplace).
 
-**La dose d'aléatoire** (cachée) : tenir **OCT− et OCT+** ensemble et tourner **SELECT**. L'écran écrit RANDOM, et
-plus la dose monte, plus ses lettres se mettent à changer (une à quelques %, les six à 100 %). Chaque réglage du son
+**La dose d'aléatoire** (cachée) : tenir **OCT−** et tourner **SELECT** (OCT− et OCT+ ensemble marchent toujours).
+La machine passe sur **son écran à elle** : la troisième couleur du thème s'ouvre depuis le centre, RAN / DOM s'écrit
+en grand, en blanc, ses lettres arrivant de gauche à droite à travers des signes ; plus la dose monte, plus ses
+lettres se mettent à changer (une à quelques %, les six à 100 %, toutes relancées à chaque cran) et plus les cases du
+fond tremblent. Dessous, la dose, sa barre (le dernier quart marqué) et ce que font les fills. Chaque réglage du son
 est poussé d'un écart au hasard qui lui est propre, plus ou moins loin selon la dose : FREQ (jusqu'à ±6 demi-tons à
 100 %, dans la gamme), la transposition (±7), l'enveloppe de hauteur, HARMONICS, TIMBRE, MORPH, DECAY, COLOUR et les
 enveloppes de Plaits, le drive du grit, l'EQ, les envois vers le delay et la réverbe, le feedback, le filtre, le
 drive, la résonance et le pleurage du delay, la réverbe, l'algorithme (d'un repère à un autre : entre deux, Warps
 calcule les deux algorithmes, deux fois plus de travail), le timbre et les niveaux de Warps. Rien de ce
 qui tient le temps (divisions, tempo, vitesses, longueurs, pas), ni les pans, les niveaux, la gamme ou le branchement :
-ça reste musical. On lâche : la dose reste (en bas, un trait de la largeur de la dose ; les potards montrent jusqu'où
-elle les emmène, RANDOM dessous). Revenir à 0 rend le son exact de départ, comme l'annulation d'ALL ; remonter depuis 0
-tire un autre hasard. Pendant le geste, l'octave du clavier ne bouge pas.
+ça reste musical. On lâche OCT− : retour à la page, la dose reste (en bas, un trait de la largeur de la dose ; les
+potards montrent jusqu'où elle les emmène, RANDOM dessous). Revenir à 0 rend le son exact de départ, comme
+l'annulation d'ALL ; remonter depuis 0 tire un autre hasard. Pendant le geste, l'octave du clavier (ou la page de pas)
+ne bouge pas.
+
+**Les fills** (le dernier quart de la dose, 76 à 100 %) : des trigs en plus à la fin des mesures (comptées depuis
+PLAY), comme un batteur, sur les pistes qui jouent des pas (pas sur Endless). À 76 %, un fill sur le dernier temps
+toutes les 4 mesures, sur une piste ; en montant, toutes les 2 mesures (85 %), sur les deux derniers temps (88 %), à
+chaque mesure (93 %), sur une piste de plus à chaque tiers du quart (les quatre à 100 %), avec des motifs de plus en
+plus chargés : une levée, des croches puis des doubles, un galop, un 3-3-2, un roulement, des flas et des ratchets
+(deux ou trois coups dans une double croche), une descente de toms (la hauteur qui descend à chaque coup, dans la
+gamme). Quelles pistes et quels motifs : tirés du hasard de la dose et de la mesure, les mêmes tant qu'on ne touche
+pas la dose. Un trig de fill joue toujours (quelle que soit la probabilité du pas) ; sur un pas qui a déjà son trig,
+le fill lui donne ses ratchets et sa hauteur.
 
 **La sortie** (GLO, SELECT, K2) : Stereo, Mic headset ou Mono. **Mic headset** est pour un casque à micro (fiche à
 4 contacts) branché à fond dans la prise du FM-1 (3 contacts) : ses écouteurs se retrouvent en série entre la

@@ -16,7 +16,7 @@ repository, at the commit the package names.
 | The LXR-02's drum voices (Copyright Erica Synths), MIFM1's port of them and the code that reuses theirs | `firmware/third_party/lxr/`, `firmware/mi/mi_lxr.cc`, `tools/vendor_lxr.py`, `tools/lxr_check.cc` | GPL-3.0-only with the additional permission and terms of `firmware/third_party/lxr/NOTICE.md` |
 
 The name at power-on is drawn in **Syne** (Copyright 2017 The Syne Project Authors), under the SIL Open Font License
-1.1: `firmware/fonts/Syne-OFL.txt`, beside the font; `firmware/logo_font.h` is made from it by `tools/gen_logo_font.py`.
+1.1: `firmware/fonts/Syne-OFL.txt`, beside the font; `firmware/logo_font.h` and `firmware/rand_font.h` are made from it by `tools/gen_logo_font.py`.
 The interface's fonts are fm1-base's (Barlow, SIL OFL 1.1).
 
 Trademarks: Mutable Instruments, Erica Synths, LXR and LXR-02 are their owners'. MIFM1 does not use them as its

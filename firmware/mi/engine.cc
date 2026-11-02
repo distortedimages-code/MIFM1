@@ -223,6 +223,7 @@ float duck_d, duck_s, duck_depth[ENG_TRACKS], duckv[kN];
 int restart;                            // PLAY: the steps from the first
 float step_clk;                         // samples into the sixteenth
 int32_t tick;                           // sixteenths since PLAY
+uint32_t fill_trigs[ENG_TRACKS];        // the dose's fills' trigs each track played (the tests)
 int cur_step[ENG_LANES];
 float raw_left[ENG_TRACKS];             // a step's gate: its samples left
 int last_g[ENG_TRACKS];                 // the gate of the last frame
@@ -441,7 +442,7 @@ uint32_t rand_u32() {                   // xorshift32
 float rand01() { return static_cast<float>(rand_u32() >> 8) * (1.0f / 16777216.0f); }
 float loop01(int lane, int step, int tp) {   // the looped random: the same for this lane, step and parameter
   uint32_t h = (proj.seed[lane] + 1u) * 2654435761u ^ static_cast<uint32_t>(step) * 40503u ^
-               static_cast<uint32_t>(tp * 9973 + lane * 7919);
+               static_cast<uint32_t>(tp * 9973 + lane * 7919) ^ static_cast<uint32_t>(proj.rseed[lane][tp]) * 0x9E3779B9u;
   h ^= h >> 15;
   h *= 0x2C1B3C6Du;
   h ^= h >> 12;
@@ -605,6 +606,101 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
   rat_pos[lane] = 0.0f;
 }
 
+// the random dose's fills, in its last quarter (76..100 %): trigs added at the end of bars, as a drummer's fills, on
+// the tracks that play steps (Endless and its recording left alone). The bars from PLAY (16 sixteenths): from 76 % a
+// fill on the last beat every 4 bars, on one track; up the dose, every 2 bars (from 85 %), on the last two beats (88
+// %), every bar (93 %), on more tracks (one more each third of the quarter: all four at 100 %), from a wider set of
+// patterns, the busiest with ratchets (two or three trigs in a sixteenth) and a descent of the pitch (a tom fill).
+// Which tracks and which patterns: from the dose's seed and the bar (the same each pass while the dose is held). A
+// fill's trig plays whatever its step's probability; on a step's own trig, its ratchets and its pitch are the fill's
+struct FillPat {
+  uint8_t hit[8];                       // the bar's last eight sixteenths: 0 nothing, 1 a trig, 2 and 3 ratchets
+  int8_t dn[8];                         // the note, semitones (then in the scale)
+};
+const FillPat kFills[] = {
+    // the last beat: from a pickup to a roll
+    {{0, 0, 0, 0, 0, 0, 0, 1}, {0}},
+    {{0, 0, 0, 0, 0, 0, 1, 1}, {0}},
+    {{0, 0, 0, 0, 0, 1, 0, 1}, {0}},
+    {{0, 0, 0, 0, 1, 0, 1, 1}, {0}},
+    {{0, 0, 0, 0, 1, 1, 1, 1}, {0}},
+    {{0, 0, 0, 0, 1, 0, 1, 2}, {0}},
+    {{0, 0, 0, 0, 1, 2, 1, 2}, {0}},
+    // the last two beats
+    {{1, 0, 0, 1, 0, 0, 1, 0}, {0}},                                   // 3-3-2
+    {{0, 0, 1, 0, 1, 0, 1, 1}, {0}},
+    {{1, 0, 1, 0, 1, 1, 1, 1}, {0}},                                   // eighths, then sixteenths
+    {{1, 0, 1, 1, 1, 0, 1, 1}, {0}},                                   // a gallop
+    {{1, 1, 1, 1, 1, 1, 1, 1}, {0, 0, -2, -2, -4, -5, -7, -9}},       // down the toms
+    {{1, 1, 1, 1, 1, 1, 1, 1}, {0}},                                   // a roll
+    {{3, 0, 0, 3, 0, 0, 2, 2}, {0}},                                   // flams
+    {{1, 1, 1, 1, 2, 2, 2, 2}, {0}},                                   // the roll into 32nds
+    {{1, 1, 2, 1, 2, 1, 3, 3}, {0, 0, -2, -3, -5, -7, -9, -12}},      // all out, down
+};
+const int kFillShort = 7, kFillN = static_cast<int>(sizeof kFills / sizeof kFills[0]);
+
+int fill_amount_q(int dice) { return dice > 75 ? (dice > 100 ? 100 : dice) - 75 : 0; }   // 0..25
+struct FillPlan {
+  int32_t bar;
+  int dice, seed;
+  int every, span, tracks;              // a fill every so many bars, over its last span sixteenths, on so many tracks
+  int8_t pat[ENG_TRACKS];               // each track's pattern this bar (-1: none)
+};
+FillPlan fplan = {-1, -1, -1, 0, 0, 0, {-1, -1, -1, -1}};
+
+uint32_t fill_hash(uint32_t a, uint32_t b) {
+  uint32_t h = (a + 1u) * 0x9E3779B9u ^ (b + 0x7F4A7C15u) * 0x85EBCA6Bu;
+  h ^= h >> 15;
+  h *= 0x2C1B3C6Du;
+  h ^= h >> 12;
+  h *= 0x297A2D39u;
+  h ^= h >> 15;
+  return h;
+}
+
+void fill_shape(int q, int* every, int* span, int* tracks) {   // the dose's last quarter, 1..25
+  *every = q < 10 ? 4 : q < 18 ? 2 : 1;
+  *span = q < 13 ? 4 : 8;
+  *tracks = 1 + (q - 1) * 3 / 24;       // 1 at 76 %, 2 from 84, 3 from 92, 4 at 100
+}
+
+void fill_plan(int32_t bar, const int* stepping) {
+  if (fplan.bar == bar && fplan.dice == proj.dice && fplan.seed == proj.dice_seed) return;
+  fplan.bar = bar;
+  fplan.dice = proj.dice;
+  fplan.seed = proj.dice_seed;
+  for (int t = 0; t < ENG_TRACKS; ++t) fplan.pat[t] = -1;
+  int q = fill_amount_q(proj.dice);
+  if (!q) return;
+  fill_shape(q, &fplan.every, &fplan.span, &fplan.tracks);
+  if (bar % fplan.every != fplan.every - 1) return;
+  uint32_t h = fill_hash(static_cast<uint32_t>(proj.dice_seed), static_cast<uint32_t>(bar));
+  uint32_t key[ENG_TRACKS];
+  for (int t = 0; t < ENG_TRACKS; ++t) key[t] = fill_hash(h, static_cast<uint32_t>(t) + 11u);
+  // the patterns: the short ones (the last beat) or the long ones, more of them up the dose
+  int lo = fplan.span == 4 ? 0 : kFillShort, all = fplan.span == 4 ? kFillShort : kFillN - kFillShort;
+  int part = fplan.span == 4 ? q : q - 12;   // (1..12, 1..13)
+  int pool = 2 + (all - 2) * part / (fplan.span == 4 ? 12 : 13);
+  if (pool > all) pool = all;
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    if (!stepping[t]) continue;
+    int rank = 0;                       // its place among the tracks that play steps, by its key
+    for (int u = 0; u < ENG_TRACKS; ++u)
+      if (u != t && stepping[u] && (key[u] < key[t] || (key[u] == key[t] && u < t))) ++rank;
+    if (rank < fplan.tracks)
+      fplan.pat[t] = static_cast<int8_t>(lo + static_cast<int>(fill_hash(key[t], 3u) % static_cast<uint32_t>(pool)));
+  }
+}
+
+// a fill's hit for track t at this sixteenth: 0 none, 1..3 a trig (its ratchets); its note in *dn
+int fill_hit(int t, int* dn) {
+  int p = fplan.pat[t], pos = static_cast<int>(tick % 16) - 8;
+  *dn = 0;
+  if (p < 0 || pos < 0 || pos < 8 - fplan.span) return 0;
+  *dn = kFills[p].dn[pos];
+  return kFills[p].hit[pos];
+}
+
 // the trigs of one block, frame by frame: fg (the gates) and fnote (the notes) for the voices; the effects' trigs
 void sequence(uint32_t n) {
   float fl = static_cast<float>(n / kFrames);
@@ -629,14 +725,21 @@ void sequence(uint32_t n) {
   }
   for (uint32_t k = 0; k < kFrames; ++k) {
     int fresh[ENG_TRACKS] = {0, 0, 0, 0};   // a step's trig in this frame
+    int fhit[ENG_TRACKS] = {0, 0, 0, 0}, fdn[ENG_TRACKS] = {0, 0, 0, 0};   // the dose's fills: a hit, its note
     if (playing && (step_clk += fl) >= six_len(sl)) {   // a sixteenth: each lane's step, its trig
       step_clk -= six_len(sl);
       ++tick;
       if (step_clk >= six_len(sl)) step_clk = 0.0f;
+      if (fill_amount_q(proj.dice) && tick % 16 >= 8) {   // (the bar's second half: where fills are)
+        int stepping[ENG_TRACKS];
+        for (int t = 0; t < ENG_TRACKS; ++t) stepping[t] = !endless[t] && !e_rec[t] && eng_lane_has_trigs(t);
+        fill_plan(tick / 16, stepping);
+        for (int t = 0; t < ENG_TRACKS; ++t) fhit[t] = stepping[t] ? fill_hit(t, &fdn[t]) : 0;
+      }
       for (int l = 0; l < ENG_LANES; ++l) {
         int len = Pi(PG_STEP(l), 3);
         cur_step[l] = static_cast<int>(tick % (len < 1 ? 1 : len));
-        if (!eng_trig(l, cur_step[l])) continue;
+        if (!eng_trig(l, cur_step[l]) && !(l < ENG_TRACKS && fhit[l])) continue;
         if (l >= ENG_TRACKS) new_trig(l, cur_step[l], 1);
         else if (!endless[l] && !e_rec[l]) fresh[l] = 1;
       }
@@ -666,16 +769,22 @@ void sequence(uint32_t n) {
       }
       if (fresh[t]) {                   // a step's trig: its length is its own (a lock, a random)
         new_trig(t, cur_step[t], 1);
+        if (fhit[t]) {                  // a fill's: it plays, its ratchets and its note the fill's
+          rat_on[t] = 1;
+          if (rat_n[t] < fhit[t]) rat_n[t] = fhit[t];
+          ++fill_trigs[t];
+        }
         raw_left[t] = fm_maxf(fl * 2.0f, sl * gate_frac(E(t, TP_LENGTH)));
         rat_period[t] = sl / static_cast<float>(rat_n[t]);
         tnote[t] = static_cast<float>(quantize(iround(48.0f + 12.0f * static_cast<float>(iround(E(t, TP_OCTAVE))) +
                                                       static_cast<float>(iround(E(t, TP_TRANSPOSE))) +
-                                                      E(t, TP_NOTE))));
+                                                      E(t, TP_NOTE)) + fdn[t]));
       } else if (rise) {                // Endless' note: its randoms, no locks
         new_trig(t, e_pos[t], 0);
         rat_period[t] = el[t] / static_cast<float>(rat_n[t]);
         tnote[t] = static_cast<float>(quantize(e_note[t] + proj.endless_key[t] + Pi(PG_ARP(t), 3) +
-                                               iround(E(t, TP_TRANSPOSE)) + iround(tdelta[t][TP_NOTE])));
+                                               12 * iround(E(t, TP_OCTAVE)) + iround(E(t, TP_TRANSPOSE)) +
+                                               iround(tdelta[t][TP_NOTE])));
       }
       if (e_rec[t]) {
         raw = 0;
@@ -698,7 +807,8 @@ void sequence(uint32_t n) {
       fnote[t][k] = tnote[t];
       if (key_on[t] || key_hold[t] > 0) {   // the keyboard plays over; a new key, a new trig
         g = !(key_retrig[t] && k == 0);
-        fnote[t][k] = static_cast<float>(quantize(key_note[t] + iround(E(t, TP_TRANSPOSE))));
+        fnote[t][k] = static_cast<float>(quantize(key_note[t] + 12 * iround(E(t, TP_OCTAVE)) +
+                                                  iround(E(t, TP_TRANSPOSE))));   // (OCTAVE too, as the steps)
         if (key_hold[t] > 0) --key_hold[t];
       }
       fg[t][k] = static_cast<uint8_t>(g);
@@ -743,6 +853,7 @@ void lx_kit(project_t* p, int t) {      // its knobs as its kit has them
     int param = lx_param(t, i);
     p->val[param] = eng_pdef(param)->kind == K_BIP ? 2.0f * k[i] - 1.0f : k[i];
   }
+  p->val[PG_TRACK(t, 2) * 4 + 3] = 0.0f;   // OCTAVE 0: C3 plays the kit's own pitch (a bass's -1 would halve a kick)
 }
 
 void set_voice(int t) {
@@ -2091,6 +2202,15 @@ extern "C" {
 
 float eng_dice_span(int param) { return dice_span(param); }
 
+void eng_rnd_redraw(project_t* p, int lane, int tp) {
+  if (lane >= 0 && lane < ENG_LANES && tp >= 0 && tp < ENG_NTP) p->rseed[lane][tp] = static_cast<uint8_t>(p->rseed[lane][tp] + 1u);
+}
+
+// 0.4's and 0.5's projects (versions 10 and 11): this one without the looped randoms' draws at its end
+const uint32_t kV11Bytes = 3104u;
+static_assert(offsetof(project_t, rseed) <= kV11Bytes && offsetof(project_t, rseed) + 4u > kV11Bytes,
+              "0.5's project: this one but its draws (and its padding)");
+
 int eng_upgrade(project_t* p, int bytes) {
   static union {
     project_old<33> v4;
@@ -2102,8 +2222,11 @@ int eng_upgrade(project_t* p, int bytes) {
   } u;
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
-  if (v == 10 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
-    p->version = PROJECT_VERSION;       // (0.4's: the same project; its models all Plaits')
+  if ((v == 10 || v == 11) && bytes == static_cast<int>(kV11Bytes) && p->size == kV11Bytes) {
+    uint8_t* raw = reinterpret_cast<uint8_t*>(p);   // (0.4's and 0.5's: the same project, its draws 0; 0.4's
+    for (uint32_t i = offsetof(project_t, rseed); i < sizeof(project_t); ++i) raw[i] = 0;   // models all Plaits')
+    p->version = PROJECT_VERSION;
+    p->size = sizeof(project_t);
     return 1;
   }
   uint32_t size = v == 9 ? sizeof u.v9 : v == 8 ? sizeof u.v8 : v == 7 ? sizeof u.v7 : v == 6 ? sizeof u.v6 : v == 5 ? sizeof u.v5
@@ -2594,6 +2717,14 @@ void eng_trig_set(int lane, int step, int on) {
   else proj.trig[lane][step / 8] = static_cast<uint8_t>(proj.trig[lane][step / 8] & ~(1u << (step % 8)));
   if (!on && !eng_lane_has_trigs(lane)) lane_fresh(lane);   // (its last trig gone: its last lock with it)
 }
+void eng_fills(int dice, int* every, int* beats, int* tracks) {
+  int q = fill_amount_q(dice), span = 0;
+  *every = *tracks = 0;
+  if (q) fill_shape(q, every, &span, tracks);
+  *beats = span / 4;
+}
+uint32_t eng_fill_trigs(int t) { return t >= 0 && t < ENG_TRACKS ? fill_trigs[t] : 0u; }
+
 int eng_lane_has_trigs(int lane) {
   if (lane < 0 || lane >= ENG_LANES) return 0;
   int len = iround(proj.val[PG_STEP(lane) * 4 + 3]);
