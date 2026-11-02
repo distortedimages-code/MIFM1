@@ -4,6 +4,9 @@ Une groovebox 4 pistes pour le M-VAVE FM-1 dont tout le son vient de code open s
 et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la base de
 [fm1-base](https://github.com/charlesvestal/fm1-base) :
 
+- un **filtre** par piste, quatre modèles d'après les meilleurs modèles virtuels analogiques ouverts : **LADDER**
+  (l'échelle Moog), **MS-20** (Korg 35, la résonance qui drive), **SEM** (Oberheim, du bruit blanc dedans) et **VOX**
+  (des formants), en LP, BP ou HP, avec une enveloppe à vactrol, un **ping** et une **FM** par sa propre sortie ;
 - **Plaits** sur chaque piste, ses 24 modèles au complet, et un **grit** par piste (drive doux, dur ou replié,
   réduction de fréquence d'échantillonnage et de bits) ;
 - **quatre batteries FM** comme modèles de piste en plus : les voix du **LXR-02** (son firmware est open source,
@@ -100,7 +103,8 @@ annuler), *Stress test* ou *Stress test, on the 4 FM drums*. Le transport s'arr�
 **Le stress test** (GLO, SELECT, K1 sur *Stress test*, REC tenu) : un patch fixe, le même à chaque fois, qui démarre
 tout seul et laisse sous les yeux la page machine (la charge des cœurs, le pic, ce que coûte chaque piste) : pour
 comparer les versions entre elles. Une grosse caisse et une basse VA VCF passées au grit, des accords (CHORD) et un
-résonateur MODAL, Warps (anneau à diodes, T3 par T2), OTT sur le bus, le delay et la réverbe nourris, le duck, les
+résonateur MODAL, chacun dans un des quatre filtres (depuis 0.5.8 : LADDER, MS-20, SEM avec sa FM, VOX pingé ; les
+chiffres montent donc par rapport aux versions d'avant), Warps (anneau à diodes, T3 par T2), OTT sur le bus, le delay et la réverbe nourris, le duck, les
 filtres, les trois LFO sur 20 câbles, des aléatoires, des locks et des ratchets. La sortie, la qualité de Warps (Eco
 ou HQ) et le thème restent ceux de la machine : comparer avec le même réglage de Warps. *Stress test, on the 4 FM
 drums* (le cinquième choix) joue le même patch, les mêmes câbles et les mêmes effets, mais les quatre pistes sur les
@@ -154,7 +158,7 @@ porte le numéro de sa piste dans sa couleur.
 | **SELECT** | l'autre face du module (PLAITS 1/3, 2/3, 3/3…), en glissant |
 | **ALGORITHM** | le modèle de la piste (les 24 de Plaits, puis les 4 batteries FM) ; sur Warps, d'un repère d'ALGO au suivant ; sur le delay, SYNC (vers la gauche) ou FREE (vers la droite) |
 | **PRESETS** | la piste active, de 1 à 4 |
-| **EDIT** | Plaits de la piste active (appuis suivants : ses trois faces, puis GRIT) |
+| **EDIT** | Plaits de la piste active (appuis suivants : ses trois faces, GRIT, puis les deux faces du FILTRE) |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
 | **SEQ** | les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) |
 | **ARP** | Endless, celui de la piste (voir plus bas) |
@@ -171,7 +175,7 @@ porte le numéro de sa piste dans sa couleur.
 | **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en noir sur la couleur du thème. Les réglages restent ; pendant 4 s (cinq carrés jaunes en bas), **GLO** les remet comme avant ALL au début de la mesure suivante (GLO encore avant la mesure : ils restent) |
 | **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage (avec GLO tenu aussi : sur les 4 pistes) |
 | **REC tenu** (pas) | efface la piste de pas affichée : ses trigs, ses locks, ses aléatoires (et les câbles d'une piste) |
-| **GLO + REC tenus 3 s** | **ERASE ALL**, depuis n'importe quelle page : tout revient comme dans un projet neuf (INIT) sauf **les quatre sons** (leurs modèles et leurs trois pages : le son, l'enveloppe, la hauteur), **le tempo, la gamme et sa tonique** : plus de pas, de locks, d'aléatoires (aucun potard RND), de câbles ni d'Endless ; les niveaux comme neufs, les pans au centre, pas de filtre, aucun envoi, le grit à zéro, les LFO, les effets (delay, réverbe, Warps coupé), le duck et le bus master comme neufs, pas de swing, la dose d'aléatoire à 0. La sortie, la qualité de Warps et le thème restent |
+| **GLO + REC tenus 3 s** | **ERASE ALL**, depuis n'importe quelle page : tout revient comme dans un projet neuf (INIT) sauf **les quatre sons** (leurs modèles et leurs trois pages : le son, l'enveloppe, la hauteur), **le tempo, la gamme et sa tonique** : plus de pas, de locks, d'aléatoires (aucun potard RND), de câbles ni d'Endless ; les niveaux comme neufs, les pans au centre, pas de filtre (ni l'EQ, ni le filtre de piste : OFF), aucun envoi, le grit à zéro, les LFO, les effets (delay, réverbe, Warps coupé), le duck et le bus master comme neufs, pas de swing, la dose d'aléatoire à 0. La sortie, la qualité de Warps et le thème restent |
 | **REC + SEL tenus 1,5 s** | efface **tous les câbles** (les modulations des LFO, de toutes les pistes et globales) |
 
 Les appuis tenus (SAVE, REC pour effacer ou charger, SEL pour la matrice) affichent en bas ce qu'ils vont faire et
@@ -279,6 +283,27 @@ wavefolder). **RATE** garde chaque échantillon un moment (un sample & hold : de
 voulu) et **BITS** arrondit les échantillons (de 16 bits à 2 : à fond, une voix discrète disparaît dans le premier
 pas). Chacun n'agit que relevé ; le tout se locke pas par pas, a son aléatoire et un LFO peut le moduler. L'écran
 montre ce que les réglages font d'une sinusoïde.
+
+**Le filtre** (EDIT, cinquième et sixième faces de la piste : après le grit, avant Warps et le mixer). **ALGO**
+choisit le modèle, **SELECT** le type (sur ces deux faces, SELECT ne change pas de face : EDIT le fait) ; GLO tenu,
+les deux règlent les quatre pistes. OFF par défaut : il ne coûte alors rien.
+
+| Modèle | D'où il vient | Types | Son réglage propre |
+| --- | --- | --- | --- |
+| **LADDER** | l'échelle à transistors du Moog, d'après le modèle « amélioré » de Stefano D'Angelo et Vesa Välimäki (2013 ; leur code de référence, licence ISC) : la saturation de chaque paire de transistors à chacun des quatre étages, l'auto-oscillation du circuit | LP 24 dB ; HP 24 et BP pris sur ses étages (les mélanges de l'Oberheim Xpander) | **DRIVE** (ce qui entre dans les transistors) |
+| **MS-20** | le Korg 35 (MS-10, premiers MS-20), d'après Will Pirkle (note AN-5) sur les filtres à rétroaction sans délai de Vadim Zavalishin, la saturation **dans** la boucle de résonance : elle drive et chante | LP 12 dB, HP 6 dB, BP (un passe-haut puis le passe-bas, comme les deux filtres du MS-20 en série) | **DRIVE** (la saturation de la boucle) |
+| **SEM** | le filtre d'état 12 dB de l'Oberheim SEM (Pirkle, Zavalishin) : il résonne sans s'auto-osciller, comme le vrai | LP, BP, HP | **NOISE** (du bruit blanc dans le filtre : la résonance souffle et siffle) |
+| **VOX** | trois formants, les trois premières résonances des voyelles (moyennes mesurées de Peterson et Barney, 1952) : CUTOFF passe de A à E, I, O, U, la résonance les aiguise | voix basse, moyenne, haute | **BREATH** (du bruit dans les formants : un murmure) |
+
+Première face : **CUTOFF** (20 Hz à 18 kHz ; VOX : la voyelle), **RESO**, **ENV** (de combien l'enveloppe ouvre ou
+ferme, ±8 octaves), **DECAY**. Deuxième face : le réglage du modèle, **PING**, **FM**, **KEY**. L'**enveloppe** est
+celle d'un vactrol (celle du low-pass gate de Plaits) : une montée très rapide à chaque trig, une chute qui ralentit
+en descendant (DECAY : de 5 ms à plus d'une seconde, puis sa queue). **PING** envoie une impulsion dans le filtre à
+chaque trig : avec de la résonance, il sonne tout seul (une percussion, même sur une voix silencieuse). **FM** renvoie
+la sortie du filtre dans sa fréquence de coupure, échantillon par échantillon, d'un côté ou de l'autre : de la
+rugosité, puis du chaos. **KEY** fait suivre la note (100 % : une octave par octave). Tout se locke pas par pas, a son
+aléatoire, se module par les câbles, et la dose d'aléatoire bouge CUTOFF, RESO et ENV. L'écran dessine la réponse du
+filtre telle qu'elle est (son enveloppe, sa FM, la touche), sa fréquence en dessous.
 
 **Les rythmes euclidiens** (SEQ, troisième face ; sur les effets, la dernière face) : **FILLS** coups répartis aussi
 régulièrement que possible sur la longueur de la piste, **ROTATE** les décale ; LENGTH et PROB sont ceux de la piste

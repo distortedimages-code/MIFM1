@@ -42,6 +42,26 @@ void lx_knob_text(int model, int k, float v, char *b, int n);   /* as the LXR-02
 void lx_defaults(int model, float *k);   /* the knobs as the model's kit has them */
 int lx_knob_steps(int model, int k);     /* its values a knob's turn goes through: 128 (MIDI's), a wave's 6 */
 
+/* ---- the tracks' filters (mi_filter.cc): LADDER (Moog's, D'Angelo and Valimaki's model), MS-20 (Korg 35, its
+ * resonance driven), SEM (Oberheim's state variable, noise into it), VOX (three formants); each with a vactrol
+ * envelope, a ping, FM from its own output, key tracking ---- */
+#define MF_TRACKS 4
+enum { MF_OFF, MF_LADDER, MF_MS20, MF_SEM, MF_VOX, MF_MODELS };
+enum { MF_LP, MF_BP, MF_HP, MF_TYPES };  /* (VOX: low, mid, high voices) */
+#define MF_MID MF_BP
+enum { MF_CUTOFF, MF_RESO, MF_ENV, MF_DECAY, MF_SPECIAL, MF_PING, MF_FM, MF_KEY, MF_KNOBS };
+void mf_init(void);
+/* k: MF_KNOBS values (CUTOFF, RESO, DECAY, SPECIAL, PING, KEY 0..1; ENV, FM -1..1); note: MIDI (KEY's) */
+void mf_set(int t, int model, int type, const float *k, float note);
+void mf_trigger(int t, uint32_t at);     /* a trig at that sample of the next mf_process */
+void mf_process(int t, float *x, uint32_t n);   /* in place; nothing when OFF */
+void mf_reset(int t);
+float mf_cutoff_hz(int t);               /* (the screen) the cutoff now, all modulations in */
+float mf_env(int t);                     /* its envelope now, 0..1 */
+const char *mf_model_name(int m);
+const char *mf_type_name(int m, int type);
+const char *mf_special_name(int m);      /* its model's own knob: Drive, Noise, Breath */
+
 /* ---- Clouds ---- */
 #define MC_MODES 4
 uint32_t mc_size(void);                  /* the processor alone */

@@ -1577,20 +1577,53 @@ int main(int argc, char** argv) {
     if (wrong) ++failures, printf("FAIL: the FM drums' envelope\n");
   }
 
-  // 36. 0.4's and 0.5's projects (versions 10 and 11, 3104 bytes: this one without the looped randoms' draws): read,
-  // their draws 0 (their loops as they were)
-  for (int v = 10; v <= 11; ++v) {
-    static project_t q;
-    eng_defaults(&q);
-    q.version = static_cast<uint16_t>(v);
-    q.size = 3104;
-    q.algo[PG_TRACK(2, 0)] = 7;
-    q.rseed[0][0] = 99;                                  // (what was past its end: anything)
-    q.rseed[ENG_LANES - 1][ENG_NTP - 1] = 42;
-    int ok = eng_upgrade(&q, 3104) && eng_check(&q) && q.algo[PG_TRACK(2, 0)] == 7 && !q.rseed[0][0] &&
-             !q.rseed[ENG_LANES - 1][ENG_NTP - 1];
-    printf("a version %d project: %s\n", v, ok ? "read" : "REFUSED");
-    if (!ok) ++failures, printf("FAIL: a version %d project\n", v);
+  // 36. 0.4's, 0.5's and 0.5.6's projects (versions 10 and 11, 3104 bytes; 12 with its draws): read, as they were,
+  // their filters off (and ready), their draws kept (12) or 0
+  {
+    struct V12 {                                         // (engine.cc's project_v12)
+      uint32_t magic;
+      uint16_t version, size;
+      float val[52 * 4];
+      uint8_t algo[52];
+      uint8_t out_mode, warps_hq, theme, dice, dice_seed;
+      cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+      uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+      int8_t rnd[ENG_LANES][25];
+      uint16_t seed[ENG_LANES];
+      plock_t lock[ENG_PLOCKS];
+      uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+      uint8_t endless_len[ENG_TRACKS];
+      int8_t endless_key[ENG_TRACKS];
+      uint8_t rseed[ENG_LANES][25];
+    };
+    for (int v = 10; v <= 12; ++v) {
+      static project_t cur, q;
+      static V12 o;
+      eng_defaults(&cur);
+      memset(&o, 0, sizeof o);
+      o.magic = PROJECT_MAGIC;
+      o.version = static_cast<uint16_t>(v);
+      o.size = static_cast<uint16_t>(v == 12 ? sizeof o : 3104);
+      for (int i = 0; i < 52 * 4; ++i) o.val[i] = cur.val[i];
+      for (int i = 0; i < 52; ++i) o.algo[i] = cur.algo[i];
+      o.algo[PG_TRACK(2, 0)] = 7;
+      o.dice = 33;
+      for (int l = 0; l < ENG_LANES; ++l) {
+        for (int i = 0; i < 25; ++i) o.rnd[l][i] = cur.rnd[l][i], o.rseed[l][i] = static_cast<uint8_t>(v == 12 ? 5 : 99);
+        for (int i = 0; i < ENG_STEPS / 8; ++i) o.trig[l][i] = cur.trig[l][i];
+        o.seed[l] = cur.seed[l];
+      }
+      for (int i = 0; i < ENG_PLOCKS; ++i) o.lock[i] = cur.lock[i];
+      o.lock[0] = plock_t{2, 5, TP_NOTE, 200};
+      memcpy(&q, &o, sizeof o);
+      int bytes = v == 12 ? static_cast<int>(sizeof o) : 3104;
+      int ok = eng_upgrade(&q, bytes) && eng_check(&q) && q.algo[PG_TRACK(2, 0)] == 7 && q.dice == 33 &&
+               q.rnd[3][TP_NOTE] == cur.rnd[3][TP_NOTE] && q.rseed[1][3] == (v == 12 ? 5 : 0) && !q.rseed[1][30] &&
+               q.lock[0].lane == 2 && q.lock[0].tp == TP_NOTE && q.algo[PG_FILT(1, 0)] == MF_OFF &&
+               q.val[PG_FILT(1, 0) * 4] > 0.5f && q.val[PG_MIX * 4 + 1] == cur.val[PG_MIX * 4 + 1];
+      printf("a version %d project: %s\n", v, ok ? "read" : "REFUSED");
+      if (!ok) ++failures, printf("FAIL: a version %d project\n", v);
+    }
   }
 
   // 39. a looped random brought back to 0 draws another loop: T4's looped tune, two passes the same; its knob back to
@@ -1723,6 +1756,117 @@ int main(int argc, char** argv) {
     if (s0 || s75 || !s80 || d80.bars_with > 4 || d80.tracks_max != 1 || d80.bad_pos < 12 || d80.early ||
         d100.bars_with < 15 || t100 != stepping || d100.bad_pos < 8 || d100.rises <= d75.rises)
       ++failures, printf("FAIL: the dose's fills\n");
+  }
+
+  // 40. the tracks' filters (mi_filter.cc), each model and type: low pass keeps the lows and cuts the highs, high pass
+  // the reverse, band pass its middle; pinged in silence, it rings; driven anyhow (any knobs, FM, noise, pings), never
+  // a NaN, never past 2; its envelope opens the cutoff at a trig; OFF leaves the sound as it is. Its time here
+  {
+    auto tone_db = [&](int m, int ty, float hz, float cut) {   // a sine's level through it, dB
+      mf_init();
+      float k[MF_KNOBS] = {cut, 0.2f, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f}, buf[128];
+      double e = 0.0, ph = 0.0;
+      for (int b = 0; b < 200; ++b) {
+        mf_set(0, m, ty, k, 60.0f);
+        for (int i = 0; i < 128; ++i, ph += 6.283185307 * hz / 44100.0) buf[i] = 0.1f * static_cast<float>(std::sin(ph));
+        mf_process(0, buf, 128);
+        if (b >= 100)
+          for (int i = 0; i < 128; ++i) e += static_cast<double>(buf[i]) * buf[i];
+      }
+      return 10.0 * std::log10(e / (100.0 * 128.0) / 0.005 + 1e-12);
+    };
+    int ok = 1;
+    for (int m = MF_LADDER; m < MF_VOX; ++m) {           // (VOX: formants, not a pass band)
+      float c = 0.62f;                                   // (~1.3 kHz)
+      double lp_lo = tone_db(m, MF_LP, 150.0f, c), lp_hi = tone_db(m, MF_LP, 9000.0f, c);
+      double hp_lo = tone_db(m, MF_HP, 150.0f, c), hp_hi = tone_db(m, MF_HP, 9000.0f, c);
+      double bp_lo = tone_db(m, MF_BP, 100.0f, c), bp_mid = tone_db(m, MF_BP, 1300.0f, c), bp_hi = tone_db(m, MF_BP, 12000.0f, c);
+      printf("filter %s: LP %.0f / %.0f dB, HP %.0f / %.0f, BP %.0f %.0f %.0f (150 Hz / 9 kHz; 100, 1.3k, 12k)\n",
+             mf_model_name(m), lp_lo, lp_hi, hp_lo, hp_hi, bp_lo, bp_mid, bp_hi);
+      // (the ladder's passband: the resonance takes some, as a Moog's; MS-20's high pass: 6 dB, one pole and its loop)
+      if (lp_lo < -6.0 || lp_hi > lp_lo - 20.0 || hp_hi < -3.0 || hp_lo > hp_hi - (m == MF_MS20 ? 12.0 : 20.0) ||
+          bp_mid < bp_lo + 10.0 ||
+          bp_mid < bp_hi + 10.0)
+        ok = 0;
+    }
+    double vox_e = tone_db(MF_VOX, MF_MID, 700.0f, 0.0f), vox_i = tone_db(MF_VOX, MF_MID, 700.0f, 0.5f);
+    printf("filter VOX: 700 Hz through A %.0f dB, through I %.0f dB (its first formant there, then not)\n", vox_e, vox_i);
+    if (vox_e < vox_i + 6.0) ok = 0;
+    for (int m = MF_LADDER; m < MF_MODELS; ++m) {        // pinged in silence
+      mf_init();
+      float k[MF_KNOBS] = {0.6f, 0.8f, 0.0f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f}, buf[128], pk = 0.0f;
+      mf_set(0, m, 0, k, 60.0f);
+      mf_trigger(0, 10);
+      for (int b = 0; b < 20; ++b) {
+        mf_set(0, m, 0, k, 60.0f);
+        for (int i = 0; i < 128; ++i) buf[i] = 0.0f;
+        mf_process(0, buf, 128);
+        for (int i = 0; i < 128; ++i) pk = std::max(pk, std::fabs(buf[i]));
+      }
+      printf("filter %s pinged: peak %.2f\n", mf_model_name(m), pk);
+      if (pk < 0.05f) ok = 0;
+    }
+    uint32_t rs = 12345u;
+    auto rnd = [&]() { rs ^= rs << 13; rs ^= rs >> 17; rs ^= rs << 5; return static_cast<float>(rs >> 8) / 16777216.0f; };
+    int nan = 0;
+    float worst = 0.0f;
+    for (int trial = 0; trial < 240; ++trial) {          // driven anyhow
+      int m = MF_LADDER + trial % 4, ty = (trial / 4) % 3;
+      float k[MF_KNOBS] = {rnd(), rnd(), rnd() * 2.0f - 1.0f, rnd(), rnd(), rnd(), rnd() * 2.0f - 1.0f, rnd()}, buf[128];
+      mf_init();
+      for (int b = 0; b < 120; ++b) {
+        mf_set(0, m, ty, k, 24.0f + rnd() * 72.0f);
+        if (b % 15 == 0) mf_trigger(0, static_cast<uint32_t>(rnd() * 127.0f));
+        for (int i = 0; i < 128; ++i) buf[i] = (rnd() * 2.0f - 1.0f) * (b % 40 < 20 ? 1.0f : 3.0f);
+        mf_process(0, buf, 128);
+        for (int i = 0; i < 128; ++i) {
+          if (!std::isfinite(buf[i])) ++nan;
+          worst = std::max(worst, std::fabs(buf[i]));
+        }
+      }
+    }
+    printf("filters driven anyhow (240 settings, FM, pings, loud noise): %d NaN, peak %.2f\n", nan, worst);
+    if (nan || worst > 2.001f) ok = 0;
+    {                                                    // the envelope opens it at a trig
+      mf_init();
+      float k[MF_KNOBS] = {0.3f, 0.2f, 1.0f, 0.6f, 0.0f, 0.0f, 0.0f, 0.0f}, buf[128] = {0};
+      mf_set(0, MF_SEM, MF_LP, k, 60.0f);
+      mf_process(0, buf, 128);
+      float before = mf_cutoff_hz(0);
+      mf_set(0, MF_SEM, MF_LP, k, 60.0f);
+      mf_trigger(0, 0);
+      mf_process(0, buf, 128);
+      float after = mf_cutoff_hz(0);
+      printf("filter envelope: cutoff %.0f Hz, at a trig %.0f Hz\n", before, after);
+      if (after < before * 8.0f) ok = 0;
+    }
+    {                                                    // OFF: the sound as it is
+      mf_init();
+      float k[MF_KNOBS] = {0.1f, 1.0f, 1.0f, 0.6f, 1.0f, 1.0f, 1.0f, 1.0f}, buf[128], ref[128];
+      for (int i = 0; i < 128; ++i) buf[i] = ref[i] = rnd() - 0.5f;
+      mf_set(0, MF_OFF, MF_LP, k, 60.0f);
+      mf_trigger(0, 3);
+      mf_process(0, buf, 128);
+      if (memcmp(buf, ref, sizeof buf)) ok = 0, printf("FAIL: the filter OFF changed the sound\n");
+    }
+    printf("filters' time here, a block:");
+    for (int m = MF_LADDER; m < MF_MODELS; ++m)
+      for (int fm = 0; fm < 2; ++fm) {
+        mf_init();
+        float k[MF_KNOBS] = {0.6f, 0.5f, 0.5f, 0.5f, 0.3f, 0.0f, fm ? 0.5f : 0.0f, 0.0f}, buf[128];
+        clock_t c0 = clock();
+        for (int b = 0; b < 20000; ++b) {
+          mf_set(0, m, MF_LP, k, 60.0f);
+          for (int i = 0; i < 128; ++i) buf[i] = rnd() - 0.5f;
+          mf_process(0, buf, 128);
+        }
+        printf(" %s%s %.1f us", mf_model_name(m), fm ? "+FM" : "",
+               static_cast<double>(clock() - c0) / CLOCKS_PER_SEC * 1e6 / 20000.0);
+      }
+    printf("\n");
+    if (!ok) ++failures, printf("FAIL: the filters\n");
+    mf_init();
+    eng_cut();
   }
 
   // 37. the USB audio input's 10 channels (eng_usb_frames): silence until the host has recorded a block, then the

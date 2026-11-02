@@ -26,7 +26,7 @@ extern "C" {
 #define LANE_REVERB 5
 #define LANE_WARPS 6
 #define ENG_CABLES 8                     /* per track, and as many global */
-#define ENG_NPAGES 52
+#define ENG_NPAGES 60
 #define ENG_NPARAMS (ENG_NPAGES * 4)
 #define ENG_STEPS 64                     /* the steps a lane: four pages of 16 */
 #define ENG_PLOCKS 384                   /* parameter locks, for all the lanes' steps */
@@ -61,9 +61,13 @@ extern "C" {
 #define PG_EUC(l) (45 + (l))             /* a lane's Euclidean rhythm (its steps' last face): FILLS spread as evenly
                                           * as they go over the lane's LENGTH, ROTATE; turning them writes its trigs
                                           * (the screen: its third and fourth knobs are the lane's LENGTH and PROB) */
+#define PG_FILT(t, f) (52 + (t) * 2 + (f))   /* a track's filter (Plaits' fifth and sixth faces, mi_filter.cc): CUTOFF,
+                                          * RESO, ENV, DECAY; its model's own (DRIVE, NOISE, BREATH), PING, FM, KEY.
+                                          * ALGORITHM: the first's the model (OFF, LADDER, MS-20, SEM, VOX), the
+                                          * second's the type (LP, BP, HP; VOX: low, mid, high voices) */
 enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_LFO, PT_MIX, PT_PAN, PT_REVERB, PT_RSEND, PT_DELAY1,
        PT_DELAY2, PT_DSEND, PT_STEP, PT_LANE, PT_GLOBAL, PT_ARP, PT_WARPS1, PT_WARPS2, PT_DUCK, PT_COMP, PT_OTT, PT_EQ,
-       PT_GRIT, PT_EUC, NPT };
+       PT_GRIT, PT_EUC, PT_FILT1, PT_FILT2, NPT };
 enum { GS_SOFT, GS_HARD, GS_FOLD };    /* the grit's shapes */
 enum { MB_OFF, MB_COMP, MB_OTT };       /* the master bus's mode (PG_COMP's ALGORITHM) */
 /* Warps' carrier (PG_WARPS(0)'s first knob): none (Warps off), a track, or the module's internal oscillator, its three
@@ -79,7 +83,8 @@ enum { DL_SYNC, DL_FREE };              /* the delay's ALGORITHM: its time in di
  * page's note, probability and ratchets, its duck, its filter. An effect lane's are its effect's knobs
  * (eng_lane_params) */
 enum { TP_DECAY = 4, TP_PITCHENV = 8, TP_LENGTH, TP_TRANSPOSE, TP_OCTAVE, TP_LEVEL, TP_SEND, TP_PAN, TP_NOTE, TP_PROB,
-       TP_RATCHET, TP_DSEND, TP_DUCK, TP_EQ, TP_DRIVE, TP_SHAPE, TP_RATE, TP_BITS, ENG_NTP };
+       TP_RATCHET, TP_DSEND, TP_DUCK, TP_EQ, TP_DRIVE, TP_SHAPE, TP_RATE, TP_BITS, TP_CUTOFF, TP_RESO, TP_FENV,
+       TP_FDECAY, TP_FSPECIAL, TP_PING, TP_FM, TP_KEY, ENG_NTP };
                                          /* (T1 has no TP_DUCK: it ducks the others) */
 int eng_track_param(int lane, int tp);   /* its parameter (an effect lane: its effect's knob tp) */
 int eng_param_tp(int param, int *lane);  /* a parameter's tp and lane, -1 if none */
@@ -135,7 +140,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 12u              /* (11: 0.5's, without the looped randoms' draws (rseed): read, 0 each; 10: 0.4's,
+#define PROJECT_VERSION 13u              /* (12: 0.5.6's, without the filters (8 pages, 8 lane parameters): read, the
+                                          * filters off; 11: 0.5's, without the looped randoms' draws (rseed) either: read, 0 each; 10: 0.4's,
                                           * the same but without the FM drums either: read as it is; 9: 0.3.9's and 0.3.10's, with Tides, Warps' faces as they were, no random
                                           * dose; 8: 0.3.8's,
                                           * without the grit and the Euclidean rhythms either; 7: 0.3.3's to
@@ -171,6 +177,8 @@ float eng_dice_span(int param);          /* how far the random dose moves a para
  * bar's last beat or two, on so many of the tracks that play steps (1..4); 0 when the dose gives none */
 void eng_fills(int dice, int *every, int *beats, int *tracks);
 uint32_t eng_fill_trigs(int t);          /* the fills' trigs track t played, since power-on */
+float eng_filter_hz(int t);              /* a track's filter: its cutoff now (its envelope, FM and key in), Hz */
+float eng_filter_env(int t);             /* its envelope now, 0..1 */
 const char *eng_algo_name(int page, int a);
 
 /* Warps as it plays: its algorithm (0..5 the cross-modulations, 6 the frequency shifter; -1 off), its name, the track

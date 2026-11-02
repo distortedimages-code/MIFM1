@@ -10,6 +10,7 @@ repository, at the commit the package names.
 | What | Where | Licence |
 | --- | --- | --- |
 | MIFM1's own code | `firmware/app.c`, `firmware/mi/` (but `mi_lxr.cc`), `firmware/tests/`, `firmware/shim/`, `tools/` (but `vendor_lxr.py`, `lxr_check.cc`) | MPL-2.0 (`LICENSE`): MPL-2.0 files may be part of a GPL work (its section 3.3) and stay MPL-2.0 file by file |
+| The ladder filter's equations, after Stefano D'Angelo's reference code (MoogLadders' ImprovedModel.h, Copyright 2012 Stefano D'Angelo) | in `firmware/mi/mi_filter.cc` (MPL-2.0), its notice at the end of that file | ISC |
 | fm1-base and felucca-bsp | `base/` (a submodule) | MPL-2.0 |
 | MIFM1's changes to them (the USB audio input's 10 channels), applied to `base/` before a build | `patches/`, `tools/patch_base.sh` | MPL-2.0, as the files they change |
 | Mutable Instruments' code (Emilie Gillet) | `firmware/third_party/` (stmlib, Plaits, Clouds, Warps, Tides 2, Marbles) | MIT (`firmware/third_party/LICENSE-eurorack`, `LICENSE-stmlib`) |
