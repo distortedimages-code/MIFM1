@@ -45,7 +45,7 @@ page = f"""<!doctype html>
 :root {{ --alu: #e4e5e0; --paper: #f8f8f5; --ink: #000; --grey: #5c5d58; --orange: #ff5000; --focus: #0050ff; color-scheme: light; }}
 * {{ box-sizing: border-box; }}
 html {{ background: var(--alu); }}
-body {{ margin: 0; background: var(--alu); color: var(--ink); font: 400 17px/1.5 "Archivo", "Helvetica Neue", Arial, sans-serif;
+body {{ margin: 0; overflow-x: clip; background: var(--alu); color: var(--ink); font: 400 17px/1.5 "Archivo", "Helvetica Neue", Arial, sans-serif;
        -webkit-font-smoothing: antialiased; }}
 html[lang="en"] .fr, html[lang="fr"] .en {{ display: none !important; }}
 a {{ color: inherit; text-underline-offset: 3px; }} a:hover {{ color: var(--orange); }}
@@ -77,6 +77,16 @@ a {{ color: inherit; text-underline-offset: 3px; }} a:hover {{ color: var(--oran
 .ways h2 {{ margin: .5rem 0 .8rem; font-size: clamp(3rem, 6vw, 5.4rem); line-height: .8; font-weight: 900; font-stretch: 62%; text-transform: uppercase; }}
 .ways p {{ margin: 0; }}
 .ways .go {{ margin-top: auto; padding-top: 1.2rem; font-weight: 800; font-stretch: 112%; }}
+/* Audiotrauma, the label MIFM1 comes from: its tape across the page, as on the machine's page */
+.at-tape {{ width: 100vw; margin: 64px 0 0 calc(50% - 50vw); overflow: hidden; background: #0d0d0c; color: #edece5; transform: rotate(-1.6deg);
+           border-block: 4px solid var(--orange); }}
+.at-tape a {{ display: flex; width: max-content; text-decoration: none; color: inherit; }}
+.at-tape a > span {{ display: flex; }}
+.at-tape span span {{ padding: 12px 0 10px; font-size: clamp(1.5rem, 2.6vw, 2.3rem); line-height: 1; font-weight: 900; font-stretch: 62%; white-space: nowrap; }}
+.at-tape span span::after {{ content: "✕"; margin: 0 .7em; font-weight: 300; font-stretch: 100%; color: var(--orange); }}
+@media (prefers-reduced-motion: no-preference) {{
+  .at-tape a {{ animation: at-roll 46s linear infinite; }} @keyframes at-roll {{ to {{ transform: translateX(-50%); }} }}
+}}
 .fine {{ margin: 56px 0 48px; padding-top: 1rem; border-top: 2px solid var(--ink); color: var(--grey); font-size: 14px; }}
 @media (max-width: 860px) {{ .intro, .ways {{ grid-template-columns: minmax(0, 1fr); }} .ways {{ margin-top: 40px; }} }}
 @media (max-width: 600px) {{
@@ -123,11 +133,19 @@ a {{ color: inherit; text-underline-offset: 3px; }} a:hover {{ color: var(--oran
             "Le projet sauvegardé sur le FM-1, vers un fichier sur l'ordinateur, et retour.")}</p>
       <span class="go">{t("Save or restore →", "Sauvegarder ou restaurer →")}</span></a></li>
   </ul>
-  <p class="fine">{t('Open source (MPL-2.0), built on <a href="https://github.com/charlesvestal/fm1-base">fm1-base</a> '
+</main>
+</div>
+<div class="at-tape"><a href="emu/#ch8" aria-label="Audiotrauma">{t('<span>AUDIOTRAUMA</span><span>STRASBOURG</span><span>SINCE 2002</span><span>VOUS ÊTES LE BRUIT</span><span>ELECTRO</span><span>INDUSTRIAL</span><span>NOISE</span><span>DIY</span><span>AUDIOTRAUMA</span><span>STRASBOURG</span><span>SINCE 2002</span><span>VOUS ÊTES LE BRUIT</span><span>ELECTRO</span><span>INDUSTRIAL</span><span>NOISE</span><span>DIY</span>', '<span>AUDIOTRAUMA</span><span>STRASBOURG</span><span>DEPUIS 2002</span><span>VOUS ÊTES LE BRUIT</span><span>ÉLECTRO</span><span>INDUS</span><span>NOISE</span><span>DIY</span><span>AUDIOTRAUMA</span><span>STRASBOURG</span><span>DEPUIS 2002</span><span>VOUS ÊTES LE BRUIT</span><span>ÉLECTRO</span><span>INDUS</span><span>NOISE</span><span>DIY</span>', 'span')}</a></div>
+<div class="wrap">
+<footer>
+  <p class="fine">{t('MIFM1 comes from <a href="emu/#ch8">Audiotrauma</a>, an associative label from Strasbourg for electro, '
+                     'industrial and noise, since 2002. ',
+                     'MIFM1 vient d\'<a href="emu/#ch8">Audiotrauma</a>, un label associatif de Strasbourg pour l\'électro, '
+                     'l\'indus et le noise, depuis 2002. ')}{t('Open source (MPL-2.0), built on <a href="https://github.com/charlesvestal/fm1-base">fm1-base</a> '
                      'and the code of Mutable Instruments. The controls, one by one: <a href="emu/#h-panel">the panel</a>.',
                      'Open source (MPL-2.0), sur <a href="https://github.com/charlesvestal/fm1-base">fm1-base</a> et le '
                      'code de Mutable Instruments. Les commandes, une à une : <a href="emu/#h-panel">le panneau</a>.')}</p>
-</main>
+</footer>
 </div>
 <script>
 // EN / FR: the page in that language at once, the choice kept for the machine's page too
