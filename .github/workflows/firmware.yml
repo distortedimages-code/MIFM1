@@ -98,8 +98,16 @@ jobs:
           ls -la firmware/build/*.fwsc firmware/build/*-res.bin
       - name: Diagnostic (the device code's helpers and hot loops)
         run: |
-          grep -oE '<__[a-z0-9_]+(sf|si|di|df)[0-9a-z_]*>:' firmware/build/mifm1.dis | sort -u || true
-          python3 tools/diag_dis.py firmware/build/mifm1.dis apply_bend fm4_render mf_process drum_render render_voice trauma bend_word plaits Render +apply_bend +fm4_render +sat_adaa +mf_process | head -c 3000000
+          OD="$JIELI_TOOLCHAIN/common/bin/objdump"
+          head -40 firmware/build/mifm1.dis
+          ls firmware/build/o2/
+          for o in firmware/build/o2/*.o; do
+            "$OD" -d -r -mcpu=r3 "$o" > "$o.dis" 2>/dev/null || true
+            echo "== $o: $(wc -l < "$o.dis") lines; helpers: $(grep -oE '__[a-z]+[a-z0-9]*(sf|si|df|di)[0-9]?' "$o.dis" | sort | uniq -c | tr '\n' ' ')"
+          done
+          for o in firmware/build/o2/mi_engine.o firmware/build/o2/mi_mi_fm4.o firmware/build/o2/mi_mi_filter.o; do
+            [ -f "$o.dis" ] && python3 tools/diag_dis.py "$o.dis" bend fm4_render mf_process render_voice trauma +apply_bend +fm4_render +bend_one
+          done | head -c 2500000
       - name: The moved tables' references, as linked (their addresses, none with its halfwords swapped)
         run: python3 tools/check_res_links.py firmware/build/mifm1.elf firmware/res/symbols.txt
       - name: No static initializer in the modules as JieLi's compiler built them (the FM-1 never runs one)
