@@ -117,8 +117,11 @@ d'un STRING).
 
 La construire : `make web` (avec `pip install ziglang` ; dans `firmware/build/emu/`, à servir en HTTP) :
 `tools/web/emcc` passe les commandes d'Emscripten que fm1-base donne au clang de Zig
-(wasm32-wasi), et la page de MIFM1 (`firmware/web/emu/`, en français) remplace celle de fm1-base. GitHub la publie à
-chaque push dans `emu/`. Après un changement qui pèse sur le CPU (un module, un filtre), `python3
+(wasm32-wasi), et la page de MIFM1 (`firmware/web/emu/`) remplace celle de fm1-base. GitHub la publie à
+chaque push dans `emu/`. Elle est écrite en anglais, son français dans un dictionnaire en elle : EN / FR, en haut, la
+change sans la recharger (la machine continue de jouer), et le choix reste (`?lang=fr` le donne dans un lien). Une
+phrase ajoutée : son anglais dans la page, son élément un `data-t` (le numéro suivant), son français dans le JSON
+`i18n-fr`, puis `python3 tools/web/i18n.py check firmware/web/emu/index.html`. Après un changement qui pèse sur le CPU (un module, un filtre), `python3
 tools/web/calibrate.py` recompte et réécrit la table.
 
 ## Enregistrer dans un DAW (USB)
