@@ -292,11 +292,19 @@ un **carré** (deux dents de scie à une demi-période l'une de l'autre, retranc
 pressée, l'onde penche, comme la distorsion de phase des Casio CZ), à droite **SYNC** (leur phase repart à chaque cycle
 de la note, leur hauteur jusqu'à trois octaves au-dessus ; la marche du redémarrage corrigée, polyBLEP). **INDEX** dose
 les modulateurs (avec ALGO 8, les trois tirettes du haut). **Chaque opérateur a son enveloppe**, et c'est ce qui fait
-bouger la FM. **MOVE** leur donne leur caractère : à droite un **pincement** (la FM s'ouvre au trig et retombe, plus fort
-et plus vite vers la droite, les modulateurs l'un après l'autre, le premier le plus vite : le timbre passe par plusieurs
-états), à gauche une **montée** (la note monte jusqu'à 2,5 s, les modulateurs grandissent après elle, l'un après
-l'autre), au milieu ni l'un ni l'autre. **DECAY** de 50 ms à 20 s, Hold au bout (tenu tant que la note l'est, relâché
-d'autant plus lentement que la montée est longue) ; un opérateur au-dessus de la note s'éteint plus vite (comme les
+bouger la FM. **SHAPE** (0.11.1) choisit leurs **formes**, quinze dessinées d'avance : la profondeur de chaque modulateur
+au fil de la note, chacun la sienne (étirée, retardée : le premier le plus vite dans un pincement, le troisième le
+premier dans une montée), si bien que le timbre passe par plusieurs états. Au milieu **Flat** (INDEX seul). À droite, la
+FM qui s'ouvre au trig : **Soft**, **Pluck** et **Hard** (des pincements de plus en plus forts et courts : un marteau),
+**Cascade** (une bosse par modulateur, l'une après l'autre), **Bounce** (des rebonds de plus en plus petits),
+**Rebound** (la chute, puis une remontée lente : le timbre s'ouvre à nouveau), **Loop** (pincé encore et encore, chaque
+modulateur à son propre rythme : leurs cycles se décalent). À gauche, la FM qui grandit : **Rise**, **Swell** et
+**Slow** (la note monte en 0,15, 0,6 ou 2 s, les modulateurs grandissent après elle, l'un après l'autre), **Delay** (la
+note part pure, la FM attend puis s'épanouit), **Wave** (une vague sur la note), **Reverse** (la FM grandit jusqu'à la
+fin de la note : à l'envers), **Breath** (une respiration en boucle). Leur temps suit DECAY (la constante de temps de la
+note ; tenue, une seconde ; une montée, celui de son attaque). L'écran les dessine sur la deuxième page : chaque
+modulateur de l'algorithme joué, par-dessus INDEX (le pointillé). **DECAY** de 50 ms à 20 s, Hold au bout (tenu tant que
+la note l'est, relâché d'autant plus lentement que la montée est longue) ; un opérateur au-dessus de la note s'éteint plus vite (comme les
 partiels aigus d'un vrai son : une lame, l'éclat d'une cloche). **MOTION** fait respirer les opérateurs : le niveau de
 chacun cycle à sa propre vitesse (des rapports irrationnels entre elles, 1, 1,618, 0,764, 2,236 : le timbre ne repasse
 jamais par le même état), la rétroaction du premier respire avec lui, le mélange des opérateurs entendus bouge quand il y
@@ -308,14 +316,15 @@ ZERO : entre les harmoniques, rien au-dessus de -55 dB, dent de scie et carré j
 
 | 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **ALGO** (1 à 8) | **RATIO** (30 accords des opérateurs) | **INDEX** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **MOTION** (Off, puis les opérateurs qui respirent) | **MOVE** (− : une montée, + : un pincement) | **FEEDBACK** (− : carré, + : scie, puis bruit) | **MUTATE** (− : PW, + : SYNC) |
+| **ALGO** (1 à 8) | **RATIO** (30 accords des opérateurs) | **INDEX** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **MOTION** (Off, puis les opérateurs qui respirent) | **SHAPE** (15 formes : − la FM grandit, + elle s'ouvre au trig) | **FEEDBACK** (− : carré, + : scie, puis bruit) | **MUTATE** (− : PW, + : SYNC) |
 
 Choisir la FM met ces réglages aux siens (le deuxième algorithme, ses modulateurs à x2 et x3, un pincement sur une dent
 de scie douce, en mouvement) et garde
 l'OCTAVE de la piste (la FM joue la note comme Plaits). La dose d'aléatoire tire tout, sauf RATIO dans ou vers les
-accords (ils sortiraient de la gamme). Une voix coûte au FM-1 environ 11 % d'un bloc (le carré +2 %, PW +3 %, la sync
+accords (ils sortiraient de la gamme). Une voix coûte au FM-1 environ 13 % d'un bloc (le carré +1 %, PW +2 %, la sync
 +1 %) : moins que les modèles de Plaits qu'elle remplace (VIRTUAL ANALOG 15 %, les 6-OP FM 17 %, HARMONIC 31 %). Les
-projets de la 0.9 et de la 0.10.0 (où la FM était huit modèles, un par algorithme) se lisent, leurs modèles
+projets de la 0.10 et de la 0.11.0 se lisent, leur MOVE (un pincement, une montée) devenu la forme la plus proche (Soft,
+Pluck ou Hard ; Rise, Swell ou Slow), locks compris. Ceux de la 0.9 et de la 0.10.0 (où la FM était huit modèles, un par algorithme) se lisent aussi, leurs modèles
 renumérotés : un modèle de Plaits parti devient la FM, sur ses réglages et l'algorithme le plus proche (VA VCF, PHASE
 DIST et VIRTUAL ANALOG : 2 ; les 6-OP FM : 5 ; WAVE TERRAIN, STRING MACHINE, WAVETABLE et CHORDS : 6 ; WAVESHAPER et
 FM 2-OP : 1 ; HARMONIC : 8).

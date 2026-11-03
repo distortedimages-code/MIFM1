@@ -85,7 +85,11 @@ int fm4_chord(float u);                 /* 1: RATIO at u is a chord */
 float fm4_chords_at(void);              /* where on RATIO (0..1) the chords start */
 const char *fm4_knob_name(int k);
 void fm4_defaults(float *k);
-int fm4_knob_steps(int k);              /* ALGO's 8, RATIO's 30, the others 128 */
+int fm4_knob_steps(int k);              /* ALGO's 8, RATIO's 30, SHAPE's 15, the others 128 */
+int fm4_shape(float u);                 /* SHAPE at u: -7 .. 7 (0 none) */
+int fm4_modulators(int algo);           /* the operators SHAPE moves (bit i: operator i + 1) */
+float fm4_shape_level(float u, int op, float x);   /* its operator op's level at x (its units: the drawing's) */
+float fm4_from_move(float move);         /* 0.10's MOVE (-1..1) as SHAPE (-1..1) */
 void fm4_knob_text(int k, float u, char *b, int n);
 
 /* ---- PADS (mi_pads.cc, 0.11): MIFM1's chords and their progressions (MANUAL, then sixteen: after Arvo Part,

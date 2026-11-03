@@ -134,6 +134,8 @@ int eng_model_find(int kind, int sub);   /* the model a kind's sub is, -1 none *
 const char *eng_model_abbr(int m);       /* in four letters or so (the tracks' row) */
 const char *eng_bank_name(int b);
 int eng_fm_algo(int t);                  /* the FM on track t: its algorithm now (0..7, its cables and locks), -1 none */
+int eng_fm_shaped(int t);                /* its SHAPE now: the operators it moves (bit i: operator i + 1), 0 none (Flat) */
+float eng_fm_shape(int t, int op, float x);   /* operator op's level in it at x (its units), -1..1 */
 int eng_model_free(int t, int m);        /* 0: a model once a project (PADS) another track holds */
 int eng_pads_track(void);                /* the track PADS is on, -1 none */
 void eng_pads_chord(char *b, int n);     /* its chord now, named (Am7, F, Gsus4...); its place: eng_pads_pos */
@@ -165,7 +167,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 19u              /* (18: 0.10.1's, without PADS: read, renumbered; 17: 0.10.0's, the FM in eight models: read, one FM, ALGO theirs;
+#define PROJECT_VERSION 20u              /* (19: 0.11.0's, the FM's MOVE where SHAPE is: read, its nearest shape;
+                                          * 18: 0.10.1's, without PADS: read, renumbered, MOVE as SHAPE; 17: 0.10.0's, the FM in eight models: read, one FM, ALGO theirs;
                                           * 16: 0.9's, thirteen of Plaits' models since gone: read, renumbered, those
                                           * the FM's nearest (its kit); 15: 0.7's and 0.8's, the models numbered as they were (Plaits' 24 first):
                                           * read, renumbered, Plaits' three drums MIFM1's; 14: 0.6's, with the grit (its four knobs where the bits are, no glitch):

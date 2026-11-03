@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 // Copyright (C) 2026 Yoann
-// MIFM1's FM (0.10.1): four operators, as the Yamaha YM2612 has them (the Mega Drive's sound chip, the MEGAfm's):
+// MIFM1's FM (0.10.1; its shapes 0.11.1): four operators, as the Yamaha YM2612 has them (the Mega Drive's sound chip, the MEGAfm's):
 // its eight algorithms (ALGO), the first operator's feedback; with two of a modern synthesizer's mutators (ASM's
 // Hydrasynth: PW, sync) on the operators that are heard. One machine: RATIO goes through thirty voicings of the four
 // operators (their ratios, harmonic or not; the last eight chords, chords where three operators or more are heard).
@@ -13,11 +13,13 @@
 // each of the note's cycles, their pitch up to three octaves above: the edge's step taken off around it, polyBLEP).
 //
 // Each operator its own envelope: the FM moves. INDEX: the modulators' depth (with every operator heard: the three upper
-// ones' levels). MOVE, the envelopes' character: to the right a pluck (the FM opens at the trig and settles back, more
-// and faster further right; the modulators one after another, the first fastest: the timbre goes through its stages),
-// to the left a swell (the note rises slower, the modulators after it, one after another). DECAY (held at the top
-// while the gate is); an operator high above the note dies sooner (a sound's high partials do: a tine, a bell's
-// shimmer). MOTION: each operator's level cycling at its own rate, their rates apart by irrational ratios (the timbre
+// ones' levels). SHAPE, fifteen drawn in advance: each modulator's depth drawn over the note, each its own (stretched,
+// delayed: the timbre goes through its stages). In the middle none; to the right, the FM opening at the trig: a pluck
+// (soft, plucked, hard), the modulators' humps one after another (Cascade), bouncing back (Bounce), falling then rising
+// again (Rebound), plucked again and again (Loop, each modulator at its own pace); to the left, growing: the note rising
+// slower, the modulators after it (Rise, Swell, Slow), waiting then blooming (Delay), a wave over the note, growing to
+// its end (Reverse), breathing (Breath, looped). DECAY (held at the top while the gate is) sets their time (held: a
+// second's); an operator high above the note dies sooner (a sound's high partials do: a tine, a bell's shimmer). MOTION: each operator's level cycling at its own rate, their rates apart by irrational ratios (the timbre
 // never comes back the same), the first one's feedback breathing with it, the heard ones' mix moving when there are
 // two or more; deeper and faster up the knob, the operators a few cents apart and wandering.
 //
@@ -99,8 +101,8 @@ const char* const kVoicingName[kVoicings] = {
     nullptr, nullptr, nullptr, nullptr, "Tine", nullptr, "Bell", "Tube", "Bars", "Metal",
     "Major", "Minor", "Sus4", "Sus2", "Maj7", "Min7", "Dom7", "4ths"};
 // the knobs as choosing the FM sets them: the second algorithm, its modulators at x2 and x3, a pluck over a soft saw,
-// moving
-const float kDef[8] = {1.5f / 8.0f, 8.5f / kVoicings, 0.5f, 0.6f, 0.35f, 0.65f, 0.7f, 0.5f};
+// moving (SHAPE: kShapes is further down, 15)
+const float kDef[8] = {1.5f / 8.0f, 8.5f / kVoicings, 0.5f, 0.6f, 0.35f, 9.5f / 15.0f, 0.7f, 0.5f};
 
 inline int algo_of(float u) {
   int a = static_cast<int>(u * 8.0f);
@@ -118,7 +120,7 @@ struct Voice {
   float fa0, fa1, fb0, fb1;             // the first operator's feedback: its two last outputs (the square's two saws)
   float e[4], att[4], ainc[4], a0[4], dec[4];   // the envelopes: the level; the attack's progress, step, start; the decay
   float g[4];                           // each operator's gain as the last sub-block left it
-  float ie[4];                          // MOVE's, each operator's (1 at the trig, falling)
+  float sp;                             // SHAPE's time since the trig (its units)
   float th[4];                          // MOTION's, each operator's cycle (its phase)
   float i_s, fb_s, mu_s;                // smoothed: the depth, the feedback, the mutator
   float corr;                           // the sync's step: its correction on the next sample
@@ -148,9 +150,83 @@ inline float motion_depth(float u) { return 0.9f * u; }
 inline float motion_hz(float u) { return 0.12f * fm_exp2f(u * 4.5f); }    // 0.12 .. 2.7 Hz (the first operator's)
 inline float detune_ct(float u) { return 12.0f * u * u; }
 const float kMotionRate[4] = {1.0f, 1.618034f, 0.763932f, 2.236068f};
-// MOVE's stagger: a pluck's operators fall one after another (the first fastest), a swell's rise one after another
-// (the third first): the timbre goes through its stages
-const float kPluckT[4] = {0.45f, 0.8f, 1.4f, 1.0f}, kSwellT[4] = {1.6f, 1.0f, 0.6f, 1.0f};
+// SHAPE: each modulator's depth over the note, drawn as points (their time in the shape's units, their level: added to
+// INDEX, x 0.8), each reached by a curve: straight; fast then slow (a fall's that settles, a rise's); slow then fast; an
+// S. Its units the note's (DECAY's time constant; held, a second) or, for a swell, the attack's (0.05 s + 0.8 of it).
+// Each operator its own: its time stretched (a pluck's first operator fastest, a swell's third), delayed. A loop goes
+// back to its point when its last is reached (each operator on its own: their cycles drift apart)
+enum { C_LIN, C_EXP, C_POW, C_SM };
+struct Pt {
+  float t, l;
+  uint8_t c;
+};
+struct Shape {
+  const char* name;
+  float A;                              // the attack, s (every operator's level: the heard ones' rise)
+  uint8_t by_attack;                    // its units: 0 the note's, 1 the attack's
+  int8_t np, loop;                      // its points; the one a loop goes back to (-1: the last held)
+  Pt p[8];
+  float ts[4], dl[4];                   // each operator: its time stretched, delayed (units)
+};
+#define PLUCK_T {0.45f, 0.8f, 1.4f, 1.0f}
+#define SWELL_T {1.6f, 1.0f, 0.6f, 1.0f}
+#define SAME_T {1.0f, 1.0f, 1.0f, 1.0f}
+#define NO_DL {0.0f, 0.0f, 0.0f, 0.0f}
+const int kShapes = 15;                 // -7 .. 7: kShape[7] the middle
+const Shape kShape[kShapes] = {
+    {"Breath", 0.3f, 0, 3, 0, {{0, 0, C_LIN}, {0.8f, 0.8f, C_SM}, {1.6f, 0, C_SM}}, {1.0f, 1.31f, 0.83f, 1.17f}, NO_DL},
+    {"Reverse", 0.08f, 0, 2, -1, {{0, -0.6f, C_LIN}, {2.5f, 1.0f, C_POW}}, {1.2f, 1.0f, 0.85f, 1.0f}, NO_DL},
+    {"Wave", 0.02f, 0, 3, -1, {{0, 0, C_LIN}, {0.8f, 1.0f, C_SM}, {1.8f, -0.25f, C_SM}}, SAME_T, {0.3f, 0.15f, 0, 0}},
+    {"Delay", 0.004f, 0, 3, -1, {{0, -1.0f, C_LIN}, {0.45f, -1.0f, C_LIN}, {1.2f, 1.0f, C_SM}}, {1.3f, 1.0f, 0.8f, 1.0f},
+     NO_DL},
+    {"Slow", 2.0f, 1, 2, -1, {{0, 0, C_LIN}, {1.0f, 0.85f, C_SM}}, SWELL_T, NO_DL},
+    {"Swell", 0.6f, 1, 2, -1, {{0, 0, C_LIN}, {1.0f, 0.8f, C_SM}}, SWELL_T, NO_DL},
+    {"Rise", 0.15f, 1, 2, -1, {{0, 0, C_LIN}, {1.0f, 0.5f, C_SM}}, SWELL_T, NO_DL},
+    {"Flat", 0.002f, 0, 1, -1, {{0, 0, C_LIN}}, SAME_T, NO_DL},
+    {"Soft", 0.002f, 0, 2, -1, {{0, 0.45f, C_LIN}, {1.1f, 0, C_EXP}}, PLUCK_T, NO_DL},
+    {"Pluck", 0.0015f, 0, 2, -1, {{0, 0.85f, C_LIN}, {0.9f, 0, C_EXP}}, PLUCK_T, NO_DL},
+    {"Hard", 0.0005f, 0, 3, -1, {{0, 1.0f, C_LIN}, {0.12f, 0.35f, C_EXP}, {0.7f, 0, C_EXP}}, PLUCK_T, NO_DL},
+    {"Cascade", 0.002f, 0, 3, -1, {{0, 0, C_LIN}, {0.1f, 1.0f, C_SM}, {0.8f, 0, C_EXP}}, SAME_T, {0.5f, 0.25f, 0, 0}},
+    {"Bounce", 0.002f, 0, 8, -1,
+     {{0, 1.0f, C_LIN}, {0.3f, 0, C_EXP}, {0.41f, 0.55f, C_EXP}, {0.52f, 0, C_POW}, {0.6f, 0.3f, C_EXP},
+      {0.68f, 0, C_POW}, {0.735f, 0.16f, C_EXP}, {0.79f, 0, C_POW}},
+     {0.8f, 1.0f, 1.25f, 1.0f}, NO_DL},
+    {"Rebound", 0.002f, 0, 3, -1, {{0, 1.0f, C_LIN}, {0.5f, -0.35f, C_EXP}, {2.2f, 0.6f, C_SM}}, {0.7f, 1.0f, 1.3f, 1.0f},
+     NO_DL},
+    {"Loop", 0.002f, 0, 3, 0, {{0, 0, C_LIN}, {0.03f, 1.0f, C_LIN}, {0.55f, 0, C_EXP}}, {1.0f, 1.5f, 0.75f, 1.25f}, NO_DL},
+};
+inline int shape_of(float u) {          // SHAPE at u: 0..14 (7 the middle)
+  int i = static_cast<int>(u * static_cast<float>(kShapes));
+  return i < 0 ? 0 : i > kShapes - 1 ? kShapes - 1 : i;
+}
+// a shape's level at x (its units, an operator's: stretched, delayed)
+float shape_at(const Shape& h, float x) {
+  if (x <= 0.0f || h.np < 2) return h.p[0].l;
+  const float end = h.p[h.np - 1].t;
+  if (x >= end) {
+    if (h.loop < 0) return h.p[h.np - 1].l;
+    const float lt = h.p[h.loop].t, span = end - lt;
+    x = lt + (x - lt) - span * fm_floorf((x - lt) / span);
+  }
+  for (int i = 1; i < h.np; ++i) {
+    if (x > h.p[i].t) continue;
+    const Pt &a = h.p[i - 1], &b = h.p[i];
+    float q = b.t > a.t ? (x - a.t) / (b.t - a.t) : 1.0f, f;
+    switch (b.c) {
+      case C_EXP: f = 1.0f - (1.0f - q) * (1.0f - q) * (1.0f - q); break;
+      case C_POW: f = q * q * q; break;
+      case C_SM: f = q * q * (3.0f - 2.0f * q); break;
+      default: f = q; break;
+    }
+    return a.l + (b.l - a.l) * f;
+  }
+  return h.p[h.np - 1].l;
+}
+inline float shape_peak(const Shape& h) {
+  float m = 0.0f;
+  for (int i = 0; i < h.np; ++i) m = h.p[i].l > m ? h.p[i].l : m;
+  return m;
+}
 // FEEDBACK: its depth (the phase moved by the two last outputs' sum, cycles): the saw (and the square) at 0.75 (0.16:
 // past it the loop starts to hunt, it aliases), then noise (x 4.5)
 inline float fb_beta(float v) {
@@ -318,9 +394,9 @@ void fm4_render(int t, float* out, uint32_t n) {
   const int additive = algo == 7;
   // the knobs
   const float I = v.k[2] * v.k[2], ud = v.k[4];
-  const float move = 2.0f * v.k[5] - 1.0f, fbk = 2.0f * v.k[6] - 1.0f, mut = 2.0f * v.k[7] - 1.0f;
-  // MOVE to the left: a swell, the attack up to 2.5 s; to the right a pluck, the attack from 2 ms down to 0.5
-  const float A = move < 0.0f ? 0.002f + 2.5f * move * move : 0.002f - 0.0015f * move;
+  const float fbk = 2.0f * v.k[6] - 1.0f, mut = 2.0f * v.k[7] - 1.0f;
+  const Shape& sh = kShape[shape_of(v.k[5])];
+  const float A = sh.A;
   float tau = t60_s(v.k[3]) * (1.0f / 6.9078f);
   v.held = v.k[3] > 0.98f;
   if (v.trig) {                         // a trig: the envelopes from where they are (from silence: the phases at 0)
@@ -343,7 +419,8 @@ void fm4_render(int t, float* out, uint32_t n) {
       v.att[i] = 0.0f;
       v.dec[i] = 1.0f;
     }
-    for (int i = 0; i < 4; ++i) v.ie[i] = 1.0f, v.th[i] = 0.5f;   // (MOTION from its top: the note's attack as set)
+    for (int i = 0; i < 4; ++i) v.th[i] = 0.5f;   // (MOTION from its top: the note's attack as set)
+    v.sp = 0.0f;                        // (SHAPE from its start)
     v.let_go = 0;
     v.alive = 1;
   }
@@ -378,7 +455,7 @@ void fm4_render(int t, float* out, uint32_t n) {
   float ks = v.note > 60.0f ? fm_exp2f((60.0f - v.note) * (1.0f / 24.0f)) : 1.0f;
   float B[4], cap[4];
   int modx[4];
-  float n2 = 0.0f, xt = clampf(I + fm_fabsf(move) * 0.4f, 0.0f, 1.2f);
+  float n2 = 0.0f, xt = clampf(I + shape_peak(sh) * 0.4f, 0.0f, 1.2f);
   const float s_max = mut > 0.0f ? fm_exp2f(3.0f * mut) : 1.0f;   // (SYNC: the heard ones' pitch up)
   float inc_hi = 0.0f;
   for (int i = 0; i < 4; ++i) {
@@ -414,13 +491,9 @@ void fm4_render(int t, float* out, uint32_t n) {
     for (int q = 0; q < 3; ++q) kd[i] *= kd[i];   // (^8)
     v.ainc[i] = static_cast<float>(kSub) / (clampf(A, 0.0005f, 6.0f) * kSr);
   }
-  // MOVE's time: to the right a third of the note's (held: of a second), shorter the further right; to the left, after
-  // the attack
-  float tref = v.held ? 1.0f : tau, ti;
-  if (move >= 0.0f) ti = clampf(0.33f * tref * (1.2f - 0.8f * move), 0.006f, 2.5f);
-  else ti = 0.05f + 0.8f * A;
-  float ik[4];
-  for (int i = 0; i < 4; ++i) ik[i] = fm_expf(-static_cast<float>(kSub) / (ti * (move >= 0.0f ? kPluckT[i] : kSwellT[i]) * kSr));
+  // SHAPE's units: the note's (DECAY's time constant; held, a second), or the attack's
+  const float unit = sh.by_attack ? 0.05f + 0.8f * A : clampf(v.held ? 1.0f : tau, 0.02f, 3.0f);
+  const float dsp = static_cast<float>(kSub) / (unit * kSr);   // (its step a sub-block)
   // MOTION: its depth on the modulators (on the heard ones too when two or more are: their mix moves, a single one's
   // level does not), its rates
   int heard = 0;
@@ -471,10 +544,10 @@ void fm4_render(int t, float* out, uint32_t n) {
     v.mu_s += (mu - v.mu_s) * ksm;
     const float r2 = 1.0f / static_cast<float>(2 * ns);
     float cyc0 = 1.0f;
+    v.sp += dsp * static_cast<float>(ns) * (1.0f / kSub);
     for (int i = 0; i < 4; ++i) {
-      v.ie[i] *= ns == kSub ? ik[i] : fm_exp2f(fm_log2f(ik[i]) * static_cast<float>(ns) * (1.0f / kSub));
-      float X = v.i_s + (move >= 0.0f ? move * 0.8f * v.ie[i] : -move * 0.8f * (1.0f - v.ie[i]));
-      X = clampf(X, 0.0f, 1.2f);
+      float X = 0.0f;
+      if (modx[i]) X = clampf(v.i_s + 0.8f * shape_at(sh, (v.sp - sh.dl[i]) / sh.ts[i]), 0.0f, 1.2f);
       v.th[i] += mth[i] * static_cast<float>(ns) * (1.0f / kSub);
       v.th[i] -= v.th[i] >= 1.0f ? 1.0f : 0.0f;
       float cyc = 0.5f - 0.5f * sin_cyc(v.th[i] < 0.75f ? v.th[i] + 0.25f : v.th[i] - 0.75f);   // (1 at 0.5: a cosine)
@@ -563,7 +636,7 @@ void fm4_render(int t, float* out, uint32_t n) {
 int fm4_algo(float u) { return algo_of(u); }
 
 const char* fm4_knob_name(int k) {
-  static const char* const kN[8] = {"Algo", "Ratio", "Index", "Decay", "Motion", "Move", "Feedback", "Mutate"};
+  static const char* const kN[8] = {"Algo", "Ratio", "Index", "Decay", "Motion", "Shape", "Feedback", "Mutate"};
   return k >= 0 && k < 8 ? kN[k] : "";
 }
 
@@ -571,7 +644,24 @@ void fm4_defaults(float* k) {
   for (int i = 0; i < 8; ++i) k[i] = kDef[i];
 }
 
-int fm4_knob_steps(int k) { return k == 0 ? 8 : k == 1 ? kVoicings : 128; }
+int fm4_knob_steps(int k) { return k == 0 ? 8 : k == 1 ? kVoicings : k == 5 ? kShapes : 128; }
+int fm4_shape(float u) { return shape_of(u) - kShapes / 2; }
+int fm4_modulators(int algo) {          // the operators SHAPE moves: the modulators (ALGO 8: the three upper drawbars)
+  algo = algo < 0 ? 0 : algo > 7 ? 7 : algo;
+  int m = 0;
+  for (int i = 0; i < 4; ++i) m |= (!kOut[algo][i] || (algo == 7 && i > 0)) << i;
+  return m;
+}
+float fm4_shape_level(float u, int op, float x) {   // (the screen's drawing: x in the shape's units)
+  const Shape& h = kShape[shape_of(u)];
+  op = op < 0 ? 0 : op > 3 ? 3 : op;
+  return shape_at(h, (x - h.dl[op]) / h.ts[op]);
+}
+float fm4_from_move(float move) {       // 0.10's MOVE (-1 .. 1) as SHAPE (-1 .. 1, the middle of its step)
+  float m = move < 0.0f ? -move : move;
+  int s = m < 0.08f ? 0 : move > 0.0f ? (m < 0.2f ? 1 : m < 0.65f ? 2 : 3) : (m < 0.32f ? -1 : m < 0.7f ? -2 : -3);
+  return 2.0f * (static_cast<float>(s + kShapes / 2) + 0.5f) / static_cast<float>(kShapes) - 1.0f;
+}
 
 int fm4_chord(float u) { return voicing_of(u) >= kChords; }
 float fm4_chords_at(void) { return static_cast<float>(kChords) / static_cast<float>(kVoicings); }
@@ -636,8 +726,9 @@ void fm4_knob_text(int k, float u, char* b, int n) {   // u: 0..1 (a bipolar kno
     case 3:
       if (u > 0.98f) return put_s(b, n, &at, "Hold");
       return put_time(b, n, &at, t60_s(u));
-    case 5: case 6: case 7: {           // bipolar: MOVE (- swell, + pluck); FEEDBACK (- square, + saw); MUTATE (- PW,
-                                        // + SYNC)
+    case 5:                             // SHAPE: its name
+      return put_s(b, n, &at, kShape[shape_of(u)].name);
+    case 6: case 7: {                   // bipolar: FEEDBACK (- square, + saw); MUTATE (- PW, + SYNC)
       float w = 2.0f * u - 1.0f;
       int x = static_cast<int>(w * 100.0f + (w < 0.0f ? -0.5f : 0.5f));
       if (k == 6) {
@@ -646,10 +737,10 @@ void fm4_knob_text(int k, float u, char* b, int n) {   // u: 0..1 (a bipolar kno
         if (x <= -73 && x >= -77) return put_s(b, n, &at, "Square");
         if (x == 0) return put_s(b, n, &at, "Sine");
       }
-      if (k == 7 || k == 5) {
-        if (x == 0) return put_s(b, n, &at, k == 7 ? "Off" : "0%");
+      if (k == 7) {
+        if (x == 0) return put_s(b, n, &at, "Off");
         put_i(b, n, &at, x < 0 ? -x : x);
-        put_s(b, n, &at, k == 7 ? (x < 0 ? "% PW" : "% SYNC") : (x < 0 ? "% SWELL" : "% PLUCK"));
+        put_s(b, n, &at, x < 0 ? "% PW" : "% SYNC");
         return;
       }
       if (x > 0) put_s(b, n, &at, "+");

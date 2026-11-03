@@ -1987,6 +1987,10 @@ void eng_pads_line(char* b, int n) {    // the progression, its place, the chord
   b[k] = 0;
 }
 int eng_fm_algo(int t) { return t >= 0 && t < ENG_TRACKS && track_kind(t) == MK_FM ? fm4_algo(E(t, 1)) : -1; }
+int eng_fm_shaped(int t) { return eng_fm_algo(t) >= 0 && fm4_shape((E(t, 6) + 1.0f) * 0.5f) ? fm4_modulators(eng_fm_algo(t)) : 0; }
+float eng_fm_shape(int t, int op, float x) {
+  return eng_fm_algo(t) >= 0 ? fm4_shape_level((E(t, 6) + 1.0f) * 0.5f, op, x) : 0.0f;
+}
 int eng_model_own(int m) { return mdef(m).kind != MK_PLAITS; }
 int eng_model_find(int kind, int sub) {
   for (int m = 0; m < ENG_MODELS; ++m)
@@ -2450,13 +2454,13 @@ void eng_defaults(project_t* p) {
   p->val[PG_TRACK(1, 0) * 4 + 1] = 0.5f / 8.0f;          // the bass: the first algorithm (four in a chain), INDEX
   p->val[PG_TRACK(1, 0) * 4 + 3] = 0.3f;                 // low, opened by LFO 1, a pluck over a soft saw
   p->val[PG_TRACK(1, 1) * 4 + 0] = 0.42f;
-  p->val[PG_TRACK(1, 1) * 4 + 2] = 0.45f;
+  p->val[PG_TRACK(1, 1) * 4 + 2] = 2.0f * 9.5f / 15.0f - 1.0f;   // (SHAPE: Pluck)
   p->val[PG_TRACK(1, 1) * 4 + 3] = 0.3f;
   p->val[PG_TRACK(1, 2) * 4 + 1] = 0.3f;                 // short notes
   p->val[PG_TRACK(2, 0) * 4 + 1] = 3.5f / 8.0f;          // the pluck: the fourth algorithm, its 1 at x3, a sharp pluck
   p->val[PG_TRACK(2, 0) * 4 + 2] = 6.5f / 30.0f;
   p->val[PG_TRACK(2, 1) * 4 + 0] = 0.5f;
-  p->val[PG_TRACK(2, 1) * 4 + 2] = 0.6f;
+  p->val[PG_TRACK(2, 1) * 4 + 2] = 2.0f * 10.5f / 15.0f - 1.0f;   // (SHAPE: Hard)
   p->val[PG_TRACK(2, 2) * 4 + 1] = 0.2f;
   // LFO 1: a ramp down at each of T2's trigs (an envelope), 2.5 Hz; LFO 2: a sine a bar; LFO 3: a smooth random
   static const float kLfo[3][4] = {{static_cast<float>(LW_RAMP), 0.7f, static_cast<float>(LM_T1 + 1), 0.05f},
@@ -2521,7 +2525,7 @@ void eng_groove(project_t* p) {
   p->val[PG_TRACK(1, 0) * 4 + 1] = 0.5f / 8.0f;          // ALGO: four in a chain
   p->val[PG_TRACK(1, 0) * 4 + 3] = 0.5f;                 // INDEX
   p->val[PG_TRACK(1, 1) * 4 + 0] = 0.42f;                // DECAY
-  p->val[PG_TRACK(1, 1) * 4 + 2] = 0.45f;                // MOVE: a pluck
+  p->val[PG_TRACK(1, 1) * 4 + 2] = 2.0f * 9.5f / 15.0f - 1.0f;   // SHAPE: Pluck
   p->val[PG_TRACK(1, 1) * 4 + 3] = 0.6f;                 // FEEDBACK: toward the saw
   p->val[PG_TRACK(1, 2) * 4 + 1] = 0.35f;
   p->algo[PG_FILT(1, 0)] = MF_LADDER;
@@ -2534,7 +2538,7 @@ void eng_groove(project_t* p) {
   p->val[PG_TRACK(3, 0) * 4 + 3] = 0.3f;                 // INDEX
   p->val[PG_TRACK(3, 1) * 4 + 0] = 0.5f;                 // DECAY: 1 s
   p->val[PG_TRACK(3, 1) * 4 + 1] = 0.35f;                // MOTION
-  p->val[PG_TRACK(3, 1) * 4 + 2] = 0.3f;                 // MOVE: a pluck
+  p->val[PG_TRACK(3, 1) * 4 + 2] = 2.0f * 9.5f / 15.0f - 1.0f;   // SHAPE: Pluck
   p->val[PG_TRACK(3, 1) * 4 + 3] = 0.4f;                 // FEEDBACK
   p->val[PG_TRACK(3, 2) * 4 + 1] = 0.35f;
   p->algo[PG_FILT(3, 0)] = MF_SEM;
@@ -3219,13 +3223,30 @@ void models_renumbered(project_t* p, int from) {
   }
 }
 
+// 0.10's and 0.11.0's FM: MOVE (to the left a swell, to the right a pluck) where SHAPE is, as its nearest shape (its
+// value, its locks)
+void shapes_from_move(project_t* p) {
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    if (mdef(p->algo[PG_TRACK(t, 0)]).kind != MK_FM) continue;
+    const int param = PG_TRACK(t, 1) * 4 + 2;   // (SHAPE: the own knobs' sixth, tp 6)
+    p->val[param] = fm4_from_move(clampf(p->val[param], -1.0f, 1.0f));
+    for (int i = 0; i < ENG_PLOCKS; ++i) {
+      plock_t& k = p->lock[i];
+      if (k.lane != t || k.tp != 6) continue;
+      float w = fm4_from_move(static_cast<float>(k.v) * (2.0f / 255.0f) - 1.0f);
+      k.v = static_cast<uint8_t>(clampf((w + 1.0f) * 0.5f, 0.0f, 1.0f) * 255.0f + 0.5f);
+    }
+  }
+}
+
 int upgrade_before_16(project_t* p, int bytes);
 int eng_upgrade(project_t* p, int bytes) {
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
-  if (v >= 15 && v <= 18 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+  if (v >= 15 && v <= 19 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
     p->version = PROJECT_VERSION;
-    models_renumbered(p, v);
+    if (v <= 18) models_renumbered(p, v);
+    if (v >= 18) shapes_from_move(p);   // (before: the FM came in on its own knobs, SHAPE's)
     return 1;
   }
   if (!upgrade_before_16(p, bytes)) return 0;

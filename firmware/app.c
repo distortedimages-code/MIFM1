@@ -1296,6 +1296,40 @@ static void hero_line(int y, const char *s)   /* the line under the name: its pa
     }
 }
 
+/* the FM's second face: SHAPE drawn, each modulator's depth over the note (three of its units: the note's time
+ * constant, or a swell's attack), over INDEX (the dotted line); the first modulator brightest */
+static void fm_shape_panel(int t, int pg, uint16_t ac)
+{
+    char v[16], u[16];
+    int mods = eng_fm_shaped(t), k = 0;
+    const int x0 = 86, w = 146, ym = 44, hh = 22;
+    cv_text(84, 0, &FONT_XS, dec("SHAPE", 1), MUTED);
+    eng_param_text(pg * 4 + 2, eng_final(pg * 4 + 2), v, sizeof v);
+    label_text(v, u, sizeof u);
+    cv_text(232 - text_w(&FONT_XS, u), 0, &FONT_XS, u, DIM);
+    for (int x = 0; x < w; x += 5)
+        cv_rect(x0 + x, ym, 2, 1, MUTED);
+    int reveal = anim_p >= 1.0f ? w : (int)((float)w * (1.0f - (1.0f - anim_p) * (1.0f - anim_p)));
+    if (!mods) {                         /* (Flat: INDEX alone) */
+        seg((float)x0, (float)ym, (float)(x0 + reveal), (float)ym, 2.0f, ac);
+        return;
+    }
+    for (int op = 0; op < 4; op++) {
+        if (!(mods >> op & 1))
+            continue;
+        uint16_t c = k ? tint(ac, BG, k + 1) : ac;
+        float px = 0.0f, py = 0.0f;
+        k++;
+        for (int x = 0; x <= reveal; x += 2) {
+            float y = (float)ym - eng_fm_shape(t, op, (float)x * (3.0f / (float)w)) * (float)hh;
+            if (x)
+                seg((float)x0 + px, py, (float)(x0 + x), y, 2.0f, c);
+            px = (float)x;
+            py = y;
+        }
+    }
+}
+
 static void panel_plaits(int t, int face, uint16_t ac)
 {
     project_t *p = eng_project();
@@ -1319,6 +1353,8 @@ static void panel_plaits(int t, int face, uint16_t ac)
         int_text(ENG_MODELS, n);
         text_cat(s, n, sizeof s);
         hero_line(y, s);
+    } else if (face == 1 && alg >= 0) {  /* the FM: its SHAPE */
+        fm_shape_panel(t, PG_TRACK(t, 1), ac);
     } else if (face == 1) {              /* the low-pass gate: DECAY's tail, COLOUR's tone */
         int pg = PG_TRACK(t, 1), y0 = 68, h = 48;
         float decay = eng_final(pg * 4 + 0), colour = eng_final(pg * 4 + 1);
@@ -2008,7 +2044,8 @@ static void draw_panel(void)
     if (pt == PT_DUCK)
         s[2] = (int)(p->val[PG_DUCK * 4] * 1000.0f);
     switch (pt) {                        /* what the display shows, to draw it again only when it changes */
-    case PT_PLAITS2: s[2] = (int)(eng_final(ui.page * 4) * 200.0f) | (int)(eng_final(ui.page * 4 + 1) * 8.0f) << 8; break;
+    case PT_PLAITS2: s[2] = (int)(eng_final(ui.page * 4) * 200.0f) | (int)(eng_final(ui.page * 4 + 1) * 8.0f) << 8 |
+                            (int)(eng_final(ui.page * 4 + 2) * 8.0f + 8.0f) << 12; break;   /* (the FM: SHAPE) */
     case PT_PLAITS3: s[2] = eng_note(tr) | (int)((eng_gates() >> tr) & 1u) << 8 |
                             (int)(eng_final(ui.page * 4) * 50.0f + 50.0f) << 9 | (int)(eng_final(ui.page * 4 + 1) * 100.0f) << 16;
         break;
@@ -2109,7 +2146,9 @@ static void draw_panel(void)
     cv_begin(240, PANEL_H, BG);
     switch (pt) {
     case PT_PLAITS1: case PT_PLAITS3: panel_plaits(tr, 0, page_accent(ui.page)); break;
-    case PT_PLAITS2: panel_plaits(tr, drum_track(tr) ? 0 : 1, page_accent(ui.page)); break;   /* (an FM drum's knobs) */
+    case PT_PLAITS2:                     /* (an FM drum's knobs: its name; the FM's: its SHAPE) */
+        panel_plaits(tr, drum_track(tr) && eng_fm_algo(tr) < 0 ? 0 : 1, page_accent(ui.page));
+        break;
     case PT_SON2: panel_plaits(tr, 2, page_accent(ui.page)); break;
     case PT_ENV2: panel_env2(tr, page_accent(ui.page)); break;
     case PT_LFO: panel_lfo(ui.page - PG_LFO(0)); break;

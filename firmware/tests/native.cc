@@ -2553,7 +2553,8 @@ int main(int argc, char** argv) {
         {0, 2.5f / 8.0f, "3"}, {1, 0.5f / 30.0f, "1:1:1:1"}, {1, 11.5f / 30.0f, "1:1:.5:1"}, {1, 16.5f / 30.0f, "Tine"},
         {1, 22.5f / 30.0f, "Major"}, {1, 27.5f / 30.0f, "Min7"}, {3, 1.0f, "Hold"}, {6, 0.875f, "Saw"},
         {6, 0.125f, "Square"}, {6, 0.5f, "Sine"}, {7, 0.5f, "Off"}, {7, 0.75f, "50% SYNC"}, {7, 0.25f, "50% PW"},
-        {4, 0.0f, "Off"}, {4, 0.5f, "50%"}, {5, 0.75f, "50% PLUCK"}, {5, 0.25f, "50% SWELL"}};
+        {4, 0.0f, "Off"}, {4, 0.5f, "50%"}, {5, 7.5f / 15.0f, "Flat"}, {5, 9.5f / 15.0f, "Pluck"},
+        {5, 5.5f / 15.0f, "Swell"}, {5, 0.0f, "Breath"}, {5, 1.0f, "Loop"}, {5, 13.5f / 15.0f, "Rebound"}};
     for (const auto& x : kTx) {
       fm4_knob_text(x.k, x.u, tx, sizeof tx);
       if (std::strcmp(tx, x.want)) kit_ok = 0, printf("FM: knob %d at %.3f written %s, %s expected\n", x.k, x.u, tx, x.want);
@@ -2689,7 +2690,50 @@ int main(int argc, char** argv) {
         }
       }
     }
+    // SHAPE: each held two seconds (the second algorithm, MOTION off): its brightness (the differences' level over the
+    // signal's, 100 ms windows, 50 apart) steady in the middle, moving elsewhere; Loop's again and again
+    int shapes_ok = 1, loops = 0;
+    double sh_lo = 1e9, sh_hi = 0.0;
+    for (int sh = 0; sh < 15; ++sh) {
+      fm4_defaults(k);
+      k[3] = 1.0f, k[4] = 0.0f, k[5] = (static_cast<float>(sh) + 0.5f) / 15.0f;
+      play(1, 45.0f, k, 88192, 1u << 30);   // (A2: 110 Hz, 11 cycles a window)
+      double bmin = 1e9, bmax = 0.0, prev = -1.0;
+      int rising = 0, peaks = 0;
+      for (uint32_t w = 4410; w + 4410 <= 88192; w += 2205) {   // (from 0.1 s: the coupling capacitor settled)
+        double ex = 0.0, ed = 0.0;
+        for (uint32_t i = w; i < w + 4410; ++i) ex += buf[i] * buf[i], ed += (buf[i] - buf[i - 1]) * (buf[i] - buf[i - 1]);
+        double b = std::sqrt(ed / (ex + 1e-12));
+        bmin = std::min(bmin, b), bmax = std::max(bmax, b);
+        if (prev >= 0.0) {
+          if (b > prev * 1.05) rising = 1;
+          else if (b < prev * 0.95 && rising) ++peaks, rising = 0;
+        }
+        prev = b;
+      }
+      double ratio = bmax / bmin;
+      if (sh == 7) shapes_ok &= ratio < 1.02;
+      else shapes_ok &= ratio > 1.08, sh_lo = std::min(sh_lo, ratio), sh_hi = std::max(sh_hi, ratio);
+      if (sh == 14) loops = peaks;
+    }
+    shapes_ok &= loops >= 3;
     fm4_init();
+    // a project of 0.11.0 (version 19): the FM's MOVE where SHAPE is: a swell (-50 %), a pluck (+30 %), a strong one
+    // (+90 %), none; a lock (-60 %): their nearest shapes
+    static project_t q19;
+    eng_defaults(&q19);
+    q19.version = 19;
+    const float kMove[4] = {-0.5f, 0.3f, 0.9f, 0.0f};
+    for (int t = 0; t < ENG_TRACKS; ++t) {
+      q19.algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(eng_model_find(MK_FM, 0));
+      q19.val[PG_TRACK(t, 1) * 4 + 2] = kMove[t];
+    }
+    for (int i = 0; i < ENG_PLOCKS; ++i) q19.lock[i].lane = 0xFF;
+    q19.lock[0].lane = 1, q19.lock[0].step = 3, q19.lock[0].tp = 6, q19.lock[0].v = 51;   // (-60 %)
+    int v19 = eng_upgrade(&q19, sizeof q19) && eng_check(&q19);
+    const int kWant[4] = {-2, 2, 3, 0};
+    for (int t = 0; t < ENG_TRACKS; ++t) v19 &= fm4_shape((q19.val[PG_TRACK(t, 1) * 4 + 2] + 1.0f) * 0.5f) == kWant[t];
+    v19 &= fm4_shape(static_cast<float>(q19.lock[0].v) / 255.0f) == -2;
     // a project of 0.9 (version 16): VIRTUAL ANALOG (19 then) the FM on its own knobs, its second algorithm; CHIPTUNE
     // (18) still Plaits', ZERO (10), MODAL (31). One of 0.10.0 (version 17): BASS (11) the FM's first algorithm, PAD
     // (16) its sixth, CHIPTUNE (19), MODAL (26)
@@ -2719,11 +2763,13 @@ int main(int argc, char** argv) {
     printf("the FM: knobs %s, its algorithms sounding %s (peaks %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f); C3 alone %.1f Hz, its octave "
            "%.0f dB; the saw %.0f %.0f dB, the square %.0f %.0f dB; on C6 between the harmonics: saw %.0f dB, square %.0f;"
            " on C5: SYNC %.0f, PW %.0f; a major chord: third %.0f, fifth %.0f, fourth %.0f dB; held %.3f %.3f, let go "
-           "%.5f; a tine over: %.6f; a retrig: a step of %.3f (the note's %.3f); 300 settings: peak %.2f%s; versions 16, 17 %s\n",
+           "%.5f; a tine over: %.6f; a retrig: a step of %.3f (the note's %.3f); 300 settings: peak %.2f%s; versions 16, 17 %s; "
+           "SHAPE %s (its brightness moving x%.2f to x%.2f, Loop's %d times), MOVE read as SHAPE %s\n",
            kit_ok ? "ok" : "WRONG", sound_ok ? "ok" : "NO", pk[0], pk[1], pk[2], pk[3], pk[4], pk[5], pk[6], pk[7], hz,
            sine2, saw2, saw3, sq2, sq3, saw_alias, sq_alias, sync_alias, pw_alias, c3rd, c5th, c4th, held_a, held_b, after,
-           tail, step, typ, pk_any, nan_any ? ", NaN" : "", up_ok ? "read" : "WRONG");
-    if (!kit_ok || !sound_ok || std::fabs(hz - 130.81f) > 1.5f || sine2 > -80.0 || saw2 < -8.0 || saw2 > -4.0 ||
+           tail, step, typ, pk_any, nan_any ? ", NaN" : "", up_ok ? "read" : "WRONG", shapes_ok ? "ok" : "WRONG", sh_lo,
+           sh_hi, loops, v19 ? "ok" : "WRONG");
+    if (!shapes_ok || !v19 || !kit_ok || !sound_ok || std::fabs(hz - 130.81f) > 1.5f || sine2 > -80.0 || saw2 < -8.0 || saw2 > -4.0 ||
         saw3 < -14.0 || saw3 > -8.0 || sq2 > -40.0 || sq3 < -14.0 || sq3 > -8.0 || saw_alias > -55.0 || sq_alias > -55.0 ||
         sync_alias > -55.0 || pw_alias > -55.0 || c3rd < -12.0 || c5th < -12.0 || c4th > -40.0 || held_a < 0.1 ||
         std::fabs(held_b / held_a - 1.0) > 0.2 || after > 1e-3 || tail != 0.0f || step > 1.5f * typ + 0.02f ||
