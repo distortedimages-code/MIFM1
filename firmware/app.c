@@ -428,6 +428,7 @@ static const char *module_name(int page)
                                                                         : track_kind(ptrack(page)) == MK_ZERO ? "Zero"
                                                                         : track_kind(ptrack(page)) == MK_DRUM ? "Drum"
                                                                         : track_kind(ptrack(page)) == MK_LXR ? "FM drum"
+                                                                        : track_kind(ptrack(page)) == MK_FM ? "FM"
                                                                         : "Plaits";
     }
     case PT_LFO: {
@@ -454,8 +455,8 @@ static const char *const LANE_SHORT[ENG_LANES] = {"T1", "T2", "T3", "T4", "DL", 
 /* the colours of a module's state, as its icons print them (in Mutable's: teal, orange, pink) */
 static uint16_t accent3(int i) { return i <= 0 ? AC1 : i == 1 ? AC2 : AC3; }
 
-static uint16_t model_accent(int m)      /* by bank: orange Plaits' 1.2, teal its pitched models, pink the drums, the
-                                          * noises and the physical models, ZERO */
+static uint16_t model_accent(int m)      /* by bank: orange the FM, teal Plaits' chiptune and voices, pink the drums,
+                                          * the noises and the physical models, ZERO */
 {
     int b = eng_model_bank(m);
     return b == 3 ? AC2 : b == 4 ? AC1 : AC3;
@@ -896,7 +897,7 @@ static void led(float cx, float cy, float r, uint16_t c, int lvl)   /* an LED: l
     disc(cx, cy, r, col);
 }
 
-/* the icons, as strokes in a 32-unit box: the 32 models (as ALGORITHM orders them), the LFOs' waves, the mixer, the reverb, the global page,
+/* the icons, as strokes in a 32-unit box: the models (as ALGORITHM orders them), the LFOs' waves, the mixer, the reverb, the global page,
  * the projects, the steps, Warps' algorithms, the delay. L a line, C a circle, D a dot, R a rectangle (x y w h) */
 typedef struct {
     char op;
@@ -925,35 +926,35 @@ static const vop_t ICONS[NICON][IOPS] = {
     {{'C', 16, 16, 11, 0}, {'L', 6, 16, 9, 11}, {'L', 9, 11, 12, 11}, {'L', 12, 11, 16, 16}, {'L', 16, 16, 20, 21},
      {'L', 20, 21, 23, 21}, {'L', 23, 21, 26, 16}},                                                 /* ZERO: a sine
                                                                                                      * through zero */
-    {{'L', 4, 24, 12, 8}, {'L', 12, 8, 12, 24}, {'L', 12, 24, 20, 8}, {'L', 20, 8, 20, 24}, {'L', 20, 24, 28, 16}},
-    {{'L', 4, 16, 8, 7}, {'L', 8, 7, 12, 7}, {'L', 12, 7, 20, 25}, {'L', 20, 25, 24, 25}, {'L', 24, 25, 28, 16}},
-    {{'D', 9, 9, 2, 0}, {'D', 16, 9, 2, 0}, {'D', 23, 9, 2, 0}, {'D', 9, 23, 2, 0}, {'D', 16, 23, 2, 0}, {'D', 23, 23, 2, 0},
-     {'L', 9, 12, 9, 20}},
-    {{'D', 9, 9, 2, 0}, {'D', 16, 9, 2, 0}, {'D', 23, 9, 2, 0}, {'D', 9, 23, 2, 0}, {'D', 16, 23, 2, 0}, {'D', 23, 23, 2, 0},
-     {'L', 16, 12, 16, 20}},
-    {{'D', 9, 9, 2, 0}, {'D', 16, 9, 2, 0}, {'D', 23, 9, 2, 0}, {'D', 9, 23, 2, 0}, {'D', 16, 23, 2, 0}, {'D', 23, 23, 2, 0},
-     {'L', 23, 12, 23, 20}},
-    {{'C', 16, 16, 11, 0}, {'C', 18, 14, 6, 0}, {'D', 19, 13, 2, 0}},
-    {{'L', 5, 10, 27, 10}, {'L', 5, 16, 27, 16}, {'L', 5, 22, 27, 22}, {'L', 22, 5, 10, 27}},
+    {{'R', 13, 1, 6, 6}, {'R', 13, 9, 6, 6}, {'R', 13, 17, 6, 6}, {'R', 13, 25, 6, 6}, {'L', 16, 7, 16, 9},
+     {'L', 16, 15, 16, 17}, {'L', 16, 23, 16, 25}},                                                 /* the FM's
+                                                                                                     * algorithms:
+                                                                                                     * BASS 1>2>3>4 */
+    {{'R', 7, 1, 6, 6}, {'R', 19, 1, 6, 6}, {'R', 13, 13, 6, 6}, {'R', 13, 25, 6, 6}, {'L', 10, 7, 15, 13},
+     {'L', 22, 7, 17, 13}, {'L', 16, 19, 16, 25}},                                                  /* LEAD */
+    {{'R', 19, 1, 6, 6}, {'R', 19, 13, 6, 6}, {'R', 7, 13, 6, 6}, {'R', 13, 25, 6, 6}, {'L', 22, 7, 22, 13},
+     {'L', 22, 19, 17, 25}, {'L', 10, 19, 15, 25}},                                                 /* BRASS */
+    {{'R', 7, 1, 6, 6}, {'R', 7, 13, 6, 6}, {'R', 19, 13, 6, 6}, {'R', 13, 25, 6, 6}, {'L', 10, 7, 10, 13},
+     {'L', 10, 19, 15, 25}, {'L', 22, 19, 17, 25}},                                                 /* PLUCK */
+    {{'R', 7, 5, 6, 6}, {'R', 7, 21, 6, 6}, {'R', 19, 5, 6, 6}, {'R', 19, 21, 6, 6}, {'L', 10, 11, 10, 21},
+     {'L', 22, 11, 22, 21}},                                                                        /* KEYS */
+    {{'R', 13, 5, 6, 6}, {'R', 3, 21, 6, 6}, {'R', 13, 21, 6, 6}, {'R', 23, 21, 6, 6}, {'L', 15, 11, 7, 21},
+     {'L', 16, 11, 16, 21}, {'L', 17, 11, 25, 21}},                                                 /* PAD */
+    {{'R', 3, 5, 6, 6}, {'R', 3, 21, 6, 6}, {'R', 13, 21, 6, 6}, {'R', 23, 21, 6, 6}, {'L', 6, 11, 6, 21}}, /* BELL */
+    {{'R', 1, 9, 6, 6}, {'R', 9, 9, 6, 6}, {'R', 17, 9, 6, 6}, {'R', 25, 9, 6, 6}, {'L', 4, 24, 28, 24},
+     {'L', 4, 15, 4, 24}, {'L', 12, 15, 12, 24}, {'L', 20, 15, 20, 24}, {'L', 28, 15, 28, 24}},     /* ORGAN */
     {{'L', 4, 24, 4, 10}, {'L', 4, 10, 12, 10}, {'L', 12, 10, 12, 24}, {'L', 12, 24, 20, 24}, {'L', 20, 24, 20, 10},
-     {'L', 20, 10, 28, 10}},
-    {{'L', 4, 24, 12, 8}, {'L', 12, 8, 12, 24}, {'L', 12, 24, 18, 24}, {'L', 18, 24, 18, 8}, {'L', 18, 8, 26, 8},
-     {'L', 26, 8, 26, 24}},
-    {{'L', 4, 16, 7, 9}, {'L', 7, 9, 10, 7}, {'L', 10, 7, 13, 9}, {'L', 13, 9, 19, 23}, {'L', 19, 23, 22, 25},
-     {'L', 22, 25, 25, 23}, {'L', 25, 23, 28, 16}},
-    {{'C', 12, 16, 7, 0}, {'C', 21, 16, 7, 0}},
+     {'L', 20, 10, 28, 10}},                                                                        /* CHIPTUNE */
     {{'L', 4, 24, 10, 22}, {'L', 10, 22, 13, 12}, {'L', 13, 12, 16, 7}, {'L', 16, 7, 19, 12}, {'L', 19, 12, 22, 22},
-     {'L', 22, 22, 28, 24}},
-    {{'L', 6, 26, 6, 6}, {'L', 11, 26, 11, 11}, {'L', 16, 26, 16, 15}, {'L', 21, 26, 21, 19}, {'L', 26, 26, 26, 22}},
-    {{'R', 5, 5, 9, 9}, {'R', 18, 5, 9, 9}, {'R', 5, 18, 9, 9}, {'R', 18, 18, 9, 9}},
-    {{'L', 5, 9, 19, 9}, {'L', 9, 16, 23, 16}, {'L', 13, 23, 27, 23}},
-    {{'R', 5, 6, 22, 14}, {'L', 10, 20, 8, 27}, {'L', 8, 27, 16, 20}},
-    {{'C', 10, 18, 5, 0}, {'C', 17, 13, 6, 0}, {'C', 23, 19, 5, 0}},
+     {'L', 22, 22, 28, 24}},                                                                        /* FORMANT */
+    {{'R', 5, 6, 22, 14}, {'L', 10, 20, 8, 27}, {'L', 8, 27, 16, 20}},                              /* SPEECH */
+    {{'C', 10, 18, 5, 0}, {'C', 17, 13, 6, 0}, {'C', 23, 19, 5, 0}},                                /* SWARM */
     {{'L', 4, 18, 7, 10}, {'L', 7, 10, 10, 23}, {'L', 10, 23, 13, 8}, {'L', 13, 8, 16, 21}, {'L', 16, 21, 19, 11},
-     {'L', 19, 11, 22, 24}, {'L', 22, 24, 25, 12}, {'L', 25, 12, 28, 17}},
-    {{'D', 8, 9, 2, 0}, {'D', 20, 7, 2, 0}, {'D', 14, 15, 2, 0}, {'D', 25, 17, 2, 0}, {'D', 9, 23, 2, 0}, {'D', 19, 25, 2, 0}},
-    {{'L', 8, 5, 8, 27}, {'L', 16, 5, 20, 16}, {'L', 20, 16, 16, 27}, {'L', 24, 5, 24, 27}},
-    {{'C', 16, 16, 11, 0}, {'C', 16, 16, 6, 0}, {'D', 16, 16, 2, 0}},
+     {'L', 19, 11, 22, 24}, {'L', 22, 24, 25, 12}, {'L', 25, 12, 28, 17}},                          /* NOISE */
+    {{'D', 8, 9, 2, 0}, {'D', 20, 7, 2, 0}, {'D', 14, 15, 2, 0}, {'D', 25, 17, 2, 0}, {'D', 9, 23, 2, 0},
+     {'D', 19, 25, 2, 0}},                                                                          /* PARTICLES */
+    {{'L', 8, 5, 8, 27}, {'L', 16, 5, 20, 16}, {'L', 20, 16, 16, 27}, {'L', 24, 5, 24, 27}},        /* STRING */
+    {{'C', 16, 16, 11, 0}, {'C', 16, 16, 6, 0}, {'D', 16, 16, 2, 0}},                               /* MODAL */
     {{'L', 4, 16, 7, 10}, {'L', 7, 10, 10, 7}, {'L', 10, 7, 13, 10}, {'L', 13, 10, 16, 16}, {'L', 16, 16, 19, 22},
      {'L', 19, 22, 22, 25}, {'L', 22, 25, 25, 22}, {'L', 25, 22, 28, 16}},                          /* sine */
     {{'L', 4, 16, 10, 7}, {'L', 10, 7, 22, 25}, {'L', 22, 25, 28, 16}},                             /* triangle */
@@ -2438,7 +2439,7 @@ static void draw_matrix(void)
 static void draw_projects(void)          /* the projects REC held loads, in the module's display */
 {
     static int shown = -1;
-    static const char *const P[5] = {"New: 4 Plaits, nothing patched", "The demo groove", "The saved project",
+    static const char *const P[5] = {"New: 4 FM leads, nothing patched", "The demo groove", "The saved project",
                                      "Stress test (plays at once)", "Stress test, on the 4 FM drums"};
     if (ui.full || ui.body_panel || shown != ui.init_sel) {
         shown = ui.init_sel;
@@ -3414,7 +3415,7 @@ static void project_init(int which)
         eng_fresh();
         dirty = 1;
         app_say(which == 0 ? "NEW PROJECT" : which == 1 ? "DEMO GROOVE" : "STRESS TEST",
-                which == 0 ? "4 PLAITS" : which == 1 ? "LOADED" : which == 3 ? "PLAYING" : "FM DRUMS PLAYING");
+                which == 0 ? "4 FM LEADS" : which == 1 ? "LOADED" : which == 3 ? "PLAYING" : "FM DRUMS PLAYING");
     }
     p->out_mode = out;
     p->warps_hq = hq;

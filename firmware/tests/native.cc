@@ -245,14 +245,14 @@ int main(int argc, char** argv) {
     printf("the delay's, the swing's, the lanes' values: written as expected\n");
   }
 
-  // 5. INIT: four Plaits on VIRTUAL ANALOG, nothing patched, no steps; a step on each, each track plays
+  // 5. INIT: four tracks on the FM's LEAD, nothing patched, no steps; a step on each, each track plays
   eng_blank(p);
   int cables = 0, models = 0, steps = 0;
   for (int l = 0; l < ENG_LANES; ++l) steps += eng_lane_has_trigs(l);
   for (int tr = 0; tr < ENG_TRACKS; ++tr) eng_trig_set(tr, tr * 4, 1);
   for (int g = 0; g <= ENG_TRACKS; ++g)
     for (int c = 0; c < ENG_CABLES; ++c) cables += p->cable[g][c].depth != 0;
-  for (int tr = 0; tr < ENG_TRACKS; ++tr) models += p->algo[PG_TRACK(tr, 0)] == eng_model_find(MK_PLAITS, 8);
+  for (int tr = 0; tr < ENG_TRACKS; ++tr) models += p->algo[PG_TRACK(tr, 0)] == eng_model_find(MK_FM, ENG_INIT_FM);
   snprintf(path, sizeof path, "%s/init.wav", dir);
   Wav wi;
   const uint32_t iblocks = 8u * 44100u / n;
@@ -276,8 +276,8 @@ int main(int argc, char** argv) {
     wi.add(l, r, n);
   }
   wi.close();
-  printf("init: %d cables, %d lanes with steps, %d tracks on VIRTUAL ANALOG (%s), a step each: rms %.3f, gates %u %u %u %u\n",
-         cables, steps, models, eng_algo_name(PG_TRACK(0, 0), eng_model_find(MK_PLAITS, 8)), std::sqrt(ie / (iblocks * n)), irises[0], irises[1],
+  printf("init: %d cables, %d lanes with steps, %d tracks on LEAD (%s), a step each: rms %.3f, gates %u %u %u %u\n",
+         cables, steps, models, eng_algo_name(PG_TRACK(0, 0), eng_model_find(MK_FM, ENG_INIT_FM)), std::sqrt(ie / (iblocks * n)), irises[0], irises[1],
          irises[2], irises[3]);
   if (cables || steps || models != ENG_TRACKS || inan || ie < 1e-3) ++failures, printf("FAIL: the INIT project\n");
   for (int tr = 0; tr < ENG_TRACKS; ++tr)
@@ -580,7 +580,8 @@ int main(int argc, char** argv) {
     q->size = 2644;
     float* val = reinterpret_cast<float*>(buf + 8);
     for (int i = 0; i < 132; ++i) val[i] = 0.25f;
-    buf[8 + 528 + PG_TRACK(1, 0)] = 17;                   // track 2 on NOISE
+    buf[8 + 528 + PG_TRACK(1, 0)] = 17;                   // track 2 on NOISE, track 1 on STRING (the others on VA VCF:
+    buf[8 + 528 + PG_TRACK(0, 0)] = 19;                   // gone, the FM's LEAD, its kit)
     buf[8 + 528 + 33] = 2;                                // the output: mono
     cable_t* cab = reinterpret_cast<cable_t*>(buf + 572);
     cab[0].src = 2;                                       // (Tides A2 then: LFO 2 now)
@@ -1038,8 +1039,9 @@ int main(int argc, char** argv) {
     p->val[PG_BEND(0) * 4 + 1] = 0.85f;                  // BITS: 3
     measure(&d1, &c1, &k1);
     float k3;
-    p->val[PG_BEND(0) * 4 + 1] = 1.0f;                   // BITS: 1 (this quiet a voice: none left)
-    measure(&dd, &cd, &k3);
+    p->val[PG_BEND(0) * 4 + 1] = 1.0f;                   // BITS: 1 (-1, 0, 1 left)
+    int d3;
+    measure(&d3, &cd, &k3);
     p->val[PG_BEND(0) * 4 + 1] = 0.0f;
     p->val[PG_BEND(0) * 4 + 0] = 1.0f;                   // CLOCK: x2 the note (a hold every 168 samples)
     measure(&d2, &c2, &k2);
@@ -1056,9 +1058,9 @@ int main(int argc, char** argv) {
     eng_key(0, 48, 0);
     float kw = 0.0f;
     for (int sh = 0; sh < BS_N; ++sh) kw = std::max(kw, ks[sh]);
-    printf("bits: plain %d values a block, %d changes, peak %.2f; 3 bits %d values; 1 bit peak %.4f; clock x2 %d changes;"
-           " shapes and a mask peak %.2f\n", d0, c0, k0, d1, k3, c2, kw);
-    if (d0 < 64 || d1 > 16 || k3 > 1e-3f || c2 > 4 || k0 <= 0.01f || kw > 2.0f || kw < 0.01f)
+    printf("bits: plain %d values a block, %d changes, peak %.2f; 3 bits %d values; 1 bit %d values; clock x2 %d changes;"
+           " shapes and a mask peak %.2f\n", d0, c0, k0, d1, d3, c2, kw);
+    if (d0 < 64 || d1 > 16 || d3 > 3 || c2 > 4 || k0 <= 0.01f || kw > 2.0f || kw < 0.01f)
       ++failures, printf("FAIL: the bits\n");
     {                                    // 0.6's project (version 14, 3652 bytes): read, its grit gone, the rest kept
       struct v14 {
@@ -1236,6 +1238,7 @@ int main(int argc, char** argv) {
       eng_blank(p);
       for (int t = 1; t < ENG_TRACKS; ++t) p->val[PG_MIX * 4 + t] = 0.0f;
       p->val[PG_TRACK(0, 1) * 4 + 0] = 1.0f;
+      p->val[PG_TRACK(0, 0) * 4 + 1] = 0.0f;              // (INDEX 0: a sine, two crossings a cycle)
       p->val[PG_REVERB * 4 + 3] = 0.0f;
       p->val[PG_DELAY(1) * 4 + 3] = 0.0f;
       p->val[PG_TRACK(0, 0) * 4 + 0] = c ? 1.0f / 24.0f : 0.0f;
@@ -1306,9 +1309,9 @@ int main(int argc, char** argv) {
               st.send_wrong += dev < -1e-6f || dev > 0.35f + 1e-4f;
               continue;
             }
-            if ((t == 1 && tp == 1) || tp == TP_PITCHENV) st.off_scale += std::fabs(dev) > 1e-6f;   // (the VA's
-            if (tp == 0) st.off_scale += std::fabs(dev * 24.0f - std::floor(dev * 24.0f + 0.5f)) > 1e-3f;   // detune;
-            if (sp == 0.0f) {                                                           // FREQ: semitones)
+            if (tp == TP_PITCHENV) st.off_scale += std::fabs(dev) > 1e-6f;   // (the pitch envelope; FREQ:
+            if (tp == 0) st.off_scale += std::fabs(dev * 24.0f - std::floor(dev * 24.0f + 0.5f)) > 1e-3f;   // semitones)
+            if (sp == 0.0f) {
               st.kept_wrong += std::fabs(dev) > 1e-6f;   // (the sends, the levels, the time: the knobs)
               continue;
             }
@@ -2502,6 +2505,210 @@ int main(int argc, char** argv) {
     if (!kit_ok || !sound_ok || std::fabs(hz - 50.0f) > 1.5f || rises < 3 || rises > 5 || step > 1.5f * typ + 0.02f ||
         nan_any || pk_any > 1.5f)
       ++failures, printf("FAIL: the drums\n");
+  }
+
+  // 46. the FM (mi_fm4.cc, 0.10): on a track, each model's kit (knobs named, written as they are), each sounding; the
+  // engine: ORGAN's first operator alone (INDEX 0) at the note, a sine; FEEDBACK's saw and square (their harmonics),
+  // clean (nothing between the harmonics above -55 dB) up to C6; SYNC and PW clean; the pad's chord; a held note held,
+  // let go; a decaying one over; a retrig without a step; any setting finite and bounded. A project of 0.9 (version
+  // 16): its models renumbered, a model gone the FM's nearest
+  {
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    int kit_ok = 1, sound_ok = 1;
+    float pk[FM_MODELS];
+    for (int m = 0; m < FM_MODELS; ++m) {
+      eng_set_model(0, eng_model_find(MK_FM, m));
+      float kd[8];
+      fm4_defaults(m, kd);
+      for (int i = 0; i < 8; ++i) {
+        int param = PG_TRACK(0, 0) * 4 + 1 + i;
+        float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
+        if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), fm4_knob_name(i)) != 0) kit_ok = 0;
+      }
+      if (std::strcmp(eng_algo_name(PG_TRACK(0, 0), eng_model_find(MK_FM, m)), fm4_model_name(m)) != 0) kit_ok = 0;
+      if (fm4_algo(m) != m) kit_ok = 0;
+      eng_cut();
+      for (int b = 0; b < 3; ++b) eng_render(l, r, n);
+      pk[m] = 0.0f;
+      for (int b = 0; b < 400; ++b) {
+        if (b % 100 == 0) eng_key(0, 48, 1);
+        if (b % 100 == 60) eng_key(0, 48, 0);
+        eng_render(l, r, n);
+        for (uint32_t i = 0; i < n; ++i) {
+          if (!std::isfinite(l[i])) sound_ok = 0;
+          pk[m] = std::max(pk[m], std::fabs(l[i]));
+        }
+      }
+      if (pk[m] < 0.02f) sound_ok = 0;
+    }
+    char tx[24];
+    struct { int m, k; float u; const char* want; } kTx[] = {
+        {5, 1, 0.5f / 16.0f, "Unison"}, {5, 1, 7.5f / 16.0f, "Min7"}, {4, 1, 0.5f / 16.0f, "1:1:14:1"},
+        {0, 1, 3.5f / 16.0f, "1:1:.5:1"}, {6, 1, 3.5f / 16.0f, "Glock"}, {0, 3, 1.0f, "Hold"}, {0, 6, 0.875f, "Saw"},
+        {0, 6, 0.125f, "Square"}, {0, 6, 0.5f, "Sine"}, {0, 7, 0.5f, "Off"}, {0, 7, 0.75f, "50% SYNC"},
+        {0, 7, 0.25f, "50% PW"}, {0, 2, 0.0f, "Off"}, {0, 4, 0.0f, "1ms"}};
+    for (const auto& x : kTx) {
+      fm4_knob_text(x.m, x.k, x.u, tx, sizeof tx);
+      if (std::strcmp(tx, x.want)) kit_ok = 0, printf("FM: model %d knob %d at %.3f written %s, %s expected\n", x.m, x.k, x.u, tx, x.want);
+    }
+    eng_defaults(p);
+    eng_cut();
+    // the engine itself: a note held, its samples
+    static float buf[88200];
+    float k[8];
+    auto play = [&](int m, float note, const float* kk, uint32_t frames, uint32_t gate_off) {
+      fm4_init();
+      fm4_set(0, m, note, kk);
+      fm4_gate(0, 1);
+      for (uint32_t i = 0; i < frames; i += 32) {
+        if (i == gate_off) fm4_gate(0, 0);
+        fm4_render(0, &buf[i], 32);
+      }
+    };
+    auto level = [&](uint32_t from, uint32_t len, double hz) {   // a Hann-windowed DFT bin's level
+      double re = 0.0, im = 0.0, w = 2.0 * 3.14159265358979 * hz / 44100.0;
+      for (uint32_t i = 0; i < len; ++i) {
+        double h = 0.5 - 0.5 * std::cos(2.0 * 3.14159265358979 * i / len), v = buf[from + i] * h;
+        re += v * std::cos(w * i);
+        im -= v * std::sin(w * i);
+      }
+      return std::sqrt(re * re + im * im) / (0.25 * len);
+    };
+    auto db = [](double a, double ref) { return 20.0 * std::log10(a / ref + 1e-12); };
+    auto between = [&](double f0) {      // the loudest between the harmonics (10 Hz apart, under 16 kHz) against f0's
+      double ref = level(8192, 32768, f0), worst = 0.0;
+      for (double f = 40.0; f < 16000.0; f += 10.0) {
+        double h = f / f0, d = std::fabs(h - std::floor(h + 0.5)) * f0;
+        if (d < 25.0) continue;
+        worst = std::max(worst, level(8192, 32768, f));
+      }
+      return db(worst, ref);
+    };
+    auto knobs = [&](int m, float index, float fb, float mut) {
+      fm4_defaults(m, k);
+      k[0] = index, k[2] = 0.0f, k[3] = 1.0f, k[6] = fb, k[7] = mut;   // (no detune; held)
+    };
+    // ORGAN alone: a sine at the note (C3), its zero crossings
+    knobs(7, 0.0f, 0.5f, 0.5f);
+    play(7, 48.0f, k, 44128, 1u << 30);
+    int zc = 0;
+    for (uint32_t i = 8821; i < 44100; ++i) zc += buf[i - 1] < 0.0f && buf[i] >= 0.0f;
+    float hz = static_cast<float>(zc) / 0.8f;
+    double sine2 = db(level(8192, 32768, 261.63), level(8192, 32768, 130.81));
+    // FEEDBACK: the saw (C3), the square, clean up to C6
+    knobs(7, 0.0f, 0.875f, 0.5f);
+    play(7, 48.0f, k, 44128, 1u << 30);
+    double f3 = 130.81, saw2 = db(level(8192, 32768, 2 * f3), level(8192, 32768, f3));
+    double saw3 = db(level(8192, 32768, 3 * f3), level(8192, 32768, f3));
+    knobs(7, 0.0f, 0.125f, 0.5f);
+    play(7, 48.0f, k, 44128, 1u << 30);
+    double sq2 = db(level(8192, 32768, 2 * f3), level(8192, 32768, f3));
+    double sq3 = db(level(8192, 32768, 3 * f3), level(8192, 32768, f3));
+    double f6 = 1046.50;
+    knobs(7, 0.0f, 0.875f, 0.5f);
+    play(7, 84.0f, k, 44128, 1u << 30);
+    double saw_alias = between(f6);
+    knobs(7, 0.0f, 0.125f, 0.5f);
+    play(7, 84.0f, k, 44128, 1u << 30);
+    double sq_alias = between(f6);
+    // SYNC (+75 %: x2.8) and PW (-100 %) on C5
+    double f5 = 523.25;
+    knobs(7, 0.0f, 0.5f, 0.875f);
+    play(7, 72.0f, k, 44128, 1u << 30);
+    double sync_alias = between(f5);
+    knobs(7, 0.0f, 0.5f, 0.0f);
+    play(7, 72.0f, k, 44128, 1u << 30);
+    double pw_alias = between(f5);
+    // the pad's major chord (INDEX 0): its root, its third, its fifth; a fourth, none
+    knobs(5, 0.0f, 0.5f, 0.5f);
+    k[1] = 4.5f / 16.0f;
+    k[4] = 0.0f;
+    play(5, 48.0f, k, 44128, 1u << 30);
+    double c_root = level(8192, 32768, 130.81), c3rd = db(level(8192, 32768, 164.81), c_root);
+    double c5th = db(level(8192, 32768, 196.0), c_root), c4th = db(level(8192, 32768, 174.61), c_root);
+    // LEAD held (DECAY at Hold) half a second, let go: its level held, then gone; KEYS (its decay) over in 20 s
+    fm4_defaults(1, k);
+    k[3] = 1.0f;
+    play(1, 60.0f, k, 44128, 22048);
+    auto rms = [&](uint32_t a, uint32_t len) {
+      double e = 0.0;
+      for (uint32_t i = a; i < a + len; ++i) e += buf[i] * buf[i];
+      return std::sqrt(e / len);
+    };
+    double held_a = rms(8000, 4000), held_b = rms(18000, 4000), after = rms(40000, 4000);
+    fm4_defaults(4, k);
+    fm4_init();
+    fm4_set(0, 4, 60.0f, k);
+    fm4_gate(0, 1);
+    float tail = 1.0f;
+    for (int b = 0; b < 44100 * 20 / 32; ++b) {
+      fm4_render(0, buf, 32);
+      if (b > 44100 * 19 / 32)
+        for (int i = 0; i < 32; ++i) tail = i == 0 && b == 44100 * 19 / 32 + 1 ? std::fabs(buf[i]) : std::max(tail, std::fabs(buf[i]));
+    }
+    // a retrig over a held LEAD: its largest step around it, against the note's own
+    fm4_defaults(1, k);
+    k[3] = 1.0f;
+    fm4_init();
+    fm4_set(0, 1, 48.0f, k);
+    fm4_gate(0, 1);
+    for (uint32_t i = 0; i < 8832; i += 32) fm4_render(0, &buf[i], 32);
+    float typ = 0.0f, step = 0.0f;
+    for (uint32_t i = 4001; i < 8832; ++i) typ = std::max(typ, std::fabs(buf[i] - buf[i - 1]));
+    fm4_gate(0, 0);
+    fm4_gate(0, 1);
+    for (uint32_t i = 8832; i < 13248; i += 32) fm4_render(0, &buf[i], 32);
+    for (uint32_t i = 8800; i < 9000; ++i) step = std::max(step, std::fabs(buf[i] - buf[i - 1]));
+    // anything: 300 settings, a trig each
+    uint32_t sd = 4242u;
+    auto rnd = [&]() { sd = sd * 1664525u + 1013904223u; return static_cast<float>(sd >> 8) / 16777216.0f; };
+    float pk_any = 0.0f;
+    int nan_any = 0;
+    fm4_init();
+    for (int s2 = 0; s2 < 300; ++s2) {
+      for (int i = 0; i < 8; ++i) k[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();
+      fm4_set(s2 & 3, s2 % FM_MODELS, 12.0f + 100.0f * rnd(), k);
+      fm4_gate(s2 & 3, 1);
+      for (int b = 0; b < 300; ++b) {
+        float tmp[32];
+        if (b == 150) fm4_gate(s2 & 3, 0);
+        fm4_render(s2 & 3, tmp, 32);
+        for (int i = 0; i < 32; ++i) {
+          if (!std::isfinite(tmp[i])) nan_any = 1;
+          pk_any = std::max(pk_any, std::fabs(tmp[i]));
+        }
+      }
+    }
+    fm4_init();
+    // a project of 0.9 (version 16): VIRTUAL ANALOG (19 then) the FM's LEAD and its kit, CHIPTUNE (18) still Plaits',
+    // ZERO (10), MODAL (31)
+    static project_t q16;
+    eng_defaults(&q16);
+    q16.version = 16;
+    const uint8_t kOld[4] = {19, 18, 10, 31};
+    for (int t = 0; t < ENG_TRACKS; ++t) q16.algo[PG_TRACK(t, 0)] = kOld[t];
+    q16.val[PG_TRACK(0, 0) * 4 + 1] = 0.123f;
+    int up_ok = eng_upgrade(&q16, sizeof q16) && eng_check(&q16) &&
+                q16.algo[PG_TRACK(0, 0)] == eng_model_find(MK_FM, 1) && q16.algo[PG_TRACK(1, 0)] == eng_model_find(MK_PLAITS, 7) &&
+                q16.algo[PG_TRACK(2, 0)] == eng_model_find(MK_ZERO, 0) && q16.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PLAITS, 20);
+    float kl[8];
+    fm4_defaults(1, kl);
+    up_ok &= std::fabs(q16.val[PG_TRACK(0, 0) * 4 + 1] - kl[0]) < 1e-6f;
+    printf("the FM: kits %s, sounding %s (peaks %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f); C3 alone %.1f Hz, its octave "
+           "%.0f dB; the saw %.0f %.0f dB, the square %.0f %.0f dB; on C6 between the harmonics: saw %.0f dB, square %.0f;"
+           " on C5: SYNC %.0f, PW %.0f; the pad's major: third %.0f, fifth %.0f, fourth %.0f dB; held %.3f %.3f, let go "
+           "%.5f; KEYS over: %.6f; a retrig: a step of %.3f (the note's %.3f); 300 settings: peak %.2f%s; version 16 %s\n",
+           kit_ok ? "ok" : "WRONG", sound_ok ? "ok" : "NO", pk[0], pk[1], pk[2], pk[3], pk[4], pk[5], pk[6], pk[7], hz,
+           sine2, saw2, saw3, sq2, sq3, saw_alias, sq_alias, sync_alias, pw_alias, c3rd, c5th, c4th, held_a, held_b, after,
+           tail, step, typ, pk_any, nan_any ? ", NaN" : "", up_ok ? "read" : "WRONG");
+    if (!kit_ok || !sound_ok || std::fabs(hz - 130.81f) > 1.5f || sine2 > -80.0 || saw2 < -8.0 || saw2 > -4.0 ||
+        saw3 < -14.0 || saw3 > -8.0 || sq2 > -40.0 || sq3 < -14.0 || sq3 > -8.0 || saw_alias > -55.0 || sq_alias > -55.0 ||
+        sync_alias > -55.0 || pw_alias > -55.0 || c3rd < -12.0 || c5th < -12.0 || c4th > -40.0 || held_a < 0.1 ||
+        std::fabs(held_b / held_a - 1.0) > 0.2 || after > 1e-3 || tail != 0.0f || step > 1.5f * typ + 0.02f ||
+        nan_any || pk_any > 1.25f || !up_ok)
+      ++failures, printf("FAIL: the FM\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
