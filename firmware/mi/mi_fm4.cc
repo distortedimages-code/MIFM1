@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 // Copyright (C) 2026 Yoann
-// MIFM1's FM (0.10): four operators, as the Yamaha YM2612 has them (the Mega Drive's sound chip, the MegaFM's): its eight
-// algorithms, the first operator's feedback; with a modern synthesizer's mutators (ASM's Hydrasynth: sync, PW) on the
-// operators that are heard. Eight models, one engine: each model is one of the eight algorithms with its kit (each
-// operator's level, its decay and attack against the note's, its detune) and its sixteen tunings (RATIO: the four
-// operators' ratios, harmonic or not; the pad's are chords).
+// MIFM1's FM (0.10.1): four operators, as the Yamaha YM2612 has them (the Mega Drive's sound chip, the MEGAfm's):
+// its eight algorithms (ALGO), the first operator's feedback; with two of a modern synthesizer's mutators (ASM's
+// Hydrasynth: PW, sync) on the operators that are heard. One machine: RATIO goes through thirty voicings of the four
+// operators (their ratios, harmonic or not; the last eight chords, chords where three operators or more are heard).
 //
 // An operator is a sine whose phase the operators before it move (phase modulation, as the chip and the DX7 do).
 // The first one modulates itself: FEEDBACK to the right, its sine leans into a saw (its two last outputs averaged, as
@@ -13,9 +12,11 @@
 // first half squeezed: its wave leans, as Casio's phase distortion), to the right SYNC (their phase started again at
 // each of the note's cycles, their pitch up to three octaves above: the edge's step taken off around it, polyBLEP).
 //
-// INDEX: the modulators' depth (the organ's: the three upper operators' levels). MOVE, as ZERO's: to the right the FM
-// opens at the trig and settles back, to the left it grows. DETUNE: the operators apart (a few cents, then a chorus),
-// wandering. DECAY (held at the top while the gate is), ATTACK.
+// INDEX: the modulators' depth (with every operator heard: the three upper ones' levels). MOVE, the envelope's
+// character: to the right a pluck (the FM opens at the trig and settles back, more and faster further right), to the
+// left a swell (the note rises slower, the FM grows after it). DECAY (held at the top while the gate is); an operator
+// high above the note dies sooner (a sound's high partials do: a tine, a bell's shimmer). DETUNE: the operators apart
+// (a few cents, then a chorus), wandering.
 //
 // Rendered at twice the rate (the sidebands, the feedback's saw), brought down by ZERO's half-band (HIIR, six
 // coefficients). The modulators' depth falls 3 dB an octave above C4 (and is kept under what would alias).
@@ -27,7 +28,6 @@ namespace {
 
 const float kSr = 44100.0f, kSr2 = 88200.0f;
 const float kTwoPi = 6.2831853f;
-const int kTun = 16;
 const float kHb[6] = {0.0682040760f, 0.2402703580f, 0.4486762359f, 0.6411223671f, 0.7999975637f, 0.9344822355f};
 
 inline float clampf(float x, float lo, float hi) { return x < lo ? lo : x > hi ? hi : x; }
@@ -71,77 +71,44 @@ const int8_t kFirst[8][4] = {           // the operator each modulator modulates
     {1, 2, 3, -1}, {2, 2, 3, -1}, {3, 2, 3, -1}, {1, 3, 3, -1},
     {1, -1, 3, -1}, {1, -1, -1, -1}, {1, -1, -1, -1}, {-1, -1, -1, -1}};
 
-// the chords' intervals, equal tempered (the pad's tunings: in tune with the other tracks)
-const float kM2 = 1.122462f, km3 = 1.189207f, kM3 = 1.259921f, kP4 = 1.334840f, kTT = 1.414214f, kP5 = 1.498307f,
-            km6 = 1.587401f, kM6 = 1.681793f, km7 = 1.781797f, kM7 = 1.887749f, kM9 = 2.244924f;
+// each operator's level by algorithm: a modulator's depth at INDEX full (cycles), one heard: its level (with every one
+// heard, the three upper ones x the depth)
+const float kLvl[8][4] = {{0.35f, 0.5f, 1.0f, 1.0f}, {0.5f, 0.5f, 1.0f, 1.0f}, {0.7f, 0.5f, 0.8f, 1.0f},
+                          {0.5f, 0.7f, 0.8f, 1.0f}, {0.8f, 1.0f, 0.6f, 1.0f}, {0.6f, 1.0f, 1.0f, 1.0f},
+                          {0.8f, 1.0f, 0.8f, 0.8f}, {1.0f, 1.0f, 1.0f, 1.0f}};
+const float kDet[4] = {0.5f, -1.0f, 1.0f, -0.3f};   // each operator's detune (x DETUNE): the heard ones spread
 
-struct Kit {
-  const char* name;
-  uint8_t algo;
-  float lvl[4];                         // a modulator: its depth at INDEX full (cycles); one heard: its level
-  float dk[4];                          // its decay against the note's
-  float ak[4];                          // its attack against ATTACK
-  float det[4];                         // its detune (-1..1, x DETUNE)
-  float def[8];                         // the knobs (0..1; MOVE, FEEDBACK, MUTATE from their middle)
-  float ratio[kTun][4];
-  const char* const* tname;             // the tunings' names (none: their ratios)
-};
+// RATIO: the four operators' ratios to the note (the fourth always heard, always the note). Harmonic, then sub, high
+// and inharmonic ones; then eight chords (equal tempered: in tune with the other tracks), the note and an octave on
+// the first two, the third and the fifth or the seventh on the second and third
+const float kM2 = 1.122462f, km3 = 1.189207f, kM3 = 1.259921f, kP4 = 1.334840f, kP5 = 1.498307f, km7 = 1.781797f,
+            kM7 = 1.887749f;
+const int kVoicings = 30, kChords = 22;
+const float kVoicing[kVoicings][4] = {
+    {1, 1, 1, 1}, {2, 1, 1, 1}, {1, 2, 1, 1}, {1, 1, 2, 1}, {2, 2, 1, 1}, {3, 1, 1, 1}, {1, 3, 1, 1}, {1, 1, 3, 1},
+    {2, 3, 1, 1}, {4, 3, 2, 1}, {0.5f, 1, 1, 1}, {1, 1, 0.5f, 1}, {5, 1, 1, 1}, {1, 5, 2, 1}, {7, 3, 1, 1},
+    {1, 1, 7, 1}, {1, 1, 14, 1}, {11, 1, 1, 1}, {1.41f, 1, 2, 1}, {3.5f, 1, 1, 1}, {2.756f, 1, 5.404f, 1},
+    {7.13f, 1, 3.17f, 1},
+    {2, kM3, kP5, 1}, {2, km3, kP5, 1}, {2, kP4, kP5, 1}, {2, kM2, kP5, 1}, {2, kM3, kM7, 1}, {2, km3, km7, 1},
+    {2, kM3, km7, 1}, {2, kP4, km7, 1}};
+const char* const kVoicingName[kVoicings] = {
+    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+    nullptr, nullptr, nullptr, nullptr, "Tine", nullptr, "Bell", "Tube", "Bars", "Metal",
+    "Major", "Minor", "Sus4", "Sus2", "Maj7", "Min7", "Dom7", "4ths"};
+// the knobs as choosing the FM sets them: the second algorithm, unison, a bright pluck over a saw
+const float kDef[8] = {1.5f / 8.0f, 0.5f / kVoicings, 0.5f, 0.55f, 0.2f, 0.675f, 0.775f, 0.5f};
 
-const char* const kChordNames[kTun] = {"Unison", "Octaves", "5th", "Sus4", "Major", "Minor", "Maj7", "Min7",
-                                       "Dom7", "Maj6", "Sus2", "Add9", "Min9", "4ths", "Dim", "Aug"};
-const char* const kBellNames[kTun] = {"Bell", "Tubular", "Church", "Glock", "Vibes", "Marimba", "Gong", "Plate",
-                                      "Kalimba", "Celesta", "Crystal", "Cowbell", "Steel", "Temple", "Anvil", "Shimmer"};
-
-const Kit kKits[FM_MODELS] = {
-    {"BASS", 0, {0.25f, 0.35f, 0.9f, 1.0f}, {0.5f, 0.6f, 0.8f, 1.0f}, {1, 1, 1, 1}, {0.3f, -0.3f, 0.6f, -0.2f},
-     {0.55f, 0.5f / kTun, 0.15f, 0.36f, 0.0f, 0.725f, 0.65f, 0.5f},
-     {{1, 1, 1, 1}, {2, 1, 1, 1}, {1, 2, 1, 1}, {1, 1, 0.5f, 1}, {2, 2, 2, 1}, {1, 1, 2, 1}, {3, 1, 1, 1}, {1, 3, 1, 1},
-      {4, 2, 1, 1}, {1, 1, 3, 1}, {5, 1, 1, 1}, {1, 4, 2, 1}, {7, 2, 1, 1}, {1, 7, 1, 1}, {1, 1, 4, 1}, {13, 1, 1, 1}},
-     nullptr},
-    {"LEAD", 1, {0.45f, 0.35f, 0.8f, 1.0f}, {1, 1, 1, 1}, {1, 1, 1, 1}, {0.5f, -0.5f, 0.25f, 0.0f},
-     {0.45f, 0.5f / kTun, 0.25f, 1.0f, 0.2f, 0.575f, 0.875f, 0.5f},
-     {{1, 1, 1, 1}, {1, 2, 1, 1}, {2, 1, 1, 1}, {1, 3, 1, 1}, {2, 3, 1, 1}, {1, 1, 2, 1}, {0.5f, 1, 1, 1}, {1, 4, 1, 1},
-      {3, 1, 1, 1}, {1, 5, 1, 1}, {2, 5, 1, 1}, {1, 1, 3, 1}, {1, 2, 0.5f, 1}, {1, 7, 2, 1}, {3, 7, 1, 1}, {1, 11, 1, 1}},
-     nullptr},
-    {"BRASS", 2, {0.5f, 0.3f, 0.6f, 1.0f}, {1, 1, 1, 1}, {1.4f, 1.0f, 1.2f, 1.0f}, {0.4f, -0.4f, 0.2f, -0.1f},
-     {0.4f, 0.5f / kTun, 0.25f, 1.0f, 0.5f, 0.25f, 0.725f, 0.5f},
-     {{1, 1, 1, 1}, {1, 2, 1, 1}, {2, 1, 1, 1}, {1, 1, 2, 1}, {1, 3, 1, 1}, {2, 2, 1, 1}, {1, 1, 0.5f, 1}, {3, 1, 1, 1},
-      {1, 3, 2, 1}, {1, 4, 1, 1}, {2, 1, 2, 1}, {1, 5, 1, 1}, {3, 3, 1, 1}, {1, 1, 3, 1}, {1, 7, 1, 1}, {5, 1, 1, 1}},
-     nullptr},
-    {"PLUCK", 3, {0.3f, 0.5f, 0.7f, 1.0f}, {0.3f, 0.5f, 0.4f, 1.0f}, {1, 1, 1, 1}, {0.5f, -0.3f, 0.4f, 0.0f},
-     {0.5f, 1.5f / kTun, 0.1f, 0.5f, 0.0f, 0.8f, 0.6f, 0.5f},
-     {{1, 1, 1, 1}, {1, 3, 1, 1}, {3, 1, 1, 1}, {1, 1, 3, 1}, {2, 1, 3, 1}, {1, 5, 1, 1}, {1, 2, 2, 1}, {5, 1, 1, 1},
-      {1, 1, 5, 1}, {2, 3, 4, 1}, {1, 1, 7, 1}, {7, 1, 1, 1}, {1, 4, 3, 1}, {1, 9, 1, 1}, {3, 5, 7, 1}, {1, 1, 11, 1}},
-     nullptr},
-    {"KEYS", 4, {0.3f, 1.0f, 0.18f, 0.55f}, {0.5f, 1.0f, 0.12f, 0.6f}, {1, 1, 1, 1}, {0.0f, -0.3f, 0.0f, 0.3f},
-     {0.5f, 0.5f / kTun, 0.2f, 0.68f, 0.0f, 0.7f, 0.5f, 0.5f},
-     {{1, 1, 14, 1}, {1, 1, 1, 1}, {1, 1, 3, 1}, {2, 1, 14, 1}, {1, 1, 5, 1}, {1, 1, 7, 1}, {3, 1, 14, 1}, {1, 1, 9, 1},
-      {1, 2, 14, 1}, {1, 1, 11, 1}, {1, 1, 17, 1}, {1, 1, 19, 1}, {1, 1, 14, 2}, {0.5f, 1, 14, 1}, {1, 1, 3.5f, 1},
-      {1, 1, 10.7f, 1}},
-     nullptr},
-    {"PAD", 5, {0.35f, 1.0f, 0.85f, 0.8f}, {1, 1, 1, 1}, {1.5f, 1.0f, 1.0f, 1.0f}, {0.0f, -1.0f, 1.0f, -0.4f},
-     {0.3f, 0.5f / kTun, 0.45f, 1.0f, 0.74f, 0.375f, 0.7f, 0.5f},
-     {{1, 1, 1, 1}, {1, 0.5f, 1, 2}, {1, 1, kP5, 2}, {1, 1, kP4, kP5}, {1, 1, kM3, kP5}, {1, 1, km3, kP5},
-      {1, 1, kM3, kM7}, {1, 1, km3, km7}, {1, 1, kM3, km7}, {1, 1, kM3, kM6}, {1, 1, kM2, kP5}, {1, 1, kM3, kM9},
-      {1, 1, km3, kM9}, {1, 1, kP4, km7}, {1, 1, km3, kTT}, {1, 1, kM3, km6}},
-     kChordNames},
-    {"BELL", 6, {0.55f, 1.0f, 0.45f, 0.35f}, {0.6f, 1.0f, 1.6f, 0.45f}, {1, 1, 1, 1}, {0.0f, 0.0f, 1.0f, -1.0f},
-     {0.5f, 0.5f / kTun, 0.12f, 0.72f, 0.0f, 0.575f, 0.5f, 0.5f},
-     {{1.4f, 1, 0.5f, 2.0f}, {3.5f, 1, 2.0f, 3.0f}, {1.41f, 1, 0.5f, 1.19f}, {2.756f, 1, 5.404f, 8.933f},
-      {4.0f, 1, 4.0f, 10.0f}, {1.0f, 1, 3.9f, 9.2f}, {1.41f, 1, 1.52f, 2.26f}, {2.14f, 1, 1.59f, 2.65f},
-      {5.92f, 1, 2.0f, 6.67f}, {7.0f, 1, 2.0f, 4.0f}, {7.13f, 1, 3.17f, 5.11f}, {1.5f, 1, 1.48f, 2.53f},
-      {2.4f, 1, 2.92f, 4.2f}, {0.71f, 1, 1.73f, 2.41f}, {3.31f, 1, 4.77f, 7.36f}, {11.3f, 1, 2.0f, 4.03f}},
-     kBellNames},
-    {"ORGAN", 7, {1.0f, 0.8f, 0.6f, 0.5f}, {1, 1, 1, 1}, {1, 1, 1, 1}, {0.0f, 0.5f, -0.5f, 1.0f},
-     {0.75f, 0.5f / kTun, 0.08f, 1.0f, 0.12f, 0.5f, 0.575f, 0.5f},
-     {{1, 2, 3, 4}, {0.5f, 1, 2, 4}, {1, 2, 4, 8}, {0.5f, 1, 1.5f, 2}, {1, 3, 5, 7}, {1, 1.5f, 2, 3}, {1, 2, 3, 5},
-      {1, 2, 4, 6}, {0.5f, 1.5f, 3, 4}, {1, 4, 6, 8}, {0.5f, 1, 3, 5}, {1, 5, 6, 8}, {1, 1.5f, 2.25f, 3.375f},
-      {1, 2.756f, 5.404f, 8.933f}, {1, 3, 6, 9}, {1, 7, 9, 11}},
-     nullptr},
-};
+inline int algo_of(float u) {
+  int a = static_cast<int>(u * 8.0f);
+  return a < 0 ? 0 : a > 7 ? 7 : a;
+}
+inline int voicing_of(float u) {
+  int r = static_cast<int>(u * static_cast<float>(kVoicings));
+  return r < 0 ? 0 : r > kVoicings - 1 ? kVoicings - 1 : r;
+}
 
 struct Voice {
-  int model, tun;
+  int algo, voi;
   float note, k[8];
   uint32_t ph[4], pm;                   // the operators' phases, the note's (the sync's master)
   float fa0, fa1, fb0, fb1;             // the first operator's feedback: its two last outputs (the square's two saws)
@@ -170,7 +137,6 @@ inline float bip(uint32_t& s) { return static_cast<float>(xs(s) >> 8) * (2.0f / 
 inline float note_hz(float note) { return 440.0f * fm_exp2f((note - 69.0f) * (1.0f / 12.0f)); }
 
 inline float t60_s(float u) { return 0.05f * fm_exp2f(u * 8.644f); }        // DECAY: 50 ms .. 20 s (to -60 dB)
-inline float attack_s(float u) { return 0.0005f * fm_exp2f(u * 12.5f); }  // ATTACK: 0.5 ms .. 2.9 s
 inline float detune_ct(float u) { return 30.0f * u * u; }                  // DETUNE: up to 30 cents apart
 // FEEDBACK: its depth (the phase moved by the two last outputs' sum, cycles): the saw (and the square) at 0.75 (0.16:
 // past it the loop starts to hunt, it aliases), then noise (x 4.5)
@@ -297,7 +263,7 @@ void fm4_init(void) {
     v.rnd = 0x6C078965u * static_cast<uint32_t>(t + 1) | 1u;
     v.note = 48.0f;
     for (int i = 0; i < 4; ++i) v.att[i] = 1.0f;
-    for (int i = 0; i < 8; ++i) v.k[i] = kKits[0].def[i];
+    for (int i = 0; i < 8; ++i) v.k[i] = kDef[i];
   }
 }
 
@@ -310,14 +276,13 @@ void fm4_silence(void) {
   }
 }
 
-void fm4_set(int t, int model, float note, const float* k) {
+void fm4_set(int t, float note, const float* k) {
   if (t < 0 || t >= MF_TRACKS) return;
   Voice& v = voice[t];
-  v.model = model < 0 ? 0 : model >= FM_MODELS ? FM_MODELS - 1 : model;
   v.note = note;
   for (int i = 0; i < 8; ++i) v.k[i] = clampf(k[i], 0.0f, 1.0f);
-  int r = static_cast<int>(v.k[1] * static_cast<float>(kTun));
-  v.tun = r < 0 ? 0 : r > kTun - 1 ? kTun - 1 : r;
+  v.algo = algo_of(v.k[0]);
+  v.voi = voicing_of(v.k[1]);
 }
 
 void fm4_gate(int t, int g) {
@@ -334,13 +299,15 @@ void fm4_gate(int t, int g) {
 void fm4_render(int t, float* out, uint32_t n) {
   if (t < 0 || t >= MF_TRACKS) return;
   Voice& v = voice[t];
-  const Kit& kit = kKits[v.model];
-  const uint8_t* C = kOut[kit.algo];
-  const int additive = kit.algo == 7;
+  const int algo = v.algo;
+  const uint8_t* C = kOut[algo];
+  const float* lvl = kLvl[algo];
+  const int additive = algo == 7;
   // the knobs
-  const float I = v.k[0] * v.k[0], ud = v.k[2], ua = v.k[4];
+  const float I = v.k[2] * v.k[2], ud = v.k[4];
   const float move = 2.0f * v.k[5] - 1.0f, fbk = 2.0f * v.k[6] - 1.0f, mut = 2.0f * v.k[7] - 1.0f;
-  const float A = attack_s(ua);
+  // MOVE to the left: a swell, the attack up to 2.5 s; to the right a pluck, the attack from 2 ms down to 0.5
+  const float A = move < 0.0f ? 0.002f + 2.5f * move * move : 0.002f - 0.0015f * move;
   float tau = t60_s(v.k[3]) * (1.0f / 6.9078f);
   v.held = v.k[3] > 0.98f;
   if (v.trig) {                         // a trig: the envelopes from where they are (from silence: the phases at 0)
@@ -382,18 +349,18 @@ void fm4_render(int t, float* out, uint32_t n) {
   // the operators' frequencies
   Core c;
   const float f0 = note_hz(v.note);
-  const float* rt = kit.ratio[v.tun];
+  const float* rt = kVoicing[v.voi];
   float fr[4], inc[4];
   float spread = detune_ct(ud), hz = ud * ud * 1.2f;
   for (int i = 0; i < 4; ++i) {
-    float ct = kit.det[i] * spread + v.dr[i] * 2.5f * ud;
-    fr[i] = f0 * rt[i] * fm_exp2f(ct * (1.0f / 1200.0f)) + kit.det[i] * hz;
+    float ct = kDet[i] * spread + v.dr[i] * 2.5f * ud;
+    fr[i] = f0 * rt[i] * fm_exp2f(ct * (1.0f / 1200.0f)) + kDet[i] * hz;
     fr[i] = clampf(fr[i], 0.0f, 30000.0f);
     inc[i] = fr[i] * (1.0f / kSr2);
     c.inc[i] = c.incs[i] = step_u(inc[i]);
     c.fincs[i] = inc[i];
   }
-  for (int i = 0; i < 6; ++i) c.R[i] = kRoute[kit.algo][i];
+  for (int i = 0; i < 6; ++i) c.R[i] = kRoute[algo][i];
   // each operator's gain: a modulator's depth (cycles: the keyboard's scaling, under what would alias), a heard one's level
   float ks = v.note > 60.0f ? fm_exp2f((60.0f - v.note) * (1.0f / 24.0f)) : 1.0f;
   float B[4], cap[4];
@@ -407,13 +374,13 @@ void fm4_render(int t, float* out, uint32_t n) {
     cap[i] = 1e9f;
     if (C[i]) {
       float fs = fr[i] * s_max;         // one heard: faded out from 18 to 20 kHz
-      B[i] = kit.lvl[i] * clampf((20000.0f - fs) * (1.0f / 2000.0f), 0.0f, 1.0f);
+      B[i] = lvl[i] * clampf((20000.0f - fs) * (1.0f / 2000.0f), 0.0f, 1.0f);
       inc_hi = inc[i] > inc_hi ? inc[i] : inc_hi;
       float b = B[i] * (additive && i > 0 ? xt : 1.0f);
       n2 += b;
     } else {
-      B[i] = kit.lvl[i] * ks;
-      int j = kFirst[kit.algo][i];
+      B[i] = lvl[i] * ks;
+      int j = kFirst[algo][i];
       float fj = j >= 0 ? fr[j] : f0;
       float bmax = (60000.0f - fj) / (fr[i] > 1.0f ? fr[i] : 1.0f) - 1.0f;   // its sidebands under 60 kHz
       cap[i] = clampf(bmax, 0.0f, 100.0f) * (1.0f / kTwoPi);
@@ -425,17 +392,20 @@ void fm4_render(int t, float* out, uint32_t n) {
   float norm = n2 > 1.0f ? 0.6f * fm_exp2f(-0.75f * fm_log2f(n2)) : 0.6f;   // (a sine's peak 0.6: the drums')
   for (int i = 0; i < 4; ++i)
     if (C[i]) B[i] *= norm;
-  // the envelopes' steps (a sub-block's)
+  // the envelopes' steps (a sub-block's): an operator above the note dies sooner (1 / the square root of its ratio)
   float kd[4];
   float rel = fm_expf(-1.0f / ((0.03f + 0.5f * A) * kSr));
   for (int i = 0; i < 4; ++i) {
-    kd[i] = v.let_go ? rel : fm_expf(-1.0f / (tau * kit.dk[i] * kSr));
+    float dk = clampf(fm_exp2f(-0.5f * fm_log2f(rt[i])), 0.35f, 1.4f);
+    kd[i] = v.let_go ? rel : fm_expf(-1.0f / (tau * dk * kSr));
     for (int q = 0; q < 3; ++q) kd[i] *= kd[i];   // (^8)
-    v.ainc[i] = static_cast<float>(kSub) / (clampf(A * kit.ak[i], 0.0005f, 6.0f) * kSr);
+    v.ainc[i] = static_cast<float>(kSub) / (clampf(A, 0.0005f, 6.0f) * kSr);
   }
-  float tref = v.held ? 1.0f : tau;     // MOVE's time: a third of the note's (held: 0.33 s), at least the attack's half
-  float ti = clampf(0.33f * tref, 0.008f, 2.5f);
-  ti = ti > 0.5f * A ? ti : 0.5f * A;
+  // MOVE's time: to the right a third of the note's (held: of a second), shorter the further right; to the left, after
+  // the attack
+  float tref = v.held ? 1.0f : tau, ti;
+  if (move >= 0.0f) ti = clampf(0.33f * tref * (1.2f - 0.8f * move), 0.006f, 2.5f);
+  else ti = 0.05f + 0.8f * A;
   const float ik = fm_expf(-static_cast<float>(kSub) / (ti * kSr));
   // the feedback (its sign: the square; above 1 kHz less: a saw as clean as an octave under), the mutator
   const float fhi = fr[0] > 1000.0f ? fm_exp2f(-0.25f * fm_log2f(fr[0] * 0.001f)) : 1.0f;
@@ -563,20 +533,21 @@ void fm4_render(int t, float* out, uint32_t n) {
   }
 }
 
-const char* fm4_model_name(int m) { return kKits[m < 0 ? 0 : m >= FM_MODELS ? FM_MODELS - 1 : m].name; }
-int fm4_algo(int m) { return kKits[m < 0 ? 0 : m >= FM_MODELS ? FM_MODELS - 1 : m].algo; }
+int fm4_algo(float u) { return algo_of(u); }
 
 const char* fm4_knob_name(int k) {
-  static const char* const kN[8] = {"Index", "Ratio", "Detune", "Decay", "Attack", "Move", "Feedback", "Mutate"};
+  static const char* const kN[8] = {"Algo", "Ratio", "Index", "Decay", "Detune", "Move", "Feedback", "Mutate"};
   return k >= 0 && k < 8 ? kN[k] : "";
 }
 
-void fm4_defaults(int m, float* k) {
-  m = m < 0 ? 0 : m >= FM_MODELS ? FM_MODELS - 1 : m;
-  for (int i = 0; i < 8; ++i) k[i] = kKits[m].def[i];
+void fm4_defaults(float* k) {
+  for (int i = 0; i < 8; ++i) k[i] = kDef[i];
 }
 
-int fm4_knob_steps(int k) { return k == 1 ? kTun : 128; }
+int fm4_knob_steps(int k) { return k == 0 ? 8 : k == 1 ? kVoicings : 128; }
+
+int fm4_chord(float u) { return voicing_of(u) >= kChords; }
+float fm4_chords_at(void) { return static_cast<float>(kChords) / static_cast<float>(kVoicings); }
 
 static void put_s(char* b, int n, int* at, const char* s) {
   while (*s && *at < n - 1) b[(*at)++] = *s++;
@@ -615,24 +586,24 @@ static void put_ratio(char* b, int n, int* at, float r) {   // 1, .5, 3.5, 2.76
   }
 }
 
-void fm4_knob_text(int model, int k, float u, char* b, int n) {   // u: 0..1 (a bipolar knob from its middle)
+void fm4_knob_text(int k, float u, char* b, int n) {   // u: 0..1 (a bipolar knob from its middle)
   if (n <= 0) return;
   int at = 0;
   b[0] = 0;
   u = clampf(u, 0.0f, 1.0f);
-  const Kit& kit = kKits[model < 0 ? 0 : model >= FM_MODELS ? FM_MODELS - 1 : model];
   switch (k) {
-    case 1: {                           // RATIO: the tuning (its name; else the four ratios)
-      int r = static_cast<int>(u * static_cast<float>(kTun));
-      r = r < 0 ? 0 : r > kTun - 1 ? kTun - 1 : r;
-      if (kit.tname) return put_s(b, n, &at, kit.tname[r]);
+    case 0:                             // ALGO: the chip's, 1 to 8
+      return put_i(b, n, &at, algo_of(u) + 1);
+    case 1: {                           // RATIO: the voicing (its name; else the four ratios)
+      int r = voicing_of(u);
+      if (kVoicingName[r]) return put_s(b, n, &at, kVoicingName[r]);
       for (int i = 0; i < 4; ++i) {
         if (i) put_s(b, n, &at, ":");
-        put_ratio(b, n, &at, kit.ratio[r][i]);
+        put_ratio(b, n, &at, kVoicing[r][i]);
       }
       return;
     }
-    case 2: {                           // DETUNE: cents apart
+    case 4: {                           // DETUNE: cents apart
       float c = detune_ct(u);
       if (c < 0.05f) return put_s(b, n, &at, "Off");
       int x = static_cast<int>(c * 10.0f + 0.5f);
@@ -649,8 +620,8 @@ void fm4_knob_text(int model, int k, float u, char* b, int n) {   // u: 0..1 (a 
     case 3:
       if (u > 0.98f) return put_s(b, n, &at, "Hold");
       return put_time(b, n, &at, t60_s(u));
-    case 4: return put_time(b, n, &at, attack_s(u));
-    case 5: case 6: case 7: {           // bipolar: MOVE; FEEDBACK (- square, + saw); MUTATE (- PW, + SYNC)
+    case 5: case 6: case 7: {           // bipolar: MOVE (- swell, + pluck); FEEDBACK (- square, + saw); MUTATE (- PW,
+                                        // + SYNC)
       float w = 2.0f * u - 1.0f;
       int x = static_cast<int>(w * 100.0f + (w < 0.0f ? -0.5f : 0.5f));
       if (k == 6) {
@@ -659,10 +630,10 @@ void fm4_knob_text(int model, int k, float u, char* b, int n) {   // u: 0..1 (a 
         if (x <= -73 && x >= -77) return put_s(b, n, &at, "Square");
         if (x == 0) return put_s(b, n, &at, "Sine");
       }
-      if (k == 7) {
-        if (x == 0) return put_s(b, n, &at, "Off");
+      if (k == 7 || k == 5) {
+        if (x == 0) return put_s(b, n, &at, k == 7 ? "Off" : "0%");
         put_i(b, n, &at, x < 0 ? -x : x);
-        put_s(b, n, &at, x < 0 ? "% PW" : "% SYNC");
+        put_s(b, n, &at, k == 7 ? (x < 0 ? "% PW" : "% SYNC") : (x < 0 ? "% SWELL" : "% PLUCK"));
         return;
       }
       if (x > 0) put_s(b, n, &at, "+");

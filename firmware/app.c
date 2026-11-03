@@ -455,11 +455,11 @@ static const char *const LANE_SHORT[ENG_LANES] = {"T1", "T2", "T3", "T4", "DL", 
 /* the colours of a module's state, as its icons print them (in Mutable's: teal, orange, pink) */
 static uint16_t accent3(int i) { return i <= 0 ? AC1 : i == 1 ? AC2 : AC3; }
 
-static uint16_t model_accent(int m)      /* by bank: orange the FM, teal Plaits' chiptune and voices, pink the drums,
-                                          * the noises and the physical models, ZERO */
+static uint16_t model_accent(int m)      /* by bank: orange MIFM1's voices (ZERO, the FM), teal Plaits' chiptune and
+                                          * voices, pink the drums, the noises and the physical models */
 {
     int b = eng_model_bank(m);
-    return b == 3 ? AC2 : b == 4 ? AC1 : AC3;
+    return b == 2 ? AC2 : b == 3 ? AC1 : AC3;
 }
 static uint16_t track_accent(int t) { return model_accent(eng_project()->algo[PG_TRACK(t, 0)]); }
 
@@ -897,13 +897,13 @@ static void led(float cx, float cy, float r, uint16_t c, int lvl)   /* an LED: l
     disc(cx, cy, r, col);
 }
 
-/* the icons, as strokes in a 32-unit box: the models (as ALGORITHM orders them), the LFOs' waves, the mixer, the reverb, the global page,
+/* the icons, as strokes in a 32-unit box: the models (as ALGORITHM orders them), the FM's eight algorithms, the LFOs' waves, the mixer, the reverb, the global page,
  * the projects, the steps, Warps' algorithms, the delay. L a line, C a circle, D a dot, R a rectangle (x y w h) */
 typedef struct {
     char op;
     int8_t a, b, c, d;
 } vop_t;
-enum { IC_MODEL = 0, IC_WAVE = ENG_MODELS, IC_MIX = IC_WAVE + LW_N, IC_REV, IC_GLO, IC_NEW, IC_DEMO, IC_SAVED, IC_STRESS,
+enum { IC_MODEL = 0, IC_ALG = ENG_MODELS, IC_WAVE = IC_ALG + 8, IC_MIX = IC_WAVE + LW_N, IC_REV, IC_GLO, IC_NEW, IC_DEMO, IC_SAVED, IC_STRESS,
        IC_STEPS, IC_DICE,
        IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, IC_EQ, IC_BEND, IC_EUC, NICON };
 #define IOPS 10
@@ -926,23 +926,11 @@ static const vop_t ICONS[NICON][IOPS] = {
     {{'C', 16, 16, 11, 0}, {'L', 6, 16, 9, 11}, {'L', 9, 11, 12, 11}, {'L', 12, 11, 16, 16}, {'L', 16, 16, 20, 21},
      {'L', 20, 21, 23, 21}, {'L', 23, 21, 26, 16}},                                                 /* ZERO: a sine
                                                                                                      * through zero */
-    {{'R', 13, 1, 6, 6}, {'R', 13, 9, 6, 6}, {'R', 13, 17, 6, 6}, {'R', 13, 25, 6, 6}, {'L', 16, 7, 16, 9},
-     {'L', 16, 15, 16, 17}, {'L', 16, 23, 16, 25}},                                                 /* the FM's
-                                                                                                     * algorithms:
-                                                                                                     * BASS 1>2>3>4 */
-    {{'R', 7, 1, 6, 6}, {'R', 19, 1, 6, 6}, {'R', 13, 13, 6, 6}, {'R', 13, 25, 6, 6}, {'L', 10, 7, 15, 13},
-     {'L', 22, 7, 17, 13}, {'L', 16, 19, 16, 25}},                                                  /* LEAD */
-    {{'R', 19, 1, 6, 6}, {'R', 19, 13, 6, 6}, {'R', 7, 13, 6, 6}, {'R', 13, 25, 6, 6}, {'L', 22, 7, 22, 13},
-     {'L', 22, 19, 17, 25}, {'L', 10, 19, 15, 25}},                                                 /* BRASS */
-    {{'R', 7, 1, 6, 6}, {'R', 7, 13, 6, 6}, {'R', 19, 13, 6, 6}, {'R', 13, 25, 6, 6}, {'L', 10, 7, 10, 13},
-     {'L', 10, 19, 15, 25}, {'L', 22, 19, 17, 25}},                                                 /* PLUCK */
-    {{'R', 7, 5, 6, 6}, {'R', 7, 21, 6, 6}, {'R', 19, 5, 6, 6}, {'R', 19, 21, 6, 6}, {'L', 10, 11, 10, 21},
-     {'L', 22, 11, 22, 21}},                                                                        /* KEYS */
-    {{'R', 13, 5, 6, 6}, {'R', 3, 21, 6, 6}, {'R', 13, 21, 6, 6}, {'R', 23, 21, 6, 6}, {'L', 15, 11, 7, 21},
-     {'L', 16, 11, 16, 21}, {'L', 17, 11, 25, 21}},                                                 /* PAD */
-    {{'R', 3, 5, 6, 6}, {'R', 3, 21, 6, 6}, {'R', 13, 21, 6, 6}, {'R', 23, 21, 6, 6}, {'L', 6, 11, 6, 21}}, /* BELL */
-    {{'R', 1, 9, 6, 6}, {'R', 9, 9, 6, 6}, {'R', 17, 9, 6, 6}, {'R', 25, 9, 6, 6}, {'L', 4, 24, 28, 24},
-     {'L', 4, 15, 4, 24}, {'L', 12, 15, 12, 24}, {'L', 20, 15, 20, 24}, {'L', 28, 15, 28, 24}},     /* ORGAN */
+    {{'R', 12, 6, 8, 8}, {'R', 12, 22, 8, 8}, {'L', 16, 14, 16, 22}, {'L', 20, 10, 25, 10}, {'L', 25, 10, 25, 2},
+     {'L', 25, 2, 16, 2}, {'L', 16, 2, 16, 6}},                                                     /* FM: an
+                                                                                                     * operator on
+                                                                                                     * another, its
+                                                                                                     * feedback */
     {{'L', 4, 24, 4, 10}, {'L', 4, 10, 12, 10}, {'L', 12, 10, 12, 24}, {'L', 12, 24, 20, 24}, {'L', 20, 24, 20, 10},
      {'L', 20, 10, 28, 10}},                                                                        /* CHIPTUNE */
     {{'L', 4, 24, 10, 22}, {'L', 10, 22, 13, 12}, {'L', 13, 12, 16, 7}, {'L', 16, 7, 19, 12}, {'L', 19, 12, 22, 22},
@@ -955,6 +943,23 @@ static const vop_t ICONS[NICON][IOPS] = {
      {'D', 19, 25, 2, 0}},                                                                          /* PARTICLES */
     {{'L', 8, 5, 8, 27}, {'L', 16, 5, 20, 16}, {'L', 20, 16, 16, 27}, {'L', 24, 5, 24, 27}},        /* STRING */
     {{'C', 16, 16, 11, 0}, {'C', 16, 16, 6, 0}, {'D', 16, 16, 2, 0}},                               /* MODAL */
+    {{'R', 13, 1, 6, 6}, {'R', 13, 9, 6, 6}, {'R', 13, 17, 6, 6}, {'R', 13, 25, 6, 6}, {'L', 16, 7, 16, 9},
+     {'L', 16, 15, 16, 17}, {'L', 16, 23, 16, 25}},                                                 /* the FM's
+                                                                                                     * algorithms (its
+                                                                                                     * hero's): 1 */
+    {{'R', 7, 1, 6, 6}, {'R', 19, 1, 6, 6}, {'R', 13, 13, 6, 6}, {'R', 13, 25, 6, 6}, {'L', 10, 7, 15, 13},
+     {'L', 22, 7, 17, 13}, {'L', 16, 19, 16, 25}},                                                  /* 2 */
+    {{'R', 19, 1, 6, 6}, {'R', 19, 13, 6, 6}, {'R', 7, 13, 6, 6}, {'R', 13, 25, 6, 6}, {'L', 22, 7, 22, 13},
+     {'L', 22, 19, 17, 25}, {'L', 10, 19, 15, 25}},                                                 /* 3 */
+    {{'R', 7, 1, 6, 6}, {'R', 7, 13, 6, 6}, {'R', 19, 13, 6, 6}, {'R', 13, 25, 6, 6}, {'L', 10, 7, 10, 13},
+     {'L', 10, 19, 15, 25}, {'L', 22, 19, 17, 25}},                                                 /* 4 */
+    {{'R', 7, 5, 6, 6}, {'R', 7, 21, 6, 6}, {'R', 19, 5, 6, 6}, {'R', 19, 21, 6, 6}, {'L', 10, 11, 10, 21},
+     {'L', 22, 11, 22, 21}},                                                                        /* 5 */
+    {{'R', 13, 5, 6, 6}, {'R', 3, 21, 6, 6}, {'R', 13, 21, 6, 6}, {'R', 23, 21, 6, 6}, {'L', 15, 11, 7, 21},
+     {'L', 16, 11, 16, 21}, {'L', 17, 11, 25, 21}},                                                 /* 6 */
+    {{'R', 3, 5, 6, 6}, {'R', 3, 21, 6, 6}, {'R', 13, 21, 6, 6}, {'R', 23, 21, 6, 6}, {'L', 6, 11, 6, 21}}, /* 7 */
+    {{'R', 1, 9, 6, 6}, {'R', 9, 9, 6, 6}, {'R', 17, 9, 6, 6}, {'R', 25, 9, 6, 6}, {'L', 4, 24, 28, 24},
+     {'L', 4, 15, 4, 24}, {'L', 12, 15, 12, 24}, {'L', 20, 15, 20, 24}, {'L', 28, 15, 28, 24}},     /* 8 */
     {{'L', 4, 16, 7, 10}, {'L', 7, 10, 10, 7}, {'L', 10, 7, 13, 10}, {'L', 13, 10, 16, 16}, {'L', 16, 16, 19, 22},
      {'L', 19, 22, 22, 25}, {'L', 22, 25, 25, 22}, {'L', 25, 22, 28, 16}},                          /* sine */
     {{'L', 4, 16, 10, 7}, {'L', 10, 7, 22, 25}, {'L', 22, 25, 28, 16}},                             /* triangle */
@@ -1291,7 +1296,8 @@ static void panel_plaits(int t, int face, uint16_t ac)
     project_t *p = eng_project();
     int m = p->algo[PG_TRACK(t, 0)];
     char s[40], n[8];
-    hero_icon(IC_MODEL + m, ac);
+    int alg = eng_fm_algo(t);            /* (the FM: its algorithm, as it plays) */
+    hero_icon(alg >= 0 ? IC_ALG + alg : IC_MODEL + m, ac);
     if (face == 0) {                     /* the model */
         int y = hero_title(eng_algo_name(PG_TRACK(t, 0), m));
         s[0] = 0;
@@ -2075,6 +2081,8 @@ static void draw_panel(void)
         break;
     default: break;
     }
+    if ((pt == PT_PLAITS1 || pt == PT_PLAITS2 || pt == PT_PLAITS3 || pt == PT_SON2) && eng_fm_algo(tr) >= 0)
+        s[1] = s[1] * 9 + 1 + eng_fm_algo(tr);   /* (the FM: its algorithm's drawing) */
     if (!ui.full && !ui.body_panel && !memcmp(s, ui.panel_shown, sizeof s)) {
         if (fx)
             fx_meter(0);
@@ -2439,7 +2447,7 @@ static void draw_matrix(void)
 static void draw_projects(void)          /* the projects REC held loads, in the module's display */
 {
     static int shown = -1;
-    static const char *const P[5] = {"New: 4 FM leads, nothing patched", "The demo groove", "The saved project",
+    static const char *const P[5] = {"New: 4 FM, nothing patched", "The demo groove", "The saved project",
                                      "Stress test (plays at once)", "Stress test, on the 4 FM drums"};
     if (ui.full || ui.body_panel || shown != ui.init_sel) {
         shown = ui.init_sel;
@@ -3415,7 +3423,7 @@ static void project_init(int which)
         eng_fresh();
         dirty = 1;
         app_say(which == 0 ? "NEW PROJECT" : which == 1 ? "DEMO GROOVE" : "STRESS TEST",
-                which == 0 ? "4 FM LEADS" : which == 1 ? "LOADED" : which == 3 ? "PLAYING" : "FM DRUMS PLAYING");
+                which == 0 ? "4 FM" : which == 1 ? "LOADED" : which == 3 ? "PLAYING" : "FM DRUMS PLAYING");
     }
     p->out_mode = out;
     p->warps_hq = hq;

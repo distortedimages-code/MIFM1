@@ -71,22 +71,22 @@ void zero_defaults(float *k);
 int zero_knob_steps(int k);              /* RATIO's 11 ratios, the others 128 */
 void zero_knob_text(int k, float u, char *b, int n);
 
-/* ---- FM (mi_fm4.cc, 0.10): MIFM1's, four operators as the YM2612 has them (its eight algorithms, the first
- * operator's feedback) with a Hydrasynth's mutators on the operators heard (PW, SYNC); eight models, one engine, one
- * algorithm each with its kit and its sixteen tunings (BASS, LEAD, BRASS, PLUCK, KEYS, PAD, BELL, ORGAN). Its eight
- * knobs (k: 0..1, a bipolar knob from its middle): INDEX, RATIO, DETUNE, DECAY, ATTACK, MOVE, FEEDBACK, MUTATE ---- */
-#define FM_MODELS 8
+/* ---- FM (mi_fm4.cc, 0.10.1): MIFM1's, four operators as the YM2612 has them (its eight algorithms, the first
+ * operator's feedback) with a Hydrasynth's mutators on the operators heard (PW, SYNC); one machine. Its eight knobs
+ * (k: 0..1, a bipolar knob from its middle): ALGO, RATIO (thirty voicings of the operators, the last eight chords),
+ * INDEX, DECAY, DETUNE, MOVE (- a swell, + a pluck), FEEDBACK, MUTATE ---- */
 void fm4_init(void);
 void fm4_silence(void);
-void fm4_set(int t, int model, float note, const float *k);
+void fm4_set(int t, float note, const float *k);
 void fm4_gate(int t, int g);            /* a rise: a trig (at the next block); a fall: a held note let go */
 void fm4_render(int t, float *out, uint32_t n);
-const char *fm4_model_name(int m);
-int fm4_algo(int m);                    /* its algorithm (the YM2612's 0..7) */
+int fm4_algo(float u);                  /* ALGO's algorithm at u (the YM2612's 0..7) */
+int fm4_chord(float u);                 /* 1: RATIO at u is a chord */
+float fm4_chords_at(void);              /* where on RATIO (0..1) the chords start */
 const char *fm4_knob_name(int k);
-void fm4_defaults(int m, float *k);
-int fm4_knob_steps(int k);              /* RATIO's 16 tunings, the others 128 */
-void fm4_knob_text(int model, int k, float u, char *b, int n);
+void fm4_defaults(float *k);
+int fm4_knob_steps(int k);              /* ALGO's 8, RATIO's 30, the others 128 */
+void fm4_knob_text(int k, float u, char *b, int n);
 
 /* ---- the tracks' filters (mi_filter.cc): LADDER (Moog's, D'Angelo and Valimaki's model), MS-20 (Korg 35, its
  * resonance driven), SEM (Oberheim's state variable, noise into it), VOX (three formants); each with a vactrol

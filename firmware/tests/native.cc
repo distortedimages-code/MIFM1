@@ -245,14 +245,14 @@ int main(int argc, char** argv) {
     printf("the delay's, the swing's, the lanes' values: written as expected\n");
   }
 
-  // 5. INIT: four tracks on the FM's LEAD, nothing patched, no steps; a step on each, each track plays
+  // 5. INIT: four tracks on the FM, nothing patched, no steps; a step on each, each track plays
   eng_blank(p);
   int cables = 0, models = 0, steps = 0;
   for (int l = 0; l < ENG_LANES; ++l) steps += eng_lane_has_trigs(l);
   for (int tr = 0; tr < ENG_TRACKS; ++tr) eng_trig_set(tr, tr * 4, 1);
   for (int g = 0; g <= ENG_TRACKS; ++g)
     for (int c = 0; c < ENG_CABLES; ++c) cables += p->cable[g][c].depth != 0;
-  for (int tr = 0; tr < ENG_TRACKS; ++tr) models += p->algo[PG_TRACK(tr, 0)] == eng_model_find(MK_FM, ENG_INIT_FM);
+  for (int tr = 0; tr < ENG_TRACKS; ++tr) models += p->algo[PG_TRACK(tr, 0)] == eng_model_find(MK_FM, 0);
   snprintf(path, sizeof path, "%s/init.wav", dir);
   Wav wi;
   const uint32_t iblocks = 8u * 44100u / n;
@@ -276,8 +276,8 @@ int main(int argc, char** argv) {
     wi.add(l, r, n);
   }
   wi.close();
-  printf("init: %d cables, %d lanes with steps, %d tracks on LEAD (%s), a step each: rms %.3f, gates %u %u %u %u\n",
-         cables, steps, models, eng_algo_name(PG_TRACK(0, 0), eng_model_find(MK_FM, ENG_INIT_FM)), std::sqrt(ie / (iblocks * n)), irises[0], irises[1],
+  printf("init: %d cables, %d lanes with steps, %d tracks on the FM (%s), a step each: rms %.3f, gates %u %u %u %u\n",
+         cables, steps, models, eng_algo_name(PG_TRACK(0, 0), eng_model_find(MK_FM, 0)), std::sqrt(ie / (iblocks * n)), irises[0], irises[1],
          irises[2], irises[3]);
   if (cables || steps || models != ENG_TRACKS || inan || ie < 1e-3) ++failures, printf("FAIL: the INIT project\n");
   for (int tr = 0; tr < ENG_TRACKS; ++tr)
@@ -581,7 +581,7 @@ int main(int argc, char** argv) {
     float* val = reinterpret_cast<float*>(buf + 8);
     for (int i = 0; i < 132; ++i) val[i] = 0.25f;
     buf[8 + 528 + PG_TRACK(1, 0)] = 17;                   // track 2 on NOISE, track 1 on STRING (the others on VA VCF:
-    buf[8 + 528 + PG_TRACK(0, 0)] = 19;                   // gone, the FM's LEAD, its kit)
+    buf[8 + 528 + PG_TRACK(0, 0)] = 19;                   // gone: the FM, its second algorithm)
     buf[8 + 528 + 33] = 2;                                // the output: mono
     cable_t* cab = reinterpret_cast<cable_t*>(buf + 572);
     cab[0].src = 2;                                       // (Tides A2 then: LFO 2 now)
@@ -1238,7 +1238,8 @@ int main(int argc, char** argv) {
       eng_blank(p);
       for (int t = 1; t < ENG_TRACKS; ++t) p->val[PG_MIX * 4 + t] = 0.0f;
       p->val[PG_TRACK(0, 1) * 4 + 0] = 1.0f;
-      p->val[PG_TRACK(0, 0) * 4 + 1] = 0.0f;              // (INDEX 0: a sine, two crossings a cycle)
+      p->val[PG_TRACK(0, 0) * 4 + 3] = 0.0f;              // (the FM's INDEX 0, MOVE flat: a sine, two crossings a
+      p->val[PG_TRACK(0, 1) * 4 + 2] = 0.0f;              // cycle)
       p->val[PG_REVERB * 4 + 3] = 0.0f;
       p->val[PG_DELAY(1) * 4 + 3] = 0.0f;
       p->val[PG_TRACK(0, 0) * 4 + 0] = c ? 1.0f / 24.0f : 0.0f;
@@ -2507,30 +2508,34 @@ int main(int argc, char** argv) {
       ++failures, printf("FAIL: the drums\n");
   }
 
-  // 46. the FM (mi_fm4.cc, 0.10): on a track, each model's kit (knobs named, written as they are), each sounding; the
-  // engine: ORGAN's first operator alone (INDEX 0) at the note, a sine; FEEDBACK's saw and square (their harmonics),
-  // clean (nothing between the harmonics above -55 dB) up to C6; SYNC and PW clean; the pad's chord; a held note held,
-  // let go; a decaying one over; a retrig without a step; any setting finite and bounded. A project of 0.9 (version
-  // 16): its models renumbered, a model gone the FM's nearest
+  // 46. the FM (mi_fm4.cc, 0.10.1): on a track, its knobs (named, written as they are), each algorithm sounding; the
+  // engine: the eighth algorithm's first operator alone (INDEX 0) at the note, a sine; FEEDBACK's saw and square (their
+  // harmonics), clean (nothing between the harmonics above -55 dB) up to C6; SYNC and PW clean; a chord on RATIO; a
+  // held note held, let go; a decaying one over; a retrig without a step; any setting finite and bounded. Projects of
+  // 0.9 and 0.10.0 (versions 16, 17): their models renumbered, a model gone the FM on its nearest algorithm
   {
     eng_play(0);
     eng_defaults(p);
     eng_fresh();
     int kit_ok = 1, sound_ok = 1;
-    float pk[FM_MODELS];
-    for (int m = 0; m < FM_MODELS; ++m) {
-      eng_set_model(0, eng_model_find(MK_FM, m));
+    float pk[8];
+    eng_set_model(0, eng_model_find(MK_FM, 0));
+    {
       float kd[8];
-      fm4_defaults(m, kd);
+      fm4_defaults(kd);
       for (int i = 0; i < 8; ++i) {
         int param = PG_TRACK(0, 0) * 4 + 1 + i;
         float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
         if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), fm4_knob_name(i)) != 0) kit_ok = 0;
       }
-      if (std::strcmp(eng_algo_name(PG_TRACK(0, 0), eng_model_find(MK_FM, m)), fm4_model_name(m)) != 0) kit_ok = 0;
-      if (fm4_algo(m) != m) kit_ok = 0;
+      if (std::strcmp(eng_algo_name(PG_TRACK(0, 0), eng_model_find(MK_FM, 0)), "FM") != 0) kit_ok = 0;
+    }
+    for (int m = 0; m < 8; ++m) {
+      p->val[PG_TRACK(0, 0) * 4 + 1] = (static_cast<float>(m) + 0.5f) / 8.0f;   // ALGO
+      if (fm4_algo((static_cast<float>(m) + 0.5f) / 8.0f) != m) kit_ok = 0;
       eng_cut();
       for (int b = 0; b < 3; ++b) eng_render(l, r, n);
+      if (eng_fm_algo(0) != m) kit_ok = 0;
       pk[m] = 0.0f;
       for (int b = 0; b < 400; ++b) {
         if (b % 100 == 0) eng_key(0, 48, 1);
@@ -2544,23 +2549,25 @@ int main(int argc, char** argv) {
       if (pk[m] < 0.02f) sound_ok = 0;
     }
     char tx[24];
-    struct { int m, k; float u; const char* want; } kTx[] = {
-        {5, 1, 0.5f / 16.0f, "Unison"}, {5, 1, 7.5f / 16.0f, "Min7"}, {4, 1, 0.5f / 16.0f, "1:1:14:1"},
-        {0, 1, 3.5f / 16.0f, "1:1:.5:1"}, {6, 1, 3.5f / 16.0f, "Glock"}, {0, 3, 1.0f, "Hold"}, {0, 6, 0.875f, "Saw"},
-        {0, 6, 0.125f, "Square"}, {0, 6, 0.5f, "Sine"}, {0, 7, 0.5f, "Off"}, {0, 7, 0.75f, "50% SYNC"},
-        {0, 7, 0.25f, "50% PW"}, {0, 2, 0.0f, "Off"}, {0, 4, 0.0f, "1ms"}};
+    struct { int k; float u; const char* want; } kTx[] = {
+        {0, 2.5f / 8.0f, "3"}, {1, 0.5f / 30.0f, "1:1:1:1"}, {1, 11.5f / 30.0f, "1:1:.5:1"}, {1, 16.5f / 30.0f, "Tine"},
+        {1, 22.5f / 30.0f, "Major"}, {1, 27.5f / 30.0f, "Min7"}, {3, 1.0f, "Hold"}, {6, 0.875f, "Saw"},
+        {6, 0.125f, "Square"}, {6, 0.5f, "Sine"}, {7, 0.5f, "Off"}, {7, 0.75f, "50% SYNC"}, {7, 0.25f, "50% PW"},
+        {4, 0.0f, "Off"}, {5, 0.75f, "50% PLUCK"}, {5, 0.25f, "50% SWELL"}};
     for (const auto& x : kTx) {
-      fm4_knob_text(x.m, x.k, x.u, tx, sizeof tx);
-      if (std::strcmp(tx, x.want)) kit_ok = 0, printf("FM: model %d knob %d at %.3f written %s, %s expected\n", x.m, x.k, x.u, tx, x.want);
+      fm4_knob_text(x.k, x.u, tx, sizeof tx);
+      if (std::strcmp(tx, x.want)) kit_ok = 0, printf("FM: knob %d at %.3f written %s, %s expected\n", x.k, x.u, tx, x.want);
     }
+    kit_ok &= fm4_chord(22.5f / 30.0f) && !fm4_chord(21.5f / 30.0f);
     eng_defaults(p);
     eng_cut();
     // the engine itself: a note held, its samples
     static float buf[88200];
     float k[8];
     auto play = [&](int m, float note, const float* kk, uint32_t frames, uint32_t gate_off) {
+      (void)m;
       fm4_init();
-      fm4_set(0, m, note, kk);
+      fm4_set(0, note, kk);
       fm4_gate(0, 1);
       for (uint32_t i = 0; i < frames; i += 32) {
         if (i == gate_off) fm4_gate(0, 0);
@@ -2586,9 +2593,10 @@ int main(int argc, char** argv) {
       }
       return db(worst, ref);
     };
-    auto knobs = [&](int m, float index, float fb, float mut) {
-      fm4_defaults(m, k);
-      k[0] = index, k[2] = 0.0f, k[3] = 1.0f, k[6] = fb, k[7] = mut;   // (no detune; held)
+    auto knobs = [&](int m, float index, float fb, float mut) {   // (algorithm m+1, unison, no detune, held, MOVE flat)
+      fm4_defaults(k);
+      k[0] = (static_cast<float>(m) + 0.5f) / 8.0f, k[1] = 0.5f / 30.0f, k[2] = index, k[3] = 1.0f, k[4] = 0.0f;
+      k[5] = 0.5f, k[6] = fb, k[7] = mut;
     };
     // ORGAN alone: a sine at the note (C3), its zero crossings
     knobs(7, 0.0f, 0.5f, 0.5f);
@@ -2621,16 +2629,15 @@ int main(int argc, char** argv) {
     knobs(7, 0.0f, 0.5f, 0.0f);
     play(7, 72.0f, k, 44128, 1u << 30);
     double pw_alias = between(f5);
-    // the pad's major chord (INDEX 0): its root, its third, its fifth; a fourth, none
+    // a major chord (RATIO, the sixth algorithm: three heard; INDEX 0): its root, its third, its fifth; a fourth, none
     knobs(5, 0.0f, 0.5f, 0.5f);
-    k[1] = 4.5f / 16.0f;
-    k[4] = 0.0f;
+    k[1] = 22.5f / 30.0f;
     play(5, 48.0f, k, 44128, 1u << 30);
     double c_root = level(8192, 32768, 130.81), c3rd = db(level(8192, 32768, 164.81), c_root);
     double c5th = db(level(8192, 32768, 196.0), c_root), c4th = db(level(8192, 32768, 174.61), c_root);
-    // LEAD held (DECAY at Hold) half a second, let go: its level held, then gone; KEYS (its decay) over in 20 s
-    fm4_defaults(1, k);
-    k[3] = 1.0f;
+    // a note held (DECAY at Hold) half a second, let go: its level held, then gone; a tine (its decay) over in 20 s
+    fm4_defaults(k);
+    k[3] = 1.0f, k[5] = 0.5f;                            // (held, MOVE flat: its timbre steady too)
     play(1, 60.0f, k, 44128, 22048);
     auto rms = [&](uint32_t a, uint32_t len) {
       double e = 0.0;
@@ -2638,9 +2645,10 @@ int main(int argc, char** argv) {
       return std::sqrt(e / len);
     };
     double held_a = rms(8000, 4000), held_b = rms(18000, 4000), after = rms(40000, 4000);
-    fm4_defaults(4, k);
+    fm4_defaults(k);
+    k[0] = 4.5f / 8.0f, k[1] = 16.5f / 30.0f;            // (two pairs, a tine)
     fm4_init();
-    fm4_set(0, 4, 60.0f, k);
+    fm4_set(0, 60.0f, k);
     fm4_gate(0, 1);
     float tail = 1.0f;
     for (int b = 0; b < 44100 * 20 / 32; ++b) {
@@ -2648,11 +2656,11 @@ int main(int argc, char** argv) {
       if (b > 44100 * 19 / 32)
         for (int i = 0; i < 32; ++i) tail = i == 0 && b == 44100 * 19 / 32 + 1 ? std::fabs(buf[i]) : std::max(tail, std::fabs(buf[i]));
     }
-    // a retrig over a held LEAD: its largest step around it, against the note's own
-    fm4_defaults(1, k);
+    // a retrig over a held note: its largest step around it, against the note's own
+    fm4_defaults(k);
     k[3] = 1.0f;
     fm4_init();
-    fm4_set(0, 1, 48.0f, k);
+    fm4_set(0, 48.0f, k);
     fm4_gate(0, 1);
     for (uint32_t i = 0; i < 8832; i += 32) fm4_render(0, &buf[i], 32);
     float typ = 0.0f, step = 0.0f;
@@ -2669,7 +2677,7 @@ int main(int argc, char** argv) {
     fm4_init();
     for (int s2 = 0; s2 < 300; ++s2) {
       for (int i = 0; i < 8; ++i) k[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();
-      fm4_set(s2 & 3, s2 % FM_MODELS, 12.0f + 100.0f * rnd(), k);
+      fm4_set(s2 & 3, 12.0f + 100.0f * rnd(), k);
       fm4_gate(s2 & 3, 1);
       for (int b = 0; b < 300; ++b) {
         float tmp[32];
@@ -2682,24 +2690,36 @@ int main(int argc, char** argv) {
       }
     }
     fm4_init();
-    // a project of 0.9 (version 16): VIRTUAL ANALOG (19 then) the FM's LEAD and its kit, CHIPTUNE (18) still Plaits',
-    // ZERO (10), MODAL (31)
+    // a project of 0.9 (version 16): VIRTUAL ANALOG (19 then) the FM on its own knobs, its second algorithm; CHIPTUNE
+    // (18) still Plaits', ZERO (10), MODAL (31). One of 0.10.0 (version 17): BASS (11) the FM's first algorithm, PAD
+    // (16) its sixth, CHIPTUNE (19), MODAL (26)
     static project_t q16;
+    float kl[8];
+    fm4_defaults(kl);
+    const int fm = eng_model_find(MK_FM, 0);
     eng_defaults(&q16);
     q16.version = 16;
     const uint8_t kOld[4] = {19, 18, 10, 31};
     for (int t = 0; t < ENG_TRACKS; ++t) q16.algo[PG_TRACK(t, 0)] = kOld[t];
-    q16.val[PG_TRACK(0, 0) * 4 + 1] = 0.123f;
-    int up_ok = eng_upgrade(&q16, sizeof q16) && eng_check(&q16) &&
-                q16.algo[PG_TRACK(0, 0)] == eng_model_find(MK_FM, 1) && q16.algo[PG_TRACK(1, 0)] == eng_model_find(MK_PLAITS, 7) &&
+    q16.val[PG_TRACK(0, 0) * 4 + 3] = 0.123f;
+    int up_ok = eng_upgrade(&q16, sizeof q16) && eng_check(&q16) && q16.algo[PG_TRACK(0, 0)] == fm &&
+                q16.algo[PG_TRACK(1, 0)] == eng_model_find(MK_PLAITS, 7) &&
                 q16.algo[PG_TRACK(2, 0)] == eng_model_find(MK_ZERO, 0) && q16.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PLAITS, 20);
-    float kl[8];
-    fm4_defaults(1, kl);
-    up_ok &= std::fabs(q16.val[PG_TRACK(0, 0) * 4 + 1] - kl[0]) < 1e-6f;
-    printf("the FM: kits %s, sounding %s (peaks %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f); C3 alone %.1f Hz, its octave "
+    up_ok &= std::fabs(q16.val[PG_TRACK(0, 0) * 4 + 3] - kl[2]) < 1e-6f &&
+             std::fabs(q16.val[PG_TRACK(0, 0) * 4 + 1] - 1.5f / 8.0f) < 1e-6f;
+    eng_defaults(&q16);
+    q16.version = 17;
+    const uint8_t kOld17[4] = {11, 16, 19, 26};
+    for (int t = 0; t < ENG_TRACKS; ++t) q16.algo[PG_TRACK(t, 0)] = kOld17[t];
+    up_ok &= eng_upgrade(&q16, sizeof q16) && eng_check(&q16) && q16.algo[PG_TRACK(0, 0)] == fm &&
+             q16.algo[PG_TRACK(1, 0)] == fm && q16.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 7) &&
+             q16.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PLAITS, 20) &&
+             std::fabs(q16.val[PG_TRACK(0, 0) * 4 + 1] - 0.5f / 8.0f) < 1e-6f &&
+             std::fabs(q16.val[PG_TRACK(1, 0) * 4 + 1] - 5.5f / 8.0f) < 1e-6f;
+    printf("the FM: knobs %s, its algorithms sounding %s (peaks %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f); C3 alone %.1f Hz, its octave "
            "%.0f dB; the saw %.0f %.0f dB, the square %.0f %.0f dB; on C6 between the harmonics: saw %.0f dB, square %.0f;"
-           " on C5: SYNC %.0f, PW %.0f; the pad's major: third %.0f, fifth %.0f, fourth %.0f dB; held %.3f %.3f, let go "
-           "%.5f; KEYS over: %.6f; a retrig: a step of %.3f (the note's %.3f); 300 settings: peak %.2f%s; version 16 %s\n",
+           " on C5: SYNC %.0f, PW %.0f; a major chord: third %.0f, fifth %.0f, fourth %.0f dB; held %.3f %.3f, let go "
+           "%.5f; a tine over: %.6f; a retrig: a step of %.3f (the note's %.3f); 300 settings: peak %.2f%s; versions 16, 17 %s\n",
            kit_ok ? "ok" : "WRONG", sound_ok ? "ok" : "NO", pk[0], pk[1], pk[2], pk[3], pk[4], pk[5], pk[6], pk[7], hz,
            sine2, saw2, saw3, sq2, sq3, saw_alias, sq_alias, sync_alias, pw_alias, c3rd, c5th, c4th, held_a, held_b, after,
            tail, step, typ, pk_any, nan_any ? ", NaN" : "", up_ok ? "read" : "WRONG");

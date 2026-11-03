@@ -77,15 +77,16 @@ int main(int argc, char** argv) {
       for (int t = 1; t < ENG_TRACKS; ++t) p->val[PG_DUCK * 4 + t] = 0.3f;
     if (extra & 4) p->val[PG_DELAY(0) * 4 + 2] = -0.15f, p->val[PG_DELAY(0) * 4 + 3] = 0.3f;
     if (extra & 8) p->val[PG_TRACK(0, 1) * 4 + 3] = -0.6f;   // 8 the FM's square (FEEDBACK), 16 its PW, 32 its SYNC
-    if (extra & 16) p->val[PG_TRACK(0, 2) * 4 + 0] = -0.5f;  // (MUTATE)
-    if (extra & 32) p->val[PG_TRACK(0, 2) * 4 + 0] = 0.5f;
+    if (extra & 16) p->val[PG_TRACK(0, 2) * 4 + 0] = -0.5f;  // (MUTATE), on its sixth algorithm (three operators
+    if (extra & 32) p->val[PG_TRACK(0, 2) * 4 + 0] = 0.5f;   // heard)
+    if (extra & 56) p->val[PG_TRACK(0, 0) * 4 + 1] = 5.5f / 8.0f;
     p->warps_hq = static_cast<uint8_t>(hq);
     if (warps >= 0) {
       static const float kW[8] = {static_cast<float>(WC_T2), 0.0f, 0.0f, 1.0f, 0.5f, 0.6f, 0.6f,
                                   static_cast<float>(WM_WARPS)};
       for (int k = 0; k < 8; ++k) p->val[PG_WARPS(k / 4) * 4 + k % 4] = kW[k];
       p->val[PG_WARPS(0) * 4 + 2] = static_cast<float>(warps) / 5.0f;
-      eng_set_model(1, eng_model_find(MK_FM, 1));
+      eng_set_model(1, eng_model_find(MK_FM, 0));
       p->val[PG_TRACK(1, 2) * 4 + 1] = 0.9f;
       for (int s = 0; s < 16; ++s) eng_trig_set(1, s, 1);
     }

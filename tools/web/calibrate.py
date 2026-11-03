@@ -33,8 +33,8 @@ FLAGS = ["-O2", "-ffp-contract=off", "-DTEST", "-DPLAT_HOST", "-fno-exceptions",
 INC = [f"-I{FW}", f"-I{FW / 'third_party'}", f"-I{FW / 'third_party' / 'lxr'}", f"-I{ROOT / 'base' / 'include'}"]
 SECS = 2.0
 NAMES = re.findall(r'\{"([^"]+)", "[^"]*", MK_', (FW / "mi" / "engine.cc").read_text())   # (the models, in order)
-VA = NAMES.index("LEAD")                             # (the filters', the bus', Warps' runs: under the FM's LEAD)
-PAD = NAMES.index("PAD")                             # (the FM's square, PW and SYNC: on its pad, three operators heard)
+VA = NAMES.index("FM")                               # (the filters', the bus', Warps' runs: under the FM)
+PAD = VA                                             # (the FM's square, PW and SYNC: three operators heard, calib.cc)
 
 
 def build():

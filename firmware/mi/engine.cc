@@ -191,14 +191,12 @@ const ModelDef kModelDef[ENG_MODELS] = {
   {"FM DRUM", "FDRM", MK_LXR, 0, 1}, {"FM SNARE", "FSNR", MK_LXR, 1, 1}, {"FM CYMBAL", "FCYM", MK_LXR, 2, 1},
   {"FM HI-HAT", "FHAT", MK_LXR, 3, 1},
   {"ZERO", "ZERO", MK_ZERO, 0, 2},
-  {"BASS", "BASS", MK_FM, 0, 3}, {"LEAD", "LEAD", MK_FM, 1, 3}, {"BRASS", "BRSS", MK_FM, 2, 3},
-  {"PLUCK", "PLCK", MK_FM, 3, 3}, {"KEYS", "KEYS", MK_FM, 4, 3}, {"PAD", "PAD", MK_FM, 5, 3}, {"BELL", "BELL", MK_FM, 6, 3},
-  {"ORGAN", "ORGN", MK_FM, 7, 3},
-  {"CHIPTUNE", "CHIP", MK_PLAITS, 7, 4}, {"FORMANT", "FRMT", MK_PLAITS, 11, 4}, {"SPEECH", "SPCH", MK_PLAITS, 15, 4},
-  {"SWARM", "SWRM", MK_PLAITS, 16, 5}, {"NOISE", "NOIS", MK_PLAITS, 17, 5}, {"PARTICLES", "PART", MK_PLAITS, 18, 5},
-  {"STRING", "STRG", MK_PLAITS, 19, 5}, {"MODAL", "MODL", MK_PLAITS, 20, 5},
+  {"FM", "FM", MK_FM, 0, 2},
+  {"CHIPTUNE", "CHIP", MK_PLAITS, 7, 3}, {"FORMANT", "FRMT", MK_PLAITS, 11, 3}, {"SPEECH", "SPCH", MK_PLAITS, 15, 3},
+  {"SWARM", "SWRM", MK_PLAITS, 16, 4}, {"NOISE", "NOIS", MK_PLAITS, 17, 4}, {"PARTICLES", "PART", MK_PLAITS, 18, 4},
+  {"STRING", "STRG", MK_PLAITS, 19, 4}, {"MODAL", "MODL", MK_PLAITS, 20, 4},
 };
-const char* const kBankNames[ENG_BANKS] = {"DRUMS", "FM DRUMS", "MIFM1", "FM 4-OP", "PLAITS", "NOISE & PHYSICAL"};
+const char* const kBankNames[ENG_BANKS] = {"DRUMS", "FM DRUMS", "MIFM1", "PLAITS", "NOISE & PHYSICAL"};
 inline const ModelDef& mdef(int m) { return kModelDef[m < 0 ? 0 : m >= ENG_MODELS ? ENG_MODELS - 1 : m]; }
 
 const char* const kSrcNames[NSRC] = {"-", "L1", "L2", "L3"};
@@ -474,9 +472,8 @@ float dice_curve() {                    // the dose's reach, 0..1: the knob's tr
   return d * d;
 }
 int dice_interval(int m) {              // the parameter (tp) of a model that is an interval (off the scale, thrown):
-  const ModelDef& d = mdef(m);          // Plaits' HARMONICS (chiptune, swarm, particle), the FM pad's RATIO (its
-  if (d.kind == MK_FM) return d.sub == 5 ? 2 : 0;   // chords); 0 none
-  if (d.kind != MK_PLAITS) return 0;
+  const ModelDef& d = mdef(m);          // Plaits' HARMONICS (chiptune, swarm, particle); 0 none (the FM's RATIO: see
+  if (d.kind != MK_PLAITS) return 0;    // dice_fm_ratio)
   return d.sub == 7 || d.sub == 16 || d.sub == 18 ? 1 : 0;
 }
 void make_dice() {                      // the effects' (a track's: at its trigs, new_trig)
@@ -745,6 +742,13 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
             fm_fabsf(fin[eng_track_param(lane, tp)] + tdelta[lane][tp]) < 0.005f) continue;
         float off = a * 0.05f * static_cast<float>(tp_dice[lane][tp]) * (2.0f * rand01() - 1.0f);   // (in 0.05s)
         if (tp == 0) off = static_cast<float>(iround(off * 24.0f)) * (1.0f / 24.0f);   // FREQ: whole semitones
+        if (tp == 2 && mdef(proj.algo[PG_TRACK(lane, 0)]).kind == MK_FM) {   // the FM's RATIO: a chord stays, the others
+                                        // not thrown into one
+          float now = fin[eng_track_param(lane, tp)] + tdelta[lane][tp];
+          if (fm4_chord(now)) continue;
+          float top = static_cast<float>(fm4_chords_at()) - 1e-3f - now;
+          off = off < top ? off : top;
+        }
         tdelta[lane][tp] += off;
       }
       if (d > 0.6f && rand01() < (d - 0.6f) * 1.25f) dice_type[lane] = static_cast<int>(rand_u32() % MF_TYPES);
@@ -1020,7 +1024,7 @@ void lx_kit(project_t* p, int t) {      // its knobs as its kit has them (a drum
   const ModelDef& d = mdef(p->algo[PG_TRACK(t, 0)]);
   if (d.kind == MK_ZERO) zero_defaults(k);
   else if (d.kind == MK_DRUM) drum_defaults(d.sub, k);
-  else if (d.kind == MK_FM) fm4_defaults(d.sub, k);
+  else if (d.kind == MK_FM) fm4_defaults(k);
   else lx_defaults(d.sub, k);
   for (int i = 0; i < LX_KNOBS; ++i) {
     int param = lx_param(t, i);
@@ -1039,7 +1043,7 @@ void set_voice(int t) {
     int kind = track_kind(t), sub = track_sub(t);
     if (kind == MK_ZERO) zero_set(t, note, k);
     else if (kind == MK_DRUM) drum_set(t, sub, note, k);
-    else if (kind == MK_FM) fm4_set(t, sub, note, k);
+    else if (kind == MK_FM) fm4_set(t, note, k);
     else lx_set(t, sub, note, k);
     return;
   }
@@ -1856,6 +1860,7 @@ int eng_model_sub(int m) { return mdef(m).sub; }
 int eng_model_bank(int m) { return mdef(m).bank; }
 const char* eng_model_abbr(int m) { return mdef(m).abbr; }
 const char* eng_bank_name(int b) { return b >= 0 && b < ENG_BANKS ? kBankNames[b] : ""; }
+int eng_fm_algo(int t) { return t >= 0 && t < ENG_TRACKS && track_kind(t) == MK_FM ? fm4_algo(E(t, 1)) : -1; }
 int eng_model_own(int m) { return mdef(m).kind != MK_PLAITS; }
 int eng_model_find(int kind, int sub) {
   for (int m = 0; m < ENG_MODELS; ++m)
@@ -1947,8 +1952,8 @@ void eng_param_text(int param, float v, char* b, int n) {
     zero_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0 && track_kind(param / 12) == MK_DRUM) {   // a drum's (times, Hz, semitones)
     drum_knob_text(track_sub(param / 12), lk, lx_u(param, v), b, n);
-  } else if (lk >= 0 && track_kind(param / 12) == MK_FM) {     // the FM's (a tuning, cents, times, %)
-    fm4_knob_text(track_sub(param / 12), lk, lx_u(param, v), b, n);
+  } else if (lk >= 0 && track_kind(param / 12) == MK_FM) {     // the FM's (an algorithm, a voicing, cents, times, %)
+    fm4_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0) {                   // an FM drum's: as the LXR-02 shows it (0..127, a wave)
     lx_knob_text(lx_model(param / 12), lk, lx_u(param, v), b, n);
   } else if (pt == PT_WARPS1 && k == 0 && i_of(v) >= WC_OSC1) {   // the oscillator's shape, as the algorithm uses it
@@ -2240,7 +2245,7 @@ void eng_blank(project_t* p) {
   for (int t = 0; t < ENG_TRACKS; ++t) {
     for (int pg = 0; pg < 3; ++pg)
       for (int k = 0; k < 4; ++k) p->val[PG_TRACK(t, pg) * 4 + k] = kTrack[pg][k];
-    p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(eng_model_find(MK_FM, ENG_INIT_FM));   // the FM's LEAD (its kit)
+    p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(eng_model_find(MK_FM, 0));   // the FM (its own knobs)
     lx_kit(p, t);
     p->val[PG_MIX * 4 + t] = 0.75f;
     p->val[PG_STEP(t) * 4 + 1] = 1.0f;                   // NOTE 0, PROB 100 %, no ratchet, 16 steps
@@ -2291,8 +2296,8 @@ void eng_blank(project_t* p) {
 // thrown into the delay on two steps (its lane), a resonator (modal) in the reverb; C minor, 120 BPM
 void eng_defaults(project_t* p) {
   eng_blank(p);
-  const int kModel[4] = {eng_model_find(MK_DRUM, 0), eng_model_find(MK_FM, 0), eng_model_find(MK_FM, 3),
-                         eng_model_find(MK_PLAITS, 20)};  // kick, the FM's bass and pluck, modal
+  const int kModel[4] = {eng_model_find(MK_DRUM, 0), eng_model_find(MK_FM, 0), eng_model_find(MK_FM, 0),
+                         eng_model_find(MK_PLAITS, 20)};  // kick, the FM (a bass, a pluck), modal
   static const int kOct[4] = {-1, -1, 0, 0};
   static const float kLevel[4] = {0.9f, 0.75f, 0.7f, 0.7f};
   static const float kPan[4] = {0.0f, 0.0f, -0.3f, 0.35f};
@@ -2313,8 +2318,16 @@ void eng_defaults(project_t* p) {
     p->val[PG_RSEND * 4 + t] = kRSend[t];
     p->val[PG_DSEND * 4 + t] = kDSend[t];
   }
-  p->val[PG_TRACK(1, 0) * 4 + 1] = 0.3f;                 // the bass: INDEX low, opened by LFO 1
+  p->val[PG_TRACK(1, 0) * 4 + 1] = 0.5f / 8.0f;          // the bass: the first algorithm (four in a chain), INDEX
+  p->val[PG_TRACK(1, 0) * 4 + 3] = 0.3f;                 // low, opened by LFO 1, a pluck over a soft saw
+  p->val[PG_TRACK(1, 1) * 4 + 0] = 0.42f;
+  p->val[PG_TRACK(1, 1) * 4 + 2] = 0.45f;
+  p->val[PG_TRACK(1, 1) * 4 + 3] = 0.3f;
   p->val[PG_TRACK(1, 2) * 4 + 1] = 0.3f;                 // short notes
+  p->val[PG_TRACK(2, 0) * 4 + 1] = 3.5f / 8.0f;          // the pluck: the fourth algorithm, its 1 at x3, a sharp pluck
+  p->val[PG_TRACK(2, 0) * 4 + 2] = 6.5f / 30.0f;
+  p->val[PG_TRACK(2, 1) * 4 + 0] = 0.5f;
+  p->val[PG_TRACK(2, 1) * 4 + 2] = 0.6f;
   p->val[PG_TRACK(2, 2) * 4 + 1] = 0.2f;
   // LFO 1: a ramp down at each of T2's trigs (an envelope), 2.5 Hz; LFO 2: a sine a bar; LFO 3: a smooth random
   static const float kLfo[3][4] = {{static_cast<float>(LW_RAMP), 0.7f, static_cast<float>(LM_T1 + 1), 0.05f},
@@ -2334,8 +2347,8 @@ void eng_defaults(project_t* p) {
   p->val[PG_STEP(LANE_DELAY) * 4 + 0] = 0.45f;           // its lane: open on two of the line's notes, ~170 ms to
   set_trigs(p, LANE_DELAY, 0x1010);                      // close
   p->val[PG_GLOBAL * 4 + 1] = 2.0f;                      // minor
-  cable(p, 1, 0, SRC_L1, PG_TRACK(1, 0) * 4 + 1, 50);    // track 2: L1 -> INDEX (the envelope)
-  cable(p, 2, 0, SRC_L2, PG_TRACK(2, 0) * 4 + 1, 40);    // track 3: L2 -> INDEX (the loop)
+  cable(p, 1, 0, SRC_L1, PG_TRACK(1, 0) * 4 + 3, 50);    // track 2: L1 -> INDEX (the envelope)
+  cable(p, 2, 0, SRC_L2, PG_TRACK(2, 0) * 4 + 3, 40);    // track 3: L2 -> INDEX (the loop)
   cable(p, 3, 0, SRC_L3, PG_TRACK(3, 0) * 4 + 2, 30);    // track 4: L3 -> TIMBRE (brightness)
   static const uint16_t kPat[4] = {0x1111, 0x6444, 0x1090, 0x4A49};   // bit s: step s
   for (int t = 0; t < ENG_TRACKS; ++t) set_trigs(p, t, kPat[t]);
@@ -2357,7 +2370,7 @@ void eng_defaults(project_t* p) {
 void eng_groove(project_t* p) {
   eng_blank(p);
   const int kModel[4] = {eng_model_find(MK_DRUM, 0), eng_model_find(MK_FM, 0), eng_model_find(MK_LXR, 3),
-                         eng_model_find(MK_FM, 5)};   // kick, the FM's bass, FM hi-hat, the FM's pad
+                         eng_model_find(MK_FM, 0)};   // kick, the FM (a bass), FM hi-hat, the FM (chords)
   static const int kOct[4] = {0, -1, 0, 0};
   static const float kLevel[4] = {1.0f, 0.4f, 0.5f, 1.0f};
   static const float kPan[4] = {0.0f, 0.0f, 0.25f, -0.15f};
@@ -2376,20 +2389,24 @@ void eng_groove(project_t* p) {
   }
   // the bass: its pluck a little longer, a saw in the chain (FEEDBACK), short gates; through the ladder, opened by its
   // envelope at each note
-  p->val[PG_TRACK(1, 0) * 4 + 1] = 0.5f;                 // INDEX
+  p->val[PG_TRACK(1, 0) * 4 + 1] = 0.5f / 8.0f;          // ALGO: four in a chain
+  p->val[PG_TRACK(1, 0) * 4 + 3] = 0.5f;                 // INDEX
   p->val[PG_TRACK(1, 1) * 4 + 0] = 0.42f;                // DECAY
+  p->val[PG_TRACK(1, 1) * 4 + 2] = 0.45f;                // MOVE: a pluck
   p->val[PG_TRACK(1, 1) * 4 + 3] = 0.6f;                 // FEEDBACK: toward the saw
   p->val[PG_TRACK(1, 2) * 4 + 1] = 0.35f;
   p->algo[PG_FILT(1, 0)] = MF_LADDER;
   static const float kBassF[12] = {0.5f, 0.55f, 0.45f, 0.28f, 0.3f, 0.0f, 0.0f, 0.5f, MF_LP, 0.0f, 0.0f, 0.0f};
   for (int k = 0; k < 12; ++k) p->val[PG_FILT(1, k / 4) * 4 + k % 4] = kBassF[k];
-  // the stabs: a minor seventh chord (RATIO), short (a quick attack, a second's decay, a pluck of FM), through SEM's
-  // low pass, its envelope and a breath of noise
-  p->val[PG_TRACK(3, 0) * 4 + 1] = 0.3f;                 // INDEX
-  p->val[PG_TRACK(3, 0) * 4 + 2] = 7.5f / 16.0f;         // RATIO: Min7
+  // the stabs: a minor seventh chord (RATIO, three operators heard), short (a second's decay, a pluck of FM), through
+  // SEM's low pass, its envelope and a breath of noise
+  p->val[PG_TRACK(3, 0) * 4 + 1] = 5.5f / 8.0f;          // ALGO: one modulator, three heard
+  p->val[PG_TRACK(3, 0) * 4 + 2] = 27.5f / 30.0f;        // RATIO: Min7
+  p->val[PG_TRACK(3, 0) * 4 + 3] = 0.3f;                 // INDEX
   p->val[PG_TRACK(3, 1) * 4 + 0] = 0.5f;                 // DECAY: 1 s
-  p->val[PG_TRACK(3, 1) * 4 + 1] = 0.15f;                // ATTACK: 2 ms
-  p->val[PG_TRACK(3, 1) * 4 + 2] = 0.3f;                 // MOVE: +30 %
+  p->val[PG_TRACK(3, 1) * 4 + 1] = 0.35f;                // DETUNE
+  p->val[PG_TRACK(3, 1) * 4 + 2] = 0.3f;                 // MOVE: a pluck
+  p->val[PG_TRACK(3, 1) * 4 + 3] = 0.4f;                 // FEEDBACK
   p->val[PG_TRACK(3, 2) * 4 + 1] = 0.35f;
   p->algo[PG_FILT(3, 0)] = MF_SEM;
   static const float kStabF[12] = {0.58f, 0.45f, 0.45f, 0.32f, 0.0f, 0.0f, 0.0f, 0.3f, MF_LP, 0.15f, -0.3f, 0.05f};
@@ -2415,7 +2432,7 @@ void eng_groove(project_t* p) {
   p->val[PG_GLOBAL * 4 + 1] = 2.0f;                      // minor
   p->val[PG_GLOBAL * 4 + 2] = 5.0f;                      // on F
   cable(p, 1, 0, SRC_L1, PG_FILT(1, 0) * 4 + 0, 22);     // T2: the triangle -> CUTOFF
-  cable(p, 3, 0, SRC_L2, PG_TRACK(3, 0) * 4 + 1, 30);    // T4: S&H -> INDEX (the brightness), the smooth random ->
+  cable(p, 3, 0, SRC_L2, PG_TRACK(3, 0) * 4 + 3, 30);    // T4: S&H -> INDEX (the brightness), the smooth random ->
   cable(p, 3, 1, SRC_L3, PG_FILT(3, 0) * 4 + 0, 25);     // CUTOFF
   cable(p, 4, 0, SRC_L3, PG_DELAY(0) * 4 + 2, 20);       // global: the smooth random -> the delay's filter
   static const uint16_t kPat[4] = {0x1111, 0xEEEE, 0xFFFF, 0x0848};   // bit s: step s
@@ -2439,13 +2456,13 @@ void eng_groove(project_t* p) {
 }
 
 // the stress test (GLO, SELECT: PROJECT, K1, REC held): a fixed patch that keeps everything busy, to read the
-// machine page against, version after version: four tracks playing (a kick, the FM's LEAD synced on a square, its
-// PAD in PW on a square: the FM at its heaviest, MODAL), two of them bent, Warps (diode ring, T3 by T2), OTT, the
+// machine page against, version after version: four tracks playing (a kick, the FM synced on a square, the FM in PW
+// on a square, three operators heard, a chord: the FM at its heaviest, MODAL), two of them bent, Warps (diode ring, T3 by T2), OTT, the
 // delay and the reverb fed, the duck, the filters, the three LFOs on 18 cables, randoms, locks, ratchets
 void eng_stress(project_t* p) {
   eng_blank(p);
-  const int kModel[4] = {eng_model_find(MK_DRUM, 0), eng_model_find(MK_FM, 1), eng_model_find(MK_FM, 5),
-                         eng_model_find(MK_PLAITS, 20)};  // kick, the FM's lead and pad, modal
+  const int kModel[4] = {eng_model_find(MK_DRUM, 0), eng_model_find(MK_FM, 0), eng_model_find(MK_FM, 0),
+                         eng_model_find(MK_PLAITS, 20)};  // kick, the FM twice, modal
   static const int kOct[4] = {0, -1, 0, 0};
   static const float kLevel[4] = {0.9f, 0.75f, 0.6f, 0.6f};
   static const float kPan[4] = {0.0f, 0.0f, -0.3f, 0.35f};
@@ -2465,12 +2482,12 @@ void eng_stress(project_t* p) {
     p->val[PG_EQ * 4 + t] = kEq[t];
   }
   p->val[PG_TRACK(1, 2) * 4 + 1] = 0.3f;                 // the bass: short notes
-  p->val[PG_TRACK(1, 1) * 4 + 3] = -0.6f;                // the lead: a square (FEEDBACK), synced (MUTATE)
+  p->val[PG_TRACK(1, 1) * 4 + 3] = -0.6f;                // the bass: a square (FEEDBACK), synced (MUTATE)
   p->val[PG_TRACK(1, 2) * 4 + 0] = 0.5f;
-  p->val[PG_TRACK(2, 1) * 4 + 3] = -0.5f;                // the pad: a square, in PW, a chord (RATIO: minor)
+  p->val[PG_TRACK(2, 0) * 4 + 1] = 5.5f / 8.0f;          // the chords: one modulator, three heard, a minor chord
+  p->val[PG_TRACK(2, 0) * 4 + 2] = 23.5f / 30.0f;        // (RATIO), a square, in PW
+  p->val[PG_TRACK(2, 1) * 4 + 3] = -0.5f;
   p->val[PG_TRACK(2, 2) * 4 + 0] = -0.45f;
-  p->val[PG_TRACK(2, 0) * 4 + 2] = 5.5f / 16.0f;
-  p->val[PG_TRACK(2, 1) * 4 + 1] = 0.2f;                 // (ATTACK: a few ms)
   // the filters, one model each (0.5.8): LADDER driven on the kick, MS-20 on the bass (its envelope, half its key),
   // SEM's noise on the chords (its FM: a sample at a time), VOX on the resonator, pinged
   static const int kFm[4] = {MF_LADDER, MF_MS20, MF_SEM, MF_VOX};
@@ -2512,12 +2529,12 @@ void eng_stress(project_t* p) {
   cable(p, 0, 0, SRC_L2, PG_TRACK(0, 0) * 4 + 2, 25);    // T1: S&H -> BRIGHT, sine -> its bits, the triangle -> DECAY
   cable(p, 0, 1, SRC_L3, PG_BEND(0) * 4 + 1, 30);
   cable(p, 0, 2, SRC_L1, PG_TRACK(0, 1) * 4 + 0, 20);
-  cable(p, 1, 0, SRC_L1, PG_TRACK(1, 0) * 4 + 1, 40);    // T2: the triangle -> HARMONICS and the filter, S&H ->
-  cable(p, 1, 1, SRC_L2, PG_TRACK(1, 0) * 4 + 3, 30);    // MORPH, the sine -> BITS
+  cable(p, 1, 0, SRC_L1, PG_TRACK(1, 0) * 4 + 3, 40);    // T2: the triangle -> INDEX and the filter, S&H ->
+  cable(p, 1, 1, SRC_L2, PG_TRACK(1, 1) * 4 + 1, 30);    // DETUNE, the sine -> BITS
   cable(p, 1, 2, SRC_L3, PG_BEND(1) * 4 + 1, 15);
   cable(p, 1, 3, SRC_L1, PG_EQ * 4 + 1, -20);
-  cable(p, 2, 0, SRC_L1, PG_TRACK(2, 0) * 4 + 3, 40);    // T3: the triangle -> MORPH, S&H -> TIMBRE, the sine -> the
-  cable(p, 2, 1, SRC_L2, PG_TRACK(2, 0) * 4 + 2, 35);    // pan and the delay's send
+  cable(p, 2, 0, SRC_L1, PG_TRACK(2, 0) * 4 + 3, 40);    // T3: the triangle -> INDEX, S&H -> DETUNE, the sine -> the
+  cable(p, 2, 1, SRC_L2, PG_TRACK(2, 1) * 4 + 1, 35);    // pan and the delay's send
   cable(p, 2, 2, SRC_L3, PG_PAN * 4 + 2, 60);
   cable(p, 2, 3, SRC_L3, PG_DSEND * 4 + 2, 30);
   cable(p, 3, 0, SRC_L2, PG_TRACK(3, 0) * 4 + 2, 40);    // T4: S&H -> TIMBRE and the pan, the sine -> HARMONICS, the
@@ -3032,35 +3049,42 @@ void eng_rnd_redraw(project_t* p, int lane, int tp) {
   if (lane >= 0 && lane < ENG_LANES && tp >= 0 && tp < ENG_NTP) p->rseed[lane][tp] = static_cast<uint8_t>(p->rseed[lane][tp] + 1u);
 }
 
-// a Plaits engine's model now (0.10: thirteen gone, each to the FM's nearest; -1: none, the FM's kit to its knobs)
-int plaits_now(int sub, int* kit) {
+// a Plaits engine's model now (0.10: thirteen gone to the FM, on its own knobs, the nearest algorithm: *algo; -1:
+// still Plaits')
+int plaits_now(int sub, int* algo) {
   int m = eng_model_find(MK_PLAITS, sub);
-  *kit = m < 0;
+  *algo = -1;
   if (m >= 0) return m;
   //                      VCF PD 6OP 6OP 6OP TERR SMCH CHIP VA SHPR FM2 FRMT HARM WTBL CHRD
-  static const int8_t kTo[15] = {1, 1, 4, 4, 4, 5, 5, -1, 1, 0, 0, -1, 7, 5, 5};   // LEAD, KEYS, PAD, BASS, ORGAN
-  m = sub >= 0 && sub < 15 && kTo[sub] >= 0 ? eng_model_find(MK_FM, kTo[sub]) : -1;
-  return m < 0 ? 0 : m;
+  static const int8_t kTo[15] = {1, 1, 4, 4, 4, 5, 5, -1, 1, 0, 0, -1, 7, 5, 5};
+  *algo = sub >= 0 && sub < 15 && kTo[sub] >= 0 ? kTo[sub] : 1;
+  return eng_model_find(MK_FM, 0);
 }
 
 // the models renumbered: 0.9 (the drums first; Plaits' three drums gone to MIFM1's), 0.10 (thirteen of Plaits' gone
-// to the FM). A project of 0.8 or before takes its tracks' models from their old numbers (Plaits' 24, the LXR-02's
-// four, ZERO), one of 0.9 from 0.9's (the drums, the FM drums, ZERO, then Plaits' 21 in its order); a model gone,
-// its nearest (its kit)
+// to the FM), 0.10.1 (the FM's eight models one). A project of 0.8 or before takes its tracks' models from their old
+// numbers (Plaits' 24, the LXR-02's four, ZERO), one of 0.9 from 0.9's (the drums, the FM drums, ZERO, then Plaits' 21
+// in its order), one of 0.10.0 from its (ZERO, the FM's eight, then Plaits' eight); a model gone the FM, on its own
+// knobs, ALGO the nearest
 void models_renumbered(project_t* p, int from) {
   for (int t = 0; t < ENG_TRACKS; ++t) {
-    int o = p->algo[PG_TRACK(t, 0)], m, kit = 0;
-    if (from == 16) {
+    int o = p->algo[PG_TRACK(t, 0)], m, kit = 0, algo = -1;
+    if (from == 17) {
       if (o <= 10) m = o;
-      else m = plaits_now(o - 11, &kit);
+      else if (o <= 18) m = eng_model_find(MK_FM, 0), algo = o - 11;
+      else m = o - 7;
+    } else if (from == 16) {
+      if (o <= 10) m = o;
+      else m = plaits_now(o - 11, &algo);
     } else {
-      if (o <= 20) m = plaits_now(o, &kit);
+      if (o <= 20) m = plaits_now(o, &algo);
       else if (o <= 23) m = eng_model_find(MK_DRUM, o == 21 ? 0 : o == 22 ? 1 : 3), kit = 1;
       else if (o <= 27) m = eng_model_find(MK_LXR, o - 24);
       else m = eng_model_find(MK_ZERO, 0);
     }
     p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(m < 0 ? 0 : m);
-    if (kit) lx_kit(p, t);
+    if (kit || algo >= 0) lx_kit(p, t);
+    if (algo >= 0) p->val[PG_TRACK(t, 0) * 4 + 1] = (static_cast<float>(algo) + 0.5f) / 8.0f;
   }
 }
 
@@ -3068,7 +3092,7 @@ int upgrade_before_16(project_t* p, int bytes);
 int eng_upgrade(project_t* p, int bytes) {
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
-  if ((v == 15 || v == 16) && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+  if (v >= 15 && v <= 17 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
     p->version = PROJECT_VERSION;
     models_renumbered(p, v);
     return 1;

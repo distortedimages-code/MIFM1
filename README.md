@@ -9,9 +9,9 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   BP ou HP, avec du bruit coloré dedans, une enveloppe à vactrol, un **ping** et une **FM** par sa propre sortie ;
 - **six batteries** écrites pour MIFM1 (0.9), d'après le Microtonic de Sonic Charge : KICK, SNARE, CLAP, HAT, TOM,
   PERC, un oscillateur et un bruit chacune (voir plus bas) ;
-- **la FM** de MIFM1 (0.10) : quatre opérateurs comme dans la puce de la Mega Drive (le YM2612), ses huit algorithmes,
-  la rétroaction de son premier opérateur, et deux mutations de l'Hydrasynth (PW, sync) ; huit modèles, BASS, LEAD,
-  BRASS, PLUCK, KEYS, PAD, BELL, ORGAN (voir plus bas) ;
+- **la FM** de MIFM1 (0.10) : quatre opérateurs comme dans la puce de la Mega Drive (le YM2612), ses huit algorithmes
+  sur un potard, la rétroaction de son premier opérateur, et deux mutations de l'Hydrasynth (PW, sync) ; trente accords
+  des opérateurs, dont huit vrais accords (voir plus bas) ;
 - **Plaits** sur chaque piste, 8 de ses modèles (ses trois batteries et treize de ses oscillateurs ont laissé la place
   aux moteurs de MIFM1 ; la voix et les puces suivront), et un **circuit bending** par piste (0.7, à la place du
   grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
@@ -80,7 +80,7 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
 pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
 en quatre gestes, le chemin du son (un schéma), le panneau (chaque numéro allume son repère sur la machine ;
-« Repères » les montre tous), les 27 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
+« Repères » les montre tous), les 20 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
 et ce qu'ils modélisent, les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le circuit bending,
 les effets, le séquenceur, la dose d'aléatoire, les spécifications, et des jauges de la charge du FM-1. « Essayer »,
 sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_try). Pour écouter MIFM1 sur un autre système (une
@@ -144,25 +144,25 @@ passent par des signes au hasard dans les couleurs du thème avant de se poser, 
 troisième couleur se tire dessous, puis « 4-TRACK SYNTHESIS MACHINE » et la version : 1,8 s, qu'un bouton passe.
 
 Un FM-1 sans projet sauvegardé joue **la démo** (PLAY), un groove : piste 1 un kick sur les temps (
-un double à la fin de la mesure) qui fait respirer (le duck) une basse FM en piste 2 (BASS, une dent de scie en haut de
-sa chaîne) dans le filtre LADDER (son enveloppe à chaque note, un LFO triangle d'une mesure sur la coupure), qui roule sur les contretemps avec
+un double à la fin de la mesure) qui fait respirer (le duck) une basse FM en piste 2 (quatre opérateurs en chaîne,
+une dent de scie en haut) dans le filtre LADDER (son enveloppe à chaque note, un LFO triangle d'une mesure sur la coupure), qui roule sur les contretemps avec
 un riff de locks et un ratchet de temps en temps ; piste 3 le charleston FM sur toutes les doubles croches (decay et
 pan tirés à chaque coup, ouvert sur les contretemps, 10 % de coups laissés) ; piste 4 des accords dub de septième
-mineure, le PAD de la FM dans le filtre SEM (un S&H sur leur brillance, un hasard lisse sur la coupure, un souffle de
+mineure, la FM (trois opérateurs entendus, l'accord sur RATIO) dans le filtre SEM (un S&H sur leur brillance, un hasard lisse sur la coupure, un souffle de
 bruit), jetés dans un delay ping-pong à la croche pointée et dans la réverbe ; un compresseur doux sur le bus. Fa
 mineur, 124 BPM. Elle est légère exprès (moins de la moitié de chaque cœur, un peu moins depuis que la FM remplace
 VIRTUAL ANALOG et CHORDS), de la place pour ce qu'on y ajoute (Warps en prend 20 %).
 
 **Repartir de zéro (INIT)** : GLO, SELECT (la page PROJECT), puis **K1** choisit le projet et **REC tenu** le
-charge : *New* (4 pistes sur LEAD, la FM de MIFM1, chacune sur son kit, aucun pas, aucun câble, rien vers les
+charge : *New* (4 pistes sur la FM de MIFM1, sur ses réglages, aucun pas, aucun câble, rien vers les
 effets, do majeur), *The demo groove* (la démo ci-dessus) ou *The saved project* (le dernier sauvegardé, pour
 annuler), *Stress test* ou *Stress test, on the 4 FM drums*. Le transport s'arrête ; rien n'est sauvegardé tant que SAVE n'est pas tenu.
 
 **Le stress test** (GLO, SELECT, K1 sur *Stress test*, REC tenu) : un patch fixe, le même à chaque fois, qui démarre
 tout seul et laisse sous les yeux la page machine (la charge des cœurs, le pic, ce que coûte chaque piste) : pour
-comparer les versions entre elles. Une grosse caisse et une basse (LEAD de la FM, synchronisée sur un carré) passées
-aux bits (et la piste 4 au glitch), des accords (PAD de la FM, en PW sur un carré : la FM au plus lourd ; 0.10, les
-chiffres changent donc avec la FM) et un résonateur MODAL, chacun dans un des quatre filtres (depuis 0.5.8 : LADDER, MS-20, SEM avec sa FM, VOX pingé ; les
+comparer les versions entre elles. Une grosse caisse et une basse (la FM synchronisée sur un carré) passées aux bits
+(et la piste 4 au glitch), des accords (la FM, trois opérateurs entendus, en PW sur un carré : la FM au plus lourd ;
+0.10, les chiffres changent donc avec la FM) et un résonateur MODAL, chacun dans un des quatre filtres (depuis 0.5.8 : LADDER, MS-20, SEM avec sa FM, VOX pingé ; les
 chiffres montent donc par rapport aux versions d'avant), Warps (anneau à diodes, T3 par T2), OTT sur le bus, le delay et la réverbe nourris, le duck, les
 filtres, les trois LFO sur 20 câbles, des aléatoires, des locks et des ratchets. La sortie, la qualité de Warps (Eco
 ou HQ) et le thème restent ceux de la machine : comparer avec le même réglage de Warps. *Stress test, on the 4 FM
@@ -257,58 +257,66 @@ boucle) et garde l'OCTAVE de la piste : ZERO joue la note comme Plaits, FREQ, la
 n'a qu'une page, celle du filtre de la piste. Les câbles, les locks, les aléatoires de trig, la dose et le circuit
 bending marchent sur lui comme ailleurs. Il coûte au FM-1 environ 11 % d'un bloc par voix (un MODAL de Plaits : 27 %).
 
-**La FM** (0.10 ; ALGORITHM après ZERO, la banque FM 4-OP) : celle de MIFM1, quatre opérateurs comme dans la
+**La FM** (0.10 ; ALGORITHM après ZERO, la banque MIFM1) : celle de MIFM1, quatre opérateurs comme dans la
 **YM2612** de Yamaha, la puce de la Mega Drive (1988) et du [MEGAfm](https://www.twisted-electrons.com/) de Twisted
-Electrons : ses **huit algorithmes**, la **rétroaction** de son premier opérateur ; et, sur les opérateurs qu'on
-entend, deux des « Mutants » de l'[Hydrasynth](https://www.ashunsoundmachines.com/) d'ASM, PW et sync. Un opérateur est
-une sinusoïde dont les opérateurs d'avant déplacent la phase (la modulation de phase de la puce et du DX7). **Huit
-modèles, un même moteur** : chacun est un des huit algorithmes, avec son kit (le niveau de chaque opérateur, sa
-décroissance et sa montée par rapport à celles de la note, son désaccord) et **seize accords de ses opérateurs** (RATIO :
-leurs quatre rapports, harmoniques ou non) :
+Electrons : ses **huit algorithmes** sur **ALGO**, la **rétroaction** de son premier opérateur ; et, sur les opérateurs
+qu'on entend, deux des « Mutants » de l'[Hydrasynth](https://www.ashunsoundmachines.com/) d'ASM, PW et sync. Un
+opérateur est une sinusoïde dont les opérateurs d'avant déplacent la phase (la modulation de phase de la puce et du
+DX7). L'écran dessine l'algorithme joué (ses câbles, ses locks compris) :
 
-| Modèle | Algorithme | Ce qu'il fait |
+| ALGO | Algorithme | Pour |
 | --- | --- | --- |
-| **BASS** | 1 › 2 › 3 › 4 | la basse qui claque puis s'arrondit (le 1 en dent de scie en haut de la chaîne) |
-| **LEAD** | (1 + 2) › 3 › 4 | un lead brillant, tenu tant que la note l'est (DECAY au bout : Hold) |
-| **BRASS** | (1 + (2 › 3)) › 4 | des cuivres : MOVE à gauche, l'index monte après l'attaque |
-| **PLUCK** | ((1 › 2) + 3) › 4 | guitares, harpes, koto : l'index retombe vite |
-| **KEYS** | (1 › 2) + (3 › 4) | le corps et la lame d'un piano électrique (la lame à x14, vite éteinte) |
-| **PAD** | 1 › (2, 3, 4) | trois porteuses désaccordées ; RATIO est un **accord** (Unison, Octaves, 5th, Sus4, Major, Minor, Maj7, Min7, Dom7, Maj6, Sus2, Add9, Min9, 4ths, Dim, Aug), tempéré |
-| **BELL** | (1 › 2) + 3 + 4 | la cloche de Chowning (1 : 1,4) et quinze autres métaux, chacun son nom (Tubular, Glock, Vibes, Gong…) |
-| **ORGAN** | 1 + 2 + 3 + 4 | quatre tirettes (INDEX les dose) ; INDEX à 0, un seul opérateur : l'oscillateur d'un analogique |
+| 1 | 1 › 2 › 3 › 4 | les basses qui claquent, le grain de la Mega Drive |
+| 2 | (1 + 2) › 3 › 4 | des leads brillants |
+| 3 | (1 + (2 › 3)) › 4 | des cuivres |
+| 4 | ((1 › 2) + 3) › 4 | guitares, harpes, koto |
+| 5 | (1 › 2) + (3 › 4) | deux paires : un piano électrique (le corps, la lame) |
+| 6 | 1 › (2, 3, 4) | trois porteuses désaccordées : des nappes, des accords |
+| 7 | (1 › 2) + 3 + 4 | une paire et deux sinus : des cloches |
+| 8 | 1 + 2 + 3 + 4 | quatre tirettes d'orgue (INDEX les dose) ; INDEX à 0, un seul opérateur : l'oscillateur d'un analogique |
+
+**RATIO** passe par **trente accords des opérateurs** (leurs quatre rapports à la note ; le 4 est toujours la note) :
+harmoniques d'abord (1:1:1:1, 2:1:1:1…), puis des graves (x0,5), des aigus, une lame (Tine : x14), des inharmoniques
+(Bell, Tube, Bars, Metal) ; les huit derniers sont des **accords** tempérés, justes avec les autres pistes (Major,
+Minor, Sus4, Sus2, Maj7, Min7, Dom7, 4ths) : la note et son octave sur les deux premiers opérateurs, la tierce et la
+quinte ou la septième sur les deux autres ; ils s'entendent en accords dès que trois opérateurs sonnent (ALGO 6 à 8),
+ailleurs ce sont des modulations inharmoniques.
 
 **FEEDBACK** : le premier opérateur se module lui-même. À droite, sa sinusoïde penche vers une **dent de scie** (ses deux
 dernières sorties moyennées, comme le fait la puce ; « Saw » aux trois quarts), puis se casse en **bruit** ; à gauche,
 un **carré** (deux dents de scie à une demi-période l'une de l'autre, retranchées : les harmoniques paires s'annulent ;
-« Square »), puis du bruit. Au-delà des trois quarts, la boucle se met à chasser : du grain, puis du souffle (le FB 7 de
-la puce). **MUTATE**, sur les opérateurs qu'on entend : à gauche **PW** (la première moitié du cycle pressée, l'onde
-penche, comme la distorsion de phase des Casio CZ), à droite **SYNC** (leur phase repart à chaque cycle de la note,
-leur hauteur jusqu'à trois octaves au-dessus ; la marche du redémarrage corrigée, polyBLEP). **INDEX** dose les
-modulateurs (sur ORGAN, les trois tirettes du haut) ; **MOVE**, comme sur ZERO : à droite la FM s'ouvre au trig et
-se pose, à gauche elle grandit ; **DETUNE** écarte les opérateurs (quelques cents qui battent, puis un chorus), et les
-fait dériver lentement. Les modulateurs perdent 3 dB par octave au-dessus du do 4 et restent sous ce qui se replierait.
-Tout est calculé à deux fois la fréquence d'échantillonnage (une sinusoïde en table, 512 points interpolés : -94 dB)
-et ramené par le demi-bande de ZERO : entre les harmoniques, rien au-dessus de -55 dB, dent de scie et carré jusqu'au
-do 6, sync et PW compris.
+« Square »), puis du bruit. **MUTATE**, sur les opérateurs qu'on entend : à gauche **PW** (la première moitié du cycle
+pressée, l'onde penche, comme la distorsion de phase des Casio CZ), à droite **SYNC** (leur phase repart à chaque cycle
+de la note, leur hauteur jusqu'à trois octaves au-dessus ; la marche du redémarrage corrigée, polyBLEP). **INDEX** dose
+les modulateurs (avec ALGO 8, les trois tirettes du haut). **MOVE** donne son caractère à l'enveloppe : à droite un
+**pincement** (la FM s'ouvre au trig et retombe, plus fort et plus vite vers la droite), à gauche une **montée** (la
+note monte jusqu'à 2,5 s, la FM grandit après elle), au milieu ni l'un ni l'autre. **DECAY** de 50 ms à 20 s, Hold au
+bout (tenu tant que la note l'est, relâché d'autant plus lentement que la montée est longue) ; un opérateur au-dessus
+de la note s'éteint plus vite (comme les partiels aigus d'un vrai son : une lame, l'éclat d'une cloche). **DETUNE**
+écarte les opérateurs (quelques cents qui battent, puis un chorus) et les fait dériver lentement. Les modulateurs
+perdent 3 dB par octave au-dessus du do 4 et restent sous ce qui se replierait. Tout est calculé à deux fois la
+fréquence d'échantillonnage (une sinusoïde en table, 512 points interpolés : -94 dB) et ramené par le demi-bande de
+ZERO : entre les harmoniques, rien au-dessus de -55 dB, dent de scie et carré jusqu'au do 6, sync et PW compris.
 
 | 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **INDEX** | **RATIO** (16 accords des opérateurs) | **DETUNE** (Off, puis jusqu'à 30 cents) | **DECAY** (50 ms à 20 s ; au bout, Hold) | **ATTACK** (1 ms à 3 s) | **MOVE** (− : la FM grandit, + : elle s'ouvre et se pose) | **FEEDBACK** (− : carré, + : scie, puis bruit) | **MUTATE** (− : PW, + : SYNC) |
+| **ALGO** (1 à 8) | **RATIO** (30 accords des opérateurs) | **INDEX** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **DETUNE** (Off, puis jusqu'à 30 cents) | **MOVE** (− : une montée, + : un pincement) | **FEEDBACK** (− : carré, + : scie, puis bruit) | **MUTATE** (− : PW, + : SYNC) |
 
-Choisir un modèle de FM met ces réglages à ceux de son kit et garde l'OCTAVE de la piste (la FM joue la note comme
-Plaits). En Hold, une note relâchée retombe d'autant plus lentement que l'attaque est longue. La dose d'aléatoire tire
-tout sauf l'accord du PAD (il sortirait de la gamme). Une voix coûte au FM-1 environ 11 % d'un bloc (le carré +2 %,
-PW +3 %, la sync +1 %) : moins que les modèles de Plaits qu'elle remplace (VIRTUAL ANALOG 15 %, les 6-OP FM 17 %,
-HARMONIC 31 %). Les projets de la 0.9 se lisent, leurs modèles renumérotés : un modèle de Plaits parti devient le plus
-proche de la FM, sur son kit (VA VCF, PHASE DIST et VIRTUAL ANALOG : LEAD ; les 6-OP FM : KEYS ; WAVE TERRAIN,
-STRING MACHINE, WAVETABLE et CHORDS : PAD ; WAVESHAPER et FM 2-OP : BASS ; HARMONIC : ORGAN).
+Choisir la FM met ces réglages aux siens (le deuxième algorithme, un pincement brillant sur une dent de scie) et garde
+l'OCTAVE de la piste (la FM joue la note comme Plaits). La dose d'aléatoire tire tout, sauf RATIO dans ou vers les
+accords (ils sortiraient de la gamme). Une voix coûte au FM-1 environ 11 % d'un bloc (le carré +2 %, PW +3 %, la sync
++1 %) : moins que les modèles de Plaits qu'elle remplace (VIRTUAL ANALOG 15 %, les 6-OP FM 17 %, HARMONIC 31 %). Les
+projets de la 0.9 et de la 0.10.0 (où la FM était huit modèles, un par algorithme) se lisent, leurs modèles
+renumérotés : un modèle de Plaits parti devient la FM, sur ses réglages et l'algorithme le plus proche (VA VCF, PHASE
+DIST et VIRTUAL ANALOG : 2 ; les 6-OP FM : 5 ; WAVE TERRAIN, STRING MACHINE, WAVETABLE et CHORDS : 6 ; WAVESHAPER et
+FM 2-OP : 1 ; HARMONIC : 8).
 
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
 icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis
 les quatre potards côte à côte, dans l'ordre des KNOB 1 à 4 : un anneau fin allumé de son début (ou de son milieu,
 avec « − + ») jusqu'à la valeur, la valeur dedans, un câble en pointillé et son point d'arrivée dans l'autre couleur,
 la source écrite dessous. En bas les quatre pistes, une LED chacune allumée par sa gate dans la couleur de son modèle,
-celle qu'on joue en défonce (chaque case sous son potard, le modèle en 4 lettres : KICK, BASS, PAD, MODL…) ; sur les pages des LFO, les trois
+celle qu'on joue en défonce (chaque case sous son potard, le modèle en 4 lettres : KICK, FM, ZERO, MODL…) ; sur les pages des LFO, les trois
 LFO, allumés à leur hauteur ; en mode STEP, sur les pages des pas et sur celles
 des effets, les 16 pas de la piste (allumés : un trig ; un point : des locks ; cerclé : celui qui joue ; pour un effet,
 à droite, à quel point il est ouvert). Quand on change de face dans un même module (SELECT), la nouvelle page glisse
@@ -328,7 +336,7 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | --- | --- |
 | **KNOB 1 à 4** | les 4 paramètres de la page affichée |
 | **SELECT** | les pages de ce qu'on regarde (les deux du son de la piste, les deux de son filtre, les faces d'un effet…), en glissant |
-| **ALGORITHM** | le type de ce qu'on a devant soi, là où il y a un choix (le A cerclé en haut) : sur le son de la piste, son modèle (les 27 : les batteries, les batteries FM, ZERO, la FM, Plaits) ; sur son filtre, le modèle de filtre (OFF, LADDER, MS-20, SEM, VOX) ; sur Warps, d'un repère d'ALGO au suivant ; sur le delay, SYNC (vers la gauche) ou FREE (vers la droite) |
+| **ALGORITHM** | le type de ce qu'on a devant soi, là où il y a un choix (le A cerclé en haut) : sur le son de la piste, son modèle (les 20 : les batteries, les batteries FM, ZERO et la FM, Plaits) ; sur son filtre, le modèle de filtre (OFF, LADDER, MS-20, SEM, VOX) ; sur Warps, d'un repère d'ALGO au suivant ; sur le delay, SYNC (vers la gauche) ou FREE (vers la droite) |
 | **PRESETS** | la piste active, de 1 à 4 |
 | **EDIT** | les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
@@ -562,7 +570,7 @@ rien ne boucle. **La dose suit une courbe** (son carré) : au début de la cours
 ±6 demi-tons à 100 %) et la transposition (±7) sautent par demi-tons entiers, puis sur les notes de la gamme choisie ;
 ce qui en sortirait n'est jamais tiré : l'enveloppe de hauteur (son glissando), le PING du filtre (une résonance
 qui sonne à n'importe quelle hauteur), HARMONICS là où c'est un intervalle (les accords de CHIPTUNE, l'écart de SWARM
-et de PARTICLE), l'accord du PAD de la FM (son RATIO), le décalage de Warps en décaleur de
+et de PARTICLE), RATIO de la FM dans ou vers ses accords, le décalage de Warps en décaleur de
 fréquence. Le reste : HARMONICS ailleurs, TIMBRE, MORPH, DECAY, COLOUR et les enveloppes de Plaits (sur une batterie
 FM, ses réglages), la gate, les bits (CLOCK, BITS, MASK, SHAPE) et le glitch (GLITCH, SIZE, BEND, DROP : à forte dose, des notes qui
 bégaient), le

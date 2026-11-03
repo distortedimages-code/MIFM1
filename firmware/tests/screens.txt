@@ -7,7 +7,7 @@
 # transposed by a key), Warps (off, patched, its algorithms, its oscillator, the frequency shifter), a save kept across
 # a power-off and in a backup, a new project (INIT: GLO, SELECT, REC held), the saved one back, the stress test (on
 # Plaits, then on the FM drums: their pages, a model chosen bringing its kit; ZERO, its knobs; the FM: its three pages,
-# the pad's chords), an FM-1 without the
+# another algorithm (its drawing), a chord), an FM-1 without the
 # module tables, then the tables arriving. Screenshots in the output folder.
 wait 1500
 shot 00_intro.png
@@ -526,12 +526,12 @@ turn SELECT 1
 wait 400
 shot 18t_fm_bass_3.png
 turn SELECT -2
-turn ALGO 5
+turn K2 5
 wait 400
-shot 18u_fm_pad.png
-turn K3 3
+shot 18u_fm_algo6.png
+turn K3 22
 wait 400
-shot 18v_fm_pad_chord.png
+shot 18v_fm_chord.png
 tap PLAY
 wait 300
 res 0
