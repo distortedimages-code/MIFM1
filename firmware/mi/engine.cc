@@ -1367,7 +1367,7 @@ void glitch_event(int t) {              // a sixteenth: repeat (or go on repeati
 // then no more), as a distortion pedal sustains. In from the sound as it is over the knob's first quarter. Glided
 // over the block from the last one's (a trig, a turn: no step); at 0 it lets the sound through, untouched
 struct TraumaDrive {
-  float x1, F1, dc, dcy;                // the last input and its antiderivative (ADAA), the capacitor
+  float x1, dc, dcy;                    // the last input (ADAA), the capacitor
   float g, b, fb, k, m, s;              // the gain, the bias, the curve at the bias, the level given back, the share,
   float env;                            // the level brought to 0.6; the track's peaks followed
 };
@@ -1376,6 +1376,18 @@ inline float tclip(float x) { return x >= 1.0f ? 0.6666667f : x <= -1.0f ? -0.66
 inline float tclip_F(float x) {
   float a = fm_fabsf(x);
   return a <= 1.0f ? x * x * (0.5f - x * x * (1.0f / 12.0f)) : 0.6666667f * a - 0.25f;
+}
+// the curve's ADAA from x1 to x: the antiderivative's divided difference, (F(x) - F(x1)) / (x - x1), written out
+// where both are on one piece of it (0.14.2): on the cubic, (x + x1)(1/2 - (x^2 + x1^2) / 12); both flat on one side,
+// +/-2/3. No division there (the FM-1 divides slowly) and no cancellation (the subtraction of two near values the
+// division then blew up: 3e-3 off at worst, now 7e-5); a division only where a step crosses the knee (a few samples
+// in a hundred, driven hard)
+inline float tclip_adaa(float x, float x1) {
+  float a = fm_fabsf(x), a1 = fm_fabsf(x1);
+  if (a <= 1.0f && a1 <= 1.0f) return (x + x1) * (0.5f - (x * x + x1 * x1) * (1.0f / 12.0f));
+  if (a >= 1.0f && a1 >= 1.0f && (x > 0.0f) == (x1 > 0.0f)) return x > 0.0f ? 0.6666667f : -0.6666667f;
+  float dx = x - x1;
+  return fm_fabsf(dx) > 1e-4f ? (tclip_F(x) - tclip_F(x1)) / dx : tclip(0.5f * (x + x1));
 }
 void trauma_drive(int t, float* g, float* b, float* k, float* m) {   // a track's drive now: gain, bias, level, share
   float d = trauma01(), u = d * tr_f[t];
@@ -1388,15 +1400,14 @@ void trauma_drive(int t, float* g, float* b, float* k, float* m) {   // a track'
 // its samples: the bias and its curve held where they do not move (between trigs: most blocks), all of it without
 // the blend (from the first quarter); the same sums either way (8 % fewer instructions, the same samples)
 template <bool kBias, bool kWet>
-void trauma_run(float* x, uint32_t n, float* st, const float* d) {   // st: g b fb k m x1 F1 dc dcy; d: their steps
-  float g = st[0], b = st[1], fb = st[2], k = st[3], m = st[4], x1 = st[5], F1 = st[6], dc = st[7], dcy = st[8];
+void trauma_run(float* x, uint32_t n, float* st, const float* d) {   // st: g b fb k m x1 dc dcy; d: their steps
+  float g = st[0], b = st[1], fb = st[2], k = st[3], m = st[4], x1 = st[5], dc = st[6], dcy = st[7];
   const float dg = d[0], db = d[1], dfb = d[2], dk = d[3], dm = d[4];
   for (uint32_t i = 0; i < n; ++i) {
     g += dg, k += dk;
     if (kBias) b += db, fb += dfb;
-    float xin = g * x[i] + b, dx = xin - x1, F = tclip_F(xin);
-    float y = fm_fabsf(dx) > 1e-4f ? (F - F1) / dx : tclip(0.5f * (xin + x1));
-    x1 = xin, F1 = F;
+    float xin = g * x[i] + b, y = tclip_adaa(xin, x1);
+    x1 = xin;
     y = (y - fb) * k;
     float hp = y - dc + 0.99886f * dcy;   // (the capacitor)
     dc = y;
@@ -1404,14 +1415,14 @@ void trauma_run(float* x, uint32_t n, float* st, const float* d) {   // st: g b 
     if (kWet) x[i] = hp;
     else m += dm, x[i] += m * (hp - x[i]);
   }
-  st[5] = x1, st[6] = F1, st[7] = dc, st[8] = dcy;
+  st[5] = x1, st[6] = dc, st[7] = dcy;
 }
 void apply_trauma(int t, float* x, uint32_t n) {
   TraumaDrive& s = tdrv[t];
   float g1 = 1.0f, b1 = 0.0f, k1 = s.k, m1 = 0.0f;
   if (proj.trauma) trauma_drive(t, &g1, &b1, &k1, &m1);
   if (m1 <= 0.0f && s.m <= 0.0f) {      // (off, and out: nothing done)
-    s.x1 = s.F1 = s.dc = s.dcy = s.env = 0.0f;
+    s.x1 = s.dc = s.dcy = s.env = 0.0f;
     return;
   }
   float pk = 0.0f;                      // the level: this block's peak, or the last falling (0.1 s)
@@ -1422,11 +1433,11 @@ void apply_trauma(int t, float* x, uint32_t n) {
   float inv = 1.0f / static_cast<float>(n), fb1 = tclip(b1);
   float g = s.g * s.s, g1s = g1 * s1, dg = (g1s - g) * inv, b = s.b, db = (b1 - b) * inv, fb = s.fb;
   float dfb = (fb1 - fb) * inv, k = s.k / s.s, dk = (k1 / s1 - k) * inv, m = s.m, dm = (m1 - m) * inv;
-  float st[9] = {g, b, fb, k, m, s.x1, s.F1, s.dc, s.dcy}, d[5] = {dg, db, dfb, dk, dm};
+  float st[8] = {g, b, fb, k, m, s.x1, s.dc, s.dcy}, d[5] = {dg, db, dfb, dk, dm};
   const int wet = m >= 1.0f && dm == 0.0f, bias = db != 0.0f || dfb != 0.0f;   // (all of it: no blend; the bias moving)
   if (bias) wet ? trauma_run<true, true>(x, n, st, d) : trauma_run<true, false>(x, n, st, d);
   else wet ? trauma_run<false, true>(x, n, st, d) : trauma_run<false, false>(x, n, st, d);
-  s.g = g1, s.b = b1, s.fb = fb1, s.k = k1, s.m = m1, s.s = s1, s.x1 = st[5], s.F1 = st[6], s.dc = st[7], s.dcy = st[8];
+  s.g = g1, s.b = b1, s.fb = fb1, s.k = k1, s.m = m1, s.s = s1, s.x1 = st[5], s.dc = st[6], s.dcy = st[7];
 }
 
 void apply_glitch(int t, float* x, uint32_t n) {
@@ -1502,7 +1513,7 @@ void render_voice(int t, uint32_t n) {
     gl_at[t] = -1;
     gl_busy[t] = 0;
     mf_reset(t);
-    tdrv[t].x1 = tdrv[t].F1 = tdrv[t].dc = tdrv[t].dcy = tdrv[t].env = 0.0f;
+    tdrv[t].x1 = tdrv[t].dc = tdrv[t].dcy = tdrv[t].env = 0.0f;
     return;
   }
   mclaim(t);                            // (its machine's state: made if another's was there)

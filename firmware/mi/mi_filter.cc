@@ -62,8 +62,8 @@ struct Filter {
   float k35[3], pre;
   // SEM / VOX: the state variable filters' states (two each, three for VOX), their integrators' last inputs (DRIVE)
   float sv[6], nl[6];
-  // SEM / VOX: DRIVE's input stage (its curve's last input and antiderivative, the coupling capacitor's states)
-  float du1, dF1, dcx, dcy;
+  // SEM / VOX: DRIVE's input stage (its curve's last input, the coupling capacitor's states)
+  float du1, dcx, dcy;
   int dstale;
 };
 Filter flt[MF_TRACKS];
@@ -114,7 +114,7 @@ void reset_state(Filter& f) {
   for (int i = 0; i < 4; ++i) f.V[i] = f.dV[i] = f.tV[i] = 0.0f;
   for (int i = 0; i < 3; ++i) f.k35[i] = 0.0f;
   for (int i = 0; i < 6; ++i) f.sv[i] = f.nl[i] = 0.0f;
-  f.du1 = f.dF1 = f.dcx = f.dcy = 0.0f;
+  f.du1 = f.dcx = f.dcy = 0.0f;
   f.dstale = 1;
   f.pre = f.y1 = f.nlp = 0.0f;
 }
@@ -227,16 +227,25 @@ inline float sat_F(float x) {            // sat's antiderivative
   }
   return a - 0.5625f;
 }
+// the curve's ADAA from u1 to u: its antiderivative's divided difference written out where both are on one piece of
+// it (0.14.2): on the cubic, (u + u1)(1/2 - (u^2 + u1^2) / 27); both flat on one side, +/-1. No division there (the
+// FM-1 divides slowly) and no cancellation; a division only where a step crosses the knee
+inline float sat_adaa(float u, float u1) {
+  float a = fm_fabsf(u), a1 = fm_fabsf(u1);
+  if (a <= 1.5f && a1 <= 1.5f) return (u + u1) * (0.5f - (u * u + u1 * u1) * (1.0f / 27.0f));
+  if (a >= 1.5f && a1 >= 1.5f && (u > 0.0f) == (u1 > 0.0f)) return u > 0.0f ? 1.0f : -1.0f;
+  float du = u - u1;
+  return fm_fabsf(du) > 1e-3f ? (sat_F(u) - sat_F(u1)) / du : sat(0.5f * (u + u1));
+}
 inline float drive_in(Filter& f, float x, float dg, float bias, float sb, float lvl) {
-  float u = dg * x + bias, Fu = sat_F(u), du = u - f.du1, y;
+  float u = dg * x + bias, y;
   if (f.dstale) {
     y = sat(u);
     f.dstale = 0;
   } else {
-    y = fm_fabsf(du) > 1e-3f ? (Fu - f.dF1) / du : sat(0.5f * (u + f.du1));
+    y = sat_adaa(u, f.du1);
   }
   f.du1 = u;
-  f.dF1 = Fu;
   y -= sb;                               // (the bias's own output)
   float z = y - f.dcx + 0.99929f * f.dcy;
   f.dcx = y;
