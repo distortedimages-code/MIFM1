@@ -118,6 +118,14 @@ jobs:
           path: |
             firmware/build/*.fwsc
             firmware/build/*-res.bin
+      - uses: actions/upload-artifact@v4   # (diagnostic branch: the device code as JieLi's compiler built it)
+        with:
+          name: mifm1-dis
+          path: |
+            firmware/build/*.dis
+            firmware/build/*.elf
+            firmware/build/o2/*.o
+            build.log
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
