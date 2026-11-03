@@ -48,6 +48,9 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   de chaque piste (hauteurs toujours dans la gamme, timbres, bits et glitch, filtres, pans, un envoi d'effet de temps en
   temps), discrète au début de la course et folle au bout, le rend tel quel à 0, et dans son dernier quart ajoute des
   **fills** en fin de mesure ;
+- **TRAUMA** (OCT+ tenu, SELECT), sur son propre écran : une dose de saturation, en hommage à Audiotrauma, qui pousse
+  petit à petit le son dans le rouge (des drives sur toutes les pistes, la FM des filtres, Warps, le drive du delay)
+  sans jamais toucher une note, et ne fait rien à 0 ;
 - **trois effets, chacun avec sa propre piste de pas** : un **delay** inspiré des potards du Zen Delay (temps en
   divisions du tempo ou libre en millisecondes, feedback, filtre passe-bas / passe-haut avec résonance, drive, mono ou ping-pong, une légère
   modulation de bande), la **réverbe de Clouds** et **Warps**. Sans pas, l'effet est toujours ouvert ; avec des pas,
@@ -506,13 +509,14 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **REC** | **KEY** ↔ **STEP** (voir plus bas) ; sur la page d'Endless, l'enregistrement |
 | **clavier** | en KEY, joue la piste active, même à l'arrêt, avec sa TRANSP et son OCTAVE ; **OCT− / OCT+** pour l'octave du clavier (en STEP : la page de pas) ; en MOD, les trois premières touches blanches sont les LFO |
 | **OCT− tenu + SELECT** | la **dose d'aléatoire**, sur son écran (voir plus bas) |
+| **OCT+ tenu + SELECT** | **TRAUMA**, la dose de saturation, sur son écran (voir plus bas) |
 | **SEL** | le mode MOD (voir plus bas) ; **tenu** : la matrice de la piste |
 | **SAVE tenu** | sauvegarde le projet (à l'arrêt) |
 | **GLO** | TEMPO, SCALE, ROOT, SWING ; SELECT : le projet (INIT) et la machine ; GLO encore : retour |
 | **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en noir sur la couleur du thème. Les réglages restent ; pendant 4 s (cinq carrés jaunes en bas), **GLO** les remet comme avant ALL au début de la mesure suivante (GLO encore avant la mesure : ils restent) |
 | **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage (avec GLO tenu aussi : sur les 4 pistes) |
 | **REC tenu** (pas) | efface la piste de pas affichée : ses trigs, ses locks, ses aléatoires (et les câbles d'une piste) |
-| **GLO + REC tenus 3 s** | **ERASE ALL**, depuis n'importe quelle page : tout revient comme dans un projet neuf (INIT) sauf **les quatre sons** (leurs modèles et leurs réglages : le son, l'enveloppe de Plaits, la gate, la hauteur), **le tempo, la gamme et sa tonique** : plus de pas, de locks, d'aléatoires (aucun potard RND), de câbles ni d'Endless ; les niveaux comme neufs, les pans au centre, pas de filtre (ni l'EQ, ni le filtre de piste : OFF), aucun envoi, le circuit bending coupé, les LFO, les effets (delay, réverbe, Warps coupé), le duck et le bus master comme neufs, pas de swing, la dose d'aléatoire à 0. La sortie, la qualité de Warps et le thème restent |
+| **GLO + REC tenus 3 s** | **ERASE ALL**, depuis n'importe quelle page : tout revient comme dans un projet neuf (INIT) sauf **les quatre sons** (leurs modèles et leurs réglages : le son, l'enveloppe de Plaits, la gate, la hauteur), **le tempo, la gamme et sa tonique** : plus de pas, de locks, d'aléatoires (aucun potard RND), de câbles ni d'Endless ; les niveaux comme neufs, les pans au centre, pas de filtre (ni l'EQ, ni le filtre de piste : OFF), aucun envoi, le circuit bending coupé, les LFO, les effets (delay, réverbe, Warps coupé), le duck et le bus master comme neufs, pas de swing, la dose d'aléatoire et TRAUMA à 0. La sortie, la qualité de Warps et le thème restent |
 | **REC + SEL tenus 1,5 s** | efface **tous les câbles** (les modulations des LFO, de toutes les pistes et globales) |
 
 Les appuis tenus (SAVE, REC pour effacer ou charger, SEL pour la matrice) affichent en bas ce qu'ils vont faire et
@@ -655,7 +659,8 @@ modèle (GLO tenu : sur les quatre pistes). OFF par défaut : il ne coûte alors
 **NOISE** (du bruit dans le filtre, sur tous les modèles : la résonance souffle et siffle ; il suit l'enveloppe, il
 souffle aux trigs, pas en continu), **COLOR** (le bruit : plus sombre à gauche, blanc au centre, plus brillant à
 droite), **FM** (la sortie du filtre renvoyée dans sa fréquence de coupure, échantillon par échantillon, d'un côté ou
-de l'autre : de la rugosité, puis du chaos). L'**enveloppe** du filtre est sur ENV (deuxième page) : celle d'un
+de l'autre : de la rugosité, puis du chaos ; depuis 0.14 son potard suit une courbe exponentielle, discrète jusqu'à
+la moitié, 12 % de la profondeur au milieu, toute la profondeur au bout). L'**enveloppe** du filtre est sur ENV (deuxième page) : celle d'un
 vactrol (celle du low-pass gate de Plaits), **F.ATK** sa montée (instantanée à gauche, jusqu'à une montée lente),
 **F.DECAY** sa chute, qui ralentit en descendant (de 5 ms à plus d'une seconde, puis sa queue), et **PING**, une
 impulsion dans le filtre à chaque trig : avec de la résonance, il sonne tout seul (une percussion, même sur une voix
@@ -748,6 +753,33 @@ de la largeur de la dose ; les potards montrent la valeur que le dernier trig a 
 rend le son exact de départ dès le trig suivant, comme l'annulation d'ALL. Pendant le geste, l'octave du clavier (ou
 la page de pas) ne bouge pas. (Jusqu'en 0.6.1, la dose tirait un seul écart par réglage, gardé à chaque trig : un son
 déplacé, mais le même à chaque note.)
+
+**TRAUMA** (0.14, caché) : tenir **OCT+** et tourner **SELECT**, de 0 à 100 % (2 % par cran, 5 en tournant vite).
+Un hommage à Audiotrauma, le label strasbourgeois d'électro, d'indus et de noise qui poussait ses disques dans le
+rouge : une dose de saturation qui entre petit à petit. **À 0, rien** : le son tel qu'il est réglé, ce qui permet de
+glisser depuis là. Puis, chacun à son point de la course, ce qui ajoute des harmoniques, **jamais une note** (tout
+reste dans la gamme) :
+- **dès le début**, un **drive sur chaque piste**, juste après son filtre : la courbe du drive des batteries (x − x³/3,
+  puis plat), antialiasée (ADAA), son gain de 1 à 8 (le carré de la course), chaud (décalé : des harmoniques paires,
+  le continu retiré par un condensateur à 8 Hz) ; le niveau de la piste est suivi (ses crêtes, qui retombent en
+  0,1 s) et amené au même point de la courbe, puis rendu : le même drive sur une piste douce que sur une forte, son
+  niveau gardé, ses queues remontées dans la saturation en retombant (comme une pédale qui tient). Il entre en fondu
+  sur le premier quart. Là où la piste a un filtre, son **DRIVE** monte aussi (+0,45 au bout) ;
+- **à partir de 25 %**, **chaque trig a son drive** (de 70 à 100 % de celui de la dose), chaud ou, sur jusqu'à la
+  moitié des trigs, dur (harmoniques impaires) ;
+- **à partir de 40 %**, la **FM des filtres** sur une part des trigs (un tiers, puis tous), d'un côté ou de l'autre,
+  **au plus 10 % de sa profondeur** à 100 % (le 10 % de l'ancien potard : plus, le son se perd) ;
+- **à partir de 50 %**, **Warps** s'ouvre par moments, un temps à la fois (MIX, TIMBRE, LEVEL 2), seulement s'il est
+  branché : TRAUMA ne l'allume jamais (son CPU : un cinquième d'un cœur) ;
+- **à partir de 60 %**, le **DRIVE du delay** (des échos qui saturent).
+
+Son écran : noir, des barres de la deuxième couleur qui entrent des deux côtés, TRAU / MA en grand, en blanc, ses
+bandes poussées de côté d'autant plus que la dose monte (un fantôme dans la deuxième couleur derrière à partir d'un
+tiers), une sinusoïde passée dans la courbe du drive à cette dose (la sinusoïde nue en dessous), la dose et sa barre
+(les points de la FM, de Warps et du delay marqués), et ce qui est entré (le gain du drive, la FM des filtres, Warps
+ou son absence, le delay). À 100 % : VOUS ETES LE BRUIT. On lâche OCT+ : retour à la page, TRAUMA reste (en bas, un
+trait orange sous celui de la dose d'aléatoire). Les deux doses se combinent. Elle se sauve avec le projet ; un
+projet de 0.13 revient avec TRAUMA à 0.
 
 **Les fills** (le dernier quart de la dose, 76 à 100 %) : des trigs en plus à la fin des mesures (comptées depuis
 PLAY), comme un batteur, sur les pistes qui jouent des pas (pas sur Endless). À 76 %, un fill sur le dernier temps

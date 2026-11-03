@@ -1,7 +1,7 @@
 # MIFM1 in fm1-base's host simulator: the intro at power-on, the default patch playing, the pages (a face sliding in), a knob turned, a
 # track's sets (its sound's second page, ENV's two pages, EDIT to its bending (the bits, the glitch), its filter: the models, TYPE, its second page), a Euclidean rhythm, the three LFOs, the mixer's filters, the effects (the delay, FREE too, the reverb,
 # Warps, their steps), a cable made in MOD mode (hold an LFO's key, turn a knob), the random dose (OCT- held,
-# SELECT: its own screen, its fills), the matrix, every cable erased (REC and SEL held), the global page (the machine: Warps HQ, another theme), STEP mode (REC: a step held and locked, the lanes on
+# SELECT: its own screen, its fills), TRAUMA (OCT+ held, SELECT: its screen, 20, 50, 100 %, back to 0), the matrix, every cable erased (REC and SEL held), the global page (the machine: Warps HQ, another theme), STEP mode (REC: a step held and locked, the lanes on
 # the black keys, the delay's lane and a lock on its time, the pages on OCT- OCT+), the RANDOM page, ENV held, GLO
 # held: ALL, Endless (recorded, played,
 # transposed by a key), Warps (off, patched, its algorithms, its oscillator, the frequency shifter), a save kept across
@@ -214,6 +214,27 @@ wait 800
 shot 13e_random_zero.png
 release OCT+
 release OCT-
+wait 300
+press OCT+
+turn SELECT 10
+wait 120
+shot 13f_trauma_opening.png
+wait 500
+shot 13g_trauma_20.png
+turn SELECT 15
+wait 400
+shot 13h_trauma_50.png
+turn SELECT 25
+wait 400
+shot 13i_trauma_100.png
+release OCT+
+wait 300
+shot 13j_trauma_kept.png
+press OCT+
+turn SELECT -50
+wait 700
+shot 13k_trauma_zero.png
+release OCT+
 wait 300
 press SEL
 wait 900

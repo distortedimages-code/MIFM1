@@ -24,7 +24,8 @@
 // COLOR a tilt; ATTACK its envelope's rise.
 // Each has its envelope, a vactrol's (Plaits' low-pass gate envelope, ported: a rise, ATTACK's, a fall slowing as it
 // goes down, DECAY its length), its PING (an impulse into the filter at each trig: its resonance rings), its FM (its
-// own output into its cutoff, at audio rate, either way) and its KEY (the note into its cutoff).
+// own output into its cutoff, at audio rate, either way; its knob on an exponential curve, 0.14) and its KEY (the
+// note into its cutoff).
 #include <stdint.h>
 #include "fastmath.h"
 #include "bridge.h"
@@ -91,6 +92,13 @@ inline float cnoise(Filter& f) {         // white noise, tilted: COLOR to the le
 }
 
 inline float hz_of(float oct) { return 20.0f * fm_exp2f(oct); }
+// FM's knob (0.14): its depth on an exponential curve, (e^4|k| - 1) / (e^4 - 1), its sign kept: gentle up to the
+// middle (12 % of the depth there, 3 % at a quarter), then rising to all of it (Yoann's call: the plain knob was too
+// much too soon)
+inline float fm_depth(float k) {
+  float a = fm_fabsf(k), d = (fm_expf(4.0f * a) - 1.0f) * (1.0f / 53.59815f);
+  return k < 0.0f ? -d : d;
+}
 inline float tan_pade(float x) {         // tan on 0 .. 1.32 (a cutoff up to 0.42 sr), a (3, 2) Padé: 1.4 % at the top
   float x2 = x * x;
   return x * (15.0f - x2) / (15.0f - 6.0f * x2);
@@ -501,7 +509,7 @@ void mf_set(int t, int model, int type, const float* k, float note) {
   f.decay_tail = 20.0f * kInvSr * fm_exp2f(-6.0f * d) - f.short_decay;
   f.drive = fm_clampf(k[MF_DRIVE], 0.0f, 1.0f);
   f.ping = fm_clampf(k[MF_PING], 0.0f, 1.0f);
-  f.fm = fm_clampf(k[MF_FM], -1.0f, 1.0f);
+  f.fm = fm_depth(fm_clampf(k[MF_FM], -1.0f, 1.0f));
   float nz = fm_clampf(k[MF_NOISE], 0.0f, 1.0f), a = fm_clampf(k[MF_ATTACK], 0.0f, 1.0f);
   f.noise_amt = 0.4f * nz * nz;
   f.color = fm_clampf(k[MF_COLOR], -1.0f, 1.0f);

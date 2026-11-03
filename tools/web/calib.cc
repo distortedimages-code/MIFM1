@@ -89,6 +89,7 @@ int main(int argc, char** argv) {
     if (extra & 2048) p->val[PG_TRACK(0, 2) * 4 + 0] = 0.5f;  // its DECAY short (a voice a trig, over before the
     if (extra & 8192) p->val[PG_TRACK(0, 1) * 4 + 0] = 0.0f;  // next); PROPHET: 1024 held, 8192 short, 16384 a
     if (extra & 16384) p->val[PG_TRACK(0, 2) * 4 + 0] = 2.0f * 13.5f / 15.0f - 1.0f;   // Min7 (four voices)
+    if (extra & 32768) p->trauma = 50;   // TRAUMA's drive on the track (50 %: no filter, no delay's drive yet)
     p->warps_hq = static_cast<uint8_t>(hq);
     if (warps >= 0) {
       static const float kW[8] = {static_cast<float>(WC_T2), 0.0f, 0.0f, 1.0f, 0.5f, 0.6f, 0.6f,

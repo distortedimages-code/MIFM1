@@ -486,6 +486,43 @@ void make_dice() {                      // the effects' (a track's: at its trigs
   dice_on = 1;
 }
 
+// TRAUMA (0.14: proj.trauma, OCT+ held on the panel, SELECT), after Audiotrauma, the Strasbourg label of electro,
+// industrial and noise that pushed its records into the red: a dose of saturation over the sound. At 0 nothing (the
+// sound as set: the knob slides in from there); then what adds harmonics, never a note (all of it stays in the
+// scale), each part from its own point of the knob's travel:
+//   from the start  a drive on every track after its filter (apply_trauma: the drums' curve, x - x^3 / 3 then flat,
+//                   antialiased; its gain 1 to 8, its level given back, in from the sound as it is over the first
+//                   quarter), and where the track has a filter, its DRIVE (+0.45 at the end)
+//   from 25 %       each trig its own drive (70 to 100 % of the dose's), warm (biased: even harmonics) or, on up to
+//                   half of them, hard (odd ones)
+//   from 40 %       the filter's FM on a share of the trigs (a third, then all of them), either way, at most 10 % of
+//                   its depth (the knob's old 10 %: Yoann's limit, more and the sound is lost)
+//   from 50 %       Warps opening now and then, a beat at a time (its MIX, TIMBRE, LEVEL 2), where it is patched:
+//                   never turned on (its CPU: a fifth of a core)
+//   from 60 %       the delay's DRIVE (its echoes pushed)
+inline float ramp01(float x, float a, float b) { return x <= a ? 0.0f : x >= b ? 1.0f : (x - a) / (b - a); }
+float trauma01() { return static_cast<float>(proj.trauma > 100 ? 100 : proj.trauma) * 0.01f; }
+float tr_f[ENG_TRACKS] = {1.0f, 1.0f, 1.0f, 1.0f};   // this trig's share of the dose's drive (0.7..1)
+uint8_t tr_hard[ENG_TRACKS];            // this trig's drive hard rather than warm
+float tr_w[3];                          // this beat's Warps: its opening (0: shut), TIMBRE (-1..1), LEVEL 2 (0..1)
+// the filter's FM knob for a depth (mi_filter's curve, the other way): ln(1 + depth (e^4 - 1)) / 4
+inline float fm_knob_for(float depth) { return fm_logf(1.0f + depth * 53.59815f) * 0.25f; }
+void trauma_trig(int t) {               // a track's trig: its drive, its filter's FM
+  float d = trauma01(), v = ramp01(d, 0.25f, 0.6f), w = ramp01(d, 0.4f, 1.0f);
+  tr_f[t] = 1.0f - 0.3f * v * rand01();
+  tr_hard[t] = rand01() < 0.5f * v;
+  if (proj.algo[PG_FILT(t, 0)] == MF_OFF) return;   // (the filter's: where there is one)
+  if (w > 0.0f && rand01() < 0.33f + 0.67f * w)
+    tdelta[t][TP_FM] += (rand01() < 0.5f ? -1.0f : 1.0f) * fm_knob_for(0.1f * w * (0.5f + 0.5f * rand01()));
+}
+void trauma_beat() {                    // the effects', at each beat: Warps open or not, its colours
+  float w = ramp01(trauma01(), 0.5f, 1.0f);
+  tr_w[0] = w > 0.0f && rand01() < 0.25f + 0.5f * w ? w * (0.5f + 0.5f * rand01()) : 0.0f;
+  tr_w[1] = 2.0f * rand01() - 1.0f;
+  tr_w[2] = rand01();
+}
+void trauma_knobs();                    // (over the knobs, each block: after lane_param)
+
 // each parameter's bounds and its cables' scale (0: no cable; 1 a 0..1 knob, 2 a -1..1 one), in RAM: the render
 // clamps some 400 values a block, and eng_pdef's tables are in the flash (on the FM-1, a read there that misses the
 // cache costs as much as a few hundred instructions). Made again when the delay changes mode (its TIME's bounds)
@@ -520,6 +557,7 @@ void apply_cables() {
     float m = proj.val[wa] * 5.0f;
     if (fm_fabsf(m - fm_floorf(m + 0.5f)) < 0.01f) fin[wa] = fm_floorf(fin[wa] * 5.0f + 0.5f) * 0.2f;
   }
+  if (proj.trauma) trauma_knobs();      // TRAUMA, over the knobs (and the dose), under the cables
   for (int g = 0; g <= ENG_TRACKS; ++g) {
     for (int c = 0; c < ENG_CABLES; ++c) {
       const cable_t& k = proj.cable[g][c];
@@ -556,6 +594,18 @@ float from_u_fast(int param, float u) { // from_u on the bounds in RAM (the rend
 
 // a lane parameter as the trig plays it: its knob and cables, then the trig's lock and random
 int16_t lane_param[ENG_LANES][ENG_NTP];  // eng_track_param's answers, made once (E is asked ~150 times a block)
+void trauma_knobs() {                   // TRAUMA's knobs: the filters' DRIVE, Warps' this beat, the delay's DRIVE
+  float d = trauma01();
+  for (int t = 0; t < ENG_TRACKS; ++t)
+    if (proj.algo[PG_FILT(t, 0)] != MF_OFF) fin[lane_param[t][TP_FDRIVE]] += 0.45f * d;
+  if (tr_w[0] > 0.0f && iround(proj.val[PG_WARPS(0) * 4]) > WC_OFF) {   // (Warps: where it is patched)
+    fin[PG_WARPS(0) * 4 + 3] += 0.4f * tr_w[0];                        // MIX
+    fin[PG_WARPS(1) * 4 + 0] += 0.25f * tr_w[0] * tr_w[1];             // TIMBRE
+    fin[PG_WARPS(1) * 4 + 2] += 0.3f * tr_w[0] * tr_w[2];              // LEVEL 2
+  }
+  float dl = ramp01(d, 0.6f, 1.0f);
+  if (dl > 0.0f) fin[PG_DELAY(0) * 4 + 3] += 0.45f * dl;               // the delay's DRIVE
+}
 uint32_t lane_lockable[ENG_LANES][2];    // its parameters a trig's lock or random moves (bit tp), made once
 // the steps with a lock (bit s), each lane's: a trig looks for its locks (all 384 slots) only on those. Made again
 // when the locks change (lock_gen: eng_lock_set, eng_lock_clear, eng_steps_clear, a project made or loaded)
@@ -770,6 +820,7 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
       if (rand01() < 0.15f * a)         // now and then, lightly, into the delay or the reverb
         tdelta[lane][rand01() < 0.5f ? TP_DSEND : TP_SEND] += 0.2f + 0.15f * rand01();
     }
+    if (proj.trauma) trauma_trig(lane);  // TRAUMA: this trig's drive, its filter's FM
   }
   if (lane >= ENG_TRACKS) {             // an effect: open, by its probability
     float prob = E(lane, kLaneKnobs[lane] + 1);
@@ -916,6 +967,7 @@ void sequence(uint32_t n) {
       ++tick;
       if (step_clk >= six_len(sl)) step_clk = 0.0f;
       if (proj.dice && tick % 4 == 0) make_dice();   // (the dose: the effects thrown anew at each beat)
+      if (proj.trauma && tick % 4 == 0) trauma_beat();   // (TRAUMA: Warps, a beat at a time)
       for (int t = 0; t < ENG_TRACKS; ++t) gl_at[t] = static_cast<int>(k * static_cast<uint32_t>(fl));   // (the glitch)
       if (fill_amount_q(proj.dice) && tick % 16 >= 8) {   // (the bar's second half: where fills are)
         int stepping[ENG_TRACKS];
@@ -1307,6 +1359,65 @@ void glitch_event(int t) {              // a sixteenth: repeat (or go on repeati
   }
 }
 
+// TRAUMA's drive on a track, after its filter: the drums' curve (x - x^3 / 3 up to 1, then flat at 2/3), antialiased
+// (ADAA: its antiderivative), its gain 1 to 8 (the dose's share this trig, squared), warm (biased: even harmonics, the
+// DC taken off by a coupling capacitor at 8 Hz) or hard. The track's level followed (its peaks, falling over 0.1 s)
+// and brought to 0.6 into the curve, then given back: the same drive on a quiet track as on a loud one, its level kept
+// (its two sides' mean, a warm drive's lopsided); its tails pushed up into it as they fall (to a twelfth:
+// then no more), as a distortion pedal sustains. In from the sound as it is over the knob's first quarter. Glided
+// over the block from the last one's (a trig, a turn: no step); at 0 it lets the sound through, untouched
+struct TraumaDrive {
+  float x1, F1, dc, dcy;                // the last input and its antiderivative (ADAA), the capacitor
+  float g, b, fb, k, m, s;              // the gain, the bias, the curve at the bias, the level given back, the share,
+  float env;                            // the level brought to 0.6; the track's peaks followed
+};
+TraumaDrive tdrv[ENG_TRACKS];
+inline float tclip(float x) { return x >= 1.0f ? 0.6666667f : x <= -1.0f ? -0.6666667f : x - x * x * x * (1.0f / 3.0f); }
+inline float tclip_F(float x) {
+  float a = fm_fabsf(x);
+  return a <= 1.0f ? x * x * (0.5f - x * x * (1.0f / 12.0f)) : 0.6666667f * a - 0.25f;
+}
+void trauma_drive(int t, float* g, float* b, float* k, float* m) {   // a track's drive now: gain, bias, level, share
+  float d = trauma01(), u = d * tr_f[t];
+  *g = 1.0f + 7.0f * u * u;
+  *b = tr_hard[t] ? 0.0f : 0.3f * fm_minf(1.0f, 2.0f * u);
+  float fb = tclip(*b), up = tclip(0.6f * *g + *b) - fb, dn = fb - tclip(*b - 0.6f * *g);
+  *k = 1.2f / (up + dn);                // (both sides' mean back to 0.6)
+  *m = fm_minf(1.0f, 4.0f * d);
+}
+void apply_trauma(int t, float* x, uint32_t n) {
+  TraumaDrive& s = tdrv[t];
+  float g1 = 1.0f, b1 = 0.0f, k1 = s.k, m1 = 0.0f;
+  if (proj.trauma) trauma_drive(t, &g1, &b1, &k1, &m1);
+  if (m1 <= 0.0f && s.m <= 0.0f) {      // (off, and out: nothing done)
+    s.x1 = s.F1 = s.dc = s.dcy = s.env = 0.0f;
+    return;
+  }
+  float pk = 0.0f;                      // the level: this block's peak, or the last falling (0.1 s)
+  for (uint32_t i = 0; i < n; ++i) pk = fm_maxf(pk, fm_fabsf(x[i]));
+  s.env = fm_maxf(pk, s.env * (1.0f - static_cast<float>(n) * (1.0f / 4410.0f)));
+  float s1 = 0.6f / fm_maxf(s.env, 0.05f);
+  if (s.m <= 0.0f) s.g = g1, s.b = b1, s.fb = tclip(b1), s.k = k1, s.s = s1;   // (coming in: from where it is)
+  float inv = 1.0f / static_cast<float>(n), fb1 = tclip(b1);
+  float g = s.g * s.s, g1s = g1 * s1, dg = (g1s - g) * inv, b = s.b, db = (b1 - b) * inv, fb = s.fb;
+  float dfb = (fb1 - fb) * inv, k = s.k / s.s, dk = (k1 / s1 - k) * inv, m = s.m, dm = (m1 - m) * inv;
+  float x1 = s.x1, F1 = s.F1, dc = s.dc, dcy = s.dcy;
+  int wet = m >= 1.0f && dm == 0.0f;    // (all of it: no blend with the sound as it is)
+  for (uint32_t i = 0; i < n; ++i) {
+    g += dg, b += db, fb += dfb, k += dk;
+    float xin = g * x[i] + b, dx = xin - x1, F = tclip_F(xin);
+    float y = fm_fabsf(dx) > 1e-4f ? (F - F1) / dx : tclip(0.5f * (xin + x1));
+    x1 = xin, F1 = F;
+    y = (y - fb) * k;
+    float hp = y - dc + 0.99886f * dcy;   // (the capacitor)
+    dc = y;
+    dcy = hp;
+    if (wet) x[i] = hp;
+    else m += dm, x[i] += m * (hp - x[i]);
+  }
+  s.g = g1, s.b = b1, s.fb = fb1, s.k = k1, s.m = m1, s.s = s1, s.x1 = x1, s.F1 = F1, s.dc = dc, s.dcy = dcy;
+}
+
 void apply_glitch(int t, float* x, uint32_t n) {
   Glitch& g = glitch[t];
   if (!g.on && g.mix <= 0.0f && gl_at[t] < 0) return;
@@ -1380,6 +1491,7 @@ void render_voice(int t, uint32_t n) {
     gl_at[t] = -1;
     gl_busy[t] = 0;
     mf_reset(t);
+    tdrv[t].x1 = tdrv[t].F1 = tdrv[t].dc = tdrv[t].dcy = tdrv[t].env = 0.0f;
     return;
   }
   mclaim(t);                            // (its machine's state: made if another's was there)
@@ -1399,7 +1511,8 @@ void render_voice(int t, uint32_t n) {
     if (track_kind(t) == MK_POLY) own = kWebPoly[0] + static_cast<float>(poly_voices(t)) * kWebPoly[1];   // (its voices)
     if (track_kind(t) == MK_PROPHET) own = kWebPro[0] + static_cast<float>(pro_voices(t)) * kWebPro[1];
     web_spend((own + fm + (bend[t].on ? kWebBend : 0.0f) +
-               (glitch[t].on || glitch[t].mix > 0.0f ? kWebGlitch : 0.0f)) * static_cast<float>(n) / 128.0f);
+               (glitch[t].on || glitch[t].mix > 0.0f ? kWebGlitch : 0.0f) +
+               (proj.trauma || tdrv[t].m > 0.0f ? kWebTrauma : 0.0f)) * static_cast<float>(n) / 128.0f);
   }
 #endif
   int kind = track_kind(t);             // an FM drum: a rise triggers it, its own envelope does the rest; ZERO, a
@@ -1470,6 +1583,7 @@ void render_voice(int t, uint32_t n) {
 #endif
   mf_process(t, vbuf[t], n);            // the filter (OFF: nothing)
   filt_ticks[t] = plat_ticks24() - fq;
+  apply_trauma(t, vbuf[t], n);          // TRAUMA's drive (0: nothing)
   apply_glitch(t, vbuf[t], n);          // (its glitch: after the filter, the track's sound repeated)
   float pk = 0.0f;
   for (uint32_t i = 0; i < n; ++i) pk = fm_maxf(pk, fm_fabsf(vbuf[t][i]));
@@ -3200,6 +3314,13 @@ void upgrade_from(project_t* p, const project_old<NP>& o) {
 extern "C" {
 
 float eng_dice_span(int param) { return dice_span(param); }
+void eng_trauma(int dose, float* gain, float* fm, float* warps, float* delay) {
+  float d = static_cast<float>(dose < 0 ? 0 : dose > 100 ? 100 : dose) * 0.01f, w = ramp01(d, 0.5f, 1.0f);
+  if (gain) *gain = 1.0f + 7.0f * d * d;
+  if (fm) *fm = 0.1f * ramp01(d, 0.4f, 1.0f);
+  if (warps) *warps = iround(proj.val[PG_WARPS(0) * 4]) <= WC_OFF ? -1.0f : w > 0.0f ? 0.25f + 0.5f * w : 0.0f;
+  if (delay) *delay = 0.45f * ramp01(d, 0.6f, 1.0f);
+}
 
 void eng_bend_preview(int t, float* y, int n) {   // a cycle of a sine through the bits as they are (CLOCK: its
   if (t < 0 || t >= ENG_TRACKS || n < 2) return; // multiple of the cycle)
@@ -3302,13 +3423,16 @@ void shapes_from_move(project_t* p) {
   }
 }
 
+static_assert(sizeof(project_t) == PROJECT_SIZE_22 && offsetof(project_t, trauma) + 4u > PROJECT_SIZE_22,
+              "TRAUMA in what was 0.13's padding: the projects the same size");
 int upgrade_before_16(project_t* p, int bytes);
 int eng_upgrade(project_t* p, int bytes) {
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
-  if (v >= 15 && v <= 21 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
-    p->version = PROJECT_VERSION;
-    models_renumbered(p, v);
+  if (v >= 15 && v <= 22 && bytes == static_cast<int>(PROJECT_SIZE_22) && p->size == PROJECT_SIZE_22) {
+    p->version = PROJECT_VERSION;        // (0.7 to 0.13: this one's layout; TRAUMA, in their padding, at 0)
+    p->trauma = 0;
+    if (v <= 21) models_renumbered(p, v);
     if (v == 18 || v == 19) shapes_from_move(p);   // (before: the FM came in on its own knobs, SHAPE's)
     return 1;
   }

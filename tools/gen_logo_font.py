@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Yoann
 """MIFM1's name at power-on and the random dose's screen, in Syne ExtraBold (firmware/fonts: Syne[wght].ttf from
 google/fonts' ofl/syne, SIL OFL 1.1, Syne-OFL.txt): firmware/logo_font.h (FONT_LOGO, 31 px) and firmware/rand_font.h
-(FONT_RAND, 48 px: RAN over DOM), felucca fonts (fm1-base tools/gen_font.py's format and rendering: 4-bit
+(FONT_RAND, 48 px: RAN over DOM, TRAU over MA), felucca fonts (fm1-base tools/gen_font.py's format and rendering: 4-bit
 anti-aliasing) with only the signs written, the words' and those their letters pass through on their way (the others
 are empty: nothing drawn, no room taken).
 
@@ -18,8 +18,8 @@ WGHT = 800
 FONTS = [  # (name, px, signs, file, what)
     ("FONT_LOGO", 31, "MIFM1" + "#%+0268",   # (app.c LOGO_SIGNS: the ones after the name; Syne's other figures go
      "logo_font.h", "MIFM1's name at power-on"),   # under the line)
-    ("FONT_RAND", 48, "RANDOM" + "#%+&?KXZ",   # (app.c RAND_SIGNS; '*' over and '@' under the others' rows)
-     "rand_font.h", "the random dose's screen"),
+    ("FONT_RAND", 48, "RANDOM" + "#%+&?KXZ" + "TU",   # (app.c RAND_SIGNS; '*' over and '@' under the others'
+     "rand_font.h", "the random dose's and TRAUMA's screens"),   # rows; TU: TRAU MA)
 ]
 PAD = 2                                        # (gen_font.py's)
 

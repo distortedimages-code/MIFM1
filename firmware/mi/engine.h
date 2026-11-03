@@ -167,7 +167,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 22u              /* (21: 0.12's, without PROPHET: read, renumbered; 20: 0.11.1's, without POLY: read, renumbered;
+#define PROJECT_VERSION 23u              /* (22: 0.13's, without TRAUMA (its byte where 0.13's ended, unused): read, TRAUMA at 0;
+                                          * 21: 0.12's, without PROPHET: read, renumbered; 20: 0.11.1's, without POLY: read, renumbered;
                                           * 19: 0.11.0's, the FM's MOVE where SHAPE is: read, its nearest shape;
                                           * 18: 0.10.1's, without PADS: read, renumbered, MOVE as SHAPE; 17: 0.10.0's, the FM in eight models: read, one FM, ALGO theirs;
                                           * 16: 0.9's, thirteen of Plaits' models since gone: read, renumbered, those
@@ -203,10 +204,17 @@ typedef struct {
     int8_t endless_key[ENG_TRACKS];      /* the transposition the last key set */
     uint8_t rseed[ENG_LANES][ENG_NTP];   /* each looped random's own draw: another each time its knob comes back to
                                           * 0 (eng_rnd_redraw), so the loop side plays a new one (0: 0.5.5's loops) */
+    uint8_t trauma;                      /* TRAUMA (0.14, OCT+ held, SELECT): 0..100 % of a dose of saturation (engine.cc:
+                                          * the drives, the filters' FM, Warps), 0 nothing; last, in what was 0.13's
+                                          * padding: its projects the same size */
 } project_t;
+#define PROJECT_SIZE_22 3776u            /* (0.7's to 0.13's project, version 15 to 22: its bytes, this one's too) */
 void eng_rnd_redraw(project_t *p, int lane, int tp);   /* a random knob back at 0: its next loop another */
 int eng_algo_count(int page);            /* 0: the page has no ALGORITHM choice */
 float eng_dice_span(int param);          /* how far the random dose moves a parameter at 100 % (0: not at all) */
+/* TRAUMA at a dose (0..100), as its screen tells it: the drive's gain (a trig's full share), the filters' FM at most
+ * (its depth, 0..0.1), the share of beats Warps opens on (-1: Warps not patched), the delay's DRIVE added */
+void eng_trauma(int dose, float *gain, float *fm, float *warps, float *delay);
 /* the random dose's fills (its last quarter, 76..100 %; none under): a fill every so many bars (4, 2, 1), over the
  * bar's last beat or two, on so many of the tracks that play steps (1..4); 0 when the dose gives none */
 void eng_fills(int dice, int *every, int *beats, int *tracks);

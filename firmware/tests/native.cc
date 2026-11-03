@@ -3243,6 +3243,95 @@ int main(int argc, char** argv) {
       ++failures, printf("FAIL: PROPHET\n");
   }
 
+  {                                     // 50. TRAUMA (0.14): at 0 nothing; up the knob more harmonics on the same note
+    // (the fundamental the strongest partial, its pitch kept), the level about kept, nothing past the edge; the
+    // filters' FM at most 10 % of its depth, none under 40 %; a 0.13 project's padding read as TRAUMA at 0
+    project_t* p = eng_project();
+    const uint32_t n = 128;
+    static float l[128], r[128], out[22050];
+    auto play = [&](int dose, int note) {   // track 1 alone, the keyboard's note held: half a second after 0.2 s
+      eng_defaults(p);
+      eng_fresh();
+      eng_play(0);
+      eng_set_model(0, eng_model_find(MK_FM, 0));
+      p->trauma = static_cast<uint8_t>(dose);
+      for (int b = 0; b < 300; ++b) eng_render(l, r, n);
+      eng_key(0, note, 1);
+      for (int b = 0; b < 69; ++b) eng_render(l, r, n);
+      for (int b = 0; b < 172; ++b) {
+        eng_render(l, r, n);
+        for (uint32_t i = 0; i < n; ++i) out[b * n + i] = l[i];
+      }
+      eng_key(0, note, 0);
+      return 440.0 * std::pow(2.0, (eng_note(0) - 69) / 12.0);
+    };
+    auto at = [&](double f) {           // a partial's level (a Hann window over the half second)
+      double re = 0.0, im = 0.0;
+      const int len = 172 * 128;
+      for (int i = 0; i < len; ++i) {
+        double w = 0.5 - 0.5 * std::cos(6.283185307 * i / len), ph = 6.283185307 * f * i / 44100.0;
+        re += w * out[i] * std::cos(ph), im += w * out[i] * std::sin(ph);
+      }
+      return std::sqrt(re * re + im * im);
+    };
+    struct Got { double f0, fund, side, harm, rms, pk; int nan; };
+    auto measure = [&](int dose) {
+      Got g{};
+      g.f0 = play(dose, 45);
+      g.fund = at(g.f0);
+      g.side = std::max(at(g.f0 * 1.0594631), at(g.f0 / 1.0594631));
+      for (int h = 2; h <= 9; ++h) g.harm += at(g.f0 * h);
+      double e = 0.0;
+      for (int i = 0; i < 172 * 128; ++i) {
+        if (!std::isfinite(out[i])) g.nan = 1;
+        e += static_cast<double>(out[i]) * out[i], g.pk = std::max(g.pk, static_cast<double>(std::fabs(out[i])));
+      }
+      g.rms = std::sqrt(e / (172.0 * 128.0));
+      return g;
+    };
+    Got g0 = measure(0), g50 = measure(50), g100 = measure(100);
+    double h0 = g0.harm / (g0.fund + 1e-12), h50 = g50.harm / (g50.fund + 1e-12), h100 = g100.harm / (g100.fund + 1e-12);
+    int ok = !g0.nan && !g50.nan && !g100.nan && g100.f0 == g0.f0 && h50 > h0 * 1.3 && h100 > h50 * 1.2 &&
+             g100.fund > 3.0 * g100.side && g50.fund > 3.0 * g50.side && g100.pk < 1.0 && g100.rms > 0.6 * g0.rms &&
+             g100.rms < 1.6 * g0.rms && g50.rms > 0.6 * g0.rms && g50.rms < 1.6 * g0.rms;
+    // the filters' FM: LADDER on track 1, its FM at 0, the steps playing; the trigs' FM read as each plays
+    float fm_max[3] = {0.0f, 0.0f, 0.0f};
+    const int kDose[3] = {30, 70, 100};
+    for (int c = 0; c < 3; ++c) {
+      eng_defaults(p);
+      eng_fresh();
+      eng_set_model(0, eng_model_find(MK_FM, 0));
+      p->algo[PG_FILT(0, 0)] = MF_LADDER;
+      int pf = eng_track_param(0, TP_FM);
+      p->val[pf] = 0.0f;
+      for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(0, st, 1);
+      p->trauma = static_cast<uint8_t>(kDose[c]);
+      eng_play(1);
+      for (int b = 0; b < 3000; ++b) {
+        eng_render(l, r, n);
+        fm_max[c] = std::max(fm_max[c], std::fabs(eng_now(pf)));
+      }
+      eng_play(0);
+    }
+    const float kTop = std::log(1.0f + 0.1f * 53.59815f) * 0.25f;   // (the knob for 10 % of the depth)
+    ok &= fm_max[0] == 0.0f && fm_max[1] > 0.05f && fm_max[1] < kTop * 0.75f && fm_max[2] > kTop * 0.6f &&
+          fm_max[2] <= kTop + 1e-3f;
+    // a 0.13 project (version 22): what was its padding read as TRAUMA at 0
+    static project_t q22;
+    eng_defaults(&q22);
+    q22.version = 22;
+    q22.trauma = 0xA5;
+    int v22 = eng_upgrade(&q22, sizeof q22) && eng_check(&q22) && q22.trauma == 0 && q22.version == PROJECT_VERSION;
+    printf("TRAUMA: harmonics against the note 0 %.3f, 50 %% %.3f, 100 %% %.3f; the note %.1f Hz %s, over its "
+           "neighbours x%.0f; rms %.3f %.3f %.3f, peak at 100 %% %.2f; the filter's FM at 30 %% %.3f, 70 %% %.3f, "
+           "100 %% %.3f (at most %.3f); version 22 %s\n",
+           h0, h50, h100, g100.f0, g100.f0 == g0.f0 ? "kept" : "MOVED", g100.fund / (g100.side + 1e-12), g0.rms,
+           g50.rms, g100.rms, g100.pk, fm_max[0], fm_max[1], fm_max[2], kTop, v22 ? "read" : "WRONG");
+    if (!ok || !v22) ++failures, printf("FAIL: TRAUMA\n");
+    eng_defaults(p);
+    eng_fresh();
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

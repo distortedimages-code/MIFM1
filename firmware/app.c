@@ -38,7 +38,8 @@
  *   keys        play the active track (MOD mode: the first three white keys are the LFOs, blinking at their rates)
  *   OCT- OCT+   the keyboard's octave (STEP mode: the steps' page). OCT- held, SELECT: the random dose, on its own
  *               screen: the sound's knobs (pitches, timbres, filters, sends) thrown aside, more or less, 0 the sound
- *               as set; its last quarter (76..100 %) adds fills at the ends of the bars
+ *               as set; its last quarter (76..100 %) adds fills at the ends of the bars. OCT+ held, SELECT:
+ *               TRAUMA, on its own screen: a dose of saturation (the drives, the filters' FM, Warps), 0 nothing
  *
  * Part of the unity build (base/device/unity.c, base/host/plat_host.c), after the platform: gfx.c is in scope.
  * The modules' biggest tables are in the resource region (app.h), which the installer writes after the firmware:
@@ -176,6 +177,8 @@ static struct {
     int octave;                          /* the keyboard's */
     int dice;                            /* OCT- held (or both), SELECT turned: the random dose, on its own screen */
     uint32_t dice_at;                    /* (its screen came at) */
+    int trauma;                          /* OCT+ held, SELECT turned: TRAUMA, on its own screen */
+    uint32_t trauma_at;
     int combo;                           /* REC and SEL held together: every cable erased (REC's hold) */
     int oct_was, spage_was;              /* the octave, the steps' page before an OCT press (both: put back) */
     uint32_t play_at;                    /* PLAY's last press (again within CUT_MS: every sound cut) */
@@ -2649,7 +2652,7 @@ static void draw_missing(void)
 
 /* the row at the bottom: the four tracks (an LED lit by its gate or its trig, in its model's colour); on the LFOs'
  * pages the three LFOs, lit as high as they are; the steps of the lane in STEP mode, and on the steps' and the effects'
- * pages theirs. Its rule lit as far as the random dose goes (OCT- and OCT+ held, SELECT) */
+ * pages theirs. Its rule lit as far as the random dose goes (OCT- held, SELECT), TRAUMA's under it (OCT+ held) */
 static int foot_lane(void)               /* the lane whose steps the row shows, -1 none */
 {
     int pt = ptype(ui.page);
@@ -2960,7 +2963,7 @@ static void draw_footer(void)
                     track_accent(2) << 2 ^ track_accent(3) << 3) ^ ui.track << 20 ^ (int32_t)ac << 4 ^ ui.page << 25,
                     eng_note(0) | eng_note(1) << 8 | eng_note(2) << 16 | p->dice << 24,
                     p->algo[PG_TRACK(0, 0)] | p->algo[PG_TRACK(1, 0)] << 5 | p->algo[PG_TRACK(2, 0)] << 10 |
-                    p->algo[PG_TRACK(3, 0)] << 15, msg ? text_hash(ui.msg[0]) : 0};
+                    p->algo[PG_TRACK(3, 0)] << 15 | (int32_t)p->trauma << 20, msg ? text_hash(ui.msg[0]) : 0};
     if (!ui.full && !memcmp(s, ui.foot_shown, sizeof s))
         return;
     memcpy(ui.foot_shown, s, sizeof s);
@@ -2968,6 +2971,8 @@ static void draw_footer(void)
     cv_rect(8, 2, 224, 1, RULE);
     if (p->dice)                         /* the random dose */
         cv_rect(8, 1, (224 * p->dice + 50) / 100, 3, AC3);
+    if (p->trauma)                       /* TRAUMA, under it */
+        cv_rect(8, 4, (224 * p->trauma + 50) / 100, 2, AC2);
     if (hb >= 0) {                       /* a press held: what it will do, the time left in five squares */
         cv_text(10, 8, &FONT_B, hl, HI);
         squares(hsq, hb == B_SEL ? AC1 : AC3);
@@ -3352,6 +3357,169 @@ static void dice_close(void)             /* back to the page, all of it drawn ag
     }
 }
 
+/* --------------------------------------------------------------- trauma --- */
+/* TRAUMA (OCT+ held, SELECT turned): a dose of saturation (engine.cc: the drives, the filters' FM, Warps, the
+ * delay's drive), after Audiotrauma, its own screen over everything. Black, the second colour's bars coming in from
+ * both sides (a wave clipped, 260 ms); TRAU over MA in Syne ExtraBold, white, its strips pushed sideways as the dose
+ * is high (none at 0, a few at a few %, nearly all at 100 %; pushed again every 90 ms and at each detent), a ghost in
+ * the second colour behind the pushed ones from a third of the way; a sine through the drive's curve at this dose
+ * (the plain one under it, dim); the dose, its bar (where the filters' FM, Warps and the delay come in, marked); what
+ * is in */
+#define TRAUMA_OPEN_MS 260u
+static uint32_t trauma_turns;            /* the detents turned on it (each pushes the strips again) */
+
+static float trauma_curve(float x)       /* the drive's curve (engine.cc's tclip) */
+{
+    return x >= 1.0f ? 0.6666667f : x <= -1.0f ? -0.6666667f : x - x * x * x * (1.0f / 3.0f);
+}
+
+/* a word centred at y, in strips, each pushed or not (this throw's) */
+static void trauma_word(const char *w, int32_t y, int d, uint32_t shake, uint16_t c, uint16_t ghost)
+{
+    int32_t x = (240 - text_w(&FONT_RAND, w)) / 2, sh = ((int32_t)FONT_RAND.h + 5) / 6, y0 = cv_y0, y1 = cv_y1;
+    int32_t far = 3 + d / 5;             /* (how far a strip goes: 3 px at a few %, 23 at 100 %) */
+    for (int k = 0; k < 6; k++) {
+        int32_t sa = y + k * sh, dx = 0;
+        uint32_t h = rand_hash((uint32_t)(y * 8 + k), shake * 131u + trauma_turns);
+        if (d && (int)(h % 110u) < d)
+            dx = (int32_t)((h >> 8) % (uint32_t)(2 * far + 1)) - far;
+        cv_y0 = sa + cv_oy > y0 ? sa + cv_oy : y0;
+        cv_y1 = sa + sh + cv_oy < y1 ? sa + sh + cv_oy : y1;
+        if (cv_y0 < cv_y1) {
+            if (dx && d > 33)
+                cv_text(x - dx / 2, y, &FONT_RAND, w, ghost);
+            cv_text(x + dx, y, &FONT_RAND, w, c);
+        }
+    }
+    cv_y0 = y0;
+    cv_y1 = y1;
+}
+
+static void trauma_scene(uint32_t t, int d, uint32_t shake)
+{
+    uint16_t col = AC2, white = 0xFFFFu, soft = mix565(AC2, 0xFFFFu, 150u), dim = mix565(AC2, BG, 170u);
+    float gain, fm, warps, delay, u = (float)d * 0.01f;
+    char line[48], v[8];
+    eng_trauma(d, &gain, &fm, &warps, &delay);
+    if (t < TRAUMA_OPEN_MS) {            /* the bars from both sides, quick then slowing, then gone */
+        float q = (float)t / (float)TRAUMA_OPEN_MS, r = 1.0f - (1.0f - q) * (1.0f - q) * (1.0f - q);
+        for (int32_t j = 0; j < 12; j++) {
+            uint32_t h = rand_hash((uint32_t)j, 77u);
+            int32_t len = (int32_t)((60.0f + (float)(h % 60u)) * r * (1.0f - q * q));
+            cv_rect(0, j * 20 + 4, len, 12, col);
+            cv_rect(240 - len, j * 20 + 4, len, 12, col);
+        }
+    }
+    line[0] = 0;
+    text_cat(line, !d ? "THE SOUND AS SET" : d >= 100 ? "VOUS ETES LE BRUIT" : "INTO THE RED", sizeof line);
+    if (t >= 200u)
+        cv_text((240 - text_w(&FONT_XS, line)) / 2, 12, &FONT_XS, line, d >= 100 ? white : soft);
+    if (t >= 120u) {
+        trauma_word("TRAU", 30, d, shake, white, col);
+        trauma_word("MA", 72, d, shake, white, col);
+    }
+    if (t >= 300u) {                     /* a sine through the drive's curve at this dose, the plain one under it */
+        float g = gain, b = 0.3f * (2.0f * u < 1.0f ? 2.0f * u : 1.0f), fb = trauma_curve(b);
+        float up = trauma_curve(0.6f * g + b) - fb, dn = fb - trauma_curve(b - 0.6f * g), k = 1.2f / (up + dn);
+        float m = 4.0f * u < 1.0f ? 4.0f * u : 1.0f, px = 0.0f, py = 0.0f, qy = 0.0f;
+        float span = t >= 520u ? 1.0f : (float)(t - 300u) / 220.0f;   /* (drawn out) */
+        for (int32_t i = 0; i <= (int32_t)(200.0f * span); i++) {
+            float ph = (float)i * (6.2831853f / 100.0f), s0 = 0.6f * fm_sinf(ph);
+            float y = s0 + m * ((trauma_curve(g * s0 + b) - fb) * k - s0);
+            float yy = 140.0f - 34.0f * y, y0 = 140.0f - 34.0f * s0;
+            if (i) {
+                seg(px, qy, 20.0f + (float)i, y0, 1.2f, dim);
+                seg(px, py, 20.0f + (float)i, yy, 2.0f, col);
+            }
+            px = 20.0f + (float)i, py = yy, qy = y0;
+        }
+    }
+    if (t >= 300u) {
+        int_text(d, v);
+        line[0] = 0;
+        text_cat(line, v, sizeof line);
+        text_cat(line, " %", sizeof line);
+        cv_text(232 - text_w(&FONT_L, line), 172, &FONT_L, line, white);
+        float uu = t >= 520u ? 1.0f : (float)(t - 300u) / 220.0f;   /* the bar drawn out */
+        int32_t bw = (int32_t)(140.0f * uu), fw = (int32_t)(140.0f * uu * u);
+        cv_rect(10, 186, bw, 6, dim);
+        cv_rect(10, 186, fw, 6, white);
+        if (uu >= 1.0f) {                /* where the filters' FM, Warps, the delay come in */
+            static const int MARK[3] = {40, 50, 60};
+            for (int i = 0; i < 3; i++)
+                cv_rect(10 + 140 * MARK[i] / 100, 182, 2, 14, d >= MARK[i] ? white : soft);
+        }
+    }
+    if (t >= 420u) {                     /* what is in */
+        line[0] = 0;
+        if (!d) {
+            text_cat(line, "TURN: THE DRIVES IN", sizeof line);
+        } else {
+            int g10 = (int)(gain * 10.0f + 0.5f);
+            text_cat(line, "DRIVE X", sizeof line);
+            int_text(g10 / 10, v);
+            text_cat(line, v, sizeof line);
+            text_cat(line, ".", sizeof line);
+            int_text(g10 % 10, v);
+            text_cat(line, v, sizeof line);
+            text_cat(line, d >= 25 ? "  EACH TRIG ITS OWN" : "  WARM", sizeof line);
+        }
+        cv_text(10, 206, &FONT_XS, line, d ? white : soft);
+        line[0] = 0;
+        if (fm > 0.0f) {
+            int_text((int)(fm * 100.0f + 0.5f), v);
+            text_cat(line, "FILTER FM ", sizeof line);
+            text_cat(line, v, sizeof line);
+            text_cat(line, " %  ", sizeof line);
+        } else
+            text_cat(line, "FM FROM 40 %  ", sizeof line);
+        text_cat(line, warps < 0.0f ? "NO WARPS" : warps > 0.0f ? "WARPS" : "WARPS AT 50", sizeof line);
+        if (delay > 0.0f)
+            text_cat(line, "  DELAY", sizeof line);
+        cv_text(10, 222, &FONT_XS, line, fm > 0.0f ? white : soft);
+    }
+}
+
+static void draw_trauma(void)
+{
+    static int32_t shown[4] = {-1, -1, -1, -1};
+    uint32_t t = plat_ms() - ui.trauma_at;
+    int d = eng_project()->trauma > 100 ? 100 : eng_project()->trauma;
+    uint32_t shake = d ? plat_ms() / 90u : 0u;
+    int32_t s[4] = {t < 600u ? (int32_t)t : -2, d, (int32_t)shake, (int32_t)trauma_turns};
+    if (!ui.full && !memcmp(s, shown, sizeof s))
+        return;                          /* (nothing moved) */
+    memcpy(shown, s, sizeof s);
+    for (int b = 0; b < 3; b++) {        /* in three bands of 80 rows, each drawn in screen rows */
+        cv_begin(240, 80, BG);
+        cv_oy = -80 * b;
+        cv_y0 = 0;
+        cv_y1 = 80;
+        trauma_scene(t, d, shake);
+        cv_oy = 0;
+        blit(0, (uint32_t)(80 * b));
+    }
+}
+
+static void trauma_open(void)
+{
+    if (!ui.trauma) {
+        ui.trauma = 1;
+        ui.trauma_at = plat_ms();
+        ui.full = 1;
+    }
+}
+
+static void trauma_close(void)
+{
+    if (ui.trauma) {
+        ui.trauma = 0;
+        ui.full = 1;
+        ui.head_shown[0] = -1;
+        ui.foot_shown[0] = -1;
+    }
+}
+
 static void draw(void)
 {
     int k = held(B_GLO) && !all.press && (ui.used[B_GLO] || plat_ms() - ui.down_at[B_GLO] >= 250u);
@@ -3376,6 +3544,13 @@ static void draw(void)
     }
     if (ui.dice && data_ok && engine_ok) {   /* OCT- held, SELECT: the random dose's own screen, over everything */
         draw_random();
+        poll_keys();
+        ui.full = 0;
+        ui.body_panel = ui.body_knobs = 0;
+        return;
+    }
+    if (ui.trauma && data_ok && engine_ok) {   /* OCT+ held, SELECT: TRAUMA's own screen, over everything */
+        draw_trauma();
         poll_keys();
         ui.full = 0;
         ui.body_panel = ui.body_knobs = 0;
@@ -3700,10 +3875,11 @@ static void button_down(int b)
     case B_OCTDN: case B_OCTUP:          /* the keyboard's octave; STEP mode: the steps' page. Both held: SELECT turns
                                           * the random dose (the first one's octave put back) */
         if (held(b == B_OCTUP ? B_OCTDN : B_OCTUP)) {
-            if (!ui.dice) {
+            if (!ui.dice && !ui.trauma) {
                 ui.octave = ui.oct_was;
                 ui.spage = ui.spage_was;
             }
+            trauma_close();              /* (TRAUMA open, OCT- pressed too: the random dose's, as both held) */
             dice_open();
             break;
         }
@@ -3760,7 +3936,7 @@ static void erase_all(void)              /* GLO and REC held 3 s: the project as
                                           * the machine's settings (the output, Warps' quality, the colours). So: no
                                           * steps, locks, randoms, cables or Endless; the levels as new, the pans in
                                           * the middle, no filter, no send, the bending off, the LFOs, the effects, the
-                                          * duck and the bus as new, no swing, the random dose at 0 */
+                                          * duck and the bus as new, no swing, the random dose and TRAUMA at 0 */
 {
     project_t *p = eng_project();
     eng_blank(&scratch);
@@ -3923,9 +4099,11 @@ static void button_up(int b)
         }
         ui.full = 1;
         break;
-    case B_OCTDN: case B_OCTUP:          /* the random dose: it stays as turned */
+    case B_OCTDN: case B_OCTUP:          /* the random dose, TRAUMA: they stay as turned */
         if (ui.dice && !(held(B_OCTDN) && b == B_OCTUP))   /* (OCT+ let go, OCT- still held: it stays open) */
             dice_close();
+        if (ui.trauma && b == B_OCTUP)
+            trauma_close();
         break;
     default:
         break;
@@ -4115,12 +4293,24 @@ static void input(void)
         ui.used[B_OCTDN] = 1;
         dice_open();
     }
+    if (e && !ui.dice && !ui.trauma && held(B_OCTUP) && !held(B_OCTDN)) {   /* OCT+ held, SELECT turned: TRAUMA's
+                                          * screen (the octave, or the steps' page, OCT+ moved put back) */
+        ui.octave = ui.oct_was;
+        ui.spage = ui.spage_was;
+        ui.used[B_OCTUP] = 1;
+        trauma_open();
+    }
     if (e && ui.dice) {                  /* the random dose: 2 % a step (5 turned fast); from 0, another throw */
         project_t *p = eng_project();
         rand_turns++;
         if (!p->dice && e > 0)
             p->dice_seed++;
         p->dice = (uint8_t)clamp((int32_t)p->dice + e * (e > 1 || e < -1 ? 5 : 2), 0, 100);
+        dirty = 1;
+    } else if (e && ui.trauma) {         /* TRAUMA: 2 % a step (5 turned fast) */
+        project_t *p = eng_project();
+        trauma_turns++;
+        p->trauma = (uint8_t)clamp((int32_t)p->trauma + e * (e > 1 || e < -1 ? 5 : 2), 0, 100);
         dirty = 1;
     } else if (e && !ui.matrix && page_count(ui.page) > 1)
         go_page_dir(page_at(ui.page, page_face(ui.page) + (e > 0 ? 1 : -1)), e > 0 ? 1 : -1);
@@ -4232,7 +4422,8 @@ static void input(void)
         ui.touched_at[i] = now;
         ui.touched_k = i;
     }
-    /* lights: the page's button, PLAY, SEL in MOD mode, REC with the steps, OCT- and OCT+ turning the random dose;
+    /* lights: the page's button, PLAY, SEL in MOD mode, REC with the steps, OCT- turning the random dose, OCT+
+     * TRAUMA;
      * the keys: the steps (the one playing blinks), or held; MOD mode: the LFOs' keys blinking at their rates */
     {
         static const uint8_t PAGE_BTN[PT_SYS + 1] = {
@@ -4244,7 +4435,7 @@ static void input(void)
             [PT_FILT1] = B_EDIT, [PT_FILT2] = B_EDIT, [PT_FILT3] = B_EDIT, [PT_SON2] = B_EDIT, [PT_VFLT1] = B_EDIT,
             [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
-        uint32_t bb = ui.dice ? 1u << B_OCTDN : 0, kk = ui.keys;
+        uint32_t bb = ui.dice ? 1u << B_OCTDN : ui.trauma ? 1u << B_OCTUP : 0, kk = ui.keys;
         int pt = ptype(ui.page);
         if (!ui.matrix)
             bb |= 1u << (pt == PT_EUC && ptrack(ui.page) < 0 ? B_FX : track_cat(ui.page) == CAT_ENV ? B_ENV

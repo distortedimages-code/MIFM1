@@ -103,6 +103,7 @@ def main():
         for v, (fm, nz) in enumerate(((0, 0), (0.5, 0), (0, 0.5))):
             jobs[f"filter{f}.{v}"] = ("one", VA, f, fm, nz, 0, 0, -1, 0, SECS)
     jobs["bend"] = ("one", VA, 0, 0, 0, 1, 0, -1, 0, SECS)
+    jobs["trauma"] = ("one", VA, 0, 0, 0, 0, 0, -1, 0, SECS, 32768)   # (TRAUMA's drive on the track)
     for b in range(3):
         jobs[f"bus{b}"] = ("one", VA, 0, 0, 0, 0, b, -1, 0, SECS)
     for e in (1, 2, 4):
@@ -119,6 +120,7 @@ def main():
     filt = [[0.0, 0.0, 0.0]] + [[k(res[f"filter{f}.{v}"]["filter"] - va["filter"], K_VOICE) for v in range(3)]
                                 for f in range(1, 5)]
     bend = k(res["bend"]["voice"] - va["voice"], K_VOICE)   # (apply_bend inlined in render_voice)
+    trauma = k(max(res["trauma"]["voice"] - va["voice"], 0.0), K_VOICE)   # (apply_trauma, the same)
     fx = [k(res[f"bus{b}"]["tasks"] - (res[f"bus{b}"]["voice"] - 3 * rest), K_FX) for b in range(3)]
     st = res["stress"]                                   # (Warps in the mix, and what else the stress test's effects
     fx_s = k(st["tasks"] - st["voice"] - st["warps"], K_FX)   # do that these runs do not: the rest of its figure)
@@ -173,6 +175,7 @@ def main():
           "static const float kWebPoly[2] = {" + ", ".join(f1(v) for v in polyc) + "};   /* POLY: its floor, a voice */",
           "static const float kWebPro[2] = {" + ", ".join(f1(v) for v in proc) + "};   /* PROPHET: its floor, a voice */",
           f"static const float kWebBend = {f1(bend)};   /* the bits, one of their knobs up */",
+          f"static const float kWebTrauma = {f1(trauma)};   /* TRAUMA's drive on a track */",
           "static const float kWebGlitch = 9.0f;   /* the glitch, taking or repeating its slice (estimated: a few loads a sample) */",
           "static const float kWebWarps[2][6] = {   /* Warps, its algorithm's mark (Eco, HQ) */",
           "    {" + ", ".join(f1(v) for v in warps[0]) + "},",
