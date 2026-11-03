@@ -9,12 +9,19 @@ __attribute__((used, visibility("default"))) uint32_t web_fm1_load(uint32_t i)
     return i == 0 ? eng_load(0) : i == 1 ? eng_load(1) : i == 2 ? eng_peak() : eng_prep_load();
 }
 
-/* the page's "Essayer": kind 0 a model (Plaits', an FM drum's: its kit with it), 1 a filter (its model), on the track
- * playing, its page shown, as ALGORITHM would */
+/* the page's "Essayer": kind 0 a model (Plaits', an FM drum's: its kit with it; PADS held by another track: that
+ * track), 1 a filter (its model), on the track playing, its page shown, as ALGORITHM would */
 __attribute__((used, visibility("default"))) void web_try(uint32_t kind, uint32_t i)
 {
     int t = ui.track;
     if (kind == 0 && i < ENG_MODELS) {
+        if (!eng_model_free(t, (int)i))  /* (PADS, once a project: the track holding it) */
+            for (int u = 0; u < ENG_TRACKS; u++)
+                if (u != t && eng_project()->algo[PG_TRACK(u, 0)] == i) {
+                    set_track(u);
+                    t = u;
+                    break;
+                }
         eng_set_model(t, (int)i);
         go_page(PG_TRACK(t, 0));
     } else if (kind == 1 && i < MF_MODELS) {

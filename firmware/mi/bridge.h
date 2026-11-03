@@ -88,6 +88,30 @@ void fm4_defaults(float *k);
 int fm4_knob_steps(int k);              /* ALGO's 8, RATIO's 30, the others 128 */
 void fm4_knob_text(int k, float u, char *b, int n);
 
+/* ---- PADS (mi_pads.cc, 0.11): MIFM1's chords and their progressions (MANUAL, then sixteen: after Arvo Part,
+ * Pachelbel, la Folia, the lament, the circle of fifths, Satie, Bach...), built in a scale (a 12-bit mask over its
+ * root), played by a string pad; once a project. Its eight knobs (k: 0..1, a bipolar knob from its middle): PROG,
+ * COLOR, VOICING, DECAY, ATTACK, TONE, ENSEMBLE (- VINTAGE, + WIDE), BELLS ---- */
+int pads_progs(void);                    /* MANUAL and the progressions */
+int pads_prog(float u);                  /* PROG at u: 0 MANUAL, 1.. a progression */
+int pads_prog_len(int prog);             /* its chords */
+int pads_prog_mode(int prog);            /* its own mode (the engine's scale: 1 major, 2 minor...) */
+/* a chord: the prog's pos-th (MANUAL: the triad on the scale's degree), COLOR its extensions; its notes (semitones
+ * over the scale's root, the root first) in out (6 at most), how many; raised: a note the scale lacks (a raised third,
+ * 0..11), -1 none */
+int pads_chord(int prog, int pos, int degree, uint16_t mask, float color, int *out, int *raised);
+uint16_t pads_chord_scale(const int *chord, int n, uint16_t mask, int raised);   /* its scale, the avoid notes out */
+void pads_init(void);
+void pads_silence(void);
+void pads_set(float note, const float *k, const int *chord, int n, int tonic);   /* the note: the chord's register */
+void pads_gate(int g);
+void pads_render(float *out, uint32_t n);
+int pads_voices(void);                   /* the notes sounding (0: silent) */
+const char *pads_knob_name(int k);
+void pads_defaults(float *k);
+int pads_knob_steps(int k);              /* PROG's 17, COLOR's and VOICING's 4, the others 128 */
+void pads_knob_text(int k, float u, char *b, int n);
+
 /* ---- the tracks' filters (mi_filter.cc): LADDER (Moog's, D'Angelo and Valimaki's model), MS-20 (Korg 35, its
  * resonance driven), SEM (Oberheim's state variable, noise into it), VOX (three formants); each with a vactrol
  * envelope, a ping, FM from its own output, key tracking ---- */

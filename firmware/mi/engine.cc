@@ -81,9 +81,10 @@ namespace {
 const char* const kLfoWaves[LW_N] = {"Sine", "Triangle", "Saw", "Ramp", "Square", "S&H", "Smooth"};
 const char* const kLfoModes[6] = {"Free", "Sync", "T1", "T2", "T3", "T4"};
 const char* const kOnOff[2] = {"Off", "On"};
-const char* const kScaleNames[15] = {"Off", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
+const char* const kScaleNames[16] = {"Off", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
                                      "Locrian", "Harm. minor", "Mel. minor", "Maj. penta", "Min. penta", "Blues",
-                                     "Whole tone", "Hirajoshi"};
+                                     "Whole tone", "Hirajoshi", "Prog"};   // (Prog: PADS' chord, as it goes)
+const int kScaleProg = 15;
 const uint16_t kScaleMasks[15] = {0xFFF, 0xAB5, 0x5AD, 0x6AD, 0x5AB, 0xAD5, 0x6B5, 0x56B, 0x9AD, 0xAAD, 0x295, 0x4A9,
                                   0x4E9, 0x555, 0x18D};   // bit i: i semitones over the root
 const char* const kNoteName[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
@@ -127,7 +128,7 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Delay", K_UNI, 0, 0, 0}, {"Delay", K_UNI, 0, 0, 0}, {"Delay", K_UNI, 0, 0, 0}, {"Delay", K_UNI, 0, 0, 0}},
   {{"Note", K_INT, -24, 24, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Ratch", K_INT, 1, 8, 0}, {"Length", K_INT, 1, 64, 0}},
   {{"Decay", K_UNI, 0, 0, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Depth", K_UNI, 0, 0, 0}, {"Length", K_INT, 1, 64, 0}},
-  {{"Tempo", K_UNI, 0, 0, 0}, {"Scale", K_ENUM, 0, 14, kScaleNames}, {"Root", K_ENUM, 0, 11, kNoteName},
+  {{"Tempo", K_UNI, 0, 0, 0}, {"Scale", K_ENUM, 0, 15, kScaleNames}, {"Root", K_ENUM, 0, 11, kNoteName},
    {"Swing", K_UNI, 0, 0, 0}},
   {{"Rate", K_ENUM, 0, 5, kArpRates}, {"Gate", K_UNI, 0, 0, 0}, {"Dir", K_ENUM, 0, 3, kArpDir},
    {"Transp", K_INT, -24, 24, 0}},
@@ -191,7 +192,7 @@ const ModelDef kModelDef[ENG_MODELS] = {
   {"FM DRUM", "FDRM", MK_LXR, 0, 1}, {"FM SNARE", "FSNR", MK_LXR, 1, 1}, {"FM CYMBAL", "FCYM", MK_LXR, 2, 1},
   {"FM HI-HAT", "FHAT", MK_LXR, 3, 1},
   {"ZERO", "ZERO", MK_ZERO, 0, 2},
-  {"FM", "FM", MK_FM, 0, 2},
+  {"FM", "FM", MK_FM, 0, 2}, {"PADS", "PADS", MK_PADS, 0, 2},
   {"CHIPTUNE", "CHIP", MK_PLAITS, 7, 3}, {"FORMANT", "FRMT", MK_PLAITS, 11, 3}, {"SPEECH", "SPCH", MK_PLAITS, 15, 3},
   {"SWARM", "SWRM", MK_PLAITS, 16, 4}, {"NOISE", "NOIS", MK_PLAITS, 17, 4}, {"PARTICLES", "PART", MK_PLAITS, 18, 4},
   {"STRING", "STRG", MK_PLAITS, 19, 4}, {"MODAL", "MODL", MK_PLAITS, 20, 4},
@@ -472,8 +473,9 @@ float dice_curve() {                    // the dose's reach, 0..1: the knob's tr
   return d * d;
 }
 int dice_interval(int m) {              // the parameter (tp) of a model that is an interval (off the scale, thrown):
-  const ModelDef& d = mdef(m);          // Plaits' HARMONICS (chiptune, swarm, particle); 0 none (the FM's RATIO: see
-  if (d.kind != MK_PLAITS) return 0;    // dice_fm_ratio)
+  const ModelDef& d = mdef(m);          // Plaits' HARMONICS (chiptune, swarm, particle), PADS' PROG; 0 none (the FM's
+  if (d.kind == MK_PADS) return 1;      // RATIO: kept out of its chords, at the dose)
+  if (d.kind != MK_PLAITS) return 0;
   return d.sub == 7 || d.sub == 16 || d.sub == 18 ? 1 : 0;
 }
 void make_dice() {                      // the effects' (a track's: at its trigs, new_trig)
@@ -589,9 +591,13 @@ float loop01(int lane, int step, int tp) {   // the looped random: the same for 
   return static_cast<float>(h & 0xFFFFu) * (1.0f / 65535.0f);
 }
 
-int quantize_slow(int n, int sc, int root) {   // the nearest note of the scale (a tie: the lower)
-  if (sc <= 0 || sc >= 15) return n;
-  uint32_t m = kScaleMasks[sc];
+// PADS' chords (0.11): the track it is on, the progression's place, the chord (semitones over the scale's root), its
+// scale (SCALE Prog: every pitch in it)
+int pad_track = -1, pad_pos = -1, pad_n = 0, pad_raised = -1;
+int pad_chord[6];
+uint16_t pad_mask = 0;                  // the chord's scale (over the root)
+int quantize_mask(int n, uint32_t m, int root) {   // the nearest note of the scale (a tie: the lower)
+  if (!m) return n;
   int rel = ((n - root) % 12 + 12) % 12;
   for (int d = 0; d <= 6; ++d) {
     if ((m >> ((rel - d + 12) % 12)) & 1u) return n - d;
@@ -599,26 +605,32 @@ int quantize_slow(int n, int sc, int root) {   // the nearest note of the scale 
   }
   return n;
 }
-// the render's: a table of the notes -32..159, made again when the scale or its root changes (the screen's,
-// eng_quantize, works it out: the table is the render's alone)
+uint32_t scale_mask(int sc) {           // SCALE's notes (Prog: the chord's, none without PADS)
+  if (sc == kScaleProg) return pad_track >= 0 ? pad_mask : 0u;
+  return sc > 0 && sc < kScaleProg ? kScaleMasks[sc] : 0u;
+}
+void pads_now(float note);              // (its chord now: after track_kind, further down)
+// the render's: a table of the notes -32..159, made again when the scale (its notes) or its root changes (the
+// screen's, eng_quantize, works it out: the table is the render's alone)
 const int kQLo = -32, kQN = 192;
 int16_t qmap[kQN];
-int q_sc = -1, q_root = -1;
+int q_root = -1;
+uint32_t q_mask = 0xFFFFFFFFu;
 int quantize(int n) {
-  int sc = Pi(PG_GLOBAL, 1), root = Pi(PG_GLOBAL, 2);
-  if (sc <= 0 || sc >= 15) return n;
-  if (sc != q_sc || root != q_root) {
-    for (int i = 0; i < kQN; ++i) qmap[i] = static_cast<int16_t>(quantize_slow(i + kQLo, sc, root));
-    q_sc = sc;
+  int root = Pi(PG_GLOBAL, 2);
+  uint32_t m = scale_mask(Pi(PG_GLOBAL, 1));
+  if (!m) return n;
+  if (m != q_mask || root != q_root) {
+    for (int i = 0; i < kQN; ++i) qmap[i] = static_cast<int16_t>(quantize_mask(i + kQLo, m, root));
+    q_mask = m;
     q_root = root;
   }
   int i = n - kQLo;
-  return i >= 0 && i < kQN ? qmap[i] : quantize_slow(n, sc, root);
+  return i >= 0 && i < kQN ? qmap[i] : quantize_mask(n, m, root);
 }
 
 int scale_on() {                        // SCALE not Off: every pitch in it
-  int sc = Pi(PG_GLOBAL, 1);
-  return sc > 0 && sc < 15;
+  return scale_mask(Pi(PG_GLOBAL, 1)) != 0u;
 }
 
 int warps_note(float level1) { return quantize(iround(12.0f + 60.0f * level1)); }   // its oscillator's (LEVEL 1)
@@ -871,12 +883,17 @@ void sequence(uint32_t n) {
     restart = 0;
     step_clk = 1e9f;                    // the first sixteenth at once
     tick = -1;
+    pad_pos = -1;                       // (PADS: its first trig its first chord)
     for (int t = 0; t < ENG_TRACKS; ++t) {
       e_clk[t] = 1e9f;
       e_pos[t] = -1;
       e_dir[t] = 1;
     }
   }
+  pad_track = -1;                       // PADS: its track (the first holding it), its chord as the knobs have it now
+  for (int t = 0; t < ENG_TRACKS && pad_track < 0; ++t)
+    if (mdef(proj.algo[PG_TRACK(t, 0)]).kind == MK_PADS) pad_track = t;
+  if (pad_track >= 0) pads_now(vnote[pad_track]);
   int endless[ENG_TRACKS];
   float el[ENG_TRACKS];
   for (int t = 0; t < ENG_TRACKS; ++t) {
@@ -911,7 +928,8 @@ void sequence(uint32_t n) {
         else if (!endless[l] && !e_rec[l]) fresh[l] = 1;
       }
     }
-    for (int t = 0; t < ENG_TRACKS; ++t) {
+    for (int oi = 0; oi < ENG_TRACKS; ++oi) {   // (PADS' track first: its trig moves the others' scale)
+      int t = pad_track < 0 ? oi : oi == 0 ? pad_track : oi <= pad_track ? oi - 1 : oi;
       int raw, g, rise = 0;
       if (endless[t] && playing && (e_clk[t] += fl) >= el[t]) {   // Endless: its next note (or rest)
         int len = proj.endless_len[t], d = Pi(PG_ARP(t), 2);
@@ -979,6 +997,10 @@ void sequence(uint32_t n) {
         if (key_hold[t] > 0) --key_hold[t];
       }
       fg[t][k] = static_cast<uint8_t>(g);
+      if (t == pad_track && g && !last_g[t]) {   // PADS: a trig, its progression's next chord
+        ++pad_pos;
+        pads_now(fnote[t][k]);
+      }
       last_g[t] = g;
       if (t == 0) {                     // T1: a rise ducks the others
         duck_hit[k] = static_cast<uint8_t>(g && !duck_prev);
@@ -1017,6 +1039,32 @@ inline int track_sub(int t) { return mdef(proj.algo[PG_TRACK(t, 0)]).sub; }
 int lx_model(int t) { return track_kind(t) == MK_LXR ? track_sub(t) : -1; }
 inline int own_knobs(int t) { return track_kind(t) != MK_PLAITS; }
 inline int zero_on(int t) { return track_kind(t) == MK_ZERO; }
+
+// PADS: its chord now (each block, each of its trigs): the progression's (at its place), MANUAL's (the note's degree),
+// built in the scale (the progression's own mode when SCALE is Off or Prog), COLOR's extensions; the chord's scale
+// (SCALE Prog: every track's notes in it)
+void pads_now(float note) {
+  const int t = pad_track;
+  if (t < 0) {
+    pad_n = 0;
+    return;
+  }
+  const int sc = Pi(PG_GLOBAL, 1), root = Pi(PG_GLOBAL, 2), prog = pads_prog(E(t, 1));
+  const uint16_t m = kScaleMasks[sc > 0 && sc < kScaleProg ? sc : pads_prog_mode(prog)];
+  int deg = 0;
+  if (prog == 0) {                      // MANUAL: the scale's note at the note or under it, its degree
+    int rel = ((static_cast<int>(note + 0.5f) - root) % 12 + 12) % 12;
+    for (int i = 0, d = 0; i < 12; ++i)
+      if ((m >> i) & 1u) {
+        if (i <= rel) deg = d;
+        ++d;
+      }
+  }
+  const int len = pads_prog_len(prog);
+  if (pad_pos >= len) pad_pos %= len;
+  pad_n = pads_chord(prog, pad_pos < 0 ? 0 : pad_pos, deg, m, E(t, 2), pad_chord, &pad_raised);
+  pad_mask = pads_chord_scale(pad_chord, pad_n, m, pad_raised);
+}
 inline int lx_param(int t, int i) { return PG_TRACK(t, 0) * 4 + 1 + i; }
 inline float lx_u(int param, float v) { return eng_pdef(param)->kind == K_BIP ? (v + 1.0f) * 0.5f : v; }
 void lx_kit(project_t* p, int t) {      // its knobs as its kit has them (a drum's, ZERO's: their own)
@@ -1025,6 +1073,7 @@ void lx_kit(project_t* p, int t) {      // its knobs as its kit has them (a drum
   if (d.kind == MK_ZERO) zero_defaults(k);
   else if (d.kind == MK_DRUM) drum_defaults(d.sub, k);
   else if (d.kind == MK_FM) fm4_defaults(k);
+  else if (d.kind == MK_PADS) pads_defaults(k);
   else lx_defaults(d.sub, k);
   for (int i = 0; i < LX_KNOBS; ++i) {
     int param = lx_param(t, i);
@@ -1044,6 +1093,9 @@ void set_voice(int t) {
     if (kind == MK_ZERO) zero_set(t, note, k);
     else if (kind == MK_DRUM) drum_set(t, sub, note, k);
     else if (kind == MK_FM) fm4_set(t, note, k);
+    else if (kind == MK_PADS) {
+      if (t == pad_track) pads_set(note, k, pad_chord, pad_n, Pi(PG_GLOBAL, 2));
+    }
     else lx_set(t, sub, note, k);
     return;
   }
@@ -1305,13 +1357,18 @@ void render_voice(int t, uint32_t n) {
       float mu = E(t, TP_PITCHENV);
       fm = (E(t, 7) < -0.004f ? kWebFm[0] : 0.0f) + (mu < -0.004f ? kWebFm[1] : mu > 0.004f ? kWebFm[2] : 0.0f);
     }
-    web_spend((kWebModel[m < 0 ? 0 : m > ENG_MODELS - 1 ? ENG_MODELS - 1 : m] + fm + (bend[t].on ? kWebBend : 0.0f) +
+    float own = kWebModel[m < 0 ? 0 : m > ENG_MODELS - 1 ? ENG_MODELS - 1 : m];
+    if (track_kind(t) == MK_PADS)       // (PADS: its notes, one saw each or three, its bell)
+      own = t != pad_track ? kWebRest
+                           : kWebPads[0] + static_cast<float>(pads_voices()) * kWebPads[E(t, 7) > 0.02f ? 2 : 1] +
+                                 (fm_fabsf(E(t, 8)) > 0.02f ? kWebPads[3] : 0.0f);
+    web_spend((own + fm + (bend[t].on ? kWebBend : 0.0f) +
                (glitch[t].on || glitch[t].mix > 0.0f ? kWebGlitch : 0.0f)) * static_cast<float>(n) / 128.0f);
   }
 #endif
   int kind = track_kind(t);             // an FM drum: a rise triggers it, its own envelope does the rest; ZERO, a
-  int lx = kind == MK_LXR, ac = kind == MK_ZERO, dr = kind == MK_DRUM, fm = kind == MK_FM;   // drum, the FM: their
-                                        // gate, their own render
+  int lx = kind == MK_LXR, ac = kind == MK_ZERO, dr = kind == MK_DRUM, fm = kind == MK_FM;   // drum, the FM, PADS:
+  int pd = kind == MK_PADS, pd_on = pd && t == pad_track;   // their gate, their own render (PADS: one track's)
   uint32_t step = n / kFrames, pos = 0;
   for (uint32_t k = 0; k < kFrames; ++k) {
     int g = fg[t][k];
@@ -1322,6 +1379,10 @@ void render_voice(int t, uint32_t n) {
       else if (ac) zero_render(t, &vbuf[t][pos], at - pos);
       else if (dr) drum_render(t, &vbuf[t][pos], at - pos);
       else if (fm) fm4_render(t, &vbuf[t][pos], at - pos);
+      else if (pd) {
+        if (pd_on) pads_render(&vbuf[t][pos], at - pos);
+        else for (uint32_t i = pos; i < at; ++i) vbuf[t][i] = 0.0f;
+      }
       else mp_render(voice[t], &vbuf[t][pos], &vaux[t][pos], at - pos);
       pos = at;
     }
@@ -1335,6 +1396,9 @@ void render_voice(int t, uint32_t n) {
     if (ac) zero_gate(t, g);
     else if (dr) drum_gate(t, g);
     else if (fm) fm4_gate(t, g);
+    else if (pd) {
+      if (pd_on) pads_gate(g);
+    }
     else if (!lx) mp_gate(voice[t], g);
     else if (g) lx_trigger(t);
     vgate[t] = g;
@@ -1344,6 +1408,10 @@ void render_voice(int t, uint32_t n) {
     else if (ac) zero_render(t, &vbuf[t][pos], n - pos);
     else if (dr) drum_render(t, &vbuf[t][pos], n - pos);
     else if (fm) fm4_render(t, &vbuf[t][pos], n - pos);
+    else if (pd) {
+      if (pd_on) pads_render(&vbuf[t][pos], n - pos);
+      else for (uint32_t i = pos; i < n; ++i) vbuf[t][i] = 0.0f;
+    }
     else mp_render(voice[t], &vbuf[t][pos], &vaux[t][pos], n - pos);
   }
   apply_bend(t, vbuf[t], n);
@@ -1842,6 +1910,7 @@ const char* eng_param_name(int param) {
     int t = param / 12;
     return zero_on(t) ? zero_knob_name(lk) : track_kind(t) == MK_DRUM ? drum_knob_name(lk)
                                            : track_kind(t) == MK_FM ? fm4_knob_name(lk)
+                                           : track_kind(t) == MK_PADS ? pads_knob_name(lk)
                                                                      : lx_knob_name(lx_model(t), lk);
   }
   if (param >= 0 && param < 12 * 4 && (param / 4) % 3 == 0 && param % 4 >= 1) {
@@ -1860,6 +1929,63 @@ int eng_model_sub(int m) { return mdef(m).sub; }
 int eng_model_bank(int m) { return mdef(m).bank; }
 const char* eng_model_abbr(int m) { return mdef(m).abbr; }
 const char* eng_bank_name(int b) { return b >= 0 && b < ENG_BANKS ? kBankNames[b] : ""; }
+int eng_model_free(int t, int m) {
+  if (mdef(m).kind != MK_PADS) return 1;
+  for (int u = 0; u < ENG_TRACKS; ++u)
+    if (u != t && mdef(proj.algo[PG_TRACK(u, 0)]).kind == MK_PADS) return 0;
+  return 1;
+}
+int eng_pads_track(void) { return pad_track; }
+int eng_pads_pos(void) { return pad_track >= 0 ? pad_pos : -1; }
+void eng_pads_chord(char* b, int n) {   // its root, minor (m), diminished (dim) or augmented (+), its seventh, sus
+  if (n <= 0) return;
+  b[0] = 0;
+  if (pad_track < 0 || pad_n < 3) return;
+  int r = pad_chord[0], third = pad_chord[1] - r, fifth = pad_chord[2] - r, sev = pad_n > 3 ? pad_chord[3] - r : -1;
+  char t[16];
+  int k = 0;
+  for (const char* q = kNoteName[((Pi(PG_GLOBAL, 2) + r) % 12 + 12) % 12]; *q; ++q) t[k++] = *q;
+  const char* suf = third == 3 ? (fifth == 6 ? "dim" : "m") : third == 4 ? (fifth == 8 ? "+" : "") :
+                    third == 5 ? "sus4" : third == 2 ? "sus2" : "";
+  for (const char* q = suf; *q; ++q) t[k++] = *q;
+  if (sev == 10 || sev == 11) {
+    if (sev == 11) t[k++] = 'M', t[k++] = 'a', t[k++] = 'j';
+    t[k++] = '7';
+  } else if (pad_n > 3) {
+    t[k++] = '+';                       // (more notes: an added one)
+  }
+  t[k] = 0;
+  for (k = 0; t[k] && k < n - 1; ++k) b[k] = t[k];
+  b[k] = 0;
+}
+void eng_pads_line(char* b, int n) {    // the progression, its place, the chord: "Tintin 3/8 Am"
+  if (n <= 0) return;
+  b[0] = 0;
+  const int t = pad_track;
+  if (t < 0) return;
+  char c[16], tmp[48];
+  const int prog = pads_prog(E(t, 1));
+  pads_knob_text(0, E(t, 1), tmp, 24);
+  int k = 0;
+  while (tmp[k]) ++k;
+  if (prog) {
+    int len = pads_prog_len(prog), pos = pad_pos < 0 ? 0 : pad_pos % len;
+    tmp[k++] = ' ';
+    if (pos + 1 >= 10) tmp[k++] = static_cast<char>('0' + (pos + 1) / 10);
+    tmp[k++] = static_cast<char>('0' + (pos + 1) % 10);
+    tmp[k++] = '/';
+    if (len >= 10) tmp[k++] = static_cast<char>('0' + len / 10);
+    tmp[k++] = static_cast<char>('0' + len % 10);
+  }
+  eng_pads_chord(c, sizeof c);
+  if (c[0]) {
+    tmp[k++] = ' ';
+    for (int i = 0; c[i] && k < 46; ++i) tmp[k++] = c[i];
+  }
+  tmp[k] = 0;
+  for (k = 0; tmp[k] && k < n - 1; ++k) b[k] = tmp[k];
+  b[k] = 0;
+}
 int eng_fm_algo(int t) { return t >= 0 && t < ENG_TRACKS && track_kind(t) == MK_FM ? fm4_algo(E(t, 1)) : -1; }
 int eng_model_own(int m) { return mdef(m).kind != MK_PLAITS; }
 int eng_model_find(int kind, int sub) {
@@ -1874,6 +2000,7 @@ float eng_lx_step(int param, float v, int detents) {
   int t = param / 12;
   int n = zero_on(t) ? zero_knob_steps(lk) : track_kind(t) == MK_DRUM ? drum_knob_steps(lk)
                                             : track_kind(t) == MK_FM ? fm4_knob_steps(lk)
+                                            : track_kind(t) == MK_PADS ? pads_knob_steps(lk)
                                                                       : lx_knob_steps(lx_model(t), lk);
   float u = bip ? (v + 1.0f) * 0.5f : v;
   int i;
@@ -1954,6 +2081,8 @@ void eng_param_text(int param, float v, char* b, int n) {
     drum_knob_text(track_sub(param / 12), lk, lx_u(param, v), b, n);
   } else if (lk >= 0 && track_kind(param / 12) == MK_FM) {     // the FM's (an algorithm, a voicing, cents, times, %)
     fm4_knob_text(lk, lx_u(param, v), b, n);
+  } else if (lk >= 0 && track_kind(param / 12) == MK_PADS) {   // PADS' (a progression, a color, a voicing, times, %)
+    pads_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0) {                   // an FM drum's: as the LXR-02 shows it (0..127, a wave)
     lx_knob_text(lx_model(param / 12), lk, lx_u(param, v), b, n);
   } else if (pt == PT_WARPS1 && k == 0 && i_of(v) >= WC_OSC1) {   // the oscillator's shape, as the algorithm uses it
@@ -3069,10 +3198,12 @@ int plaits_now(int sub, int* algo) {
 void models_renumbered(project_t* p, int from) {
   for (int t = 0; t < ENG_TRACKS; ++t) {
     int o = p->algo[PG_TRACK(t, 0)], m, kit = 0, algo = -1;
-    if (from == 17) {
+    if (from == 18) {                   // (0.10.1's: PADS since after the FM)
+      m = o <= 11 ? o : o + 1;
+    } else if (from == 17) {
       if (o <= 10) m = o;
       else if (o <= 18) m = eng_model_find(MK_FM, 0), algo = o - 11;
-      else m = o - 7;
+      else m = o - 6;
     } else if (from == 16) {
       if (o <= 10) m = o;
       else m = plaits_now(o - 11, &algo);
@@ -3092,7 +3223,7 @@ int upgrade_before_16(project_t* p, int bytes);
 int eng_upgrade(project_t* p, int bytes) {
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
-  if (v >= 15 && v <= 17 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+  if (v >= 15 && v <= 18 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
     p->version = PROJECT_VERSION;
     models_renumbered(p, v);
     return 1;
@@ -3181,6 +3312,7 @@ int eng_init(void) {
   zero_init();                          // (ZERO's: its loops)
   drum_init();
   fm4_init();
+  pads_init();
   reverb = arena + a;
   a += (mrv_size() + 7u) & ~7u;
   mrv_init(reverb);
@@ -3235,6 +3367,7 @@ void cut_now() {
   zero_silence();                       // (ZERO: silent until its next trig, its loops kept)
   drum_silence();
   fm4_silence();
+  pads_silence();
   for (int t = 0; t < ENG_TRACKS; ++t) mf_reset(t);   // (the filters' rings)
   for (int t = 0; t < ENG_TRACKS; ++t) {
     mp_init(voice[t]);
@@ -3779,7 +3912,7 @@ int eng_step_now(int lane) {
 float eng_lane_open(int lane) {
   return lane >= ENG_TRACKS && lane < ENG_LANES ? fx_open[lane - ENG_TRACKS] : 1.0f;
 }
-int eng_quantize(int note) { return quantize_slow(note, Pi(PG_GLOBAL, 1), Pi(PG_GLOBAL, 2)); }
+int eng_quantize(int note) { return quantize_mask(note, scale_mask(Pi(PG_GLOBAL, 1)), Pi(PG_GLOBAL, 2)); }
 uint32_t eng_rises(int t) { return t >= 0 && t < ENG_TRACKS ? vrises[t] : 0u; }
 
 void eng_endless_rec(int t, int on) {

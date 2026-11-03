@@ -35,6 +35,7 @@ SECS = 2.0
 NAMES = re.findall(r'\{"([^"]+)", "[^"]*", MK_', (FW / "mi" / "engine.cc").read_text())   # (the models, in order)
 VA = NAMES.index("FM")                               # (the filters', the bus', Warps' runs: under the FM)
 PAD = VA                                             # (the FM's square, PW and SYNC: three operators heard, calib.cc)
+PADS = NAMES.index("PADS")                           # (PADS: its notes, one saw each or three, its bell: calib.cc)
 
 
 def build():
@@ -87,6 +88,8 @@ def main():
         jobs[f"model{m}"] = ("one", m, 0, 0, 0, 0, 0, -1, 0, SECS)
     for x, bit in (("sq", 8), ("pw", 16), ("sync", 32)):   # the FM's square, PW, SYNC: their extra
         jobs[f"fm{x}"] = ("one", PAD, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
+    for x, bit in (("triad", 512), ("six", 512 | 64), ("one", 512 | 128), ("bell", 512 | 256)):   # PADS, MANUAL:
+        jobs[f"pads{x}"] = ("one", PADS, 0, 0, 0, 0, 0, -1, 0, SECS, bit)   # 3 notes, 6, one saw each, a bell
     for f in range(1, 5):                                # MF_LADDER..MF_VOX, under the LEAD
         for v, (fm, nz) in enumerate(((0, 0), (0.5, 0), (0, 0.5))):
             jobs[f"filter{f}.{v}"] = ("one", VA, f, fm, nz, 0, 0, -1, 0, SECS)
@@ -116,6 +119,10 @@ def main():
     fx_w = max(fx_s - (fx[2] + 2 * fxe[0] + fxe[1] + fxe[2]), 0.0)   # (OTT, T3 and T4's EQ, the duck on 3, the delay's)
     warps = [[k(res[f"warps{hq}.{a}"]["warps"], K_WARPS) for a in range(6)] for hq in range(2)]
     fmx = [max(k(res[f"fm{x}"]["voice"] - 3 * rest, K_VOICE) - model[PAD], 0.0) for x in ("sq", "pw", "sync")]
+    pv = {x: k(res[f"pads{x}"]["voice"] - 3 * rest, K_VOICE) for x in ("triad", "six", "one", "bell")}
+    pv3 = max((pv["six"] - pv["triad"]) / 3.0, 0.0)      # (a note, three saws: the triad and six notes apart)
+    pv1 = max(pv3 - (pv["triad"] - pv["one"]) / 3.0, 0.0)   # (one saw: two fewer a note)
+    pads = [max(pv["triad"] - 3.0 * pv3, 0.0), pv1, pv3, max(pv["bell"] - pv["triad"], 0.0)]
     prep0 = k(res["blank"]["total"] - res["blank"]["tasks"], K_PREP)
     prep1 = k(va["total"] - va["tasks"] - 3 * rest, K_PREP)             # (a track playing: its trigs, its knobs)
     prep_s = k(res["stress"]["total"] - res["stress"]["tasks"], K_PREP)
@@ -144,6 +151,8 @@ def main():
     h += ["};",
           "static const float kWebFm[3] = {" + ", ".join(f1(v) for v in fmx) + "};   /* the FM's extra: its square, "
           "PW, SYNC */",
+          "static const float kWebPads[4] = {" + ", ".join(f1(v) for v in pads) + "};   /* PADS: its floor, a note "
+          "(one saw, three), its bell */",
           f"static const float kWebBend = {f1(bend)};   /* the bits, one of their knobs up */",
           "static const float kWebGlitch = 9.0f;   /* the glitch, taking or repeating its slice (estimated: a few loads a sample) */",
           "static const float kWebWarps[2][6] = {   /* Warps, its algorithm's mark (Eco, HQ) */",

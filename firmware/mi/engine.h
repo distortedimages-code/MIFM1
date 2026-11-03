@@ -123,8 +123,8 @@ int eng_model_enveloped(int model);      /* 1: a Plaits model with its own envel
  * ZERO, the FM) takes its eight parameters from the knobs after FREQ: HARMONICS, TIMBRE, MORPH, the envelope page's
  * four, the pitch envelope's. Its kind says what plays it, its sub its index there (Plaits' engine, the LXR's voice,
  * the drum, the FM's kit) */
-enum { MK_PLAITS, MK_LXR, MK_ZERO, MK_DRUM, MK_FM };
-#define ENG_MODELS 20
+enum { MK_PLAITS, MK_LXR, MK_ZERO, MK_DRUM, MK_FM, MK_PADS };
+#define ENG_MODELS 21
 #define ENG_BANKS 5
 int eng_model_kind(int m);
 int eng_model_sub(int m);
@@ -134,6 +134,11 @@ int eng_model_find(int kind, int sub);   /* the model a kind's sub is, -1 none *
 const char *eng_model_abbr(int m);       /* in four letters or so (the tracks' row) */
 const char *eng_bank_name(int b);
 int eng_fm_algo(int t);                  /* the FM on track t: its algorithm now (0..7, its cables and locks), -1 none */
+int eng_model_free(int t, int m);        /* 0: a model once a project (PADS) another track holds */
+int eng_pads_track(void);                /* the track PADS is on, -1 none */
+void eng_pads_chord(char *b, int n);     /* its chord now, named (Am7, F, Gsus4...); its place: eng_pads_pos */
+int eng_pads_pos(void);                  /* the progression's chord now (0..), -1 before its first trig */
+void eng_pads_line(char *b, int n);      /* the progression, its place, the chord: "Tintin 3/8 Am" */
 void eng_set_model(int t, int model);    /* a track's model (an FM drum new to it: its kit on those knobs) */
 int eng_lx_knob(int param);              /* an FM drum's knob (0..7) that parameter is now, -1 none */
 float eng_lx_step(int param, float v, int detents);   /* an FM drum's knob turned: one of its values a detent (its
@@ -160,7 +165,7 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 18u              /* (17: 0.10.0's, the FM in eight models: read, one FM, ALGO theirs;
+#define PROJECT_VERSION 19u              /* (18: 0.10.1's, without PADS: read, renumbered; 17: 0.10.0's, the FM in eight models: read, one FM, ALGO theirs;
                                           * 16: 0.9's, thirteen of Plaits' models since gone: read, renumbered, those
                                           * the FM's nearest (its kit); 15: 0.7's and 0.8's, the models numbered as they were (Plaits' 24 first):
                                           * read, renumbered, Plaits' three drums MIFM1's; 14: 0.6's, with the grit (its four knobs where the bits are, no glitch):

@@ -2731,6 +2731,116 @@ int main(int argc, char** argv) {
       ++failures, printf("FAIL: the FM\n");
   }
 
+  // 47. PADS (mi_pads.cc, 0.11): its knobs; once a project; the chords (Pachelbel's in C major: their roots and
+  // thirds; la Folia's major dominant in A minor, its raised third in the chord's scale); the chord's scale (the avoid
+  // note out); SCALE Prog through the engine: at each of PADS' trigs the next chord, another track's notes in its
+  // scale; the pad sounding, any setting finite and bounded
+  {
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    const int pads = eng_model_find(MK_PADS, 0);
+    int ok = pads >= 0;
+    eng_set_model(3, pads);
+    float kd[8];
+    pads_defaults(kd);
+    for (int i = 0; i < 8; ++i) {
+      int param = PG_TRACK(3, 0) * 4 + 1 + i;
+      float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
+      if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), pads_knob_name(i)) != 0) ok = 0;
+    }
+    int once = !eng_model_free(1, pads) && eng_model_free(3, pads) && eng_model_free(1, eng_model_find(MK_FM, 0));
+    // the chords
+    int ch[6], raised, roots_ok = 1, thirds_ok = 1;
+    const int kRoot[8] = {0, 7, 9, 4, 5, 0, 5, 7}, kThird[8] = {4, 4, 3, 3, 4, 4, 4, 4};
+    for (int i = 0; i < 8; ++i) {         // Pachelbel (the third progression), C major (0xAB5)
+      int nn = pads_chord(3, i, 0, 0xAB5, 0.0f, ch, &raised);
+      roots_ok &= nn == 3 && (ch[0] % 12) == kRoot[i];
+      thirds_ok &= ch[1] - ch[0] == kThird[i];
+    }
+    int nf = pads_chord(4, 1, 0, 0x5AD, 0.0f, ch, &raised);   // la Folia's V in A minor (over A): E major, G#
+    uint16_t fm = pads_chord_scale(ch, nf, 0x5AD, raised);
+    int folia = nf == 3 && ch[0] % 12 == 7 && ch[1] - ch[0] == 4 && raised == 11 && ((fm >> 11) & 1) && !((fm >> 10) & 1);
+    int nc = pads_chord(3, 0, 0, 0xAB5, 0.0f, ch, &raised);   // C major in C major: F out (over E)
+    uint16_t cm = pads_chord_scale(ch, nc, 0xAB5, raised);
+    int avoid = cm == 0xAB5 - (1u << 5);
+    // SCALE Prog through the engine: PADS on track 4, Pachelbel, a trig each beat
+    for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(3, st, st % 4 == 0 && st < 16);
+    p->val[PG_TRACK(3, 0) * 4 + 1] = 3.5f / 17.0f;
+    p->val[PG_GLOBAL * 4 + 1] = 15.0f;
+    p->val[PG_GLOBAL * 4 + 2] = 0.0f;
+    eng_play(1);
+    int pos0 = -2, q0 = 0, q1 = 0, pos1 = -2;
+    float pk = 0.0f;
+    int nan = 0;
+    for (int b = 0; b < 2000; ++b) {
+      eng_render(l, r, n);
+      for (uint32_t i = 0; i < n; ++i) {
+        if (!std::isfinite(l[i])) nan = 1;
+        pk = std::max(pk, std::fabs(l[i]));
+      }
+      if (eng_pads_pos() == 0 && pos0 == -2) pos0 = 0, q0 = eng_quantize(65);   // C: F to E
+      if (eng_pads_pos() == 1 && pos1 == -2) pos1 = 1, q1 = eng_quantize(60);   // G: C to B
+    }
+    char line[48];
+    eng_pads_line(line, sizeof line);
+    eng_play(0);
+    // the pad alone: 300 settings, a chord each
+    uint32_t sd = 99u;
+    auto rnd = [&]() { sd = sd * 1664525u + 1013904223u; return static_cast<float>(sd >> 8) / 16777216.0f; };
+    float pk_any = 0.0f, k[8];
+    int nan_any = 0;
+    pads_init();
+    for (int s2 = 0; s2 < 300; ++s2) {
+      for (int i = 0; i < 8; ++i) k[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();
+      int prog = static_cast<int>(rnd() * 17.0f), cn = pads_chord(prog, s2, s2 % 7, 0x5AD, k[1], ch, &raised);
+      pads_set(24.0f + 60.0f * rnd(), k, ch, cn, s2 % 12);
+      pads_gate(1);
+      for (int b = 0; b < 200; ++b) {
+        float tmp[32];
+        if (b == 100) pads_gate(0);
+        pads_render(tmp, 32);
+        for (int i = 0; i < 32; ++i) {
+          if (!std::isfinite(tmp[i])) nan_any = 1;
+          pk_any = std::max(pk_any, std::fabs(tmp[i]));
+        }
+      }
+    }
+    // held 40 s, dark (the sines most): its level steady (each voice's sine a rotation, its level held)
+    pads_init();
+    pads_defaults(k);
+    k[3] = 1.0f;
+    k[4] = 0.0f;
+    k[5] = 0.0f;
+    k[6] = 0.5f;
+    {
+      int cn = pads_chord(1, 0, 0, 0x5AD, k[1], ch, &raised);
+      pads_set(57.0f, k, ch, cn, 9);
+    }
+    pads_gate(1);
+    double e_early = 0.0, e_late = 0.0;
+    for (int b = 0; b < 40 * 44100 / 32; ++b) {
+      float tmp[32];
+      pads_render(tmp, 32);
+      for (int i = 0; i < 32; ++i) {
+        if (b >= 3 * 44100 / 32 && b < 4 * 44100 / 32) e_early += tmp[i] * tmp[i];
+        if (b >= 39 * 44100 / 32) e_late += tmp[i] * tmp[i];
+      }
+    }
+    const double held = 10.0 * std::log10((e_late + 1e-12) / (e_early + 1e-12));
+    pads_init();
+    p->val[PG_GLOBAL * 4 + 1] = 2.0f;
+    printf("PADS: knobs %s, once a project %s; Pachelbel's roots %s, thirds %s; la Folia's V %s; C's scale %s (0x%03X); "
+           "SCALE Prog: the first chord F->%d, the second C->%d (%s); peak %.2f%s; 300 settings: peak %.2f%s; held 40 s: "
+           "%+.2f dB\n",
+           ok ? "ok" : "WRONG", once ? "ok" : "WRONG", roots_ok ? "ok" : "WRONG", thirds_ok ? "ok" : "WRONG",
+           folia ? "major" : "WRONG", avoid ? "ok" : "WRONG", cm, q0, q1, line, pk, nan ? ", NaN" : "", pk_any,
+           nan_any ? ", NaN" : "", held);
+    if (!ok || !once || !roots_ok || !thirds_ok || !folia || !avoid || q0 != 64 || q1 != 59 || pk < 0.02f || nan ||
+        nan_any || pk_any > 1.2f || std::fabs(held) > 0.1 || e_early < 1.0)
+      ++failures, printf("FAIL: PADS\n");
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

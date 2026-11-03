@@ -12,6 +12,9 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
 - **la FM** de MIFM1 (0.10) : quatre opérateurs comme dans la puce de la Mega Drive (le YM2612), ses huit algorithmes
   sur un potard, la rétroaction de son premier opérateur, et deux mutations de l'Hydrasynth (PW, sync) ; trente accords
   des opérateurs, dont huit vrais accords (voir plus bas) ;
+- **PADS** de MIFM1 (0.11) : des accords et leurs progressions (Arvo Pärt, la Folia, Pachelbel, la basse de
+  lamentation, Bach, Satie…) joués par une nappe de cordes, sur une piste ; ses accords suivent la gamme du projet, et
+  la gamme **Prog** fait suivre l'accord joué à toutes les autres pistes, en temps réel (voir plus bas) ;
 - **Plaits** sur chaque piste, 8 de ses modèles (ses trois batteries et treize de ses oscillateurs ont laissé la place
   aux moteurs de MIFM1 ; la voix et les puces suivront), et un **circuit bending** par piste (0.7, à la place du
   grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
@@ -29,8 +32,8 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
 - sur chaque trig : **probabilité**, **ratchets**, **longueur**, et un **aléatoire** sur n'importe quel réglage de la
   piste (à droite nouveau à chaque trig, à gauche en boucle) ; un **swing** global ; des **rythmes euclidiens** sur
   chaque piste de pas ;
-- un **quantiseur global** (15 gammes et la tonique) : aucune fausse note, sur toutes les pistes et au clavier, FREQ,
-  la transposition et l'oscillateur de Warps compris ;
+- un **quantiseur global** (15 gammes et la tonique, et Prog : les accords de PADS) : aucune fausse note, sur toutes
+  les pistes et au clavier, FREQ, la transposition et l'oscillateur de Warps compris ;
 - **trois LFO** comme modulateurs (sinus, triangle, dent de scie, rampe, carré, S&H, aléatoire lissé), chacun libre,
   calé sur le tempo ou relancé par les trigs d'une piste, avec un **slew** ;
 - une **matrice de câbles** : les 3 LFO vers presque tous les paramètres, 8 câbles par piste et 8 globaux, posés en
@@ -80,7 +83,7 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
 pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
 en quatre gestes, le chemin du son (un schéma), le panneau (chaque numéro allume son repère sur la machine ;
-« Repères » les montre tous), les 20 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
+« Repères » les montre tous), les 21 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
 et ce qu'ils modélisent, les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le circuit bending,
 les effets, le séquenceur, la dose d'aléatoire, les spécifications, et des jauges de la charge du FM-1. « Essayer »,
 sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_try). Pour écouter MIFM1 sur un autre système (une
@@ -317,12 +320,70 @@ renumérotés : un modèle de Plaits parti devient la FM, sur ses réglages et l
 DIST et VIRTUAL ANALOG : 2 ; les 6-OP FM : 5 ; WAVE TERRAIN, STRING MACHINE, WAVETABLE et CHORDS : 6 ; WAVESHAPER et
 FM 2-OP : 1 ; HARMONIC : 8).
 
+**PADS** (0.11 ; ALGORITHM après la FM, la banque MIFM1) : des **accords et leurs progressions**, joués par une nappe
+de cordes. **Une seule piste la joue** (ALGORITHM la saute sur les autres tant qu'une piste l'a) : ses accords sont
+ceux du projet. **PROG** choisit une progression, et **chaque trig de la piste passe à l'accord suivant** (PLAY repart
+du premier). L'accord est bâti dans la **gamme du projet** (GLO : SCALE et ROOT), sur sa tonique : chaque degré empile
+ses tierces dans la gamme, si bien que toutes les gammes marchent et que les accords les suivent (Pachelbel en dorien,
+la Folia en Hirajoshi) ; sans gamme (Off) ou en Prog, la progression joue dans son propre mode, sur ROOT. Quand un
+accord veut une couleur que la gamme n'a pas (le V majeur de la Folia, en mineur : sa sensible), sa tierce est
+haussée. L'écran écrit la progression, sa place et l'accord (« Folia 2/8 E »). En **Manual**, la note jouée choisit
+l'accord : son degré dans la gamme (une touche, un accord ; les pas, leurs locks de note et Endless aussi).
+
+| PROG | Les accords | D'après |
+| --- | --- | --- |
+| Manual | celui de la note jouée | |
+| Tintin | i tenu, et au-dessus une voix qui descend par degrés depuis l'octave et remonte (les notes de l'accord, déjà là, sautées ; mineur) | Arvo Pärt, *Für Alina* (1976) : les tintinnabuli |
+| Mirror | I, IV et V, une note ajoutée qui tourne autour (majeur) | Pärt, *Spiegel im Spiegel* (1978) |
+| Pachelbel | I V vi iii IV I IV V | le Canon en ré |
+| Folia | i V i VII III VII i V | la Folia (Corelli, Vivaldi, Rachmaninov) |
+| Lament | i VII VI V | la basse de lamentation (Purcell, *Didon et Énée*), la cadence andalouse |
+| Fifths | vi ii V I IV vii iii vi | le cercle des quintes baroque |
+| Gymnopedie | IVmaj7 Imaj7 | Satie, la première *Gymnopédie* |
+| Prelude | I ii7 V7 I vi ii V7 I | Bach, le premier prélude du *Clavier bien tempéré* |
+| Plagal | I IV I IV vi IV I I | l'amen des chorals |
+| Dorian | i7 IV7 | le vamp dorien |
+| Dub | i7 iv7 i7 VII | le dub |
+| Hymn | I vi IV V I IV V I | un choral |
+| Phrygian | i II i VII VI VII II i | le phrygien |
+| Epic | i VI III VII | l'éolien des musiques de film |
+| Lento | i(add9) VI i(add9) iv | un mineur lent |
+| Static | I | un bourdon : en Prog, toute la machine sur un accord |
+
+**COLOR** ajoute à la triade la septième, la neuvième, la onzième (Triad, 7th, 9th, 11th : les notes de la gamme
+au-dessus de la quinte). **VOICING** : Close (serré), Open (la deuxième voix du haut descend d'une octave), Wide (la
+quatrième aussi), Bass (et une basse sous l'accord, sa fondamentale). Chaque accord est **conduit depuis le précédent** :
+de ses renversements, celui où les voix bougent le moins, autour de la note de la piste (FREQ, OCTAVE : le registre).
+**DECAY** de 0,2 à 20 s, Hold au bout (tenu tant que la note l'est) ; **ATTACK** de 1 ms à 4 s (une montée douce, en
+S). Chaque note de l'accord est une dent de scie (polyBLEP), et **ENSEMBLE** en fait deux choses : à droite, trois dents
+de scie par note, de plus en plus écartées (une string machine, ses cordes) ; à gauche **VINTAGE**, une seule par note,
+mais chaque voix un peu désaccordée et **dérivant lentement à sa façon**, comme celles d'un vieux polyphonique, de plus
+en plus vers la gauche. **TONE** : à gauche une sinusoïde sous chaque note et les scies filtrées (plus rond, plus
+sombre), à droite plus brillant ; un passe-bas (d'état variable, celui de Zavalishin) qui s'ouvre avec l'enveloppe.
+**BELLS** sonne à chaque accord une **cloche FM** (deux opérateurs, 1 : 3,5, son index qui retombe vite, son niveau
+lentement) : à droite sur la note du haut (une octave au-dessus), à gauche sur la basse (deux octaves), Off au milieu.
+
+| 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **PROG** (Manual, 16 progressions) | **COLOR** (Triad, 7th, 9th, 11th) | **VOICING** (Close, Open, Wide, Bass) | **DECAY** (0,2 à 20 s ; au bout, Hold) | **ATTACK** (1 ms à 4 s) | **TONE** (− : sombre, + : brillant) | **ENSEMBLE** (− : VINTAGE, + : WIDE) | **BELLS** (− : sur la basse, + : sur le haut) |
+
+**La gamme Prog** (GLO, SCALE après Hirajoshi) : quand une piste joue PADS, **toutes les autres pistes suivent son
+accord**, en temps réel : à chaque trig de PADS, le quantiseur passe à la **gamme de l'accord**, ses notes et les notes
+de passage de la gamme (celle du projet, ou le mode de la progression), moins celles qui frottent (un demi-ton
+au-dessus d'une note de l'accord : la quarte sur un accord majeur). Une basse, un arpège, la dose d'aléatoire, le
+clavier : tout reste dans l'harmonie. Sans piste PADS, Prog ne quantise rien.
+
+Choisir PADS met ces réglages aux siens (Tintin, des triades ouvertes, tenues, une montée lente, un peu sombre, en
+ensemble, sans cloche) et garde l'OCTAVE de la piste. Elle coûte au FM-1 de 5 % d'un bloc (une triade, une dent de
+scie par note) à 12 % (six notes, trois dents de scie chacune, la cloche) ; sur ses réglages, 7 %. Les projets d'avant
+se lisent, leurs modèles de Plaits renumérotés.
+
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
 icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis
 les quatre potards côte à côte, dans l'ordre des KNOB 1 à 4 : un anneau fin allumé de son début (ou de son milieu,
 avec « − + ») jusqu'à la valeur, la valeur dedans, un câble en pointillé et son point d'arrivée dans l'autre couleur,
 la source écrite dessous. En bas les quatre pistes, une LED chacune allumée par sa gate dans la couleur de son modèle,
-celle qu'on joue en défonce (chaque case sous son potard, le modèle en 4 lettres : KICK, FM, ZERO, MODL…) ; sur les pages des LFO, les trois
+celle qu'on joue en défonce (chaque case sous son potard, le modèle en 4 lettres : KICK, FM, PADS, MODL…) ; sur les pages des LFO, les trois
 LFO, allumés à leur hauteur ; en mode STEP, sur les pages des pas et sur celles
 des effets, les 16 pas de la piste (allumés : un trig ; un point : des locks ; cerclé : celui qui joue ; pour un effet,
 à droite, à quel point il est ouvert). Quand on change de face dans un même module (SELECT), la nouvelle page glisse
@@ -535,7 +596,8 @@ sauvegardé garde les siennes). **ENV tenu
 
 **Le quantiseur et le swing** (GLO) : TEMPO, SCALE et ROOT (chaque note, des pas, de l'aléatoire ou du clavier, va
 à la note de la gamme la plus proche : Off, Major, Minor, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Harmonic et
-Melodic minor, Major et Minor pentatonic, Blues, Whole tone, Hirajoshi), SWING (50 % : droit ; 75 % : les
+Melodic minor, Major et Minor pentatonic, Blues, Whole tone, Hirajoshi, et Prog : l'accord que joue PADS, voir plus
+haut), SWING (50 % : droit ; 75 % : les
 contretemps retardés d'une demi-double croche). Quand une gamme est choisie, tout ce qui fait une hauteur y reste :
 FREQ (et ce que les câbles et la dose d'aléatoire en font : un LFO sur FREQ joue en escalier dans la gamme), la
 transposition, la note de l'oscillateur de Warps. Seul P.ENV glisse encore d'une note à l'autre : c'est l'enveloppe

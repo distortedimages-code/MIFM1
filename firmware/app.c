@@ -429,6 +429,7 @@ static const char *module_name(int page)
                                                                         : track_kind(ptrack(page)) == MK_DRUM ? "Drum"
                                                                         : track_kind(ptrack(page)) == MK_LXR ? "FM drum"
                                                                         : track_kind(ptrack(page)) == MK_FM ? "FM"
+                                                                        : track_kind(ptrack(page)) == MK_PADS ? "Pads"
                                                                         : "Plaits";
     }
     case PT_LFO: {
@@ -931,6 +932,10 @@ static const vop_t ICONS[NICON][IOPS] = {
                                                                                                      * operator on
                                                                                                      * another, its
                                                                                                      * feedback */
+    {{'L', 3, 10, 29, 10}, {'L', 3, 16, 29, 16}, {'L', 3, 22, 29, 22}, {'D', 11, 22, 3, 0}, {'D', 11, 16, 3, 0},
+     {'D', 11, 10, 3, 0}, {'D', 22, 19, 3, 0}, {'D', 22, 13, 3, 0}, {'D', 22, 7, 3, 0}},             /* PADS: two
+                                                                                                     * chords on a
+                                                                                                     * staff */
     {{'L', 4, 24, 4, 10}, {'L', 4, 10, 12, 10}, {'L', 12, 10, 12, 24}, {'L', 12, 24, 20, 24}, {'L', 20, 24, 20, 10},
      {'L', 20, 10, 28, 10}},                                                                        /* CHIPTUNE */
     {{'L', 4, 24, 10, 22}, {'L', 10, 22, 13, 12}, {'L', 13, 12, 16, 7}, {'L', 16, 7, 19, 12}, {'L', 19, 12, 22, 22},
@@ -1298,9 +1303,14 @@ static void panel_plaits(int t, int face, uint16_t ac)
     char s[40], n[8];
     int alg = eng_fm_algo(t);            /* (the FM: its algorithm, as it plays) */
     hero_icon(alg >= 0 ? IC_ALG + alg : IC_MODEL + m, ac);
-    if (face == 0) {                     /* the model */
+    if (face == 0) {                     /* the model (PADS: its progression, its chord) */
         int y = hero_title(eng_algo_name(PG_TRACK(t, 0), m));
         s[0] = 0;
+        if (eng_pads_track() == t) {
+            eng_pads_line(s, sizeof s);
+            hero_line(y, s);
+            return;
+        }
         text_cat(s, eng_bank_name(eng_model_bank(m)), sizeof s);
         text_cat(s, "|", sizeof s);
         int_text(m + 1, n);
@@ -2083,6 +2093,11 @@ static void draw_panel(void)
     }
     if ((pt == PT_PLAITS1 || pt == PT_PLAITS2 || pt == PT_PLAITS3 || pt == PT_SON2) && eng_fm_algo(tr) >= 0)
         s[1] = s[1] * 9 + 1 + eng_fm_algo(tr);   /* (the FM: its algorithm's drawing) */
+    if (tr >= 0 && tr == eng_pads_track()) {   /* (PADS: its progression's place, its chord) */
+        char pl[40];
+        eng_pads_line(pl, sizeof pl);
+        s[1] = s[1] * 31 + text_hash(pl);
+    }
     if (!ui.full && !ui.body_panel && !memcmp(s, ui.panel_shown, sizeof s)) {
         if (fx)
             fx_meter(0);
@@ -4103,9 +4118,15 @@ static void input(void)
         int first = algo_page(ui.page), n = eng_algo_count(first), snd = track_cat(ui.page) == CAT_SOUND;
         if (n) {
             int a = clamp((int32_t)p->algo[first] + e, 0, n - 1);
-            if (held(B_GLO) && snd) {    /* GLO held: the four tracks on that model */
+            if (snd && !held(B_GLO))     /* (a model once a project, another track's: past it) */
+                while (!eng_model_free(eng_page_track(first), a) && a + (e > 0 ? 1 : -1) >= 0 && a + (e > 0 ? 1 : -1) < n)
+                    a += e > 0 ? 1 : -1;
+            if (snd && !held(B_GLO) && !eng_model_free(eng_page_track(first), a))
+                a = p->algo[first];
+            if (held(B_GLO) && snd) {    /* GLO held: the four tracks on that model (PADS: the first) */
                 for (int t = 0; t < ENG_TRACKS; t++)
-                    eng_set_model(t, a);
+                    if (eng_model_free(t, a))
+                        eng_set_model(t, a);
                 ui.used[B_GLO] = 1;
             } else if (snd) {
                 eng_set_model(eng_page_track(first), a);   /* (an FM drum: its kit on its knobs) */
