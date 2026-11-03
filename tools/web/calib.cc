@@ -7,7 +7,8 @@
 // Warps and the effects 5.4 to 6.8 us a thousand instructions, the preparation 17). The browser cannot time the engine
 // either (its clock moves a render quantum at a time), so there the engine's clock is a model's: each part costs
 // what the table calibrate.py writes says (firmware/mi/web_costs.h).
-//   calib stress SECONDS                 the stress test playing
+//   calib stress SECONDS [TRAUMA DICE]   the stress test playing (TRAUMA's dose, the random dose: 0..100)
+//   calib groove SECONDS [TRAUMA DICE]   the demo groove playing
 //   calib one MODEL FILTER FM NOISE BEND BUS WARPS HQ SECONDS [EXTRA]
 //                                        T1 alone playing a note every step (its voice never rests), on MODEL, its
 //                                        filter FILTER (FM, NOISE: 0..1), BEND 0/1 (its bits); the bus BUS (MB_*); WARPS -1 off
@@ -38,9 +39,12 @@ int main(int argc, char** argv) {
   const char* what = argc > 1 ? argv[1] : "stress";
   project_t* p = eng_project();
   float secs = 2.0f;
-  if (!strcmp(what, "stress")) {
-    eng_stress(p);
+  if (!strcmp(what, "stress") || !strcmp(what, "groove")) {   // (the stress test, or the demo groove: TRAUMA's
+    if (!strcmp(what, "stress")) eng_stress(p);                // dose and the random dose as asked, to count what
+    else eng_groove(p);                                        // they add)
     secs = argc > 2 ? static_cast<float>(atof(argv[2])) : 4.0f;
+    if (argc > 3) p->trauma = static_cast<uint8_t>(atoi(argv[3]));
+    if (argc > 4) p->dice = static_cast<uint8_t>(atoi(argv[4]));
   } else if (!strcmp(what, "blank")) {                   // (the tracks on an FM drum: silent until a trig, they
     eng_blank(p);                                        // rest; INIT's Plaits sound without one)
     for (int t = 0; t < ENG_TRACKS; ++t) eng_set_model(t, eng_model_find(MK_LXR, 0));
