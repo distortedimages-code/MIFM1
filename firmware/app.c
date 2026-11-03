@@ -431,6 +431,7 @@ static const char *module_name(int page)
                                                                         : track_kind(ptrack(page)) == MK_FM ? "FM"
                                                                         : track_kind(ptrack(page)) == MK_PADS ? "Pads"
                                                                         : track_kind(ptrack(page)) == MK_POLY ? "Poly"
+                                                                        : track_kind(ptrack(page)) == MK_PROPHET ? "Prophet"
                                                                         : "Plaits";
     }
     case PT_LFO: {
@@ -941,6 +942,10 @@ static const vop_t ICONS[NICON][IOPS] = {
      {'L', 4, 22, 12, 22}, {'L', 12, 22, 12, 27}, {'L', 12, 27, 20, 27}, {'L', 20, 27, 20, 22},
      {'L', 20, 22, 28, 22}},                                                                        /* POLY: a saw
                                                                                                      * over its sub */
+    {{'L', 4, 15, 12, 5}, {'L', 12, 5, 12, 15}, {'L', 12, 15, 20, 5}, {'L', 20, 5, 20, 15}, {'L', 20, 15, 28, 5},
+     {'L', 4, 27, 10, 17}, {'L', 10, 17, 10, 27}, {'L', 10, 27, 18, 17}, {'L', 18, 17, 18, 27},
+     {'L', 18, 27, 26, 17}},                                                                        /* PROPHET: two
+                                                                                                     * saws apart */
     {{'L', 4, 24, 4, 10}, {'L', 4, 10, 12, 10}, {'L', 12, 10, 12, 24}, {'L', 12, 24, 20, 24}, {'L', 20, 24, 20, 10},
      {'L', 20, 10, 28, 10}},                                                                        /* CHIPTUNE */
     {{'L', 4, 24, 10, 22}, {'L', 10, 22, 13, 12}, {'L', 13, 12, 16, 7}, {'L', 16, 7, 19, 12}, {'L', 19, 12, 22, 22},

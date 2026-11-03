@@ -18,6 +18,9 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
 - **POLY** (0.12) : un petit synthé analogique polyphonique d'après le SH-101 de Roland et le S-1, quatre voix par
   piste, chacune son filtre à quatre pôles et son enveloppe ; une mémoire d'accords, ou des accords qui suivent
   l'harmonie (celle de PADS, ou la gamme), et un mode **VINTAGE** qui écarte un peu chaque voix (voir plus bas) ;
+- **PROPHET** (0.13) : le grand polyphonique d'après le Prophet-5 de Sequential Circuits, quatre voix par piste, deux
+  oscillateurs (treize réglages du panneau), son filtre, ses deux enveloppes, sa **Poly-Mod** (le balayage de la sync,
+  la FM), un bouton **VINTAGE** comme celui de la Rev 4 et les accords de POLY (voir plus bas) ;
 - **Plaits** sur chaque piste, 8 de ses modèles (ses trois batteries et treize de ses oscillateurs ont laissé la place
   aux moteurs de MIFM1 ; la voix et les puces suivront), et un **circuit bending** par piste (0.7, à la place du
   grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
@@ -86,7 +89,7 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
 pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
 en quatre gestes, le chemin du son (un schéma), le panneau (chaque numéro allume son repère sur la machine ;
-« Repères » les montre tous), les 22 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
+« Repères » les montre tous), les 23 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
 et ce qu'ils modélisent, les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le circuit bending,
 les effets, le séquenceur, la dose d'aléatoire, les spécifications, et des jauges de la charge du FM-1. « Essayer »,
 sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_try). Pour écouter MIFM1 sur un autre système (une
@@ -427,6 +430,40 @@ milieu des voix exactes ; à droite **UNISON** : sans accord, les quatre voix su
 Choisir POLY met ces réglages aux siens (une dent de scie sur sa sous-octave, un squelch, une voix par trig, un peu
 de vintage) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 3 % d'un bloc (quatre : 11 %). Les projets
 d'avant se lisent, leurs modèles de Plaits renumérotés.
+
+**PROPHET** (0.13 ; ALGORITHM après POLY, la banque MIFM1) : d'après le **Prophet-5** de Sequential Circuits (Dave Smith
+et John Bowen, 1978 : le premier polyphonique entièrement programmable), sa troisième révision (les puces Curtis).
+**Quatre voix par piste**, chacune deux oscillateurs, du bruit, le filtre à quatre pôles et deux enveloppes (celle du
+filtre, celle du volume). **OSC** choisit l'un de treize réglages des oscillateurs, ceux qu'on retrouve sur tous les
+programmes du Prophet : **Saws** (deux dents de scie), **Saw+Sq**, **Pulses** (deux impulsions), **Fifth** (B une
+quinte au-dessus), **Octave**, **Sub** (B un carré une octave dessous), **Hollow** (une impulsion carrée et un triangle
+une octave au-dessus), **Thin** (une impulsion à 12 %), **Sync** et **SyncSq** (A synchronisé sur B, une quinte ou une
+octave au-dessus), **Bell** (une impulsion, B à 19 demi-tons pour la FM), **Breath** (deux scies et du bruit),
+**Noise**. Toutes les arêtes sont corrigées comme dans POLY (polyBLEP du troisième ordre), les coins du triangle de B
+aussi (son polyBLAMP), et la marche de A à chaque redémarrage de la sync : rien au-dessus de -55 dB entre les harmoniques
+jusqu'au do 6. Le **filtre** : quatre pôles comme ceux de Curtis, la boucle résolue d'un coup, son entrée saturée,
+**CUTOFF** (il suit le clavier à 70 %), **RESO** jusqu'à l'auto-oscillation. **ENV** : à droite la profondeur de
+l'enveloppe du filtre (jusqu'à cinq octaves, une attaque immédiate : les sons pincés), à gauche sa profondeur avec une
+**attaque** : les cuivres (le filtre s'ouvre en un dixième de seconde, le volume un peu avant), puis les nappes (le
+filtre en 1,5 s, le volume en 2,5). **DECAY** de 50 ms à 20 s pour les deux, Hold au bout (le volume tenu, le filtre
+redescendant au tiers).
+
+**POLY-MOD**, ce qui fait le Prophet : à gauche, l'enveloppe du filtre sur la hauteur de A (jusqu'à trois octaves ; avec
+Sync, le balayage qui hurle des leads des années 80 ; ailleurs, des zaps) ; à droite, l'oscillateur B sur la fréquence
+de A (une FM linéaire : avec Bell, des cloches et du métal). **VINTAGE** (0 : Clean) fait ce que fait le bouton Vintage
+du Prophet-5 Rev 4 (2020) : des voix exactes d'aujourd'hui aux premières révisions instables, A et B de plus en plus
+écartés (jusqu'à 14 cents), chaque voix sa justesse, sa dérive lente, sa coupure et ses enveloppes un peu à part.
+**CHORD** : les accords de POLY (à droite la mémoire d'accords, à gauche l'harmonie : PADS, ou la gamme ; Off, une voix
+par trig, les précédentes résonnant dessous).
+
+| 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **OSC** (13 réglages) | **CUTOFF** (20 Hz à 20 kHz) | **RESO** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **VINTAGE** (Clean, puis les premières révisions) | **ENV** (− : avec une attaque, + : pincée) | **POLY-MOD** (− : l'enveloppe sur A, + : B sur A) | **CHORD** (ceux de POLY) |
+
+Choisir PROPHET met ces réglages aux siens (deux dents de scie un peu écartées, un filtre de cuivre, une voix par
+trig) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 4,5 % d'un bloc (quatre : 15 %). Les projets d'avant se
+lisent, leurs modèles de Plaits renumérotés. Depuis la 0.13, ZERO, les batteries, la FM, POLY et PROPHET partagent la
+mémoire d'une piste (une piste ne joue qu'une machine à la fois) : passer d'une machine à l'autre la refait à neuf.
 
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
 icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis

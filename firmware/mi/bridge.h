@@ -42,12 +42,20 @@ void lx_knob_text(int model, int k, float v, char *b, int n);   /* as the LXR-02
 void lx_defaults(int model, float *k);   /* the knobs as the model's kit has them */
 int lx_knob_steps(int model, int k);     /* its values a knob's turn goes through: 128 (MIDI's), a wave's 6 */
 
+/* ---- the machines' state on a track (0.13): ZERO's, a drum's, the FM's, POLY's and PROPHET's share it, one machine a track at a
+ * time. The engine's (mf_state); a machine's made when it comes to a track (its _reset), its init making all four its
+ * own (and the engine's owners forgotten: each made again at its next use) ---- */
+#define MF_STATE_BYTES 640
+void *mf_state(int t);
+void mf_forget(void);
+
 /* ---- the drums (mi_drum.cc, 0.9): MIFM1's, after Sonic Charge's Microtonic, an oscillator and a noise each with its
  * envelope, mixed and driven; six models (KICK, SNARE, CLAP, HAT, TOM, PERC), one engine. Their eight knobs as an FM
  * drum's (k: 0..1, a bipolar knob from its middle): WAVE, SWEEP, DECAY, FILTER, N.DECAY, MIX, DRIVE, P.AMT ---- */
 #define DR_MODELS 6
 void drum_init(void);
-void drum_silence(void);
+void drum_reset(int t);                  /* its state on track t made (it comes there) */
+void drum_silence(int t);
 void drum_set(int t, int model, float note, const float *k);
 void drum_gate(int t, int g);            /* a rise: a trig (at the next block) */
 void drum_render(int t, float *out, uint32_t n);
@@ -62,7 +70,8 @@ void drum_knob_text(int model, int k, float u, char *b, int n);
  * of sixteen. Its eight knobs as an FM drum's (k: 0..1, a bipolar knob from its middle): INDEX, RATIO, SHAPE, DECAY,
  * BEAT, MOVE, VARY, PULSE ---- */
 void zero_init(void);
-void zero_silence(void);                 /* every sound cut: silent until the next trig (its loops kept) */
+void zero_reset(int t);
+void zero_silence(int t);                /* its sound cut: silent until the next trig (its loops kept) */
 void zero_set(int t, float note, const float *k);
 void zero_gate(int t, int g);            /* a rise: a trig (at the next block); a fall: a held note let go */
 void zero_render(int t, float *out, uint32_t n);
@@ -76,7 +85,8 @@ void zero_knob_text(int k, float u, char *b, int n);
  * (k: 0..1, a bipolar knob from its middle): ALGO, RATIO (thirty voicings of the operators, the last eight chords),
  * INDEX, DECAY, MOTION (the operators' levels cycling), MOVE (- a swell, + a pluck), FEEDBACK, MUTATE ---- */
 void fm4_init(void);
-void fm4_silence(void);
+void fm4_reset(int t);
+void fm4_silence(int t);
 void fm4_set(int t, float note, const float *k);
 void fm4_gate(int t, int g);            /* a rise: a trig (at the next block); a fall: a held note let go */
 void fm4_render(int t, float *out, uint32_t n);
@@ -125,7 +135,8 @@ void pads_knob_text(int k, float u, char *b, int n);
  * scale's root, its root first; pn 0: none), the scale (bit i: i semitones over root; 0 or 0xFFF: major) */
 int poly_notes(float u, float note, const int *pc, int pn, uint16_t mask, int root, float *out);
 void poly_init(void);
-void poly_silence(void);
+void poly_reset(int t);
+void poly_silence(int t);
 void poly_set(int t, const float *notes, int n, const float *k);
 void poly_gate(int t, int g);
 void poly_render(int t, float *out, uint32_t n);
@@ -135,6 +146,23 @@ const char *poly_knob_name(int k);
 void poly_defaults(float *k);
 int poly_knob_steps(int k);              /* CHORD's 15, the others 128 */
 void poly_knob_text(int k, float u, char *b, int n);
+
+/* ---- PROPHET (mi_prophet.cc, 0.13): a five-voice classic after Sequential Circuits' Prophet-5 (its third revision),
+ * four voices a track: two oscillators (thirteen settings of them: saws, pulses, a fifth, an octave, a sub, synced, a
+ * bell...), noise, Curtis' four poles, the filter's envelope and the level's, POLY-MOD (- the filter's envelope on A's
+ * pitch: the sync's sweep; + B on A's frequency: FM). Its eight knobs (k: 0..1, a bipolar knob from its middle): OSC,
+ * CUTOFF, RESO, DECAY, VINTAGE, ENV (- with an attack, + its depth), POLY-MOD, CHORD (POLY's) ---- */
+void pro_init(void);
+void pro_reset(int t);
+void pro_silence(int t);
+void pro_set(int t, const float *notes, int n, const float *k);   /* (its notes: poly_notes, CHORD its eighth knob) */
+void pro_gate(int t, int g);
+void pro_render(int t, float *out, uint32_t n);
+int pro_voices(int t);
+const char *pro_knob_name(int k);
+void pro_defaults(float *k);
+int pro_knob_steps(int k);               /* OSC's 13, CHORD's 15, the others 128 */
+void pro_knob_text(int k, float u, char *b, int n);
 
 /* ---- the tracks' filters (mi_filter.cc): LADDER (Moog's, D'Angelo and Valimaki's model), MS-20 (Korg 35, its
  * resonance driven), SEM (Oberheim's state variable, noise into it), VOX (three formants); each with a vactrol

@@ -87,7 +87,8 @@ int main(int argc, char** argv) {
     if (extra & 256) p->val[PG_TRACK(0, 2) * 4 + 0] = 0.5f;   // (their bell on the top note)
     if (extra & 1024) p->val[PG_TRACK(0, 1) * 4 + 0] = 1.0f;  // POLY (1024): held; 2048 UNISON (four voices); 8192
     if (extra & 2048) p->val[PG_TRACK(0, 2) * 4 + 0] = 0.5f;  // its DECAY short (a voice a trig, over before the
-    if (extra & 8192) p->val[PG_TRACK(0, 1) * 4 + 0] = 0.0f;  // next)
+    if (extra & 8192) p->val[PG_TRACK(0, 1) * 4 + 0] = 0.0f;  // next); PROPHET: 1024 held, 8192 short, 16384 a
+    if (extra & 16384) p->val[PG_TRACK(0, 2) * 4 + 0] = 2.0f * 13.5f / 15.0f - 1.0f;   // Min7 (four voices)
     p->warps_hq = static_cast<uint8_t>(hq);
     if (warps >= 0) {
       static const float kW[8] = {static_cast<float>(WC_T2), 0.0f, 0.0f, 1.0f, 0.5f, 0.6f, 0.6f,
@@ -106,10 +107,10 @@ int main(int argc, char** argv) {
   eng_play(1);
   static float l[128], r[128];
   uint32_t nb = static_cast<uint32_t>(secs * 44100.0f / 128.0f);
-  double nv = 0.0;                      // (POLY's voices sounding, on average: their cost's unit)
+  double nv = 0.0;                      // (POLY's or PROPHET's voices sounding, on average: their cost's unit)
   for (uint32_t b = 0; b < nb; ++b) {
     eng_render(l, r, 128);
-    nv += poly_voices(0);
+    nv += eng_model_kind(eng_project()->algo[PG_TRACK(0, 0)]) == MK_PROPHET ? pro_voices(0) : poly_voices(0);
   }
   printf("blocks %u\nvoices %.4f\n", nb, nv / static_cast<double>(nb ? nb : 1));
   return 0;

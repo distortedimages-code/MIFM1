@@ -82,7 +82,12 @@ struct Drum {
   uint32_t rnd;
   int gate, trig, alive;
 };
-Drum drum[MF_TRACKS];
+// (its state on a track: the engine's, shared with the other machines, one a track at a time)
+static_assert(sizeof(Drum) <= MF_STATE_BYTES, "a drum's state");
+struct DrumAt {
+  Drum& operator[](int t) const { return *static_cast<Drum*>(mf_state(t)); }
+};
+const DrumAt drum = {};
 
 inline uint32_t xs(uint32_t& s) {
   s ^= s << 13;
@@ -103,19 +108,24 @@ inline float clip3_F(float x) {
 
 extern "C" {
 
-void drum_init(void) {
-  for (int t = 0; t < MF_TRACKS; ++t) {
-    Drum& d = drum[t];
-    uint8_t* raw = reinterpret_cast<uint8_t*>(&d);
-    for (uint32_t i = 0; i < sizeof(Drum); ++i) raw[i] = 0;
-    d.rnd = 0x6C078965u * static_cast<uint32_t>(t + 1);
-    d.note = 48.0f;
-    for (int i = 0; i < 8; ++i) d.k[i] = kKits[0].def[i];
-  }
+void drum_reset(int t) {
+  if (t < 0 || t >= MF_TRACKS) return;
+  Drum& d = drum[t];
+  uint8_t* raw = reinterpret_cast<uint8_t*>(&d);
+  for (uint32_t i = 0; i < sizeof(Drum); ++i) raw[i] = 0;
+  d.rnd = 0x6C078965u * static_cast<uint32_t>(t + 1);
+  d.note = 48.0f;
+  for (int i = 0; i < 8; ++i) d.k[i] = kKits[0].def[i];
 }
 
-void drum_silence(void) {
-  for (int t = 0; t < MF_TRACKS; ++t) drum[t].alive = 0, drum[t].trig = 0, drum[t].click = drum[t].last = 0.0f;
+void drum_init(void) {
+  for (int t = 0; t < MF_TRACKS; ++t) drum_reset(t);
+  mf_forget();
+}
+
+void drum_silence(int t) {
+  if (t < 0 || t >= MF_TRACKS) return;
+  drum[t].alive = 0, drum[t].trig = 0, drum[t].click = drum[t].last = 0.0f;
 }
 
 void drum_set(int t, int model, float note, const float* k) {

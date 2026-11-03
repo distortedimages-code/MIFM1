@@ -37,6 +37,7 @@ VA = NAMES.index("FM")                               # (the filters', the bus', 
 PAD = VA                                             # (the FM's square, PW and SYNC: three operators heard, calib.cc)
 PADS = NAMES.index("PADS")                           # (PADS: its notes, one saw each or three, its bell: calib.cc)
 POLY = NAMES.index("POLY")                           # (POLY: a voice held, four in unison)
+PRO = NAMES.index("PROPHET")                         # (PROPHET: a voice, four in a chord)
 
 
 def build():
@@ -96,6 +97,8 @@ def main():
         jobs[f"pads{x}"] = ("one", PADS, 0, 0, 0, 0, 0, -1, 0, SECS, bit)   # 3 notes, 6, one saw each, a bell
     for x, bit in (("one", 1024 | 8192), ("four", 1024 | 2048)):
         jobs[f"poly{x}"] = ("one", POLY, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
+    for x, bit in (("one", 1024 | 8192), ("four", 1024 | 16384)):
+        jobs[f"pro{x}"] = ("one", PRO, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
     for f in range(1, 5):                                # MF_LADDER..MF_VOX, under the LEAD
         for v, (fm, nz) in enumerate(((0, 0), (0.5, 0), (0, 0.5))):
             jobs[f"filter{f}.{v}"] = ("one", VA, f, fm, nz, 0, 0, -1, 0, SECS)
@@ -133,6 +136,10 @@ def main():
     n1, n4 = res["polyone"]["nv"], res["polyfour"]["nv"]   # (the voices sounding: a trig's and its last ones' tails;
     pvv = max((po["four"] - po["one"]) / max(n4 - n1, 0.5), 0.0)   # four in unison)
     polyc = [max(po["one"] - n1 * pvv, 0.0), pvv]
+    pr = {x: k(res[f"pro{x}"]["voice"] - 3 * rest, K_VOICE) for x in ("one", "four")}
+    m1, m4 = res["proone"]["nv"], res["profour"]["nv"]
+    prv = max((pr["four"] - pr["one"]) / max(m4 - m1, 0.5), 0.0)
+    proc = [max(pr["one"] - m1 * prv, 0.0), prv]
     prep0 = k(res["blank"]["total"] - res["blank"]["tasks"], K_PREP)
     prep1 = k(va["total"] - va["tasks"] - 3 * rest, K_PREP)             # (a track playing: its trigs, its knobs)
     prep_s = k(res["stress"]["total"] - res["stress"]["tasks"], K_PREP)
@@ -164,6 +171,7 @@ def main():
           "static const float kWebPads[4] = {" + ", ".join(f1(v) for v in pads) + "};   /* PADS: its floor, a note "
           "(one saw, three), its bell */",
           "static const float kWebPoly[2] = {" + ", ".join(f1(v) for v in polyc) + "};   /* POLY: its floor, a voice */",
+          "static const float kWebPro[2] = {" + ", ".join(f1(v) for v in proc) + "};   /* PROPHET: its floor, a voice */",
           f"static const float kWebBend = {f1(bend)};   /* the bits, one of their knobs up */",
           "static const float kWebGlitch = 9.0f;   /* the glitch, taking or repeating its slice (estimated: a few loads a sample) */",
           "static const float kWebWarps[2][6] = {   /* Warps, its algorithm's mark (Eco, HQ) */",

@@ -123,8 +123,8 @@ int eng_model_enveloped(int model);      /* 1: a Plaits model with its own envel
  * ZERO, the FM) takes its eight parameters from the knobs after FREQ: HARMONICS, TIMBRE, MORPH, the envelope page's
  * four, the pitch envelope's. Its kind says what plays it, its sub its index there (Plaits' engine, the LXR's voice,
  * the drum, the FM's kit) */
-enum { MK_PLAITS, MK_LXR, MK_ZERO, MK_DRUM, MK_FM, MK_PADS, MK_POLY };
-#define ENG_MODELS 22
+enum { MK_PLAITS, MK_LXR, MK_ZERO, MK_DRUM, MK_FM, MK_PADS, MK_POLY, MK_PROPHET };
+#define ENG_MODELS 23
 #define ENG_BANKS 5
 int eng_model_kind(int m);
 int eng_model_sub(int m);
@@ -167,7 +167,7 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 21u              /* (20: 0.11.1's, without POLY: read, renumbered;
+#define PROJECT_VERSION 22u              /* (21: 0.12's, without PROPHET: read, renumbered; 20: 0.11.1's, without POLY: read, renumbered;
                                           * 19: 0.11.0's, the FM's MOVE where SHAPE is: read, its nearest shape;
                                           * 18: 0.10.1's, without PADS: read, renumbered, MOVE as SHAPE; 17: 0.10.0's, the FM in eight models: read, one FM, ALGO theirs;
                                           * 16: 0.9's, thirteen of Plaits' models since gone: read, renumbered, those

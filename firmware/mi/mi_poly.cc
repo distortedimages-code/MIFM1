@@ -85,7 +85,12 @@ struct Poly {
   int dr_n;
   float dcx, dcy;
 };
-Poly poly[MF_TRACKS];
+// (its state on a track: the engine's, shared with the other machines, one a track at a time)
+static_assert(sizeof(Poly) <= MF_STATE_BYTES, "POLY's state");
+struct PolyAt {
+  Poly& operator[](int t) const { return *static_cast<Poly*>(mf_state(t)); }
+};
+const PolyAt poly = {};
 
 inline float t60_s(float u) { return 0.05f * fm_exp2f(u * 8.644f); }   // DECAY: 50 ms .. 20 s (to -60 dB)
 inline float cutoff_hz(float u) { return 20.0f * fm_exp2f(u * 10.0f); }  // CUTOFF: 20 Hz .. 20 kHz
@@ -174,33 +179,36 @@ int poly_notes(float u, float note, const int* pc, int pn, uint16_t mask, int ro
   return n;
 }
 
-void poly_init(void) {
-  for (int t = 0; t < MF_TRACKS; ++t) {
-    Poly& p = poly[t];
-    uint8_t* raw = reinterpret_cast<uint8_t*>(&p);
-    for (uint32_t i = 0; i < sizeof(Poly); ++i) raw[i] = 0;
-    p.rnd = 0x2545F491u * static_cast<uint32_t>(t + 3) | 1u;
-    float d[8];
-    poly_defaults(d);
-    for (int i = 0; i < 8; ++i) p.k[i] = d[i];
-    for (int i = 0; i < kVoices; ++i) {
-      PVoice& v = p.v[i];
-      v.note = 48.0f;
-      v.att = 1.0f;
-      for (int j = 0; j < 3; ++j) v.tol[j] = bip(p.rnd);   // (each voice its own, for good)
-      v.lfo = 0.25f * static_cast<float>(i);
-      v.uni = -1.0f + 2.0f * static_cast<float>(i) / static_cast<float>(kVoices - 1);
-    }
+void poly_reset(int t) {
+  if (t < 0 || t >= MF_TRACKS) return;
+  Poly& p = poly[t];
+  uint8_t* raw = reinterpret_cast<uint8_t*>(&p);
+  for (uint32_t i = 0; i < sizeof(Poly); ++i) raw[i] = 0;
+  p.rnd = 0x2545F491u * static_cast<uint32_t>(t + 3) | 1u;
+  float d[8];
+  poly_defaults(d);
+  for (int i = 0; i < 8; ++i) p.k[i] = d[i];
+  for (int i = 0; i < kVoices; ++i) {
+    PVoice& v = p.v[i];
+    v.note = 48.0f;
+    v.att = 1.0f;
+    for (int j = 0; j < 3; ++j) v.tol[j] = bip(p.rnd);   // (each voice its own, for good)
+    v.lfo = 0.25f * static_cast<float>(i);
+    v.uni = -1.0f + 2.0f * static_cast<float>(i) / static_cast<float>(kVoices - 1);
   }
 }
 
-void poly_silence(void) {
-  for (int t = 0; t < MF_TRACKS; ++t) {
-    Poly& p = poly[t];
-    p.trig = 0;
-    p.group = 0;
-    for (int i = 0; i < kVoices; ++i) p.v[i].alive = 0, p.v[i].env = 0.0f, p.v[i].att = 1.0f, p.v[i].trig = 0;
-  }
+void poly_init(void) {
+  for (int t = 0; t < MF_TRACKS; ++t) poly_reset(t);
+  mf_forget();
+}
+
+void poly_silence(int t) {
+  if (t < 0 || t >= MF_TRACKS) return;
+  Poly& p = poly[t];
+  p.trig = 0;
+  p.group = 0;
+  for (int i = 0; i < kVoices; ++i) p.v[i].alive = 0, p.v[i].env = 0.0f, p.v[i].att = 1.0f, p.v[i].trig = 0;
 }
 
 void poly_set(int t, const float* notes, int n, const float* k) {

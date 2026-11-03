@@ -78,7 +78,12 @@ struct Zero {
   uint32_t fresh;                       // the new seeds' random (never looped)
 };
 
-Zero zero[MF_TRACKS];
+// (its state on a track: the engine's, shared with the other machines, one a track at a time)
+static_assert(sizeof(Zero) <= MF_STATE_BYTES, "ZERO's state");
+struct ZeroAt {
+  Zero& operator[](int t) const { return *static_cast<Zero*>(mf_state(t)); }
+};
+const ZeroAt zero = {};
 
 inline uint32_t xs(uint32_t& s) {       // xorshift32
   s ^= s << 13;
@@ -131,21 +136,26 @@ void new_trig(Zero& v, int silent) {    // the trig's sound: its seed (a loop's,
 
 extern "C" {
 
-void zero_init(void) {
-  for (int t = 0; t < MF_TRACKS; ++t) {
-    Zero& v = zero[t];
-    uint8_t* raw = reinterpret_cast<uint8_t*>(&v);
-    for (uint32_t i = 0; i < sizeof(Zero); ++i) raw[i] = 0;
-    v.fresh = 0x2545F491u * static_cast<uint32_t>(t + 1);
-    v.rnd = 1u;
-    v.note = 36.0f;
-    v.ratio = 2;
-    v.att = 1.0f;
-  }
+void zero_reset(int t) {
+  if (t < 0 || t >= MF_TRACKS) return;
+  Zero& v = zero[t];
+  uint8_t* raw = reinterpret_cast<uint8_t*>(&v);
+  for (uint32_t i = 0; i < sizeof(Zero); ++i) raw[i] = 0;
+  v.fresh = 0x2545F491u * static_cast<uint32_t>(t + 1);
+  v.rnd = 1u;
+  v.note = 36.0f;
+  v.ratio = 2;
+  v.att = 1.0f;
 }
 
-void zero_silence(void) {
-  for (int t = 0; t < MF_TRACKS; ++t) zero[t].alive = 0, zero[t].amp = 0.0f, zero[t].trig = 0, zero[t].att = 1.0f;
+void zero_init(void) {
+  for (int t = 0; t < MF_TRACKS; ++t) zero_reset(t);
+  mf_forget();
+}
+
+void zero_silence(int t) {
+  if (t < 0 || t >= MF_TRACKS) return;
+  zero[t].alive = 0, zero[t].amp = 0.0f, zero[t].trig = 0, zero[t].att = 1.0f;
 }
 
 void zero_set(int t, float note, const float* k) {

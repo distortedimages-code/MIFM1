@@ -132,7 +132,12 @@ struct Voice {
   int gate, trig, alive, held, let_go, snap;
 };
 
-Voice voice[MF_TRACKS];
+// (its state on a track: the engine's, shared with the other machines, one a track at a time)
+static_assert(sizeof(Voice) <= MF_STATE_BYTES, "the FM's state");
+struct VoiceAt {
+  Voice& operator[](int t) const { return *static_cast<Voice*>(mf_state(t)); }
+};
+const VoiceAt voice = {};
 
 inline uint32_t xs(uint32_t& s) {
   s ^= s << 13;
@@ -342,27 +347,30 @@ void core(Voice& v, const Core& c, float* y, int m) {
 
 extern "C" {
 
+void fm4_reset(int t) {
+  if (t < 0 || t >= MF_TRACKS) return;
+  Voice& v = voice[t];
+  uint8_t* raw = reinterpret_cast<uint8_t*>(&v);
+  for (uint32_t i = 0; i < sizeof(Voice); ++i) raw[i] = 0;
+  v.rnd = 0x6C078965u * static_cast<uint32_t>(t + 1) | 1u;
+  v.note = 48.0f;
+  for (int i = 0; i < 4; ++i) v.att[i] = 1.0f;
+  for (int i = 0; i < 8; ++i) v.k[i] = kDef[i];
+}
+
 void fm4_init(void) {
   for (int i = 0; i < 512; ++i) g_sin[i] = sin_cyc(static_cast<float>(i) * (1.0f / 512.0f));
   g_sin[512] = 0.0f;
-  for (int t = 0; t < MF_TRACKS; ++t) {
-    Voice& v = voice[t];
-    uint8_t* raw = reinterpret_cast<uint8_t*>(&v);
-    for (uint32_t i = 0; i < sizeof(Voice); ++i) raw[i] = 0;
-    v.rnd = 0x6C078965u * static_cast<uint32_t>(t + 1) | 1u;
-    v.note = 48.0f;
-    for (int i = 0; i < 4; ++i) v.att[i] = 1.0f;
-    for (int i = 0; i < 8; ++i) v.k[i] = kDef[i];
-  }
+  for (int t = 0; t < MF_TRACKS; ++t) fm4_reset(t);
+  mf_forget();
 }
 
-void fm4_silence(void) {
-  for (int t = 0; t < MF_TRACKS; ++t) {
-    Voice& v = voice[t];
-    v.alive = 0;
-    v.trig = 0;
-    for (int i = 0; i < 4; ++i) v.e[i] = 0.0f, v.att[i] = 1.0f;
-  }
+void fm4_silence(int t) {
+  if (t < 0 || t >= MF_TRACKS) return;
+  Voice& v = voice[t];
+  v.alive = 0;
+  v.trig = 0;
+  for (int i = 0; i < 4; ++i) v.e[i] = 0.0f, v.att[i] = 1.0f;
 }
 
 void fm4_set(int t, float note, const float* k) {

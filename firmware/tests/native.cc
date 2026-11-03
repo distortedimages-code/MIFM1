@@ -3062,6 +3062,187 @@ int main(int argc, char** argv) {
       ++failures, printf("FAIL: POLY\n");
   }
 
+  // 49. PROPHET (mi_prophet.cc, 0.13): its knobs; its voices (a trig each, the last ringing on; a Min7 four); held and
+  // let go; its alias (its oscillators' settings, up to C6; the sync's step); POLY-MOD (the sweep moves the sync's
+  // timbre, B's FM the bell's); any setting finite and bounded. The machines' state shared on a track: the FM, POLY,
+  // PROPHET, ZERO, a drum one after another on the same track through the engine, sounding, finite. A project of 0.12
+  // (version 21) renumbered
+  {
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    const int pro_m = eng_model_find(MK_PROPHET, 0);
+    int ok = pro_m >= 0;
+    eng_set_model(1, pro_m);
+    float kd[8];
+    pro_defaults(kd);
+    for (int i = 0; i < 8; ++i) {
+      int param = PG_TRACK(1, 0) * 4 + 1 + i;
+      float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
+      if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), pro_knob_name(i)) != 0) ok = 0;
+    }
+    char tx[24];
+    struct { int k; float u; const char* want; } kTx[] = {
+        {0, 0.0f, "Saws"}, {0, 8.5f / 13.0f, "Sync"}, {0, 1.0f, "Noise"}, {7, 13.5f / 15.0f, "Min7"},
+        {7, 7.5f / 15.0f, "Off"}, {6, 0.25f, "50% SWEEP"}, {6, 0.75f, "50% FM"}, {4, 0.0f, "Clean"}, {3, 1.0f, "Hold"}};
+    for (const auto& x : kTx) {
+      pro_knob_text(x.k, x.u, tx, sizeof tx);
+      if (std::strcmp(tx, x.want)) ok = 0, printf("PROPHET: knob %d at %.3f written %s, %s expected\n", x.k, x.u, tx, x.want);
+    }
+    float k[8], buf[32];
+    auto blocks = [&](int nb) { for (int b = 0; b < nb; ++b) pro_render(0, buf, 32); };
+    auto trig = [&](const float* kk, float note) {
+      float v4[4];
+      int c = poly_notes(kk[7], note, nullptr, 0, 0, 0, v4);
+      pro_set(0, v4, c, kk);
+      pro_gate(0, 1);
+      blocks(20);
+      pro_gate(0, 0);
+      blocks(20);
+    };
+    pro_init();
+    pro_defaults(k);
+    k[3] = 0.8f;
+    trig(k, 48.0f);
+    trig(k, 55.0f);
+    int two = pro_voices(0);
+    k[7] = 13.5f / 15.0f;
+    pro_init();
+    trig(k, 48.0f);
+    int four = pro_voices(0);
+    // held, let go
+    pro_init();
+    pro_defaults(k);
+    k[3] = 1.0f, k[5] = 0.5f;
+    {
+      float v1 = 48.0f;
+      pro_set(0, &v1, 1, k);
+    }
+    pro_gate(0, 1);
+    double held_a = 0.0, held_b = 0.0, after = 0.0;
+    for (int b = 0; b < 1400; ++b) {
+      if (b == 700) pro_gate(0, 0);
+      pro_render(0, buf, 32);
+      for (int i = 0; i < 32; ++i) {
+        if (b >= 100 && b < 200) held_a = std::max(held_a, (double)std::fabs(buf[i]));
+        if (b >= 600 && b < 700) held_b = std::max(held_b, (double)std::fabs(buf[i]));
+        if (b >= 1300) after = std::max(after, (double)std::fabs(buf[i]));
+      }
+    }
+    // the alias: between the harmonics (the fundamental's), on C6
+    static float ab[44160];
+    auto level = [&](uint32_t from, uint32_t len, double hz) {
+      double re = 0.0, im = 0.0, w = 2.0 * 3.14159265358979 * hz / 44100.0;
+      for (uint32_t i = 0; i < len; ++i) {
+        double h = 0.5 - 0.5 * std::cos(2.0 * 3.14159265358979 * i / len), v = ab[from + i] * h;
+        re += v * std::cos(w * i);
+        im -= v * std::sin(w * i);
+      }
+      return std::sqrt(re * re + im * im) / (0.25 * len);
+    };
+    auto render_one = [&](const float* kk, float note) {
+      pro_init();
+      pro_set(0, &note, 1, kk);
+      pro_gate(0, 1);
+      for (uint32_t i = 0; i < 44128; i += 32) pro_render(0, &ab[i], 32);
+    };
+    double alias = -200.0;
+    const int kProg[8] = {0, 1, 2, 4, 5, 6, 7, 8};   // (Saws .. Sync: their fundamental the note's, the sub's half)
+    for (int c = 0; c < 8; ++c) {
+      pro_defaults(k);
+      k[0] = (kProg[c] + 0.5f) / 13.0f, k[1] = 1.0f, k[2] = 0.0f, k[3] = 1.0f, k[4] = 0.0f, k[5] = 0.5f;
+      render_one(k, 84.0f);
+      double f0 = 1046.5 / (kProg[c] == 5 ? 2.0 : 1.0), ref = level(8192, 32768, f0), worst = 0.0;
+      for (double f = 40.0; f < 16000.0; f += 10.0) {
+        double h = f / f0, d = std::fabs(h - std::floor(h + 0.5)) * f0;
+        if (d >= 25.0) worst = std::max(worst, level(8192, 32768, f));
+      }
+      alias = std::max(alias, 20.0 * std::log10(worst / ref + 1e-12));
+    }
+    // POLY-MOD: the sweep (Sync, the filter's envelope on A: its timbre at the trig and a second later); FM (Bell)
+    auto bright = [&](uint32_t from, uint32_t len) {
+      double ex = 0.0, ed = 0.0;
+      for (uint32_t i = from; i < from + len; ++i) ex += ab[i] * ab[i], ed += (ab[i] - ab[i - 1]) * (ab[i] - ab[i - 1]);
+      return std::sqrt(ed / (ex + 1e-12));
+    };
+    pro_defaults(k);
+    k[0] = 8.5f / 13.0f, k[1] = 1.0f, k[2] = 0.0f, k[3] = 0.7f, k[5] = 0.9f, k[6] = 0.1f;
+    render_one(k, 48.0f);
+    double sweep = bright(441, 2205) / bright(33075, 2205);
+    pro_defaults(k);
+    k[0] = 10.5f / 13.0f, k[1] = 1.0f, k[2] = 0.0f, k[3] = 1.0f, k[5] = 0.5f, k[6] = 0.5f;
+    render_one(k, 60.0f);
+    static float plain[4410];
+    for (int i = 0; i < 4410; ++i) plain[i] = ab[8820 + i];
+    k[6] = 0.9f;
+    render_one(k, 60.0f);
+    double fd = 0.0, fe = 0.0;           // (FM: how much it moved the wave, against its level)
+    for (int i = 0; i < 4410; ++i) fd += (ab[8820 + i] - plain[i]) * (ab[8820 + i] - plain[i]), fe += plain[i] * plain[i];
+    double fmb = fd / (fe + 1e-12);
+    // anything: 300 settings
+    uint32_t sd = 4321u;
+    auto rnd = [&]() { sd = sd * 1664525u + 1013904223u; return static_cast<float>(sd >> 8) / 16777216.0f; };
+    float pk_any = 0.0f;
+    int nan_any = 0;
+    pro_init();
+    for (int s2 = 0; s2 < 300; ++s2) {
+      for (int i = 0; i < 8; ++i) k[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();
+      float v4[4];
+      int c = poly_notes(k[7], 24.0f + 84.0f * rnd(), nullptr, 0, 0x5AD, 9, v4);
+      pro_set(s2 & 3, v4, c, k);
+      pro_gate(s2 & 3, 1);
+      for (int b = 0; b < 200; ++b) {
+        if (b == 100) pro_gate(s2 & 3, 0);
+        pro_render(s2 & 3, buf, 32);
+        for (int i = 0; i < 32; ++i) {
+          if (!std::isfinite(buf[i])) nan_any = 1;
+          pk_any = std::max(pk_any, std::fabs(buf[i]));
+        }
+      }
+    }
+    pro_init();
+    // the machines' state shared: one track through the FM, POLY, PROPHET, ZERO, a drum, the FM again
+    eng_defaults(p);
+    eng_fresh();
+    for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(0, st, st % 2 == 0);
+    const int kSeq[6] = {eng_model_find(MK_FM, 0), eng_model_find(MK_POLY, 0), pro_m, eng_model_find(MK_ZERO, 0),
+                         eng_model_find(MK_DRUM, 0), eng_model_find(MK_FM, 0)};
+    eng_play(1);
+    int shared_ok = 1;
+    for (int m = 0; m < 6; ++m) {
+      eng_set_model(0, kSeq[m]);
+      float spk = 0.0f;
+      for (int b = 0; b < 300; ++b) {
+        eng_render(l, r, n);
+        for (uint32_t i = 0; i < n; ++i) {
+          if (!std::isfinite(l[i])) shared_ok = 0;
+          spk = std::max(spk, std::fabs(l[i]));
+        }
+      }
+      if (spk < 0.02f || spk > 1.5f) shared_ok = 0, printf("PROPHET: the shared state, model %d: peak %.3f\n", kSeq[m], spk);
+    }
+    eng_play(0);
+    // a project of 0.12 (version 21): CHIPTUNE (14 then), POLY (13), MODAL (21), PADS (12)
+    static project_t q21;
+    eng_defaults(&q21);
+    q21.version = 21;
+    const uint8_t kOld21[4] = {14, 13, 21, 12};
+    for (int t = 0; t < ENG_TRACKS; ++t) q21.algo[PG_TRACK(t, 0)] = kOld21[t];
+    int v21 = eng_upgrade(&q21, sizeof q21) && eng_check(&q21) &&
+              q21.algo[PG_TRACK(0, 0)] == eng_model_find(MK_PLAITS, 7) &&
+              q21.algo[PG_TRACK(1, 0)] == eng_model_find(MK_POLY, 0) &&
+              q21.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 20) &&
+              q21.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PADS, 0);
+    printf("PROPHET: knobs %s; voices: a trig each %d, a Min7 %d; held %.2f %.2f, let go %.5f; its alias at C6 %.0f dB; "
+           "the sweep: brighter x%.2f at the trig; FM: %.2f of it moved; 300 settings: peak %.2f%s; the state shared %s; "
+           "version 21 %s\n",
+           ok ? "ok" : "WRONG", two, four, held_a, held_b, after, alias, sweep, fmb, pk_any, nan_any ? ", NaN" : "",
+           shared_ok ? "ok" : "WRONG", v21 ? "read" : "WRONG");
+    if (!ok || two != 2 || four != 4 || held_a < 0.1 || std::fabs(held_b / held_a - 1.0) > 0.2 || after > 1e-3 ||
+        alias > -55.0 || sweep < 1.3 || fmb < 0.05 || nan_any || pk_any > 1.2f || !shared_ok || !v21)
+      ++failures, printf("FAIL: PROPHET\n");
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }
