@@ -2404,7 +2404,7 @@ void eng_groove(project_t* p) {
   p->val[PG_TRACK(3, 0) * 4 + 2] = 27.5f / 30.0f;        // RATIO: Min7
   p->val[PG_TRACK(3, 0) * 4 + 3] = 0.3f;                 // INDEX
   p->val[PG_TRACK(3, 1) * 4 + 0] = 0.5f;                 // DECAY: 1 s
-  p->val[PG_TRACK(3, 1) * 4 + 1] = 0.35f;                // DETUNE
+  p->val[PG_TRACK(3, 1) * 4 + 1] = 0.35f;                // MOTION
   p->val[PG_TRACK(3, 1) * 4 + 2] = 0.3f;                 // MOVE: a pluck
   p->val[PG_TRACK(3, 1) * 4 + 3] = 0.4f;                 // FEEDBACK
   p->val[PG_TRACK(3, 2) * 4 + 1] = 0.35f;
@@ -2530,10 +2530,10 @@ void eng_stress(project_t* p) {
   cable(p, 0, 1, SRC_L3, PG_BEND(0) * 4 + 1, 30);
   cable(p, 0, 2, SRC_L1, PG_TRACK(0, 1) * 4 + 0, 20);
   cable(p, 1, 0, SRC_L1, PG_TRACK(1, 0) * 4 + 3, 40);    // T2: the triangle -> INDEX and the filter, S&H ->
-  cable(p, 1, 1, SRC_L2, PG_TRACK(1, 1) * 4 + 1, 30);    // DETUNE, the sine -> BITS
+  cable(p, 1, 1, SRC_L2, PG_TRACK(1, 1) * 4 + 1, 30);    // MOTION, the sine -> BITS
   cable(p, 1, 2, SRC_L3, PG_BEND(1) * 4 + 1, 15);
   cable(p, 1, 3, SRC_L1, PG_EQ * 4 + 1, -20);
-  cable(p, 2, 0, SRC_L1, PG_TRACK(2, 0) * 4 + 3, 40);    // T3: the triangle -> INDEX, S&H -> DETUNE, the sine -> the
+  cable(p, 2, 0, SRC_L1, PG_TRACK(2, 0) * 4 + 3, 40);    // T3: the triangle -> INDEX, S&H -> MOTION, the sine -> the
   cable(p, 2, 1, SRC_L2, PG_TRACK(2, 1) * 4 + 1, 35);    // pan and the delay's send
   cable(p, 2, 2, SRC_L3, PG_PAN * 4 + 2, 60);
   cable(p, 2, 3, SRC_L3, PG_DSEND * 4 + 2, 30);

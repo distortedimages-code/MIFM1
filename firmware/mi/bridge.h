@@ -74,7 +74,7 @@ void zero_knob_text(int k, float u, char *b, int n);
 /* ---- FM (mi_fm4.cc, 0.10.1): MIFM1's, four operators as the YM2612 has them (its eight algorithms, the first
  * operator's feedback) with a Hydrasynth's mutators on the operators heard (PW, SYNC); one machine. Its eight knobs
  * (k: 0..1, a bipolar knob from its middle): ALGO, RATIO (thirty voicings of the operators, the last eight chords),
- * INDEX, DECAY, DETUNE, MOVE (- a swell, + a pluck), FEEDBACK, MUTATE ---- */
+ * INDEX, DECAY, MOTION (the operators' levels cycling), MOVE (- a swell, + a pluck), FEEDBACK, MUTATE ---- */
 void fm4_init(void);
 void fm4_silence(void);
 void fm4_set(int t, float note, const float *k);

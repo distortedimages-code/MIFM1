@@ -288,21 +288,27 @@ un **carré** (deux dents de scie à une demi-période l'une de l'autre, retranc
 « Square »), puis du bruit. **MUTATE**, sur les opérateurs qu'on entend : à gauche **PW** (la première moitié du cycle
 pressée, l'onde penche, comme la distorsion de phase des Casio CZ), à droite **SYNC** (leur phase repart à chaque cycle
 de la note, leur hauteur jusqu'à trois octaves au-dessus ; la marche du redémarrage corrigée, polyBLEP). **INDEX** dose
-les modulateurs (avec ALGO 8, les trois tirettes du haut). **MOVE** donne son caractère à l'enveloppe : à droite un
-**pincement** (la FM s'ouvre au trig et retombe, plus fort et plus vite vers la droite), à gauche une **montée** (la
-note monte jusqu'à 2,5 s, la FM grandit après elle), au milieu ni l'un ni l'autre. **DECAY** de 50 ms à 20 s, Hold au
-bout (tenu tant que la note l'est, relâché d'autant plus lentement que la montée est longue) ; un opérateur au-dessus
-de la note s'éteint plus vite (comme les partiels aigus d'un vrai son : une lame, l'éclat d'une cloche). **DETUNE**
-écarte les opérateurs (quelques cents qui battent, puis un chorus) et les fait dériver lentement. Les modulateurs
+les modulateurs (avec ALGO 8, les trois tirettes du haut). **Chaque opérateur a son enveloppe**, et c'est ce qui fait
+bouger la FM. **MOVE** leur donne leur caractère : à droite un **pincement** (la FM s'ouvre au trig et retombe, plus fort
+et plus vite vers la droite, les modulateurs l'un après l'autre, le premier le plus vite : le timbre passe par plusieurs
+états), à gauche une **montée** (la note monte jusqu'à 2,5 s, les modulateurs grandissent après elle, l'un après
+l'autre), au milieu ni l'un ni l'autre. **DECAY** de 50 ms à 20 s, Hold au bout (tenu tant que la note l'est, relâché
+d'autant plus lentement que la montée est longue) ; un opérateur au-dessus de la note s'éteint plus vite (comme les
+partiels aigus d'un vrai son : une lame, l'éclat d'une cloche). **MOTION** fait respirer les opérateurs : le niveau de
+chacun cycle à sa propre vitesse (des rapports irrationnels entre elles, 1, 1,618, 0,764, 2,236 : le timbre ne repasse
+jamais par le même état), la rétroaction du premier respire avec lui, le mélange des opérateurs entendus bouge quand il y
+en a deux ou plus ; plus haut, plus profond et plus vite (de 0,12 à 2,7 Hz), les opérateurs à quelques cents les uns des
+autres et dérivant lentement. Chaque trig repart du même point : la note est rejouable, la tenue ne l'est jamais. Les modulateurs
 perdent 3 dB par octave au-dessus du do 4 et restent sous ce qui se replierait. Tout est calculé à deux fois la
 fréquence d'échantillonnage (une sinusoïde en table, 512 points interpolés : -94 dB) et ramené par le demi-bande de
 ZERO : entre les harmoniques, rien au-dessus de -55 dB, dent de scie et carré jusqu'au do 6, sync et PW compris.
 
 | 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **ALGO** (1 à 8) | **RATIO** (30 accords des opérateurs) | **INDEX** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **DETUNE** (Off, puis jusqu'à 30 cents) | **MOVE** (− : une montée, + : un pincement) | **FEEDBACK** (− : carré, + : scie, puis bruit) | **MUTATE** (− : PW, + : SYNC) |
+| **ALGO** (1 à 8) | **RATIO** (30 accords des opérateurs) | **INDEX** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **MOTION** (Off, puis les opérateurs qui respirent) | **MOVE** (− : une montée, + : un pincement) | **FEEDBACK** (− : carré, + : scie, puis bruit) | **MUTATE** (− : PW, + : SYNC) |
 
-Choisir la FM met ces réglages aux siens (le deuxième algorithme, un pincement brillant sur une dent de scie) et garde
+Choisir la FM met ces réglages aux siens (le deuxième algorithme, ses modulateurs à x2 et x3, un pincement sur une dent
+de scie douce, en mouvement) et garde
 l'OCTAVE de la piste (la FM joue la note comme Plaits). La dose d'aléatoire tire tout, sauf RATIO dans ou vers les
 accords (ils sortiraient de la gamme). Une voix coûte au FM-1 environ 11 % d'un bloc (le carré +2 %, PW +3 %, la sync
 +1 %) : moins que les modèles de Plaits qu'elle remplace (VIRTUAL ANALOG 15 %, les 6-OP FM 17 %, HARMONIC 31 %). Les

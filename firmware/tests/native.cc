@@ -2553,7 +2553,7 @@ int main(int argc, char** argv) {
         {0, 2.5f / 8.0f, "3"}, {1, 0.5f / 30.0f, "1:1:1:1"}, {1, 11.5f / 30.0f, "1:1:.5:1"}, {1, 16.5f / 30.0f, "Tine"},
         {1, 22.5f / 30.0f, "Major"}, {1, 27.5f / 30.0f, "Min7"}, {3, 1.0f, "Hold"}, {6, 0.875f, "Saw"},
         {6, 0.125f, "Square"}, {6, 0.5f, "Sine"}, {7, 0.5f, "Off"}, {7, 0.75f, "50% SYNC"}, {7, 0.25f, "50% PW"},
-        {4, 0.0f, "Off"}, {5, 0.75f, "50% PLUCK"}, {5, 0.25f, "50% SWELL"}};
+        {4, 0.0f, "Off"}, {4, 0.5f, "50%"}, {5, 0.75f, "50% PLUCK"}, {5, 0.25f, "50% SWELL"}};
     for (const auto& x : kTx) {
       fm4_knob_text(x.k, x.u, tx, sizeof tx);
       if (std::strcmp(tx, x.want)) kit_ok = 0, printf("FM: knob %d at %.3f written %s, %s expected\n", x.k, x.u, tx, x.want);
@@ -2637,7 +2637,7 @@ int main(int argc, char** argv) {
     double c5th = db(level(8192, 32768, 196.0), c_root), c4th = db(level(8192, 32768, 174.61), c_root);
     // a note held (DECAY at Hold) half a second, let go: its level held, then gone; a tine (its decay) over in 20 s
     fm4_defaults(k);
-    k[3] = 1.0f, k[5] = 0.5f;                            // (held, MOVE flat: its timbre steady too)
+    k[3] = 1.0f, k[4] = 0.0f, k[5] = 0.5f;               // (held; MOTION off, MOVE flat: its timbre steady too)
     play(1, 60.0f, k, 44128, 22048);
     auto rms = [&](uint32_t a, uint32_t len) {
       double e = 0.0;

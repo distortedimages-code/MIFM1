@@ -12,11 +12,14 @@
 // first half squeezed: its wave leans, as Casio's phase distortion), to the right SYNC (their phase started again at
 // each of the note's cycles, their pitch up to three octaves above: the edge's step taken off around it, polyBLEP).
 //
-// INDEX: the modulators' depth (with every operator heard: the three upper ones' levels). MOVE, the envelope's
-// character: to the right a pluck (the FM opens at the trig and settles back, more and faster further right), to the
-// left a swell (the note rises slower, the FM grows after it). DECAY (held at the top while the gate is); an operator
-// high above the note dies sooner (a sound's high partials do: a tine, a bell's shimmer). DETUNE: the operators apart
-// (a few cents, then a chorus), wandering.
+// Each operator its own envelope: the FM moves. INDEX: the modulators' depth (with every operator heard: the three upper
+// ones' levels). MOVE, the envelopes' character: to the right a pluck (the FM opens at the trig and settles back, more
+// and faster further right; the modulators one after another, the first fastest: the timbre goes through its stages),
+// to the left a swell (the note rises slower, the modulators after it, one after another). DECAY (held at the top
+// while the gate is); an operator high above the note dies sooner (a sound's high partials do: a tine, a bell's
+// shimmer). MOTION: each operator's level cycling at its own rate, their rates apart by irrational ratios (the timbre
+// never comes back the same), the first one's feedback breathing with it, the heard ones' mix moving when there are
+// two or more; deeper and faster up the knob, the operators a few cents apart and wandering.
 //
 // Rendered at twice the rate (the sidebands, the feedback's saw), brought down by ZERO's half-band (HIIR, six
 // coefficients). The modulators' depth falls 3 dB an octave above C4 (and is kept under what would alias).
@@ -76,7 +79,7 @@ const int8_t kFirst[8][4] = {           // the operator each modulator modulates
 const float kLvl[8][4] = {{0.35f, 0.5f, 1.0f, 1.0f}, {0.5f, 0.5f, 1.0f, 1.0f}, {0.7f, 0.5f, 0.8f, 1.0f},
                           {0.5f, 0.7f, 0.8f, 1.0f}, {0.8f, 1.0f, 0.6f, 1.0f}, {0.6f, 1.0f, 1.0f, 1.0f},
                           {0.8f, 1.0f, 0.8f, 0.8f}, {1.0f, 1.0f, 1.0f, 1.0f}};
-const float kDet[4] = {0.5f, -1.0f, 1.0f, -0.3f};   // each operator's detune (x DETUNE): the heard ones spread
+const float kDet[4] = {0.5f, -1.0f, 1.0f, -0.3f};   // each operator's detune (x MOTION's cents): the heard ones spread
 
 // RATIO: the four operators' ratios to the note (the fourth always heard, always the note). Harmonic, then sub, high
 // and inharmonic ones; then eight chords (equal tempered: in tune with the other tracks), the note and an octave on
@@ -95,8 +98,9 @@ const char* const kVoicingName[kVoicings] = {
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
     nullptr, nullptr, nullptr, nullptr, "Tine", nullptr, "Bell", "Tube", "Bars", "Metal",
     "Major", "Minor", "Sus4", "Sus2", "Maj7", "Min7", "Dom7", "4ths"};
-// the knobs as choosing the FM sets them: the second algorithm, unison, a bright pluck over a saw
-const float kDef[8] = {1.5f / 8.0f, 0.5f / kVoicings, 0.5f, 0.55f, 0.2f, 0.675f, 0.775f, 0.5f};
+// the knobs as choosing the FM sets them: the second algorithm, its modulators at x2 and x3, a pluck over a soft saw,
+// moving
+const float kDef[8] = {1.5f / 8.0f, 8.5f / kVoicings, 0.5f, 0.6f, 0.35f, 0.65f, 0.7f, 0.5f};
 
 inline int algo_of(float u) {
   int a = static_cast<int>(u * 8.0f);
@@ -114,7 +118,8 @@ struct Voice {
   float fa0, fa1, fb0, fb1;             // the first operator's feedback: its two last outputs (the square's two saws)
   float e[4], att[4], ainc[4], a0[4], dec[4];   // the envelopes: the level; the attack's progress, step, start; the decay
   float g[4];                           // each operator's gain as the last sub-block left it
-  float ie;                             // MOVE's (1 at the trig, falling)
+  float ie[4];                          // MOVE's, each operator's (1 at the trig, falling)
+  float th[4];                          // MOTION's, each operator's cycle (its phase)
   float i_s, fb_s, mu_s;                // smoothed: the depth, the feedback, the mutator
   float corr;                           // the sync's step: its correction on the next sample
   float hb[2][4];
@@ -137,7 +142,15 @@ inline float bip(uint32_t& s) { return static_cast<float>(xs(s) >> 8) * (2.0f / 
 inline float note_hz(float note) { return 440.0f * fm_exp2f((note - 69.0f) * (1.0f / 12.0f)); }
 
 inline float t60_s(float u) { return 0.05f * fm_exp2f(u * 8.644f); }        // DECAY: 50 ms .. 20 s (to -60 dB)
-inline float detune_ct(float u) { return 30.0f * u * u; }                  // DETUNE: up to 30 cents apart
+// MOTION: each operator's level cycling at its own rate (their ratios irrational: the cycles never meet again), its
+// depth and rate up with the knob; the operators apart (cents) and wandering
+inline float motion_depth(float u) { return 0.9f * u; }
+inline float motion_hz(float u) { return 0.12f * fm_exp2f(u * 4.5f); }    // 0.12 .. 2.7 Hz (the first operator's)
+inline float detune_ct(float u) { return 12.0f * u * u; }
+const float kMotionRate[4] = {1.0f, 1.618034f, 0.763932f, 2.236068f};
+// MOVE's stagger: a pluck's operators fall one after another (the first fastest), a swell's rise one after another
+// (the third first): the timbre goes through its stages
+const float kPluckT[4] = {0.45f, 0.8f, 1.4f, 1.0f}, kSwellT[4] = {1.6f, 1.0f, 0.6f, 1.0f};
 // FEEDBACK: its depth (the phase moved by the two last outputs' sum, cycles): the saw (and the square) at 0.75 (0.16:
 // past it the loop starts to hunt, it aliases), then noise (x 4.5)
 inline float fb_beta(float v) {
@@ -330,7 +343,7 @@ void fm4_render(int t, float* out, uint32_t n) {
       v.att[i] = 0.0f;
       v.dec[i] = 1.0f;
     }
-    v.ie = 1.0f;
+    for (int i = 0; i < 4; ++i) v.ie[i] = 1.0f, v.th[i] = 0.5f;   // (MOTION from its top: the note's attack as set)
     v.let_go = 0;
     v.alive = 1;
   }
@@ -351,7 +364,7 @@ void fm4_render(int t, float* out, uint32_t n) {
   const float f0 = note_hz(v.note);
   const float* rt = kVoicing[v.voi];
   float fr[4], inc[4];
-  float spread = detune_ct(ud), hz = ud * ud * 1.2f;
+  float spread = detune_ct(ud), hz = ud * ud * 0.8f;
   for (int i = 0; i < 4; ++i) {
     float ct = kDet[i] * spread + v.dr[i] * 2.5f * ud;
     fr[i] = f0 * rt[i] * fm_exp2f(ct * (1.0f / 1200.0f)) + kDet[i] * hz;
@@ -406,7 +419,15 @@ void fm4_render(int t, float* out, uint32_t n) {
   float tref = v.held ? 1.0f : tau, ti;
   if (move >= 0.0f) ti = clampf(0.33f * tref * (1.2f - 0.8f * move), 0.006f, 2.5f);
   else ti = 0.05f + 0.8f * A;
-  const float ik = fm_expf(-static_cast<float>(kSub) / (ti * kSr));
+  float ik[4];
+  for (int i = 0; i < 4; ++i) ik[i] = fm_expf(-static_cast<float>(kSub) / (ti * (move >= 0.0f ? kPluckT[i] : kSwellT[i]) * kSr));
+  // MOTION: its depth on the modulators (on the heard ones too when two or more are: their mix moves, a single one's
+  // level does not), its rates
+  int heard = 0;
+  for (int i = 0; i < 4; ++i) heard += C[i];
+  const float md = motion_depth(ud), mdc = heard > 1 ? 0.5f * md : 0.0f;
+  float mth[4];
+  for (int i = 0; i < 4; ++i) mth[i] = ud > 0.004f ? motion_hz(ud) * kMotionRate[i] * static_cast<float>(kSub) / kSr : 0.0f;
   // the feedback (its sign: the square; above 1 kHz less: a saw as clean as an octave under), the mutator
   const float fhi = fr[0] > 1000.0f ? fm_exp2f(-0.25f * fm_log2f(fr[0] * 0.001f)) : 1.0f;
   const float beta = fb_beta(fbk) * fhi * (fbk < 0.0f ? -1.0f : 1.0f);
@@ -445,15 +466,21 @@ void fm4_render(int t, float* out, uint32_t n) {
       }
       v.e[i] = x;
     }
-    v.ie *= ns == kSub ? ik : fm_exp2f(fm_log2f(ik) * static_cast<float>(ns) * (1.0f / kSub));
     v.i_s += (I - v.i_s) * ksm;
     v.fb_s += (beta - v.fb_s) * ksm;
     v.mu_s += (mu - v.mu_s) * ksm;
-    float X = v.i_s + (move >= 0.0f ? move * 0.8f * v.ie : -move * 0.8f * (1.0f - v.ie));
-    X = clampf(X, 0.0f, 1.2f);
     const float r2 = 1.0f / static_cast<float>(2 * ns);
+    float cyc0 = 1.0f;
     for (int i = 0; i < 4; ++i) {
-      float gt = B[i] * v.e[i] * (modx[i] ? X : 1.0f);
+      v.ie[i] *= ns == kSub ? ik[i] : fm_exp2f(fm_log2f(ik[i]) * static_cast<float>(ns) * (1.0f / kSub));
+      float X = v.i_s + (move >= 0.0f ? move * 0.8f * v.ie[i] : -move * 0.8f * (1.0f - v.ie[i]));
+      X = clampf(X, 0.0f, 1.2f);
+      v.th[i] += mth[i] * static_cast<float>(ns) * (1.0f / kSub);
+      v.th[i] -= v.th[i] >= 1.0f ? 1.0f : 0.0f;
+      float cyc = 0.5f - 0.5f * sin_cyc(v.th[i] < 0.75f ? v.th[i] + 0.25f : v.th[i] - 0.75f);   // (1 at 0.5: a cosine)
+      if (i == 0) cyc0 = cyc;
+      float d = modx[i] ? md : mdc;
+      float gt = B[i] * v.e[i] * (modx[i] ? X : 1.0f) * (1.0f - d + d * cyc);
       if (!C[i]) gt = gt < cap[i] ? gt : cap[i];
       c.g[i] = v.g[i];
       c.dg[i] = (gt - v.g[i]) * r2;
@@ -463,7 +490,7 @@ void fm4_render(int t, float* out, uint32_t n) {
     c.de1 = (v.e[0] - e1_0) * r2;
     // the feedback, the mutator
     const int sq = v.fb_s < 0.0f;
-    c.bt = sq ? -v.fb_s : v.fb_s;
+    c.bt = (sq ? -v.fb_s : v.fb_s) * (1.0f - 0.6f * md + 0.6f * md * cyc0);   // (MOTION: the saw breathes too)
     c.mk = sq ? (c.bt <= 0.15f ? 1.0f + 18.8f * c.bt * c.bt : clampf(1.423f - (c.bt - 0.15f) * 4.0f, 1.1f, 1.5f))
               : 1.0f;                  // (the square's level: its two saws partly cancel)
     c.kn = 0.5f, c.s1 = 1.0f, c.s2 = 1.0f;
@@ -536,7 +563,7 @@ void fm4_render(int t, float* out, uint32_t n) {
 int fm4_algo(float u) { return algo_of(u); }
 
 const char* fm4_knob_name(int k) {
-  static const char* const kN[8] = {"Algo", "Ratio", "Index", "Decay", "Detune", "Move", "Feedback", "Mutate"};
+  static const char* const kN[8] = {"Algo", "Ratio", "Index", "Decay", "Motion", "Move", "Feedback", "Mutate"};
   return k >= 0 && k < 8 ? kN[k] : "";
 }
 
@@ -603,20 +630,9 @@ void fm4_knob_text(int k, float u, char* b, int n) {   // u: 0..1 (a bipolar kno
       }
       return;
     }
-    case 4: {                           // DETUNE: cents apart
-      float c = detune_ct(u);
-      if (c < 0.05f) return put_s(b, n, &at, "Off");
-      int x = static_cast<int>(c * 10.0f + 0.5f);
-      if (x < 100) {
-        put_i(b, n, &at, x / 10);
-        put_s(b, n, &at, ".");
-        put_i(b, n, &at, x % 10);
-      } else {
-        put_i(b, n, &at, (x + 5) / 10);
-      }
-      put_s(b, n, &at, "ct");
-      return;
-    }
+    case 4:                             // MOTION
+      if (u < 0.004f) return put_s(b, n, &at, "Off");
+      break;
     case 3:
       if (u > 0.98f) return put_s(b, n, &at, "Hold");
       return put_time(b, n, &at, t60_s(u));
