@@ -41,7 +41,7 @@ static const float kWebPads[4] = {78.3f, 22.6f, 31.9f, 70.5f};   /* PADS: its fl
 static const float kWebPoly[2] = {21.3f, 77.5f};   /* POLY: its floor, a voice */
 static const float kWebPro[2] = {28.1f, 104.0f};   /* PROPHET: its floor, a voice */
 static const float kWebBend = 77.4f;   /* the bits, one of their knobs up */
-static const float kWebTrauma = 51.0f;   /* TRAUMA's drive on a track */
+static const float kWebTrauma = 46.7f;   /* TRAUMA's drive on a track */
 static const float kWebGlitch = 9.0f;   /* the glitch, taking or repeating its slice (estimated: a few loads a sample) */
 static const float kWebWarps[2][6] = {   /* Warps, its algorithm's mark (Eco, HQ) */
     {569.6f, 567.0f, 637.7f, 538.2f, 585.4f, 605.8f},
