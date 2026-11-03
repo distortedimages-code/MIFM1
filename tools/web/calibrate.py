@@ -36,6 +36,7 @@ NAMES = re.findall(r'\{"([^"]+)", "[^"]*", MK_', (FW / "mi" / "engine.cc").read_
 VA = NAMES.index("FM")                               # (the filters', the bus', Warps' runs: under the FM)
 PAD = VA                                             # (the FM's square, PW and SYNC: three operators heard, calib.cc)
 PADS = NAMES.index("PADS")                           # (PADS: its notes, one saw each or three, its bell: calib.cc)
+POLY = NAMES.index("POLY")                           # (POLY: a voice held, four in unison)
 
 
 def build():
@@ -67,6 +68,7 @@ def count(exe, *args):
         r = subprocess.run(["valgrind", "--tool=callgrind", f"--callgrind-out-file={out}", "--toggle-collect=eng_render",
                             str(exe), *map(str, args)], capture_output=True, text=True)
         blocks = int(re.search(r"blocks (\d+)", r.stdout).group(1))
+        nv = re.search(r"voices ([\d.]+)", r.stdout)
         ann = subprocess.run(["callgrind_annotate", "--inclusive=yes", "--threshold=100", str(out)],
                              capture_output=True, text=True).stdout
     got = {}
@@ -78,7 +80,9 @@ def count(exe, *args):
         for k, pat in FUNCS.items():
             if k not in got and re.search(pat, fn):
                 got[k] = n
-    return {k: got.get(k, 0) / blocks for k in FUNCS}
+    res = {k: got.get(k, 0) / blocks for k in FUNCS}
+    res["nv"] = float(nv.group(1)) if nv else 0.0         # (POLY's voices, on average)
+    return res
 
 
 def main():
@@ -90,6 +94,8 @@ def main():
         jobs[f"fm{x}"] = ("one", PAD, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
     for x, bit in (("triad", 512), ("six", 512 | 64), ("one", 512 | 128), ("bell", 512 | 256)):   # PADS, MANUAL:
         jobs[f"pads{x}"] = ("one", PADS, 0, 0, 0, 0, 0, -1, 0, SECS, bit)   # 3 notes, 6, one saw each, a bell
+    for x, bit in (("one", 1024 | 8192), ("four", 1024 | 2048)):
+        jobs[f"poly{x}"] = ("one", POLY, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
     for f in range(1, 5):                                # MF_LADDER..MF_VOX, under the LEAD
         for v, (fm, nz) in enumerate(((0, 0), (0.5, 0), (0, 0.5))):
             jobs[f"filter{f}.{v}"] = ("one", VA, f, fm, nz, 0, 0, -1, 0, SECS)
@@ -123,6 +129,10 @@ def main():
     pv3 = max((pv["six"] - pv["triad"]) / 3.0, 0.0)      # (a note, three saws: the triad and six notes apart)
     pv1 = max(pv3 - (pv["triad"] - pv["one"]) / 3.0, 0.0)   # (one saw: two fewer a note)
     pads = [max(pv["triad"] - 3.0 * pv3, 0.0), pv1, pv3, max(pv["bell"] - pv["triad"], 0.0)]
+    po = {x: k(res[f"poly{x}"]["voice"] - 3 * rest, K_VOICE) for x in ("one", "four")}
+    n1, n4 = res["polyone"]["nv"], res["polyfour"]["nv"]   # (the voices sounding: a trig's and its last ones' tails;
+    pvv = max((po["four"] - po["one"]) / max(n4 - n1, 0.5), 0.0)   # four in unison)
+    polyc = [max(po["one"] - n1 * pvv, 0.0), pvv]
     prep0 = k(res["blank"]["total"] - res["blank"]["tasks"], K_PREP)
     prep1 = k(va["total"] - va["tasks"] - 3 * rest, K_PREP)             # (a track playing: its trigs, its knobs)
     prep_s = k(res["stress"]["total"] - res["stress"]["tasks"], K_PREP)
@@ -153,6 +163,7 @@ def main():
           "PW, SYNC */",
           "static const float kWebPads[4] = {" + ", ".join(f1(v) for v in pads) + "};   /* PADS: its floor, a note "
           "(one saw, three), its bell */",
+          "static const float kWebPoly[2] = {" + ", ".join(f1(v) for v in polyc) + "};   /* POLY: its floor, a voice */",
           f"static const float kWebBend = {f1(bend)};   /* the bits, one of their knobs up */",
           "static const float kWebGlitch = 9.0f;   /* the glitch, taking or repeating its slice (estimated: a few loads a sample) */",
           "static const float kWebWarps[2][6] = {   /* Warps, its algorithm's mark (Eco, HQ) */",

@@ -116,6 +116,26 @@ void pads_defaults(float *k);
 int pads_knob_steps(int k);              /* PROG's 17, COLOR's and VOICING's 4, the others 128 */
 void pads_knob_text(int k, float u, char *b, int n);
 
+/* ---- POLY (mi_poly.cc, 0.12): a small polyphonic analog synthesizer after Roland's SH-101 and S-1, four voices a
+ * track: its oscillator (saw, pulse, PWM, its sub), the IR3109's four poles, one envelope; chords (a chord memory's,
+ * or the harmony's: PADS' chord, the scale's). Its eight knobs (k: 0..1, a bipolar knob from its middle): WAVE,
+ * CUTOFF, RESO, DECAY, SUB, ENV (- swell, + its depth), CHORD (-: the harmony's, +: a chord memory's), VOICE
+ * (- VINTAGE, + UNISON) ---- */
+/* a trig's notes (4 at most) in out, how many: CHORD at u over the note; pc, pn: PADS' chord (semitones over the
+ * scale's root, its root first; pn 0: none), the scale (bit i: i semitones over root; 0 or 0xFFF: major) */
+int poly_notes(float u, float note, const int *pc, int pn, uint16_t mask, int root, float *out);
+void poly_init(void);
+void poly_silence(void);
+void poly_set(int t, const float *notes, int n, const float *k);
+void poly_gate(int t, int g);
+void poly_render(int t, float *out, uint32_t n);
+int poly_voices(int t);                  /* its voices sounding */
+int poly_chord(float u);                 /* CHORD at u: -7 .. 7 (0 Off) */
+const char *poly_knob_name(int k);
+void poly_defaults(float *k);
+int poly_knob_steps(int k);              /* CHORD's 15, the others 128 */
+void poly_knob_text(int k, float u, char *b, int n);
+
 /* ---- the tracks' filters (mi_filter.cc): LADDER (Moog's, D'Angelo and Valimaki's model), MS-20 (Korg 35, its
  * resonance driven), SEM (Oberheim's state variable, noise into it), VOX (three formants); each with a vactrol
  * envelope, a ping, FM from its own output, key tracking ---- */

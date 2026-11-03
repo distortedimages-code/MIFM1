@@ -2887,6 +2887,181 @@ int main(int argc, char** argv) {
       ++failures, printf("FAIL: PADS\n");
   }
 
+  // 48. POLY (mi_poly.cc, 0.12): its knobs; its chords (a chord memory's Min9; the scale's triad and seventh in A minor
+  // on F, a seventh; PADS' chord through the engine, Root following it); its voices (a voice a trig, the last ringing
+  // on under it; UNISON four; a chord three); held and let go; its alias (saw, pulse, the sub, up to C6); any setting
+  // finite and bounded; a project of 0.11.1 (version 20) renumbered
+  {
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    const int poly_m = eng_model_find(MK_POLY, 0);
+    int ok = poly_m >= 0 && eng_model_free(1, poly_m) && eng_model_free(2, poly_m);
+    eng_set_model(2, poly_m);
+    float kd[8];
+    poly_defaults(kd);
+    for (int i = 0; i < 8; ++i) {
+      int param = PG_TRACK(2, 0) * 4 + 1 + i;
+      float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
+      if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), poly_knob_name(i)) != 0) ok = 0;
+    }
+    char tx[24];
+    struct { int k; float u; const char* want; } kTx[] = {
+        {0, 0.0f, "Saw"}, {0, 0.5f, "Square"}, {6, 7.5f / 15.0f, "Off"}, {6, 14.5f / 15.0f, "Min9"},
+        {6, 6.5f / 15.0f, "Triad"}, {6, 0.0f, "Root"}, {3, 1.0f, "Hold"}, {7, 0.25f, "50% VINTAGE"},
+        {7, 0.75f, "50% UNISON"}, {5, 0.25f, "50% SWELL"}, {4, 0.0f, "Off"}, {4, 1.0f, "-2 25%"}};
+    for (const auto& x : kTx) {
+      poly_knob_text(x.k, x.u, tx, sizeof tx);
+      if (std::strcmp(tx, x.want)) ok = 0, printf("POLY: knob %d at %.3f written %s, %s expected\n", x.k, x.u, tx, x.want);
+    }
+    // the chords
+    float nn[4];
+    int n9 = poly_notes(14.5f / 15.0f, 48.0f, nullptr, 0, 0, 0, nn);
+    int chords_ok = n9 == 4 && nn[0] == 48.0f && nn[1] == 51.0f && nn[2] == 58.0f && nn[3] == 62.0f;
+    int nt = poly_notes(6.5f / 15.0f, 53.0f, nullptr, 0, 0x5AD, 9, nn);   // F in A minor: F A C
+    chords_ok &= nt == 3 && nn[0] == 53.0f && nn[1] == 57.0f && nn[2] == 60.0f;
+    int n7 = poly_notes(5.5f / 15.0f, 55.0f, nullptr, 0, 0x5AD, 9, nn);   // G: G B D F
+    chords_ok &= n7 == 4 && nn[0] == 55.0f && nn[1] == 59.0f && nn[2] == 62.0f && nn[3] == 65.0f;
+    const int pe[3] = {7, 11, 14};       // PADS' E major in A minor (its raised third), Root under C4: E3
+    int nr = poly_notes(0.0f, 60.0f, pe, 3, 0x5AD, 9, nn);
+    chords_ok &= nr == 1 && nn[0] == 52.0f;
+    int ntp = poly_notes(6.5f / 15.0f, 60.0f, pe, 3, 0x5AD, 9, nn);
+    chords_ok &= ntp == 3 && nn[0] == 52.0f && nn[1] == 56.0f && nn[2] == 59.0f;
+    // the voices
+    float k[8], buf[32];
+    auto blocks = [&](int nb) { for (int b = 0; b < nb; ++b) poly_render(0, buf, 32); };
+    auto trig = [&](const float* kk, float note) {
+      float v4[4];
+      int c = poly_notes(kk[6], note, nullptr, 0, 0, 0, v4);
+      poly_set(0, v4, c, kk);
+      poly_gate(0, 1);
+      blocks(20);
+      poly_gate(0, 0);
+      blocks(20);
+    };
+    poly_init();
+    poly_defaults(k);
+    k[3] = 0.8f;                        // (a long fall: 5 s)
+    trig(k, 48.0f);
+    trig(k, 55.0f);
+    int two = poly_voices(0);
+    k[7] = 0.9f;                        // UNISON
+    poly_init();
+    trig(k, 48.0f);
+    int four = poly_voices(0);
+    k[7] = 0.35f, k[6] = 11.5f / 15.0f;   // Major
+    poly_init();
+    trig(k, 48.0f);
+    int three = poly_voices(0);
+    // held, let go
+    poly_init();
+    poly_defaults(k);
+    k[3] = 1.0f;
+    {
+      float v1 = 48.0f;
+      poly_set(0, &v1, 1, k);
+    }
+    poly_gate(0, 1);
+    double held_a = 0.0, held_b = 0.0, after = 0.0;
+    for (int b = 0; b < 1400; ++b) {
+      if (b == 700) poly_gate(0, 0);
+      poly_render(0, buf, 32);
+      for (int i = 0; i < 32; ++i) {
+        if (b >= 100 && b < 200) held_a = std::max(held_a, (double)std::fabs(buf[i]));
+        if (b >= 600 && b < 700) held_b = std::max(held_b, (double)std::fabs(buf[i]));
+        if (b >= 1300) after = std::max(after, (double)std::fabs(buf[i]));
+      }
+    }
+    // the alias: between the harmonics, under 16 kHz, against the fundamental
+    static float ab[44160];
+    auto level = [&](uint32_t from, uint32_t len, double hz) {
+      double re = 0.0, im = 0.0, w = 2.0 * 3.14159265358979 * hz / 44100.0;
+      for (uint32_t i = 0; i < len; ++i) {
+        double h = 0.5 - 0.5 * std::cos(2.0 * 3.14159265358979 * i / len), v = ab[from + i] * h;
+        re += v * std::cos(w * i);
+        im -= v * std::sin(w * i);
+      }
+      return std::sqrt(re * re + im * im) / (0.25 * len);
+    };
+    double alias = -200.0;
+    const float kW[3] = {0.0f, 0.5f, 0.7f};
+    for (int c = 0; c < 4; ++c) {
+      poly_init();
+      poly_defaults(k);
+      k[0] = kW[c < 3 ? c : 0], k[1] = 1.0f, k[2] = 0.0f, k[3] = 1.0f, k[4] = c == 3 ? 0.5f : 0.0f, k[5] = 0.5f;
+      k[7] = 0.5f;
+      float v1 = 84.0f;
+      poly_set(0, &v1, 1, k);
+      poly_gate(0, 1);
+      for (uint32_t i = 0; i < 44128; i += 32) poly_render(0, &ab[i], 32);
+      double f0 = 1046.5 / (c == 3 ? 2.0 : 1.0), ref = level(8192, 32768, f0), worst = 0.0;
+      for (double f = 40.0; f < 16000.0; f += 10.0) {
+        double h = f / f0, d = std::fabs(h - std::floor(h + 0.5)) * f0;
+        if (d >= 25.0) worst = std::max(worst, level(8192, 32768, f));
+      }
+      alias = std::max(alias, 20.0 * std::log10(worst / ref + 1e-12));
+    }
+    // anything: 300 settings, a trig each, a chord or not
+    uint32_t sd = 777u;
+    auto rnd = [&]() { sd = sd * 1664525u + 1013904223u; return static_cast<float>(sd >> 8) / 16777216.0f; };
+    float pk_any = 0.0f;
+    int nan_any = 0;
+    poly_init();
+    for (int s2 = 0; s2 < 300; ++s2) {
+      for (int i = 0; i < 8; ++i) k[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();
+      float v4[4];
+      int c = poly_notes(k[6], 24.0f + 84.0f * rnd(), nullptr, 0, 0x5AD, 9, v4);
+      poly_set(s2 & 3, v4, c, k);
+      poly_gate(s2 & 3, 1);
+      for (int b = 0; b < 200; ++b) {
+        if (b == 100) poly_gate(s2 & 3, 0);
+        poly_render(s2 & 3, buf, 32);
+        for (int i = 0; i < 32; ++i) {
+          if (!std::isfinite(buf[i])) nan_any = 1;
+          pk_any = std::max(pk_any, std::fabs(buf[i]));
+        }
+      }
+    }
+    poly_init();
+    // through the engine: POLY on track 3 following PADS on track 4 (Root)
+    eng_defaults(p);
+    eng_fresh();
+    eng_set_model(3, eng_model_find(MK_PADS, 0));
+    eng_set_model(2, poly_m);
+    p->val[PG_TRACK(2, 1) * 4 + 3] = 2.0f * 0.5f / 15.0f - 1.0f;   // CHORD: Root
+    for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(3, st, st % 4 == 0), eng_trig_set(2, st, st % 2 == 0);
+    p->val[PG_TRACK(3, 0) * 4 + 1] = 3.5f / 17.0f;   // Pachelbel
+    eng_play(1);
+    float epk = 0.0f;
+    int enan = 0;
+    for (int b = 0; b < 1500; ++b) {
+      eng_render(l, r, n);
+      for (uint32_t i = 0; i < n; ++i) {
+        if (!std::isfinite(l[i])) enan = 1;
+        epk = std::max(epk, std::fabs(l[i]));
+      }
+    }
+    eng_play(0);
+    // a project of 0.11.1 (version 20): CHIPTUNE (13 then), PADS (12), MODAL (20), the FM (11)
+    static project_t q20;
+    eng_defaults(&q20);
+    q20.version = 20;
+    const uint8_t kOld20[4] = {13, 12, 20, 11};
+    for (int t = 0; t < ENG_TRACKS; ++t) q20.algo[PG_TRACK(t, 0)] = kOld20[t];
+    int v20 = eng_upgrade(&q20, sizeof q20) && eng_check(&q20) &&
+              q20.algo[PG_TRACK(0, 0)] == eng_model_find(MK_PLAITS, 7) &&
+              q20.algo[PG_TRACK(1, 0)] == eng_model_find(MK_PADS, 0) &&
+              q20.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 20) &&
+              q20.algo[PG_TRACK(3, 0)] == eng_model_find(MK_FM, 0);
+    printf("POLY: knobs %s; chords %s; voices: a trig each %d, unison %d, a major chord %d; held %.2f %.2f, let go "
+           "%.5f; its alias at C6 %.0f dB; 300 settings: peak %.2f%s; after PADS: peak %.2f%s; version 20 %s\n",
+           ok ? "ok" : "WRONG", chords_ok ? "ok" : "WRONG", two, four, three, held_a, held_b, after, alias, pk_any,
+           nan_any ? ", NaN" : "", epk, enan ? ", NaN" : "", v20 ? "read" : "WRONG");
+    if (!ok || !chords_ok || two != 2 || four != 4 || three != 3 || held_a < 0.1 || std::fabs(held_b / held_a - 1.0) > 0.2 ||
+        after > 1e-3 || alias > -55.0 || nan_any || pk_any > 1.2f || enan || epk < 0.02f || !v20)
+      ++failures, printf("FAIL: POLY\n");
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

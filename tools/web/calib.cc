@@ -13,7 +13,7 @@
 //                                        filter FILTER (FM, NOISE: 0..1), BEND 0/1 (its bits); the bus BUS (MB_*); WARPS -1 off
 //                                        or its algorithm's mark 0..5 (T2 by T1, T2 playing too), HQ 0/1; EXTRA
 //                                        (bits) T1's EQ, the duck, the delay's filter and drive; the FM's square, PW,
-//                                        SYNC; PADS' MANUAL triad, six notes, one saw a note, its bell
+//                                        SYNC; PADS' MANUAL triad, six notes, one saw a note, its bell; POLY's voice, four
 //   calib blank SECONDS                  nothing playing (the preparation's floor, a resting voice)
 #include <cstdio>
 #include <cstdlib>
@@ -85,6 +85,9 @@ int main(int argc, char** argv) {
     if (extra & 64) p->val[PG_TRACK(0, 0) * 4 + 2] = p->val[PG_TRACK(0, 0) * 4 + 3] = 0.9f;   // under it (6 notes);
     if (extra & 128) p->val[PG_TRACK(0, 1) * 4 + 3] = -0.5f;  // 128 ENSEMBLE to VINTAGE (one saw a note); 256 the bells
     if (extra & 256) p->val[PG_TRACK(0, 2) * 4 + 0] = 0.5f;   // (their bell on the top note)
+    if (extra & 1024) p->val[PG_TRACK(0, 1) * 4 + 0] = 1.0f;  // POLY (1024): held; 2048 UNISON (four voices); 8192
+    if (extra & 2048) p->val[PG_TRACK(0, 2) * 4 + 0] = 0.5f;  // its DECAY short (a voice a trig, over before the
+    if (extra & 8192) p->val[PG_TRACK(0, 1) * 4 + 0] = 0.0f;  // next)
     p->warps_hq = static_cast<uint8_t>(hq);
     if (warps >= 0) {
       static const float kW[8] = {static_cast<float>(WC_T2), 0.0f, 0.0f, 1.0f, 0.5f, 0.6f, 0.6f,
@@ -103,7 +106,11 @@ int main(int argc, char** argv) {
   eng_play(1);
   static float l[128], r[128];
   uint32_t nb = static_cast<uint32_t>(secs * 44100.0f / 128.0f);
-  for (uint32_t b = 0; b < nb; ++b) eng_render(l, r, 128);
-  printf("blocks %u\n", nb);
+  double nv = 0.0;                      // (POLY's voices sounding, on average: their cost's unit)
+  for (uint32_t b = 0; b < nb; ++b) {
+    eng_render(l, r, 128);
+    nv += poly_voices(0);
+  }
+  printf("blocks %u\nvoices %.4f\n", nb, nv / static_cast<double>(nb ? nb : 1));
   return 0;
 }

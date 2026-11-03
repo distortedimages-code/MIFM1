@@ -430,6 +430,7 @@ static const char *module_name(int page)
                                                                         : track_kind(ptrack(page)) == MK_LXR ? "FM drum"
                                                                         : track_kind(ptrack(page)) == MK_FM ? "FM"
                                                                         : track_kind(ptrack(page)) == MK_PADS ? "Pads"
+                                                                        : track_kind(ptrack(page)) == MK_POLY ? "Poly"
                                                                         : "Plaits";
     }
     case PT_LFO: {
@@ -936,6 +937,10 @@ static const vop_t ICONS[NICON][IOPS] = {
      {'D', 11, 10, 3, 0}, {'D', 22, 19, 3, 0}, {'D', 22, 13, 3, 0}, {'D', 22, 7, 3, 0}},             /* PADS: two
                                                                                                      * chords on a
                                                                                                      * staff */
+    {{'L', 4, 17, 12, 7}, {'L', 12, 7, 12, 17}, {'L', 12, 17, 20, 7}, {'L', 20, 7, 20, 17}, {'L', 20, 17, 28, 7},
+     {'L', 4, 22, 12, 22}, {'L', 12, 22, 12, 27}, {'L', 12, 27, 20, 27}, {'L', 20, 27, 20, 22},
+     {'L', 20, 22, 28, 22}},                                                                        /* POLY: a saw
+                                                                                                     * over its sub */
     {{'L', 4, 24, 4, 10}, {'L', 4, 10, 12, 10}, {'L', 12, 10, 12, 24}, {'L', 12, 24, 20, 24}, {'L', 20, 24, 20, 10},
      {'L', 20, 10, 28, 10}},                                                                        /* CHIPTUNE */
     {{'L', 4, 24, 10, 22}, {'L', 10, 22, 13, 12}, {'L', 13, 12, 16, 7}, {'L', 16, 7, 19, 12}, {'L', 19, 12, 22, 22},

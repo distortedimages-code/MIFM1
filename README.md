@@ -15,6 +15,9 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
 - **PADS** de MIFM1 (0.11) : des accords et leurs progressions (Arvo Pärt, la Folia, Pachelbel, la basse de
   lamentation, Bach, Satie…) joués par une nappe de cordes, sur une piste ; ses accords suivent la gamme du projet, et
   la gamme **Prog** fait suivre l'accord joué à toutes les autres pistes, en temps réel (voir plus bas) ;
+- **POLY** (0.12) : un petit synthé analogique polyphonique d'après le SH-101 de Roland et le S-1, quatre voix par
+  piste, chacune son filtre à quatre pôles et son enveloppe ; une mémoire d'accords, ou des accords qui suivent
+  l'harmonie (celle de PADS, ou la gamme), et un mode **VINTAGE** qui écarte un peu chaque voix (voir plus bas) ;
 - **Plaits** sur chaque piste, 8 de ses modèles (ses trois batteries et treize de ses oscillateurs ont laissé la place
   aux moteurs de MIFM1 ; la voix et les puces suivront), et un **circuit bending** par piste (0.7, à la place du
   grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
@@ -83,7 +86,7 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
 pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
 en quatre gestes, le chemin du son (un schéma), le panneau (chaque numéro allume son repère sur la machine ;
-« Repères » les montre tous), les 21 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
+« Repères » les montre tous), les 22 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
 et ce qu'ils modélisent, les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le circuit bending,
 les effets, le séquenceur, la dose d'aléatoire, les spécifications, et des jauges de la charge du FM-1. « Essayer »,
 sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_try). Pour écouter MIFM1 sur un autre système (une
@@ -386,6 +389,44 @@ Choisir PADS met ces réglages aux siens (Tintin, des triades ouvertes, tenues, 
 ensemble, sans cloche) et garde l'OCTAVE de la piste. Elle coûte au FM-1 de 5 % d'un bloc (une triade, une dent de
 scie par note) à 12 % (six notes, trois dents de scie chacune, la cloche) ; sur ses réglages, 7 %. Les projets d'avant
 se lisent, leurs modèles de Plaits renumérotés.
+
+**POLY** (0.12 ; ALGORITHM après PADS, la banque MIFM1) : un petit synthé analogique polyphonique d'après le
+**SH-101** de Roland (1982 : un oscillateur, sa dent de scie, son impulsion et sa sous-octave mélangées, un filtre à
+quatre pôles, une seule enveloppe) et son héritier numérique à quatre voix, l'**AIRA S-1** (2023, sa mémoire
+d'accords). **Quatre voix par piste**, chacune son oscillateur, son filtre et son enveloppe. **WAVE** passe de la dent
+de scie (à gauche) à la dent de scie et au carré mêlés, au carré seul, à une impulsion de plus en plus fine (jusqu'à
+12 %), puis à la **PWM** (sa largeur balancée par un LFO lent, chaque voix le sien). **SUB** : la sous-octave du
+SH-101, un carré une octave dessous de plus en plus fort, puis deux octaves dessous, puis deux octaves à 25 % (ses
+trois réglages, des diviseurs sur l'oscillateur). Chaque arête est corrigée par un polyBLEP du troisième ordre (une
+B-spline cubique sur quatre échantillons : à l'oscillateur, rien au-dessus de -55 dB entre les harmoniques jusqu'au
+do 6). Le **filtre** est celui du SH-101, le IR3109 de Roland (celui des Juno-60 et Jupiter-8) : quatre pôles en
+cascade (les filtres trapézoïdaux de Zavalishin, la boucle résolue d'un coup), son entrée saturée ; **CUTOFF** de 20 Hz
+à 20 kHz (il suit le clavier à 70 %), **RESO** jusqu'à l'auto-oscillation (la résonance mange un peu de grave, dont la
+moitié est rendue). Une seule **enveloppe** sur le filtre et le volume : **ENV** à droite sa profondeur sur la coupure
+(jusqu'à cinq octaves : le squelch des lignes acides), à gauche une **montée** (jusqu'à 2 s, le filtre s'ouvrant avec
+elle) ; **DECAY** de 50 ms à 20 s, Hold au bout (tenu tant que la note l'est).
+
+**CHORD** : à droite la **mémoire d'accords** du S-1, des accords parallèles sur la note (Oct, 5th, Sus4, Major,
+Minor, Min7, Min9 : les accords de la dub techno) ; à gauche l'**harmonie** : l'accord que joue PADS quand une piste la
+joue (la note choisit le registre ; à chaque accord de PADS, POLY suit), sinon celui de la gamme du projet sur la note
+(une gamme majeure si elle est Off) : **Triad**, **7th**, **9th** (sans sa quinte), **Open** (fondamentale, quinte,
+dixième), **Sus**, **Root5** (la fondamentale et sa quinte), **Root** (la fondamentale seule, sous la note : une basse
+qui suit la progression). Au milieu **Off** : une voix par trig, les précédentes résonnent sous la nouvelle (quatre au
+plus, la plus discrète cédée la première). La dose d'aléatoire ne touche pas CHORD (ses accords parallèles
+sortiraient de la gamme).
+
+**VOICE** : à gauche **VINTAGE**, comme sur un vieux polyphonique : chaque voix sa propre justesse (quelques cents),
+une dérive lente qui lui est propre, son filtre et son enveloppe un peu à part, de plus en plus vers la gauche ; au
+milieu des voix exactes ; à droite **UNISON** : sans accord, les quatre voix sur la note, de plus en plus écartées
+(un lead épais), avec un accord, ses voix légèrement désaccordées.
+
+| 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **WAVE** (Saw, Square, PW, PWM) | **CUTOFF** (20 Hz à 20 kHz) | **RESO** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **SUB** (−1 oct., −2, −2 à 25 %) | **ENV** (− : une montée, + : sa profondeur) | **CHORD** (− : l'harmonie, + : une mémoire d'accords) | **VOICE** (− : VINTAGE, + : UNISON) |
+
+Choisir POLY met ces réglages aux siens (une dent de scie sur sa sous-octave, un squelch, une voix par trig, un peu
+de vintage) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 3 % d'un bloc (quatre : 11 %). Les projets
+d'avant se lisent, leurs modèles de Plaits renumérotés.
 
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
 icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis

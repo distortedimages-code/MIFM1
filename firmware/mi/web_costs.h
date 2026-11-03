@@ -4,7 +4,7 @@
  * (2902 us), from the instructions it runs (tools/web/calibrate.py writes this file: see there how). */
 #pragma once
 static const float kWebRest = 2.5f;   /* a resting voice */
-static const float kWebModel[21] = {   /* a voice playing, by model */
+static const float kWebModel[22] = {   /* a voice playing, by model */
     196.6f,  /*  0 KICK */
     193.3f,  /*  1 SNARE */
     194.3f,  /*  2 CLAP */
@@ -16,16 +16,17 @@ static const float kWebModel[21] = {   /* a voice playing, by model */
     226.8f,  /*  8 FM CYMBAL */
     235.4f,  /*  9 FM HI-HAT */
     309.8f,  /* 10 ZERO */
-    368.5f,  /* 11 FM */
+    368.6f,  /* 11 FM */
     201.5f,  /* 12 PADS */
-    185.7f,  /* 13 CHIPTUNE */
-    465.9f,  /* 14 FORMANT */
-    298.0f,  /* 15 SPEECH */
-    486.1f,  /* 16 SWARM */
-    396.5f,  /* 17 NOISE */
-    610.2f,  /* 18 PARTICLES */
-    510.6f,  /* 19 STRING */
-    776.1f,  /* 20 MODAL */
+    302.8f,  /* 13 POLY */
+    185.7f,  /* 14 CHIPTUNE */
+    465.9f,  /* 15 FORMANT */
+    298.0f,  /* 16 SPEECH */
+    486.1f,  /* 17 SWARM */
+    396.5f,  /* 18 NOISE */
+    610.2f,  /* 19 PARTICLES */
+    510.6f,  /* 20 STRING */
+    776.1f,  /* 21 MODAL */
 };
 static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, VOX): plain, its FM's extra, its NOISE's */
     {0.0f, 0.0f, 0.0f},
@@ -36,6 +37,7 @@ static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, 
 };
 static const float kWebFm[3] = {34.7f, 71.3f, 20.2f};   /* the FM's extra: its square, PW, SYNC */
 static const float kWebPads[4] = {78.0f, 22.6f, 31.9f, 70.5f};   /* PADS: its floor, a note (one saw, three), its bell */
+static const float kWebPoly[2] = {21.0f, 77.6f};   /* POLY: its floor, a voice */
 static const float kWebBend = 77.4f;   /* the bits, one of their knobs up */
 static const float kWebGlitch = 9.0f;   /* the glitch, taking or repeating its slice (estimated: a few loads a sample) */
 static const float kWebWarps[2][6] = {   /* Warps, its algorithm's mark (Eco, HQ) */
@@ -45,4 +47,4 @@ static const float kWebWarps[2][6] = {   /* Warps, its algorithm's mark (Eco, HQ
 static const float kWebFx[3] = {551.1f, 575.0f, 721.1f};   /* the effects, the mix and the master bus (OFF, COMP, OTT) */
 static const float kWebFxEq = 37.2f, kWebFxDuck = 6.9f, kWebFxDelay = 15.9f;   /* a track's EQ (playing), the duck on a track, the delay's filter and drive */
 static const float kWebFxWarps = 75.5f;   /* Warps in the mix (the rest of the stress test's effects) */
-static const float kWebPrep = 291.4f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.8f;   /* the preparation: its floor, a track playing, a cable */
+static const float kWebPrep = 291.5f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.8f;   /* the preparation: its floor, a track playing, a cable */
