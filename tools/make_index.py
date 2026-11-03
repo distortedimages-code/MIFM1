@@ -61,7 +61,7 @@ a {{ color: inherit; text-underline-offset: 3px; }} a:hover {{ color: var(--oran
 .lang button + button {{ border-left: 2px solid var(--ink); }}
 .lang button[aria-pressed="true"] {{ background: var(--ink); color: var(--alu); cursor: default; }}
 .lang button:not([aria-pressed="true"]):hover {{ background: var(--orange); }}
-.mark {{ margin: 20px 0 0; font-size: clamp(4.2rem, 20.6vw, 16.5rem); line-height: .8; font-weight: 900; font-stretch: 125%;
+.mark {{ margin: 20px 0 0; font-size: clamp(4.2rem, 20.2vw, 16.2rem); line-height: .8; font-weight: 900; font-stretch: 125%;
         letter-spacing: -.045em; white-space: nowrap; }}
 .ver {{ margin: .6rem 0 0; font-size: clamp(1rem, 1.4vw, 1.25rem); font-weight: 300; font-stretch: 125%; letter-spacing: .14em; color: var(--orange); }}
 .intro {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: .8rem 3rem; margin-top: 1.4rem;
