@@ -780,12 +780,14 @@ reste dans la gamme) :
   0,1 s) et amené au même point de la courbe, puis rendu : le même drive sur une piste douce que sur une forte, son
   niveau gardé, ses queues remontées dans la saturation en retombant (comme une pédale qui tient). Il entre en fondu
   sur le premier quart. Là où la piste a un filtre, son **DRIVE** monte aussi (+0,45 au bout) ;
-- **à partir de 25 %**, **chaque trig a son drive** (de 70 à 100 % de celui de la dose), chaud ou, sur jusqu'à la
-  moitié des trigs, dur (harmoniques impaires) ;
+- **à partir de 25 %**, **chaque trig a son drive** (de 20 à 100 % de celui de la dose au bout de la course,
+  depuis 0.14.7 : un trig presque propre, le suivant à fond ; de 70 à 100 % avant), chaud ou, sur jusqu'à la moitié
+  des trigs, dur (harmoniques impaires) ;
 - **à partir de 40 %**, la **FM des filtres** sur une part des trigs (un tiers, puis tous), d'un côté ou de l'autre,
   **au plus 10 % de sa profondeur** à 100 % (le 10 % de l'ancien potard : plus, le son se perd) ;
-- **à partir de 50 %**, **Warps** s'ouvre par moments, un temps à la fois (MIX, TIMBRE, LEVEL 2), seulement s'il est
-  branché : TRAUMA ne l'allume jamais (son CPU : un cinquième d'un cœur) ;
+- **à partir de 50 %**, **Warps** s'ouvre par moments (MIX, TIMBRE, LEVEL 2), relancé **à chaque trig de la piste
+  qu'il traite** (depuis 0.14.7 ; un temps à la fois quand il joue son propre oscillateur), seulement s'il est
+  branché : TRAUMA ne l'allume jamais (son CPU : un cinquième d'un cœur, le même ouvert ou fermé) ;
 - **à partir de 60 %**, le **DRIVE du delay** (des échos qui saturent).
 
 Son écran, en noir et blanc : des barres blanches qui entrent des deux côtés, puis la phrase du label en Anton (une

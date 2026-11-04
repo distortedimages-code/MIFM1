@@ -493,33 +493,40 @@ void make_dice() {                      // the effects' (a track's: at its trigs
 //   from the start  a drive on every track after its filter (apply_trauma: the drums' curve, x - x^3 / 3 then flat,
 //                   antialiased; its gain 1 to 8, its level given back, in from the sound as it is over the first
 //                   quarter), and where the track has a filter, its DRIVE (+0.45 at the end)
-//   from 25 %       each trig its own drive (70 to 100 % of the dose's), warm (biased: even harmonics) or, on up to
-//                   half of them, hard (odd ones)
+//   from 25 %       each trig its own drive (20 to 100 % of the dose's at the end, 0.14.7: one nearly clean, the next
+//                   all in; 70 to 100 % before), warm (biased: even harmonics) or, on up to half of them, hard (odd ones)
 //   from 40 %       the filter's FM on a share of the trigs (a third, then all of them), either way, at most 10 % of
 //                   its depth (the knob's old 10 %: Yoann's limit, more and the sound is lost)
-//   from 50 %       Warps opening now and then, a beat at a time (its MIX, TIMBRE, LEVEL 2), where it is patched:
-//                   never turned on (its CPU: a fifth of a core)
+//   from 50 %       Warps opening now and then (its MIX, TIMBRE, LEVEL 2), where it is patched, never turned on (its
+//                   CPU: a fifth of a core): thrown again at each trig of the track it plays (0.14.7), a beat at a
+//                   time when it plays its own oscillator; its CPU the same (Warps runs as patched, open or not)
 //   from 60 %       the delay's DRIVE (its echoes pushed)
 inline float ramp01(float x, float a, float b) { return x <= a ? 0.0f : x >= b ? 1.0f : (x - a) / (b - a); }
 float trauma01() { return static_cast<float>(proj.trauma > 100 ? 100 : proj.trauma) * 0.01f; }
-float tr_f[ENG_TRACKS] = {1.0f, 1.0f, 1.0f, 1.0f};   // this trig's share of the dose's drive (0.7..1)
+float tr_f[ENG_TRACKS] = {1.0f, 1.0f, 1.0f, 1.0f};   // this trig's share of the dose's drive (0.2..1)
 uint8_t tr_hard[ENG_TRACKS];            // this trig's drive hard rather than warm
-float tr_w[3];                          // this beat's Warps: its opening (0: shut), TIMBRE (-1..1), LEVEL 2 (0..1)
+float tr_w[3];                          // Warps now: its opening (0: shut), TIMBRE (-1..1), LEVEL 2 (0..1)
 // the filter's FM knob for a depth (mi_filter's curve, the other way): ln(1 + depth (e^4 - 1)) / 4
 inline float fm_knob_for(float depth) { return fm_logf(1.0f + depth * 53.59815f) * 0.25f; }
-void trauma_trig(int t) {               // a track's trig: its drive, its filter's FM
-  float d = trauma01(), v = ramp01(d, 0.25f, 0.6f), w = ramp01(d, 0.4f, 1.0f);
-  tr_f[t] = 1.0f - 0.3f * v * rand01();
-  tr_hard[t] = rand01() < 0.5f * v;
-  if (proj.algo[PG_FILT(t, 0)] == MF_OFF) return;   // (the filter's: where there is one)
-  if (w > 0.0f && rand01() < 0.33f + 0.67f * w)
-    tdelta[t][TP_FM] += (rand01() < 0.5f ? -1.0f : 1.0f) * fm_knob_for(0.1f * w * (0.5f + 0.5f * rand01()));
-}
-void trauma_beat() {                    // the effects', at each beat: Warps open or not, its colours
+void trauma_warps() {                   // Warps open or not, its colours: at each trig of its carrier, or each beat
   float w = ramp01(trauma01(), 0.5f, 1.0f);
   tr_w[0] = w > 0.0f && rand01() < 0.25f + 0.5f * w ? w * (0.5f + 0.5f * rand01()) : 0.0f;
   tr_w[1] = 2.0f * rand01() - 1.0f;
   tr_w[2] = rand01();
+}
+// Warps' carrier a track (WC_T1..4: its trigs throw Warps again), or -1 (off, or its own oscillator: each beat)
+int warps_track() {
+  int c = iround(proj.val[PG_WARPS(0) * 4]);
+  return c >= WC_T1 && c <= WC_T4 ? c - WC_T1 : -1;
+}
+void trauma_trig(int t) {               // a track's trig: its drive, its filter's FM; Warps, if it plays this track
+  float d = trauma01(), v = ramp01(d, 0.25f, 0.6f), w = ramp01(d, 0.4f, 1.0f);
+  tr_f[t] = 1.0f - 0.8f * v * rand01();
+  tr_hard[t] = rand01() < 0.5f * v;
+  if (t == warps_track()) trauma_warps();
+  if (proj.algo[PG_FILT(t, 0)] == MF_OFF) return;   // (the filter's: where there is one)
+  if (w > 0.0f && rand01() < 0.33f + 0.67f * w)
+    tdelta[t][TP_FM] += (rand01() < 0.5f ? -1.0f : 1.0f) * fm_knob_for(0.1f * w * (0.5f + 0.5f * rand01()));
 }
 void trauma_knobs();                    // (over the knobs, each block: after lane_param)
 
@@ -594,7 +601,7 @@ float from_u_fast(int param, float u) { // from_u on the bounds in RAM (the rend
 
 // a lane parameter as the trig plays it: its knob and cables, then the trig's lock and random
 int16_t lane_param[ENG_LANES][ENG_NTP];  // eng_track_param's answers, made once (E is asked ~150 times a block)
-void trauma_knobs() {                   // TRAUMA's knobs: the filters' DRIVE, Warps' this beat, the delay's DRIVE
+void trauma_knobs() {                   // TRAUMA's knobs: the filters' DRIVE, Warps' now, the delay's DRIVE
   float d = trauma01();
   for (int t = 0; t < ENG_TRACKS; ++t)
     if (proj.algo[PG_FILT(t, 0)] != MF_OFF) fin[lane_param[t][TP_FDRIVE]] += 0.45f * d;
@@ -967,7 +974,8 @@ void sequence(uint32_t n) {
       ++tick;
       if (step_clk >= six_len(sl)) step_clk = 0.0f;
       if (proj.dice && tick % 4 == 0) make_dice();   // (the dose: the effects thrown anew at each beat)
-      if (proj.trauma && tick % 4 == 0) trauma_beat();   // (TRAUMA: Warps, a beat at a time)
+      if (proj.trauma && tick % 4 == 0 && warps_track() < 0) trauma_warps();   // (TRAUMA: Warps on its oscillator,
+                                                                              // a beat at a time)
       for (int t = 0; t < ENG_TRACKS; ++t) gl_at[t] = static_cast<int>(k * static_cast<uint32_t>(fl));   // (the glitch)
       if (fill_amount_q(proj.dice) && tick % 16 >= 8) {   // (the bar's second half: where fills are)
         int stepping[ENG_TRACKS];
