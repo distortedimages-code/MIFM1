@@ -325,6 +325,7 @@ uint8_t climb_cnt[ENG_TRACKS][ENG_STEPS];   // (0.16.7) CLIMB: each step's place
 int8_t climb_off[ENG_TRACKS][ENG_STEPS];    // the transposition it played last (the screen's)
 int climb_t[ENG_TRACKS], climb_amt[ENG_TRACKS], climb_base[ENG_TRACKS];   // the trig climbing: its step (-1: none),
                                         // its CLIMB (a lock's, a random's), its note before
+int climb_dice[ENG_TRACKS];             // (0.16.8) 1: the dose's roll, climbing through its hits (not the step's CLIMB)
 int32_t lane_grid[ENG_LANES];           // (0.16.6) its grid's point last seen (the sixteenths since PLAY at its SPEED,
 int8_t lane_spd[ENG_LANES];             // whole), the SPEED it is at: another, a grid anew (0.16..0.16.5 took the
                                         // steps from the grid: back from x2 to x1, the lane waited as long as it had
@@ -813,6 +814,42 @@ void run_lfos(uint32_t n) {
 
 // a trig: its locks and randoms over the knobs, whether it plays (its probability); a track's ratchets. The locks are
 // found in one pass over the slots (not one a parameter: a sixteenth's trigs on seven lanes took 50,000 compares)
+// (0.16.8) the random dose on the ratchets, from 25 % (its travel, not its curve): a trig without some, now and then
+// some (2..4 hits; past 50 %, up to 6 over up to 4 steps); one with some, now and then changed (a hit or two more or
+// fewer, past 50 % its span a step either way) or gone (a single hit); past 50 % their CURVE thrown, past 75 % now
+// and then the roll climbing (or falling) through its hits, if the step has no CLIMB of its own. Each trig anew, as
+// the rest of the dose
+int dice_climb[ENG_TRACKS];             // (that roll's CLIMB: a semitone or a scale's note or up to three a hit, 0 none)
+void dice_ratch(int t, float d) {
+  dice_climb[t] = 0;
+  if (d < 0.25f) return;
+  float u = (d - 0.25f) * (1.0f / 0.75f);
+  int param = lane_param[t][TP_RATCHET];
+  float base = clampf(fin[param] + tdelta[t][TP_RATCHET], 1.0f, static_cast<float>(ENG_RATCH_MAX));
+  int sp, h = eng_ratch_hits(iround(base), &sp), h0 = h, sp0 = sp;
+  if (h <= 1) {
+    if (rand01() < 0.45f * u) {
+      h = 2 + static_cast<int>(rand_u32() % (d > 0.5f ? 5u : 3u));
+      if (d > 0.5f && rand01() < (d - 0.5f) * 1.2f) sp = 2 + static_cast<int>(rand_u32() % 3u);
+    }
+  } else if (rand01() < 0.6f * u) {
+    if (rand01() < 0.4f) {
+      h = sp = 1;
+    } else {
+      int dh = 1 + static_cast<int>(rand_u32() % 2u);
+      h += (rand_u32() & 1u) ? dh : -dh;
+      h = h < 2 ? 2 : h > 16 ? 16 : h;
+      if (d > 0.5f && rand01() < 0.5f) sp += (rand_u32() & 1u) ? 1 : -1;
+      sp = sp < 1 ? 1 : sp > 16 ? 16 : sp;
+    }
+  }
+  if (h != h0 || sp != sp0) tdelta[t][TP_RATCHET] = static_cast<float>(eng_ratch_join(h, h <= 1 ? 1 : sp)) - fin[param];
+  if (h <= 1) return;
+  if (d > 0.5f && rand01() < (d - 0.5f) * 1.2f) tdelta[t][TP_CURVE] += (2.0f * rand01() - 1.0f) * (d - 0.5f) * 2.0f;
+  if (d > 0.75f && rand01() < (d - 0.75f) * 2.0f)
+    dice_climb[t] = ((rand_u32() & 1u) ? 1 : -1) * (1 + static_cast<int>(rand_u32() % 3u));
+}
+
 void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_param, lane_lockable, the bounds)
   int16_t at[ENG_NTP];
   for (int tp = 0; tp < ENG_NTP; ++tp) at[tp] = -1;
@@ -848,6 +885,7 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
   }
   if (lane < ENG_TRACKS) {              // the random dose: every sound parameter of the track thrown anew, this trig's
     dice_type[lane] = -1;
+    dice_climb[lane] = 0;
     if (proj.dice) {
       float a = dice_curve(), d = static_cast<float>(proj.dice > 100 ? 100 : proj.dice) * 0.01f;
       int iv = dice_interval(proj.algo[PG_TRACK(lane, 0)]);
@@ -867,6 +905,7 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
         tdelta[lane][tp] += off;
       }
       if (d > 0.6f && rand01() < (d - 0.6f) * 1.25f) dice_type[lane] = static_cast<int>(rand_u32() % MF_TYPES);
+      dice_ratch(lane, d);              // (0.16.8) its ratchets too
       if (rand01() < 0.15f * a)         // now and then, lightly, into the delay or the reverb
         tdelta[lane][rand01() < 0.5f ? TP_DSEND : TP_SEND] += 0.2f + 0.15f * rand01();
     }
@@ -1056,7 +1095,9 @@ int climb_by(int n, int d) {            // n moved d of the scale's notes (SCALE
 void climb_play(int t, int hit) {       // a trig climbing (hit 0) or one of its ratchets' hits: its note
   int st = climb_t[t];
   if (st < 0) return;
-  int on = eng_climb_opt(t, CL_ON), n = eng_climb_opt(t, CL_TIMES), sh = eng_climb_opt(t, CL_SHAPE), c;
+  int dc = climb_dice[t];               // (the dose's roll: each hit on, over its hits, once)
+  int on = dc ? CLON_RATCH : eng_climb_opt(t, CL_ON), sh = dc ? CLSH_RAMP : eng_climb_opt(t, CL_SHAPE), c;
+  int n = dc ? (rat_n[t] < 2 ? 2 : rat_n[t] > 16 ? 16 : rat_n[t]) : eng_climb_opt(t, CL_TIMES);
   int per = sh == CLSH_BOUNCE ? 2 * n - 2 : n;
   if (on == CLON_RATCH) {
     c = hit;
@@ -1212,6 +1253,8 @@ void sequence(uint32_t n) {
                                                       E(t, TP_NOTE)) + fdn[t]));
         climb_t[t] = -1;                // CLIMB (0.16.7): a trig that plays, its step's count
         int ca = iround(E(t, TP_CLIMB)), cs = cur_step[t];
+        climb_dice[t] = !ca && dice_climb[t] && rat_n[t] > 1;   // (0.16.8: else the dose's roll, climbing)
+        if (climb_dice[t]) ca = dice_climb[t];
         if (cs >= 0 && cs < ENG_STEPS) {
           if (ca && rat_on[t]) {
             climb_t[t] = cs;

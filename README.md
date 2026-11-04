@@ -846,8 +846,14 @@ dans le delay ou dans la réverbe (un envoi de 20 à 35 %, en plus du sien), pre
 eux-mêmes sont relancés à chaque temps : le feedback, le filtre, le drive, la résonance et le pleurage du delay, la
 réverbe, l'algorithme de Warps (d'un repère à un autre : entre deux, Warps calcule les deux algorithmes, deux fois
 plus de travail), son timbre et ses niveaux (sauf LEVEL 1 quand Warps joue son propre oscillateur : c'est sa note,
-qui reste où elle est depuis 0.8.6). Rien de ce qui tient le temps (divisions, tempo, vitesses, longueurs,
-pas), ni les niveaux, la gamme ou le branchement. On lâche OCT− : retour à la page, la dose reste (en bas, un trait
+qui reste où elle est depuis 0.8.6). **Les ratchets** (0.16.8), à partir de 25 % de la course : un trig qui n'en a
+pas en reçoit de temps en temps (2 à 4 coups sur son pas ; au-delà de 50 %, jusqu'à 6, parfois sur 2 à 4 pas), de plus
+en plus souvent (près d'un trig sur deux à 100 %) ; un trig qui en a les voit changer de temps en temps (un ou deux
+coups de plus ou de moins, au-delà de 50 % un pas de plus ou de moins) ou **sauter** (un seul coup), pour qu'un
+pattern déjà plein de ratchets bouge lui aussi ; au-delà de 50 %, leur CURVE est relancé (rebond, roulement qui se
+pose) ; au-delà de 75 %, de temps en temps, le roulement grimpe ou descend d'un à trois demi-tons (ou notes de la
+gamme) par coup, sur un pas sans CLIMB à lui. Comme le reste de la dose, à chaque trig un nouveau tirage. Rien de ce qui
+tient le temps (divisions, tempo, vitesses, longueurs, pas), ni les niveaux, la gamme ou le branchement. On lâche OCT− : retour à la page, la dose reste (en bas, un trait
 de la largeur de la dose ; les potards montrent la valeur que le dernier trig a tirée, RANDOM dessous). Revenir à 0
 rend le son exact de départ dès le trig suivant, comme l'annulation d'ALL. Pendant le geste, l'octave du clavier (ou
 la page de pas) ne bouge pas. (Jusqu'en 0.6.1, la dose tirait un seul écart par réglage, gardé à chaque trig : un son

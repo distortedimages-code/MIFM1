@@ -1400,7 +1400,8 @@ int main(int argc, char** argv) {
           int diff = 0, sent = 0;
           for (int tp = 0; tp < ENG_NTP; ++tp) {
             int param = eng_track_param(t, tp);
-            if (param < 0 || tp == TP_NOTE || tp == TP_PROB || tp == TP_RATCHET) continue;
+            if (param < 0 || tp == TP_NOTE || tp == TP_PROB || tp == TP_RATCHET || tp == TP_CURVE) continue;   // (0.16.8:
+                                                  // the ratchets thrown too, their test 60)
             float now = eng_now(param), dev = now - eng_final(param), sp = eng_dice_span(param);
             if (tp == TP_SEND || tp == TP_DSEND) {        // (now and then, upwards, lightly)
               sent += dev > 1e-6f;
@@ -1409,6 +1410,8 @@ int main(int argc, char** argv) {
             }
             if (tp == TP_PITCHENV) st.off_scale += std::fabs(dev) > 1e-6f;   // (the pitch envelope; FREQ:
             if (tp == 0) st.off_scale += std::fabs(dev * 24.0f - std::floor(dev * 24.0f + 0.5f)) > 1e-3f;   // semitones)
+            if (tp == TP_LEVEL && dev <= 1e-6f && dev >= -0.35f - 1e-4f) continue;   // (0.16.8: a ratchet's hits
+                                                  // softer with CURVE to the right, the dose throwing it: as set)
             if (sp == 0.0f) {
               st.kept_wrong += std::fabs(dev) > 1e-6f;   // (the sends, the levels, the time: the knobs)
               continue;
@@ -1417,6 +1420,10 @@ int main(int argc, char** argv) {
             st.far = std::max(st.far, std::fabs(dev) / sp);
             diff += seen[t] && std::fabs(now - last[t][tp]) > 1e-6f;
             last[t][tp] = now;
+          }
+          if (dose && seen[t] && !diff) {                 // (a ratchet's hit, the same trig's: 0.16.8's dose adds
+            --st.trigs;                                   // them; not a trig)
+            continue;
           }
           st.changed += diff >= 8;                        // (another sound: most of its parameters elsewhere)
           st.sends += sent > 0;
@@ -1433,10 +1440,10 @@ int main(int argc, char** argv) {
     float k = p->val[fdbk];
     printf("the random dose: at 0 %d trigs, %d moved; at 50 %% %d trigs, %d of them another sound, as far as %.2f of "
            "the span, %d past it, %d kept parameters moved, sends on %d, the delay's FEEDBACK %.2f..%.2f (its knob "
-           "%.2f), Warps off its marks %d blocks; at 100 %% as far as %.2f, sends on %d trigs of %d; off the scale %d; "
-           "back at 0 %d moved\n", s0.trigs, s0.wrong + s0.kept_wrong + s0.sends + static_cast<int>(s0.far > 0.0f),
+           "%.2f), Warps off its marks %d blocks; at 100 %% as far as %.2f (%d past it, %d kept moved), sends on %d trigs "
+           "of %d; off the scale %d; back at 0 %d moved\n", s0.trigs, s0.wrong + s0.kept_wrong + s0.sends + static_cast<int>(s0.far > 0.0f),
            s50.trigs, s50.changed, s50.far, s50.wrong, s50.kept_wrong, s50.sends, s50.fx_lo, s50.fx_hi, k,
-           s50.marks_off + s100.marks_off, s100.far, s100.sends, s100.trigs, s50.off_scale + s100.off_scale,
+           s50.marks_off + s100.marks_off, s100.far, s100.wrong, s100.kept_wrong, s100.sends, s100.trigs, s50.off_scale + s100.off_scale,
            back.wrong + back.kept_wrong + back.sends + static_cast<int>(back.far > 0.0f));
     if (s0.trigs < 10 || s0.far > 0.0f || s0.kept_wrong || s0.sends || s0.fx_hi - s0.fx_lo > 1e-6f || s50.trigs < 20 ||
         s50.changed < s50.trigs - 8 || s50.far > 0.25f + 1e-3f || s50.far < 0.15f || s50.wrong || s50.kept_wrong ||
@@ -3994,6 +4001,61 @@ int main(int argc, char** argv) {
            "0.16.6 project %s\n", ramp ? "ok" : "WRONG", bounce ? "ok" : "WRONG", ratch ? "ok" : "WRONG",
            both ? "ok" : "WRONG", scale ? "ok" : "WRONG", lock ? "ok" : "WRONG", up ? "read" : "WRONG");
     if (!ok) ++failures, printf("FAIL: CLIMB\n");
+    eng_defaults(p);
+    eng_fresh();
+  }
+
+  {                                     // 60. the random dose on the ratchets (0.16.8): below 25 % nothing; at 60 %
+    // trigs without ratchets get some now and then, trigs with some lose them now and then; at 90 % some rolls climb
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    static int per[80], notes[80][8];
+    auto run = [&](int dose, int ratch) {   // 4 bars of 16 trigs on T1: the rises in each sixteenth, their notes
+      eng_blank(p);
+      eng_fresh();
+      eng_set_model(0, eng_model_find(MK_DRUM, 0));
+      p->val[PG_GLOBAL * 4 + 0] = 0.60206f;   // (120 BPM)
+      p->val[PG_GLOBAL * 4 + 1] = 0.0f;
+      for (int st = 0; st < 16; ++st) eng_trig_set(0, st, 1);
+      p->val[PG_STEP(0) * 4 + 2] = static_cast<float>(ratch);
+      p->dice = static_cast<uint8_t>(dose);
+      for (int i = 0; i < 80; ++i) per[i] = 0;
+      int n = 0, last = 0;
+      eng_play(1);
+      for (int b = 0; b < 4 * 689 - 4; ++b) {
+        eng_render(l, r, 128);
+        int g = (eng_gates() & 1u) != 0;
+        if (g && !last) {
+          int six = static_cast<int>(static_cast<double>(b) / 43.066);
+          if (six < 80) {
+            if (per[six] < 8) notes[six][per[six]] = eng_note(0);
+            ++per[six];
+          }
+          ++n;
+        }
+        last = g;
+      }
+      eng_play(0);
+      return n;
+    };
+    int low = run(20, 1), base3 = run(0, 3);
+    int add = run(60, 1), more = 0;
+    for (int i = 0; i < 64; ++i) more += per[i] >= 2;
+    int drop = run(60, 3), singles = 0;
+    for (int i = 0; i < 64; ++i) singles += per[i] == 1;
+    run(90, 3);
+    int climbs = 0;
+    for (int i = 0; i < 64; ++i) {
+      int k = per[i] > 8 ? 8 : per[i];
+      for (int j = 1; j < k; ++j)
+        if (notes[i][j] != notes[i][0]) { ++climbs; break; }
+    }
+    int ok = low == 64 && base3 == 192 && add > 64 && more >= 3 && singles >= 2 && drop != 192 && climbs >= 1;
+    printf("the dose on the ratchets: at 20 %% %d rises over 64 trigs; at 60 %% %d (%d sixteenths with ratchets added); "
+           "x3 at 0 %% %d, at 60 %% %d (%d with theirs gone); at 90 %% %d rolls climbing\n", low, add, more, base3, drop,
+           singles, climbs);
+    if (!ok) ++failures, printf("FAIL: the dose on the ratchets\n");
+    p->dice = 0;
     eng_defaults(p);
     eng_fresh();
   }
