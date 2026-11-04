@@ -539,7 +539,7 @@ void make_bounds() {
 }
 inline float clamp_fast(int i, float v) { return v < p_lo[i] ? p_lo[i] : v > p_hi[i] ? p_hi[i] : v; }
 
-MI_RAM void apply_cables() {
+void apply_cables() {
   if (bounds_for != proj.algo[PG_DELAY(0)]) make_bounds();
   for (int i = 0; i < ENG_NPARAMS; ++i) fin[i] = proj.val[i];
   if (!proj.dice) dice_on = 0;
@@ -1159,7 +1159,7 @@ void lx_kit(project_t* p, int t) {      // its knobs as its kit has them (a drum
     p->val[PG_TRACK(t, 2) * 4 + 3] = 0.0f;     // kick; ZERO, the FM play the note as Plaits does: its octave kept)
 }
 
-MI_RAM void set_voice(int t) {
+void set_voice(int t) {
   mclaim(t);
   if (own_knobs(t)) {
     float k[LX_KNOBS];
@@ -1258,7 +1258,7 @@ inline float bend_word(float x, int mask, int swap) {   // the sample as an 8-bi
   return (static_cast<float>(v) + frac) * (1.0f / 128.0f);
 }
 
-MI_RAM inline float bend_one(Bend& g, float x) {
+inline float bend_one(Bend& g, float x) {
   if (g.shape != BS_OFF && g.shape != BS_SWAP) {
     if (g.shape == BS_RECT) {
       x = 1.6f * fm_fabsf(x);
@@ -1491,7 +1491,7 @@ const float mf_off_knobs[MF_KNOBS] = {1.0f, 0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 
 
 // a track's filter (PG_FILT, mi_filter.cc): its model and type (the pages' ALGORITHM), its knobs as the trig sees
 // them (locks, randoms, the dose, the cables), the note for its KEY
-MI_RAM void set_filter(int t) {
+void set_filter(int t) {
   int m = proj.algo[PG_FILT(t, 0)];   // (TYPE: not a lock's nor a random's, a new type starts it again)
   if (m <= MF_OFF || m >= MF_MODELS) {
     mf_set(t, MF_OFF, MF_LP, mf_off_knobs, 60.0f);
@@ -1503,7 +1503,7 @@ MI_RAM void set_filter(int t) {
   mf_set(t, m, dice_type[t] >= 0 ? dice_type[t] : iround(proj.val[PG_FILT(t, 2) * 4]), k, vnote[t]);
 }
 
-MI_RAM void render_voice(int t, uint32_t n) {
+void render_voice(int t, uint32_t n) {
   if (voice_rests(t)) {
     WEB_SPEND(kWebRest);
     for (uint32_t i = 0; i < n; ++i) vbuf[t][i] = 0.0f;
@@ -1817,7 +1817,7 @@ float task_cost[kTasks] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 float warps_chunk_cost = 1.0f;           // Warps' cost a Process call: a block makes 2 or 3 of them (mw_calls)
 uint32_t warps_calls;
 
-MI_RAM void run_task(int i, uint32_t n) {
+void run_task(int i, uint32_t n) {
   uint32_t q = plat_ticks24();
   if (i < ENG_TRACKS) render_voice(i, n);
   else if (i == kTaskWarps) {
@@ -1839,7 +1839,7 @@ MI_RAM void run_task(int i, uint32_t n) {
 volatile uint32_t offer, offer_chk, claim, block_no;
 
 // the second core's job: tasks (bit i: task i), the block's first or second job (bit 8), the block's number (bits 16..)
-MI_RAM void core1_job(uint32_t arg) {
+void core1_job(uint32_t arg) {
   uint32_t t0 = plat_ticks24();
   for (int i = 0; i < kTasks; ++i)
     if ((arg >> i) & 1u) run_task(i, job_n);
