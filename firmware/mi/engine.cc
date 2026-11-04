@@ -3692,7 +3692,7 @@ void take_pattern(const project_t* c) {   // the machine's settings stay (the FM
   }
 }
 void eng_cue(const project_t* next) {   // (its bytes all written before the pointer is)
-  __atomic_signal_fence(__ATOMIC_SEQ_CST);
+  asm volatile("" ::: "memory");          // (the project read whole before the cue: a compiler barrier, no call)
   cue_p = next;
 }
 int eng_cue_pending(void) { return cue_p != 0; }
