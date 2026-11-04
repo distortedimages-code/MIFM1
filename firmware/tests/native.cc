@@ -4005,8 +4005,9 @@ int main(int argc, char** argv) {
     eng_fresh();
   }
 
-  {                                     // 60. the random dose on the ratchets (0.16.8): below 25 % nothing; at 60 %
-    // trigs without ratchets get some now and then, trigs with some lose them now and then; at 90 % some rolls climb
+  {                                     // 60. the random dose on the ratchets (0.16.8, 0.16.9): none added below 50 %,
+    // the sequence's left alone below 30 %; at 60 % trigs without ratchets get some now and then, trigs with some lose
+    // them now and then; at 90 % some rolls climb
     project_t* p = eng_project();
     static float l[128], r[128];
     static int per[80], notes[80][8];
@@ -4038,7 +4039,7 @@ int main(int argc, char** argv) {
       eng_play(0);
       return n;
     };
-    int low = run(20, 1), base3 = run(0, 3);
+    int low = run(45, 1), base3 = run(25, 3);
     int add = run(60, 1), more = 0;
     for (int i = 0; i < 64; ++i) more += per[i] >= 2;
     int drop = run(60, 3), singles = 0;
@@ -4050,9 +4051,10 @@ int main(int argc, char** argv) {
       for (int j = 1; j < k; ++j)
         if (notes[i][j] != notes[i][0]) { ++climbs; break; }
     }
-    int ok = low == 64 && base3 == 192 && add > 64 && more >= 3 && singles >= 2 && drop != 192 && climbs >= 1;
-    printf("the dose on the ratchets: at 20 %% %d rises over 64 trigs; at 60 %% %d (%d sixteenths with ratchets added); "
-           "x3 at 0 %% %d, at 60 %% %d (%d with theirs gone); at 90 %% %d rolls climbing\n", low, add, more, base3, drop,
+    int ok = low == 64 && base3 == 192 && add > 64 && more >= 3 && more <= 24 && singles >= 2 && drop != 192 &&
+             climbs >= 1;
+    printf("the dose on the ratchets: at 45 %% %d rises over 64 trigs; at 60 %% %d (%d sixteenths with ratchets added); "
+           "x3 at 25 %% %d, at 60 %% %d (%d with theirs gone); at 90 %% %d rolls climbing\n", low, add, more, base3, drop,
            singles, climbs);
     if (!ok) ++failures, printf("FAIL: the dose on the ratchets\n");
     p->dice = 0;

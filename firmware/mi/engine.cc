@@ -814,32 +814,38 @@ void run_lfos(uint32_t n) {
 
 // a trig: its locks and randoms over the knobs, whether it plays (its probability); a track's ratchets. The locks are
 // found in one pass over the slots (not one a parameter: a sixteenth's trigs on seven lanes took 50,000 compares)
-// (0.16.8) the random dose on the ratchets, from 25 % (its travel, not its curve): a trig without some, now and then
-// some (2..4 hits; past 50 %, up to 6 over up to 4 steps); one with some, now and then changed (a hit or two more or
-// fewer, past 50 % its span a step either way) or gone (a single hit); past 50 % their CURVE thrown, past 75 % now
-// and then the roll climbing (or falling) through its hits, if the step has no CLIMB of its own. Each trig anew, as
-// the rest of the dose
+// (0.16.8, 0.16.9: Yoann's curves) the random dose on the ratchets, by its travel (not its curve), kept rare to stay
+// musical: a trig without some gets some from 50 % (2..4 hits; past 75 %, up to 6, now and then over 2..4 steps), its
+// chance rising fast then levelling: 19 % at 60 %, 34 % at 70 %, 43 % at 80 %, 50 % at 100 % (0.5 (1 - (1 - x)^2.2)
+// over 50..100 %); a trig with some, left alone below 30 %, then now and then changed (a hit or two more or fewer,
+// past 75 % a step of span either way) or gone (a single hit), half and half: 0..5 % over 30..50 %, then the same
+// curve up to 50 %. Past 50 % their CURVE thrown, past 75 % now and then the roll climbing (or falling) through its
+// hits, if the step has no CLIMB of its own. Each trig anew, as the rest of the dose
 int dice_climb[ENG_TRACKS];             // (that roll's CLIMB: a semitone or a scale's note or up to three a hit, 0 none)
+float dice_rise(float d) {              // 0..1 over 50..100 %: fast, then levelling
+  if (d <= 0.5f) return 0.0f;
+  float y = 1.0f - (d - 0.5f) * 2.0f;
+  return y <= 1e-4f ? 1.0f : 1.0f - fm_exp2f(2.2f * fm_log2f(y));
+}
 void dice_ratch(int t, float d) {
   dice_climb[t] = 0;
-  if (d < 0.25f) return;
-  float u = (d - 0.25f) * (1.0f / 0.75f);
+  if (d < 0.3f) return;
   int param = lane_param[t][TP_RATCHET];
   float base = clampf(fin[param] + tdelta[t][TP_RATCHET], 1.0f, static_cast<float>(ENG_RATCH_MAX));
   int sp, h = eng_ratch_hits(iround(base), &sp), h0 = h, sp0 = sp;
   if (h <= 1) {
-    if (rand01() < 0.45f * u) {
-      h = 2 + static_cast<int>(rand_u32() % (d > 0.5f ? 5u : 3u));
-      if (d > 0.5f && rand01() < (d - 0.5f) * 1.2f) sp = 2 + static_cast<int>(rand_u32() % 3u);
+    if (rand01() < 0.5f * dice_rise(d)) {
+      h = 2 + static_cast<int>(rand_u32() % (d > 0.75f ? 5u : 3u));
+      if (d > 0.75f && rand01() < (d - 0.75f) * 1.6f) sp = 2 + static_cast<int>(rand_u32() % 3u);
     }
-  } else if (rand01() < 0.6f * u) {
-    if (rand01() < 0.4f) {
+  } else if (rand01() < (d < 0.5f ? 0.05f * (d - 0.3f) * 5.0f : 0.05f + 0.45f * dice_rise(d))) {
+    if (rand01() < 0.5f) {
       h = sp = 1;
     } else {
       int dh = 1 + static_cast<int>(rand_u32() % 2u);
       h += (rand_u32() & 1u) ? dh : -dh;
       h = h < 2 ? 2 : h > 16 ? 16 : h;
-      if (d > 0.5f && rand01() < 0.5f) sp += (rand_u32() & 1u) ? 1 : -1;
+      if (d > 0.75f && rand01() < 0.5f) sp += (rand_u32() & 1u) ? 1 : -1;
       sp = sp < 1 ? 1 : sp > 16 ? 16 : sp;
     }
   }
