@@ -3182,16 +3182,16 @@ static void draw_intro(uint32_t t)       /* the screen in three bands of 80 rows
 }
 
 /* --------------------------------------------------------------- random --- */
-/* the random dose (OCT- held, SELECT turned): the machine's own screen for it, over everything. The third colour
- * opening from the middle (a circle, 260 ms), its cells shaken (12 px squares, lighter and darker, as many as the
- * dose is high, thrown again every 90 ms); RAN over DOM in Syne ExtraBold (rand_font.h), white, landing left to right
- * through signs at random, then as many of its letters thrown as the dose is high (one at a few %, all six at 100 %),
- * a sign each every 60 ms, all of them again at each detent; the dose, its bar (the fills' quarter marked), and from
- * 76 % the fills: how many tracks, how often, how long */
+/* the random dose (OCT- held, SELECT turned): the machine's own screen for it, over everything. Red opening from
+ * the middle (a circle, 260 ms; red whatever the theme, 0.14.6); RAN over DOM in Syne ExtraBold (rand_font.h), white,
+ * landing left to right through signs at random, then as many of its letters thrown as the dose is high (one at a few
+ * %, all six at 100 %), a sign each every 60 ms, all of them again at each detent; the dose, its bar (the fills'
+ * quarter marked), and from 76 % the fills: how many tracks, how often, how long */
 #include "rand_font.h"
 static const char RAND_SIGNS[] = "#%+&?KXZRANDOM";
 #define RAND_OPEN_MS 260u
 #define RAND_LAND_MS 560u
+#define NOISE_RED 0xE8A3u                /* (232, 20, 28): the random dose's screen, TRAUMA's letters */
 
 static uint16_t mix565(uint16_t a, uint16_t b, uint32_t k)   /* a to b, k / 256 of the way */
 {
@@ -3246,10 +3246,10 @@ static void rand_word(const char *w, int row, int32_t y, uint32_t t, int n, uint
     }
 }
 
-static void rand_scene(uint32_t t, int d, uint32_t tick, uint32_t shake)
+static void rand_scene(uint32_t t, int d, uint32_t tick)
 {
-    uint16_t col = AC3, light = mix565(AC3, 0xFFFFu, 46u), dark = mix565(AC3, 0x0000u, 70u);
-    uint16_t soft = mix565(AC3, 0xFFFFu, 150u), white = 0xFFFFu;
+    uint16_t col = NOISE_RED, dark = mix565(NOISE_RED, 0x0000u, 70u);
+    uint16_t soft = mix565(NOISE_RED, 0xFFFFu, 150u), white = 0xFFFFu;
     int n = (d * 6 + 99) / 100, every, beats, tracks;
     char line[48], v[8];
     float rr = 1.0f;
@@ -3267,15 +3267,6 @@ static void rand_scene(uint32_t t, int d, uint32_t tick, uint32_t shake)
                 cv_rect(120 - dx, y, 2 * dx, 1, col);
             }
         }
-    }
-    if (d && t >= RAND_OPEN_MS) {        /* the cells shaken: as many as the dose is high (a third of them at 100 %) */
-        uint32_t share = (uint32_t)d * 34u / 10u;   /* per mille */
-        for (int j = 0; j < 20; j++)
-            for (int i = 0; i < 20; i++) {
-                uint32_t h = rand_hash((uint32_t)(j * 20 + i), shake);
-                if (h % 1000u < share)
-                    cv_rect(i * 12, j * 12, 12, 12, (h >> 12) & 1u ? light : dark);
-            }
     }
     line[0] = 0;
     text_cat(line, d ? "EVERY TRIG ANOTHER SOUND" : "THE SOUND AS SET", sizeof line);
@@ -3319,20 +3310,20 @@ static void rand_scene(uint32_t t, int d, uint32_t tick, uint32_t shake)
 
 static void draw_random(void)
 {
-    static int32_t shown[5] = {-1, -1, -1, -1, -1};
+    static int32_t shown[4] = {-1, -1, -1, -1};
     uint32_t t = plat_ms() - ui.dice_at;
     int d = eng_project()->dice > 100 ? 100 : eng_project()->dice;
-    uint32_t tick = d ? plat_ms() / 60u : 0u, shake = d ? plat_ms() / 90u : 0u;
-    int32_t s[5] = {t < RAND_LAND_MS + 60u ? (int32_t)t : -2, d, (int32_t)tick, (int32_t)shake, (int32_t)rand_turns};
+    uint32_t tick = d ? plat_ms() / 60u : 0u;
+    int32_t s[4] = {t < RAND_LAND_MS + 60u ? (int32_t)t : -2, d, (int32_t)tick, (int32_t)rand_turns};
     if (!ui.full && !memcmp(s, shown, sizeof s))
         return;                          /* (nothing moved) */
     memcpy(shown, s, sizeof s);
     for (int b = 0; b < 3; b++) {        /* in three bands of 80 rows, each drawn in screen rows */
-        cv_begin(240, 80, AC3);
+        cv_begin(240, 80, NOISE_RED);
         cv_oy = -80 * b;
         cv_y0 = 0;
         cv_y1 = 80;
-        rand_scene(t, d, tick, shake);
+        rand_scene(t, d, tick);
         cv_oy = 0;
         blit(0, (uint32_t)(80 * b));
     }
@@ -3359,143 +3350,140 @@ static void dice_close(void)             /* back to the page, all of it drawn ag
 
 /* --------------------------------------------------------------- trauma --- */
 /* TRAUMA (OCT+ held, SELECT turned): a dose of saturation (engine.cc: the drives, the filters' FM, Warps, the
- * delay's drive), after Audiotrauma, its own screen over everything. Black, the second colour's bars coming in from
- * both sides (a wave clipped, 260 ms); TRAU over MA in Syne ExtraBold, white, its strips pushed sideways as the dose
- * is high (none at 0, a few at a few %, nearly all at 100 %; pushed again every 90 ms and at each detent), a ghost in
- * the second colour behind the pushed ones from a third of the way; a sine through the drive's curve at this dose
- * (the plain one under it, dim); the dose, its bar (where the filters' FM, Warps and the delay come in, marked); what
- * is in */
+ * delay's drive), after Audiotrauma, its own screen over everything, in black and white (0.14.6). White bars coming
+ * in from both sides (260 ms); the label's line in Anton (noise_font.h), its letters and its lines tight: VOUS ETES LE
+ * over BRUIT, as wide; its strips pushed sideways as the dose is high (none at 0, a few at a few %, nearly all at
+ * 100 %; pushed again every 90 ms and at each detent), a grey ghost behind the pushed ones from a third of the way, a
+ * letter or a few red at random (one at a few %, three at 100 %, thrown with the strips); from 80 % a strobe, the
+ * screen turned white a frame at a time (60 ms), one frame in four, then in three, every other one at 100 %; the dose
+ * and its bar */
+#include "noise_font.h"
 #define TRAUMA_OPEN_MS 260u
 static uint32_t trauma_turns;            /* the detents turned on it (each pushes the strips again) */
+static const char NOISE1[] = "VOUS [TES LE";   /* ('[': E circumflex, in FONT_NOISE1 only) */
+#define NOISE1_TRACK (-1)                /* (the letters closer than Anton has them: 1 px, 3 px on BRUIT) */
+#define NOISE2_TRACK (-3)
+#define NOISE_SPACE 10                   /* (a space on the first line: Anton's 11 px, a little tighter) */
 
-static float trauma_curve(float x)       /* the drive's curve (engine.cc's tclip) */
+static int32_t noise_adv(const felucca_font_t *f, char ch)
 {
-    return x >= 1.0f ? 0.6666667f : x <= -1.0f ? -0.6666667f : x - x * x * x * (1.0f / 3.0f);
+    char o[2] = {ch, 0};
+    return ch == ' ' ? NOISE_SPACE : text_w(f, o);
 }
 
-/* a word centred at y, in strips, each pushed or not (this throw's) */
-static void trauma_word(const char *w, int32_t y, int d, uint32_t shake, uint16_t c, uint16_t ghost)
+static int32_t noise_w(const felucca_font_t *f, const char *w, int32_t track)
 {
-    int32_t x = (240 - text_w(&FONT_RAND, w)) / 2, sh = ((int32_t)FONT_RAND.h + 5) / 6, y0 = cv_y0, y1 = cv_y1;
+    int32_t x = 0, n = 0;
+    for (; *w; w++, n++)
+        x += noise_adv(f, *w);
+    return x + track * (n - 1);
+}
+
+/* rows r0..r1 of a glyph at x, y (gfx.c's cv_text, those rows alone: a line drawn in strips costs one drawing) */
+static void noise_rows(const felucca_font_t *f, char ch, int32_t x, int32_t y, int32_t r0, int32_t r1, uint16_t c)
+{
+    uint32_t gi = glyph(f, (uint8_t)ch), w = f->bw[gi], bpr = (w + 1u) / 2u;
+    const uint8_t *gd = f->data + f->off[gi];
+    uint32_t r = c >> 11, g = (c >> 5) & 63u, b = c & 31u;
+    int32_t ya = cv_y0 - y - cv_oy, yb = cv_y1 - y - cv_oy;
+    r0 = r0 > ya ? r0 : ya;
+    r0 = r0 > 0 ? r0 : 0;
+    r1 = r1 < yb ? r1 : yb;
+    r1 = r1 < (int32_t)f->h ? r1 : (int32_t)f->h;
+    for (int32_t gy = r0; gy < r1; gy++) {
+        uint32_t row = (uint32_t)(y + gy + cv_oy) * cv_w;
+        for (uint32_t gx = 0; gx < w; gx++) {
+            uint32_t a = gd[(uint32_t)gy * bpr + gx / 2u];
+            int32_t px = x - f->pad + (int32_t)gx;
+            a = (gx & 1u) ? (a & 15u) : (a >> 4);
+            if (!a || (uint32_t)px >= cv_w)
+                continue;
+            if (a == 15u) {
+                cv_px[row + (uint32_t)px] = swap16(c);
+            } else {
+                uint32_t bg = swap16(cv_px[row + (uint32_t)px]);
+                uint32_t br = bg >> 11, bgg = (bg >> 5) & 63u, bb = bg & 31u;
+                cv_px[row + (uint32_t)px] = swap16(((r * a + br * (15u - a)) / 15u) << 11 |
+                                                   ((g * a + bgg * (15u - a)) / 15u) << 5 | (b * a + bb * (15u - a)) / 15u);
+            }
+        }
+    }
+}
+
+/* a line centred at y in `strips` strips, each pushed or not (this throw's), its letters from `first` (of the 15)
+ * red when their bit is in `red` */
+static void noise_line(const felucca_font_t *f, const char *w, int32_t track, int32_t y, int strips, int first,
+                       uint32_t red, int d, uint32_t shake, uint16_t ink, uint16_t ghost)
+{
+    int32_t x0 = (240 - noise_w(f, w, track)) / 2, sh = ((int32_t)f->h + strips - 1) / strips;
     int32_t far = 3 + d / 5;             /* (how far a strip goes: 3 px at a few %, 23 at 100 %) */
-    for (int k = 0; k < 6; k++) {
-        int32_t sa = y + k * sh, dx = 0;
+    for (int k = 0; k < strips; k++) {
+        int32_t dx = 0, x = x0;
         uint32_t h = rand_hash((uint32_t)(y * 8 + k), shake * 131u + trauma_turns);
         if (d && (int)(h % 110u) < d)
             dx = (int32_t)((h >> 8) % (uint32_t)(2 * far + 1)) - far;
-        cv_y0 = sa + cv_oy > y0 ? sa + cv_oy : y0;
-        cv_y1 = sa + sh + cv_oy < y1 ? sa + sh + cv_oy : y1;
-        if (cv_y0 < cv_y1) {
-            if (dx && d > 33)
-                cv_text(x - dx / 2, y, &FONT_RAND, w, ghost);
-            cv_text(x + dx, y, &FONT_RAND, w, c);
+        for (int i = 0, n = first; w[i]; i++) {
+            if (w[i] != ' ') {
+                if (dx && d > 33)
+                    noise_rows(f, w[i], x - dx / 2, y, k * sh, k * sh + sh, ghost);
+                noise_rows(f, w[i], x + dx, y, k * sh, k * sh + sh, (red >> n) & 1u ? NOISE_RED : ink);
+                n++;
+            }
+            x += noise_adv(f, w[i]) + track;
         }
     }
-    cv_y0 = y0;
-    cv_y1 = y1;
 }
 
-static void trauma_scene(uint32_t t, int d, uint32_t shake)
+static void trauma_scene(uint32_t t, int d, uint32_t shake, int strobe)
 {
-    uint16_t col = AC2, white = 0xFFFFu, soft = mix565(AC2, 0xFFFFu, 150u), dim = mix565(AC2, BG, 170u);
-    float gain, fm, warps, delay, u = (float)d * 0.01f;
-    char line[48], v[8];
-    eng_trauma(d, &gain, &fm, &warps, &delay);
+    uint16_t ink = strobe ? 0x0000u : 0xFFFFu, ghost = 0x7BEFu, dim = strobe ? 0xBDF7u : 0x4208u;
+    uint32_t red = 0;
+    char line[16], v[8];
     if (t < TRAUMA_OPEN_MS) {            /* the bars from both sides, quick then slowing, then gone */
         float q = (float)t / (float)TRAUMA_OPEN_MS, r = 1.0f - (1.0f - q) * (1.0f - q) * (1.0f - q);
         for (int32_t j = 0; j < 12; j++) {
             uint32_t h = rand_hash((uint32_t)j, 77u);
             int32_t len = (int32_t)((60.0f + (float)(h % 60u)) * r * (1.0f - q * q));
-            cv_rect(0, j * 20 + 4, len, 12, col);
-            cv_rect(240 - len, j * 20 + 4, len, 12, col);
+            cv_rect(0, j * 20 + 4, len, 12, 0xFFFFu);
+            cv_rect(240 - len, j * 20 + 4, len, 12, 0xFFFFu);
         }
     }
-    line[0] = 0;
-    text_cat(line, !d ? "THE SOUND AS SET" : d >= 100 ? "VOUS ETES LE BRUIT" : "INTO THE RED", sizeof line);
-    if (t >= 200u)
-        cv_text((240 - text_w(&FONT_XS, line)) / 2, 12, &FONT_XS, line, d >= 100 ? white : soft);
-    if (t >= 120u) {
-        trauma_word("TRAU", 30, d, shake, white, col);
-        trauma_word("MA", 72, d, shake, white, col);
+    for (int k = 0; d && k < 1 + d / 40; k++)   /* the red letters: one, two from 40 %, three at 80 % */
+        red |= 1u << (rand_hash((uint32_t)k + 40u, shake * 7u + trauma_turns) % 15u);
+    if (t >= 120u) {                     /* VOUS ETES LE (its first glyph row 3 px over its accent), BRUIT 4 px under */
+        noise_line(&FONT_NOISE1, NOISE1, NOISE1_TRACK, 4, 5, 0, red, d, shake, ink, ghost);
+        noise_line(&FONT_NOISE2, "BRUIT", NOISE2_TRACK, 62, 8, 10, red, d, shake, ink, ghost);
     }
-    if (t >= 300u) {                     /* a sine through the drive's curve at this dose, the plain one under it */
-        float g = gain, b = 0.3f * (2.0f * u < 1.0f ? 2.0f * u : 1.0f), fb = trauma_curve(b);
-        float up = trauma_curve(0.6f * g + b) - fb, dn = fb - trauma_curve(b - 0.6f * g), k = 1.2f / (up + dn);
-        float m = 4.0f * u < 1.0f ? 4.0f * u : 1.0f, px = 0.0f, py = 0.0f, qy = 0.0f;
-        float span = t >= 520u ? 1.0f : (float)(t - 300u) / 220.0f;   /* (drawn out) */
-        for (int32_t i = 0; i <= (int32_t)(200.0f * span); i++) {
-            float ph = (float)i * (6.2831853f / 100.0f), s0 = 0.6f * fm_sinf(ph);
-            float y = s0 + m * ((trauma_curve(g * s0 + b) - fb) * k - s0);
-            float yy = 140.0f - 34.0f * y, y0 = 140.0f - 34.0f * s0;
-            if (i) {
-                seg(px, qy, 20.0f + (float)i, y0, 1.2f, dim);
-                seg(px, py, 20.0f + (float)i, yy, 2.0f, col);
-            }
-            px = 20.0f + (float)i, py = yy, qy = y0;
-        }
-    }
-    if (t >= 300u) {
+    if (t >= 300u) {                     /* the dose, its bar drawn out */
         int_text(d, v);
         line[0] = 0;
         text_cat(line, v, sizeof line);
         text_cat(line, " %", sizeof line);
-        cv_text(232 - text_w(&FONT_L, line), 172, &FONT_L, line, white);
-        float uu = t >= 520u ? 1.0f : (float)(t - 300u) / 220.0f;   /* the bar drawn out */
-        int32_t bw = (int32_t)(140.0f * uu), fw = (int32_t)(140.0f * uu * u);
-        cv_rect(10, 186, bw, 6, dim);
-        cv_rect(10, 186, fw, 6, white);
-        if (uu >= 1.0f) {                /* where the filters' FM, Warps, the delay come in */
-            static const int MARK[3] = {40, 50, 60};
-            for (int i = 0; i < 3; i++)
-                cv_rect(10 + 140 * MARK[i] / 100, 182, 2, 14, d >= MARK[i] ? white : soft);
-        }
-    }
-    if (t >= 420u) {                     /* what is in */
-        line[0] = 0;
-        if (!d) {
-            text_cat(line, "TURN: THE DRIVES IN", sizeof line);
-        } else {
-            int g10 = (int)(gain * 10.0f + 0.5f);
-            text_cat(line, "DRIVE X", sizeof line);
-            int_text(g10 / 10, v);
-            text_cat(line, v, sizeof line);
-            text_cat(line, ".", sizeof line);
-            int_text(g10 % 10, v);
-            text_cat(line, v, sizeof line);
-            text_cat(line, d >= 25 ? "  EACH TRIG ITS OWN" : "  WARM", sizeof line);
-        }
-        cv_text(10, 206, &FONT_XS, line, d ? white : soft);
-        line[0] = 0;
-        if (fm > 0.0f) {
-            int_text((int)(fm * 100.0f + 0.5f), v);
-            text_cat(line, "FILTER FM ", sizeof line);
-            text_cat(line, v, sizeof line);
-            text_cat(line, " %  ", sizeof line);
-        } else
-            text_cat(line, "FM FROM 40 %  ", sizeof line);
-        text_cat(line, warps < 0.0f ? "NO WARPS" : warps > 0.0f ? "WARPS" : "WARPS AT 50", sizeof line);
-        if (delay > 0.0f)
-            text_cat(line, "  DELAY", sizeof line);
-        cv_text(10, 222, &FONT_XS, line, fm > 0.0f ? white : soft);
+        cv_text(232 - text_w(&FONT_L, line), 186, &FONT_L, line, ink);
+        float uu = t >= 520u ? 1.0f : (float)(t - 300u) / 220.0f;
+        int32_t bw = (int32_t)(130.0f * uu), fw = (int32_t)(130.0f * uu * (float)d * 0.01f);   /* (clear of 100 %) */
+        cv_rect(10, 202, bw, 6, dim);
+        cv_rect(10, 202, fw, 6, ink);
     }
 }
 
 static void draw_trauma(void)
 {
-    static int32_t shown[4] = {-1, -1, -1, -1};
-    uint32_t t = plat_ms() - ui.trauma_at;
+    static int32_t shown[5] = {-1, -1, -1, -1, -1};
+    uint32_t t = plat_ms() - ui.trauma_at, frame = plat_ms() / 60u;
     int d = eng_project()->trauma > 100 ? 100 : eng_project()->trauma;
     uint32_t shake = d ? plat_ms() / 90u : 0u;
-    int32_t s[4] = {t < 600u ? (int32_t)t : -2, d, (int32_t)shake, (int32_t)trauma_turns};
+    int strobe = d >= 80 && t >= 520u && frame % (d >= 100 ? 2u : d >= 90 ? 3u : 4u) == 0u;
+    int32_t s[5] = {t < 600u ? (int32_t)t : -2, d, (int32_t)shake, (int32_t)trauma_turns, strobe};
     if (!ui.full && !memcmp(s, shown, sizeof s))
         return;                          /* (nothing moved) */
     memcpy(shown, s, sizeof s);
     for (int b = 0; b < 3; b++) {        /* in three bands of 80 rows, each drawn in screen rows */
-        cv_begin(240, 80, BG);
+        cv_begin(240, 80, strobe ? 0xFFFFu : 0x0000u);
         cv_oy = -80 * b;
         cv_y0 = 0;
         cv_y1 = 80;
-        trauma_scene(t, d, shake);
+        trauma_scene(t, d, shake, strobe);
         cv_oy = 0;
         blit(0, (uint32_t)(80 * b));
     }

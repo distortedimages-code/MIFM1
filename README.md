@@ -738,10 +738,10 @@ sous rien) et Warps ne calcule plus rien. Warps joue un bloc derrière les voix 
 remplace).
 
 **La dose d'aléatoire** (cachée) : tenir **OCT−** et tourner **SELECT** (OCT− et OCT+ ensemble marchent toujours).
-La machine passe sur **son écran à elle** : la troisième couleur du thème s'ouvre depuis le centre, RAN / DOM s'écrit
-en grand, en blanc, ses lettres arrivant de gauche à droite à travers des signes ; plus la dose monte, plus ses
-lettres se mettent à changer (une à quelques %, les six à 100 %, toutes relancées à chaque cran) et plus les cases du
-fond tremblent. Dessous, la dose, sa barre (le dernier quart marqué) et ce que font les fills. **À chaque trig de
+La machine passe sur **son écran à elle** : du rouge s'ouvre depuis le centre (quel que soit le thème), RAN / DOM
+s'écrit en grand, en blanc, ses lettres arrivant de gauche à droite à travers des signes ; plus la dose monte, plus
+ses lettres se mettent à changer (une à quelques %, les six à 100 %, toutes relancées à chaque cran). Dessous, la
+dose, sa barre (le dernier quart marqué) et ce que font les fills. **À chaque trig de
 chaque piste**, tous ses réglages du son sont relancés au hasard, chacun de son côté : chaque note est un autre son,
 rien ne boucle. **La dose suit une courbe** (son carré) : au début de la course, des écarts à peine perceptibles (à
 20 %, 4 % de la plage), de plus en plus francs, toute la plage à 100 %. **Tout reste dans la gamme** : FREQ (jusqu'à
@@ -788,11 +788,12 @@ reste dans la gamme) :
   branché : TRAUMA ne l'allume jamais (son CPU : un cinquième d'un cœur) ;
 - **à partir de 60 %**, le **DRIVE du delay** (des échos qui saturent).
 
-Son écran : noir, des barres de la deuxième couleur qui entrent des deux côtés, TRAU / MA en grand, en blanc, ses
-bandes poussées de côté d'autant plus que la dose monte (un fantôme dans la deuxième couleur derrière à partir d'un
-tiers), une sinusoïde passée dans la courbe du drive à cette dose (la sinusoïde nue en dessous), la dose et sa barre
-(les points de la FM, de Warps et du delay marqués), et ce qui est entré (le gain du drive, la FM des filtres, Warps
-ou son absence, le delay). À 100 % : VOUS ETES LE BRUIT. On lâche OCT+ : retour à la page, TRAUMA reste (en bas, un
+Son écran, en noir et blanc : des barres blanches qui entrent des deux côtés, puis la phrase du label en Anton (une
+Impact libre), ses lettres et ses lignes serrées : VOUS ÊTES LE, et dessous BRUIT en très grand, aussi large. Ses
+bandes sont poussées de côté d'autant plus que la dose monte (un fantôme gris derrière à partir d'un tiers), une
+lettre ou quelques-unes passent au rouge au hasard (une, deux à partir de 40 %, trois à 80 %) ; **sur le dernier
+cinquième, un stroboscope** : l'écran passe au blanc une image sur quatre (60 ms), puis une sur trois à 90 %, une sur
+deux à 100 %. Dessous, la dose et sa barre. On lâche OCT+ : retour à la page, TRAUMA reste (en bas, un
 trait orange sous celui de la dose d'aléatoire). Les deux doses se combinent. Elle se sauve avec le projet ; un
 projet de 0.13 revient avec TRAUMA à 0.
 

@@ -20,6 +20,9 @@ repository, at the commit the package names.
 
 The name at power-on is drawn in **Syne** (Copyright 2017 The Syne Project Authors), under the SIL Open Font License
 1.1: `firmware/fonts/Syne-OFL.txt`, beside the font; `firmware/logo_font.h` and `firmware/rand_font.h` are made from it by `tools/gen_logo_font.py`.
+TRAUMA's screen is drawn in **Anton** (Copyright 2020 The Anton Project Authors), under the SIL Open Font License 1.1:
+`firmware/fonts/Anton-Regular.ttf` (its Latin subset, as Fontsource's `@fontsource/anton` 5.3.0 ships it) and
+`firmware/fonts/Anton-OFL.txt` beside it; `firmware/noise_font.h` is made from it by `tools/gen_logo_font.py`.
 The interface's fonts are fm1-base's (Barlow, SIL OFL 1.1).
 
 Trademarks: Mutable Instruments, Erica Synths, LXR and LXR-02 are their owners'. MIFM1 does not use them as its
