@@ -318,7 +318,7 @@ float raw_left[ENG_TRACKS];             // a step's gate: its samples left
 int last_g[ENG_TRACKS];                 // the gate of the last frame
 int rat_on[ENG_TRACKS], rat_n[ENG_TRACKS], rat_span[ENG_TRACKS], rat_i[ENG_TRACKS];
 float rat_pos[ENG_TRACKS], rat_lvl[ENG_TRACKS];
-float rat_t[ENG_TRACKS][9];             // the ratchets' hits: where each starts (samples into the trig), then their end
+float rat_t[ENG_TRACKS][17];            // the ratchets' hits: where each starts (samples into the trig), then their end
                                         // (0.16: over one step or several, CURVE drawing them closer or apart)
 int32_t lane_cnt[ENG_LANES];            // (0.16) the steps each lane took since PLAY, at its SPEED (-1: none yet)
 float lane_sl[ENG_LANES];               // its step's length now (samples)
@@ -328,7 +328,8 @@ float lane_sl[ENG_LANES];               // its step's length now (samples)
 const float kSpeedMul[ENG_SPEEDS] = {0.125f, 0.25f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f};
 const char* const kSpeedNames[ENG_SPEEDS] = {"x1/8", "x1/4", "x1/2", "x3/4", "x1", "x3/2", "x2", "x3", "x4"};
 const char* const kDirNames[DIR_N] = {"Forward", "Backward", "Ping-pong", "Random", "Drunk", "2 fwd 1 back"};
-const uint8_t kTuplet[8][2] = {{3, 2}, {3, 4}, {2, 3}, {4, 3}, {5, 4}, {6, 4}, {7, 4}, {3, 8}};   // hits, steps
+const uint8_t kTuplet[8][2] = {{3, 2}, {3, 4}, {2, 3}, {4, 3}, {5, 4}, {6, 4}, {7, 4}, {3, 8}};   // (0.16.0's: hits,
+                                                                                               // steps)
 inline int lane_speed(int l) {          // 0..8 (4: x1)
   int v = proj.speed[l] + 4;
   return v < 0 ? 0 : v >= ENG_SPEEDS ? ENG_SPEEDS - 1 : v;
@@ -823,8 +824,15 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
     if (r) {                            // > 0: a new random at each trig; < 0: the same at each pass (a loop)
       float a = static_cast<float>(r < 0 ? -r : r) * 0.01f, x = r > 0 ? rand01() : loop01(lane, step, tp);
       float c = p_cab[param];
-      if (lane < ENG_TRACKS && tp == TP_RATCHET)   // only more; over half its knob's travel the tuplets too (0.16)
-        v += a * x * (a <= 0.5f ? 7.0f : 7.0f + 16.0f * (a - 0.5f));
+      if (lane < ENG_TRACKS && tp == TP_RATCHET) {   // only more hits (7 at half the knob's travel, 15 at its end);
+        int sp, h = eng_ratch_hits(iround(v), &sp);   // over half, a longer span too (3 steps more at most)
+        h += iround(a * x * (a <= 0.5f ? 7.0f : 7.0f + 16.0f * (a - 0.5f)));
+        if (a > 0.5f) {
+          float y = x * 7.13f;
+          sp += iround((a - 0.5f) * 6.0f * (y - fm_floorf(y)));
+        }
+        v = static_cast<float>(eng_ratch_join(h, sp));
+      }
       else if (lane < ENG_TRACKS && tp == TP_NOTE) v += a * (x * 2.0f - 1.0f) * 12.0f;   // an octave either way
       else v += a * (x * 2.0f - 1.0f) * (c != 0.0f ? c : p_hi[param] - p_lo[param]);
     }
@@ -862,10 +870,10 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
     return;
   }
   float prob = E(lane, TP_PROB);
-  rat_n[lane] = eng_ratch_tuplet(static_cast<int>(clampf(static_cast<float>(iround(fin[eng_track_param(lane, TP_RATCHET)] +
-                                                                                  tdelta[lane][TP_RATCHET])),
-                                                          1.0f, static_cast<float>(ENG_RATCH_MAX))),
-                                 &rat_span[lane]);
+  rat_n[lane] = eng_ratch_hits(static_cast<int>(clampf(static_cast<float>(iround(fin[eng_track_param(lane, TP_RATCHET)] +
+                                                                                tdelta[lane][TP_RATCHET])),
+                                                        1.0f, static_cast<float>(ENG_RATCH_MAX))),
+                               &rat_span[lane]);
   rat_on[lane] = prob >= 0.999f || rand01() < prob;
   rat_pos[lane] = 0.0f;
 }
@@ -999,13 +1007,14 @@ int lane_next(int l) {
   return (p % len + len) % len;
 }
 
-// (0.16) a trig's ratchets laid out: RATCH's hits over its span (one step, or the tuplet's), CURVE drawing each gap a
-// share of the last (to the right: 2^(-0.6 CURVE), closer and closer, a ball bouncing; to the left wider and wider)
+// (0.16) a trig's ratchets laid out: RATCH's hits over SPAN (0.16.4: 1 to 16 of the lane's steps), CURVE drawing each
+// gap a share of the last (to the right: 2^(-0.6 CURVE), closer and closer, a ball bouncing; to the left wider and
+// wider)
 void ratchet_layout(int t) {
   int n = rat_n[t];
   float span = lane_sl[t] * static_cast<float>(rat_span[t]), c = clampf(E(t, TP_CURVE), -1.0f, 1.0f);
   float r = fm_exp2f(-0.6f * c), d = 1.0f, sum = 0.0f;   // (each gap two thirds of the last at most, or 1.5 times)
-  if (n > 8) n = 8;
+  if (n > 16) n = 16;
   for (int i = 0; i < n; ++i) sum += d, d *= r;   // (the gaps, the first 1)
   float g = span / sum, at = 0.0f;
   d = 1.0f;
@@ -1150,7 +1159,6 @@ void sequence(uint32_t n) {
         {                               // (Endless: its ratchets over its own step)
           float keep = lane_sl[t];
           lane_sl[t] = el[t];
-          if (rat_span[t] > 1) rat_n[t] = 1, rat_span[t] = 1;   // (no tuplet over Endless' steps)
           ratchet_layout(t);
           lane_sl[t] = keep;
         }
@@ -1170,7 +1178,7 @@ void sequence(uint32_t n) {
         g = raw;
         if (!raw) rat_on[t] = 0;
       } else {                          // the ratchets: n gates over their span (ratchet_layout), each half its gap
-        int i = rat_i[t] < 0 ? 0 : rat_i[t], n = rat_n[t] > 8 ? 8 : rat_n[t];
+        int i = rat_i[t] < 0 ? 0 : rat_i[t], n = rat_n[t] > 16 ? 16 : rat_n[t];
         while (i < n && rat_pos[t] >= rat_t[t][i + 1]) ++i;
         if (i != rat_i[t]) {            // a hit: CURVE to the right, each softer (a bounce's)
           rat_i[t] = i;
@@ -2229,14 +2237,15 @@ void eng_endless_opt_set(project_t* p, int t, int o, int v) {
 
 const char* eng_speed_name(int s) { return kSpeedNames[(s + 4) < 0 ? 0 : (s + 4) >= ENG_SPEEDS ? ENG_SPEEDS - 1 : s + 4]; }
 const char* eng_dir_name(int d) { return kDirNames[d < 0 || d >= DIR_N ? 0 : d]; }
-int eng_ratch_tuplet(int r, int* steps) {
-  if (r <= 8) {
-    if (steps) *steps = 1;
-    return r < 1 ? 1 : r;
-  }
-  const uint8_t* q = kTuplet[(r > ENG_RATCH_MAX ? ENG_RATCH_MAX : r) - 9];
-  if (steps) *steps = q[1];
-  return q[0];
+int eng_ratch_hits(int r, int* span) {
+  r = r < 1 ? 1 : r > ENG_RATCH_MAX ? ENG_RATCH_MAX : r;
+  if (span) *span = (r - 1) / 16 + 1;
+  return (r - 1) % 16 + 1;
+}
+int eng_ratch_join(int hits, int span) {
+  hits = hits < 1 ? 1 : hits > 16 ? 16 : hits;
+  span = span < 1 ? 1 : span > 16 ? 16 : span;
+  return hits + 16 * (span - 1);
 }
 
 int eng_lane_params(int lane) {
@@ -2642,14 +2651,9 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
     put(b, n, kNoteName[nt % 12]);
     while (b[l]) ++l;
     put_num(b + l, n - l, nt / 12 - 1, 0, 0);
-  } else if (pt == PT_STEP && k == 2 && iround(v) > 8) {   // (0.16) RATCH's tuplets: hits:steps
-    int st = 1, h = eng_ratch_tuplet(iround(v), &st);
-    put_num(b, n, h, 0, 0);
-    put_end(b, n, ":");
-    put_num(b + 2, n - 2, st, 0, 0);
-  } else if (pt == PT_STEP && k == 2) {
+  } else if (pt == PT_STEP && k == 2) {   // RATCH: its hits (0.16.4: SPAN, the steps they take, on the PLAY face)
     put(b, n, "x");
-    put_num(b + 1, n - 1, static_cast<int32_t>(v + 0.5f), 0, 0);
+    put_num(b + 1, n - 1, eng_ratch_hits(iround(v), 0), 0, 0);
   } else if (d->kind == K_INT) {
     put_num(b, n, static_cast<int32_t>(v + (v < 0 ? -0.5f : 0.5f)), 0, d->lo < 0);
   } else if (pt == PT_PAN) {
@@ -3856,24 +3860,41 @@ MI_COLD void upgrade_v23(project_t* p, const project_v23& o) {
   }
   p->trauma = o.trauma;
 }
-// RATCH's travel 1..8 then (0.16) 1..16: the locks of a project before, as they were (a lock is a share of the travel)
-MI_COLD void ratch_widened(project_t* p) {
+// RATCH's travel: 1..8 before 0.16, 1..8 then eight tuplets (9..16) in 0.16.0 to 0.16.3, hits over a span (1..256)
+// since 0.16.4: a project before, its knobs and its locks as they were (a lock is a share of the travel; old_max: 8 or
+// 16)
+MI_COLD int ratch_from(int r) {         // 0.16.0's value: hits (1..8), or a tuplet's hits over its steps
+  if (r <= 8) return r < 1 ? 1 : r;
+  const uint8_t* q = kTuplet[(r > 16 ? 16 : r) - 9];
+  return eng_ratch_join(q[0], q[1]);
+}
+MI_COLD void ratch_widened(project_t* p, int old_max) {
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    float* v = &p->val[PG_STEP(t) * 4 + 2];
+    *v = static_cast<float>(ratch_from(static_cast<int>(*v + 0.5f)));
+  }
   for (int i = 0; i < ENG_PLOCKS; ++i) {
     plock_t& k = p->lock[i];
     if (k.lane >= ENG_TRACKS || k.tp != TP_RATCHET) continue;
-    int r = static_cast<int>(1.0f + static_cast<float>(k.v) * 7.0f / 255.0f + 0.5f);
-    k.v = static_cast<uint8_t>(static_cast<float>(r - 1) * 255.0f / static_cast<float>(ENG_RATCH_MAX - 1) + 0.5f);
+    int r = static_cast<int>(1.0f + static_cast<float>(k.v) * static_cast<float>(old_max - 1) / 255.0f + 0.5f);
+    k.v = static_cast<uint8_t>(ratch_from(r) - 1);   // (1..256 over 0..255: each its own)
   }
 }
 int upgrade_before_16(project_t* p, int bytes);
 MI_COLD int eng_upgrade(project_t* p, int bytes) {
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
+  if (v == 25 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+    p->version = PROJECT_VERSION;        // (0.16.2, 0.16.3: this one's, RATCH's tuplets)
+    ratch_widened(p, 16);
+    return 1;
+  }
   if (v == 24 && bytes == static_cast<int>(PROJECT_SIZE_24) && p->size == PROJECT_SIZE_24) {
     uint8_t* raw = reinterpret_cast<uint8_t*>(p);   // (0.16.0, 0.16.1: this one's layout, without Endless' options)
     for (uint32_t i = offsetof(project_t, endless_opt); i < sizeof(project_t); ++i) raw[i] = 0;
     p->version = PROJECT_VERSION;
     p->size = sizeof(project_t);
+    ratch_widened(p, 16);
     return 1;
   }
   if (v >= 15 && v <= 23 && bytes == static_cast<int>(PROJECT_SIZE_22) && p->size == PROJECT_SIZE_22) {
@@ -3884,12 +3905,12 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {
     if (v <= 22) p->trauma = 0;          // (0.7 to 0.13: TRAUMA, in their padding, at 0)
     if (v <= 21) models_renumbered(p, v);
     if (v == 18 || v == 19) shapes_from_move(p);   // (before: the FM came in on its own knobs, SHAPE's)
-    ratch_widened(p);
+    ratch_widened(p, 8);
     return 1;
   }
   if (!upgrade_before_16(p, bytes)) return 0;
   models_renumbered(p, 15);
-  ratch_widened(p);
+  ratch_widened(p, 8);
   return 1;
 }
 

@@ -192,7 +192,9 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 25u              /* (24: 0.16.0's and 0.16.1's, without Endless' options: read, all its notes;
+#define PROJECT_VERSION 26u              /* (25: 0.16.2's and 0.16.3's, RATCH 1..8 then eight tuplets (9..16): read, each
+                                          * as hits over a span, its locks too;
+                                          * 24: 0.16.0's and 0.16.1's, without Endless' options: read, all its notes;
                                           * 23: 0.14's and 0.15's, without the lanes' speeds and directions, the ratchets
                                           * 1 to 8 only, no CURVE: read, x1, forward, their locks of RATCH kept;
                                           * 22: 0.13's, without TRAUMA (its byte where 0.13's ended, unused): read, TRAUMA at 0;
@@ -252,8 +254,11 @@ enum { DIR_FWD, DIR_BACK, DIR_PINGPONG, DIR_RANDOM, DIR_DRUNK, DIR_TWO_ONE, DIR_
 #define ENG_SPEEDS 9                     /* a lane's SPEED: -4..4 */
 const char *eng_speed_name(int s);       /* x1/8 .. x4 */
 const char *eng_dir_name(int d);
-#define ENG_RATCH_MAX 16                 /* RATCH: 1..8 hits in the step, then 9..16 the tuplets (eng_ratch_tuplet) */
-int eng_ratch_tuplet(int r, int *steps); /* RATCH r's hits, over *steps of the lane (1 for 1..8) */
+/* (0.16.4) a step's ratchets: RATCH so many hits (1..16) over SPAN of the lane's steps (1..16), both in RATCH's
+ * parameter (and its locks, its random): hits + 16 x (span - 1), 1..256 (a lock's 256 values, each its own) */
+#define ENG_RATCH_MAX 256
+int eng_ratch_hits(int r, int *span);   /* RATCH's value r: its hits, its span in *span */
+int eng_ratch_join(int hits, int span);
 void eng_rnd_redraw(project_t *p, int lane, int tp);   /* a random knob back at 0: its next loop another */
 int eng_algo_count(int page);            /* 0: the page has no ALGORITHM choice */
 float eng_dice_span(int param);          /* how far the random dose moves a parameter at 100 % (0: not at all) */

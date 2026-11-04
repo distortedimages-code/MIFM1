@@ -1,5 +1,5 @@
 # MIFM1 in fm1-base's host simulator: the intro at power-on, the default patch playing, the pages (a face sliding in), a knob turned, a
-# track's sets (its sound's second page, ENV's two pages, EDIT to its bending (the bits, the glitch), its filter: the models, TYPE, its second page), a Euclidean rhythm, the PLAY face (SPEED, DIRECTION, CURVE) and RATCH 3:4, the three LFOs, the mixer's filters, the effects (the delay, FREE too, the reverb,
+# track's sets (its sound's second page, ENV's two pages, EDIT to its bending (the bits, the glitch), its filter: the models, TYPE, its second page), a Euclidean rhythm, the PLAY face (SPEED, DIRECTION, SPAN, CURVE) and RATCH 3 over 4 steps, the three LFOs, the mixer's filters, the effects (the delay, FREE too, the reverb,
 # Warps, their steps), a cable made in MOD mode (hold an LFO's key, turn a knob), the random dose (OCT- held,
 # SELECT: its own screen, its fills), TRAUMA (OCT+ held, SELECT: its screen, 20, 50, 100 %, back to 0), the matrix, every cable erased (REC and SEL held), the global page (the machine: Warps HQ, another theme), STEP mode (REC: a step held and locked, the lanes on
 # the black keys, the delay's lane and a lock on its time, the pages on OCT- OCT+), the RANDOM page, ENV held, GLO
@@ -143,19 +143,24 @@ wait 400
 shot 10c_play.png
 turn K1 -2
 turn K2 2
-turn K3 12
+turn K3 3
+turn K4 12
 wait 600
-shot 10d_play_half_pingpong_curve.png
+shot 10d_play_half_pingpong_span_curve.png
 turn K1 2
 turn K2 -2
-turn K3 -12
 turn SELECT -3
 wait 400
-turn K3 9
+turn K3 2
 wait 300
-shot 10e_ratch_3_4.png
-turn K3 -9
-wait 200
+shot 10e_ratch_3_over_4.png
+turn K3 -2
+turn SELECT 3
+wait 300
+turn K3 -3
+turn K4 -12
+turn SELECT -3
+wait 300
 tap HOME
 wait 300
 shot 11_mixer.png

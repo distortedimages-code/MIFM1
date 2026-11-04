@@ -17,9 +17,9 @@
  *               track's sound each, 11 banks of 16 (A the factory's): a black key a bank, a white key that sound onto
  *               the track (heard while held); SAVE held, a white key: saved there; REC held: erased
  *   LFO         the three LFOs, one after the other
- *   SEQ         a tap: the lane's steps (a track's: NOTE, PROB, RATCHET (0.16: 1..8, then the tuplets 3:2, 3:4...),
- *               LENGTH, then its RANDOM, its EUCLID; an effect's: DECAY, PROB, DEPTH, LENGTH), last its PLAY face (0.16:
- *               SPEED, DIRECTION, a track's ratchets' CURVE or an effect's PROB, LENGTH). Held: the patterns (0.15), 11 banks of 16, each a whole project: a black key
+ *   SEQ         a tap: the lane's steps (a track's: NOTE, PROB, RATCHET (0.16.4: 1..16 hits over SPAN), LENGTH, then
+ *               its RANDOM, its EUCLID; an effect's: DECAY, PROB, DEPTH, LENGTH), last its PLAY face (0.16: SPEED,
+ *               DIRECTION, a track's ratchets' SPAN and CURVE, an effect's PROB and LENGTH). Held: the patterns (0.15), 11 banks of 16, each a whole project: a black key
  *               a bank, a white key a pattern (several: an order, looped), from the playing one's end; REC held, a
  *               white key erases one
  *   ARP         Endless, the track's: REC records (a key a note, SEL a rest), REC again plays it, a key transposes
@@ -185,7 +185,7 @@ static void pat_name(int slot, char *b)  /* A1 .. K16 */
 #define VP_ENV2(t) (ENG_NPAGES + 16 + (t))
 #define VP_SYS (ENG_NPAGES + 20)
 #define VP_PLAY(l) (ENG_NPAGES + 21 + (l))   /* (0.16) a lane's PLAY face, its steps' last: SPEED, DIRECTION, then a
-                                          * track's ratchets' CURVE (an effect's PROB), LENGTH */
+                                          * track's ratchets' SPAN and CURVE (0.16.4), an effect's PROB and LENGTH */
 #define VP_ARP2(t) (ENG_NPAGES + 28 + (t))   /* (0.16.2) Endless' second face: STRIDE, REST, HOLES, LEAP */
 enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS, PT_PLAY, PT_ARP2 };
 /* a track's pages in four sets: EDIT goes from one to the next of the first three (its sound, its bending: the bits
@@ -469,9 +469,11 @@ static int knob_param(int page, int k)
                                           * stand for them here) */
         return PG_ARP(ptrack(page)) * 4 + k;
     if (ptype(page) == PT_PLAY) {        /* (SPEED and DIRECTION are the project's bytes: play_knob; their LENGTH
-                                          * stands for them here) */
+                                          * stands for them here); a track's SPAN: RATCH's parameter (ratch_field) */
         int l = plane(page);
-        return k == 2 ? (l < ENG_TRACKS ? PG_CURVE * 4 + l : PG_STEP(l) * 4 + 1) : PG_STEP(l) * 4 + 3;
+        if (l < ENG_TRACKS)
+            return k == 3 ? PG_CURVE * 4 + l : PG_STEP(l) * 4 + 2;
+        return k == 2 ? PG_STEP(l) * 4 + 1 : PG_STEP(l) * 4 + 3;
     }
     if (ptype(page) == PT_EUC && k >= 2)  /* the Euclidean face: then the lane's LENGTH and PROB */
         return PG_STEP(eng_page_lane(page)) * 4 + (k == 2 ? 3 : 1);
@@ -2463,7 +2465,7 @@ static void draw_play_knob(int page, int k, int force)
     under[0] = 0;
     i = byte_value(page, k, &n, txt, sizeof txt, &name);
     label_text(name, lab, sizeof lab);
-    int32_t s[4] = {i | k << 8 | 0x4000000, text_hash(txt) * 31 + text_hash(lab), 0x5EED, hot | (int32_t)ac << 2};
+    int32_t s[4] = {i | k << 8 | 1 << 22, text_hash(txt) * 31 + text_hash(lab), 0x5EED, hot | (int32_t)ac << 2};
     if (!force && !ui.full && !ui.body_knobs && !memcmp(s, ui.knob_shown[k], sizeof s))
         return;
     if (page == ui.page)
@@ -2494,6 +2496,103 @@ static void draw_play_knob(int page, int k, int force)
     ring_text(ring_short(txt), i || n ? HI : DIM, under, sizeof under);
     if (under[0])
         cv_text(30 - text_w(&FONT_XS, under) / 2, 78, &FONT_XS, under, MUTED);
+    blit((uint32_t)(k * KNOB_W), KNOB_Y);
+}
+
+/* (0.16.4) a step's ratchets: RATCH (its hits, the steps' face) and SPAN (the steps they take, the PLAY face), both in
+ * RATCH's parameter (engine.h eng_ratch_join), each turned and drawn alone: 1 the hits, 2 the span, 0 neither */
+static int ratch_field(int page, int k)
+{
+    int t = ptrack(page);
+    if (t < 0 || k != 2)
+        return 0;
+    return ptype(page) == PT_STEP ? 1 : ptype(page) == PT_PLAY ? 2 : 0;
+}
+
+static float ratch_moved(float v, int field, int32_t e)   /* its hits or its span a step on (1..16), the other kept */
+{
+    int sp, h = eng_ratch_hits((int)(v + 0.5f), &sp), d = e > 0 ? 1 : -1;
+    if (field == 1)
+        h = clamp(h + d, 1, 16);
+    else
+        sp = clamp(sp + d, 1, 16);
+    return (float)eng_ratch_join(h, sp);
+}
+
+static void ratch_turn(int field, int param, int32_t e)
+{
+    project_t *p = eng_project();
+    int t, tp = eng_param_tp(param, &t);
+    if (ui.held_step >= 0) {             /* a held step: its lock */
+        float v;
+        if (t != ui.lane) {
+            app_say("LOCK:", "THIS LANE'S KNOBS");
+            return;
+        }
+        if (!eng_lock(t, ui.held_step, tp, &v))
+            v = p->val[param];
+        if (eng_lock_set(t, ui.held_step, tp, ratch_moved(v, field, e)) != 0)
+            app_say("LOCKS", "ALL USED");
+        ui.step_edit = 1;
+    } else {                             /* the track's (GLO held: the four's) */
+        for (int m = 0; m < ENG_TRACKS; m++)
+            if (m == t || held(B_GLO)) {
+                float *v = &p->val[PG_STEP(m) * 4 + 2];
+                *v = ratch_moved(*v, field, e);
+            }
+        if (held(B_GLO))
+            ui.used[B_GLO] = 1;
+    }
+    dirty = 1;
+}
+
+static void draw_ratch_knob(int page, int k, int field, int force)   /* RATCH or SPAN: its value (a lock's), 1..16 */
+{
+    project_t *p = eng_project();
+    int param = knob_param(page, k), t, tp, view = knob_view(page, param, &t, &tp), locked = 0;
+    int hot = page == ui.page && ui.touched_k == k && plat_ms() - ui.touched_at[k] < 1200u;
+    float v = p->val[param];
+    uint16_t ac = page_accent(page), mc = mod_colour(ac), vc;
+    char txt[16], lab[16], under[16];
+    if (view == KV_LOCK)
+        locked = eng_lock(t, ui.held_step, tp, &v);
+    int sp, h = eng_ratch_hits((int)(v + 0.5f), &sp), x = field == 1 ? h : sp;
+    vc = locked ? mc : ac;
+    txt[0] = under[0] = 0;
+    if (field == 1)
+        text_cat(txt, "x", sizeof txt);
+    {
+        char d[8];
+        int_text(x, d);
+        text_cat(txt, d, sizeof txt);
+    }
+    label_text(field == 1 ? "Ratch" : "Span", lab, sizeof lab);
+    text_cat(under, locked ? "LOCK" : field == 2 ? (x == 1 ? "STEP" : "STEPS") : "", sizeof under);
+    int32_t s[4] = {x | field << 8 | locked << 10 | view << 12 | 1 << 21, text_hash(txt) * 31 + text_hash(lab), 0x5BA9,
+                    hot | (int32_t)ac << 2};
+    if (!force && !ui.full && !ui.body_knobs && !memcmp(s, ui.knob_shown[k], sizeof s))
+        return;
+    if (page == ui.page)
+        memcpy(ui.knob_shown[k], s, sizeof s);
+    if (slide_s && (k * KNOB_W + slide_s >= 240 || k * KNOB_W + KNOB_W + slide_s <= 0))
+        return;
+    cv_begin(KNOB_W, KNOB_H, BG);
+    {
+        int w = text_w(&FONT_S, lab);
+        cv_text(30 - w / 2, 0, &FONT_S, lab, hot ? HI : locked ? vc : MUTED);
+        if (hot)
+            cv_rect(30 - w / 2, 17, w, 1, ac);
+    }
+    {
+        float u = (float)(x - 1) / 15.0f;
+        arc(RX, RY, R0 + 0.5f, R1 - 0.5f, 0.0f, 1.0f, TRACK);
+        if (u > 0.004f)
+            lit_arc(RX, RY, R0, R1, 0.0f, u, vc);
+        ring_end(u, vc, 1);
+    }
+    ring_text(txt, HI, under, sizeof under);
+    if (under[0])
+        cv_text(30 - text_w(&FONT_XS, under) / 2, 78, &FONT_XS, under, locked ? vc : MUTED);
     blit((uint32_t)(k * KNOB_W), KNOB_Y);
 }
 
@@ -2537,6 +2636,10 @@ static void draw_knob_at(int page, int k, int force)
     project_t *p = eng_project();
     if (byte_knob(page, k)) {
         draw_play_knob(page, k, force);
+        return;
+    }
+    if (ratch_field(page, k) && !held(B_ENV)) {   /* RATCH, SPAN (ENV held: their random, as any knob's) */
+        draw_ratch_knob(page, k, ratch_field(page, k), force);
         return;
     }
     int param = knob_param(page, k), t, tp, view = knob_view(page, param, &t, &tp), locked = 0, rnd = 0;
@@ -5235,6 +5338,12 @@ static void input(void)
         }
         if (byte_knob(ui.page, i)) {     /* SPEED, DIRECTION, Endless' options: the project's bytes, not a lock's */
             play_turn(i, e);
+            continue;
+        }
+        if (ratch_field(ui.page, i) && !held(B_ENV) && !ui.mod) {   /* RATCH, SPAN: its hits, its span, alone */
+            ratch_turn(ratch_field(ui.page, i), knob_param(ui.page, i), e);
+            ui.touched_at[i] = plat_ms();
+            ui.touched_k = i;
             continue;
         }
         int param = knob_param(ui.page, i), h = ui.mod ? held_source() : SRC_NONE;

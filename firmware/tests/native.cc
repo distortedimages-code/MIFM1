@@ -3543,15 +3543,15 @@ int main(int argc, char** argv) {
         printf("\n");
       }
     }
-    // 3:4 (RATCH 10): one trig, three hits over four sixteenths, evenly
+    // RATCH 3 over SPAN 4 (0.16.4): one trig, three hits over four sixteenths, evenly
     setup();
     eng_trig_set(0, 0, 1);
-    p->val[PG_STEP(0) * 4 + 2] = 10.0f;
+    p->val[PG_STEP(0) * 4 + 2] = static_cast<float>(eng_ratch_join(3, 4));
     char txt[16], tup[16];
-    eng_param_text(PG_STEP(0) * 4 + 2, 10.0f, tup, sizeof tup);
+    eng_param_text(PG_STEP(0) * 4 + 2, p->val[PG_STEP(0) * 4 + 2], tup, sizeof tup);
     int n34 = rises(4 * 43 + 10, at, 64);
     double g1 = at[1] - at[0], g2 = at[2] - at[1];
-    int tup_ok = n34 == 3 && std::fabs(g1 - 4.0 * 43.07 / 3.0) < 3.0 && std::fabs(g2 - g1) < 2.0 && !strcmp(tup, "3:4");
+    int tup_ok = n34 == 3 && std::fabs(g1 - 4.0 * 43.07 / 3.0) < 3.0 && std::fabs(g2 - g1) < 2.0 && !strcmp(tup, "x3");
     // CURVE: eight hits over a step at x1/4 (half a second), to the right closer and closer, to the left apart
     auto curve_gaps = [&](float c, double* first, double* last) {
       setup();
@@ -3590,10 +3590,10 @@ int main(int argc, char** argv) {
     int up = eng_upgrade(as_v23(&q), PROJECT_SIZE_22) && eng_check(&q);
     float lv = -1.0f;
     for (int i = 0; i < ENG_PLOCKS; ++i)
-      if (q.lock[i].lane == 0 && q.lock[i].tp == TP_RATCHET) lv = 1.0f + static_cast<float>(q.lock[i].v) / 255.0f * 15.0f;
+      if (q.lock[i].lane == 0 && q.lock[i].tp == TP_RATCHET) lv = static_cast<float>(eng_ratch_hits(q.lock[i].v + 1, 0));
     up &= std::fabs(lv - 2.0f) < 0.1f && q.rnd[2][TP_GDROP] == 33 && q.rseed[2][TP_GDROP] == 7 && !q.rnd[2][TP_CURVE] &&
           !q.speed[0] && !q.dir[0] && q.val[PG_CURVE * 4] == 0.0f;
-    printf("the lanes (0.16): a bar of sixteenths at x1/2 x3/4 x1 x2: %d %d %d %d trigs; the directions %s; 3:4 (\"%s\"): "
+    printf("the lanes (0.16): a bar of sixteenths at x1/2 x3/4 x1 x2: %d %d %d %d trigs; the directions %s; 3 over 4 (\"%s\"): "
            "%d hits, %.0f and %.0f blocks apart; CURVE: gaps %.0f to %.0f blocks to the right, %.0f to %.0f to the left; "
            "the pattern %d sixteenths at x1/2, %d there and back; a 0.15 project %s\n",
            counts[0], counts[1], counts[2], counts[3], dir_ok ? "ok" : "WRONG", tup, n34, g1, g2, f1, l1, f2,
@@ -3668,6 +3668,51 @@ int main(int argc, char** argv) {
       printf("\n");
       ++failures, printf("FAIL: Endless' options\n");
     }
+    eng_defaults(p);
+    eng_fresh();
+  }
+
+  {                                     // 55. RATCH over SPAN (0.16.4): 4 hits over 1, 2 and 16 steps; a 0.16.2 project's
+    // tuplets read as hits over a span (3:4 as 3 over 4), its locks too
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    static int at[64];
+    auto hits = [&](int h, int sp, int blocks) {
+      eng_blank(p);
+      eng_fresh();
+      eng_set_model(0, eng_model_find(MK_DRUM, 0));
+      p->val[PG_GLOBAL * 4 + 0] = 0.60206f;
+      p->val[PG_STEP(0) * 4 + 3] = 64.0f;   // (a lane long enough: the one trig alone)
+      eng_trig_set(0, 0, 1);
+      p->val[PG_STEP(0) * 4 + 2] = static_cast<float>(eng_ratch_join(h, sp));
+      int n = 0, last = 0;
+      eng_play(1);
+      for (int b = 0; b < blocks; ++b) {
+        eng_render(l, r, 128);
+        int g = (eng_gates() & 1u) != 0;
+        if (g && !last && n < 64) at[n++] = b;
+        last = g;
+      }
+      eng_play(0);
+      return n;
+    };
+    int n1 = hits(4, 1, 60), s1 = at[3] - at[0];
+    int n2 = hits(4, 2, 100), s2 = at[3] - at[0];
+    int n16 = hits(4, 16, 16 * 43 + 20), s16 = at[3] - at[0];
+    int span_ok = n1 == 4 && n2 == 4 && n16 == 4 && s2 > s1 * 3 / 2 && s16 > 16 * 43 * 3 / 5;
+    static project_t q;
+    eng_defaults(&q);
+    q.val[PG_STEP(1) * 4 + 2] = 10.0f;    // (0.16.2's 3:4)
+    for (int i = 0; i < ENG_PLOCKS; ++i) q.lock[i].lane = 0xFF;
+    q.lock[0] = plock_t{2, 4, TP_RATCHET, static_cast<uint8_t>(8.0f * 255.0f / 15.0f + 0.5f)};   // (its 3:2, 9 then)
+    q.version = 25;
+    int sp1 = 0, sp2 = 0;
+    int up = eng_upgrade(&q, sizeof q) && eng_check(&q) &&
+             eng_ratch_hits(static_cast<int>(q.val[PG_STEP(1) * 4 + 2] + 0.5f), &sp1) == 3 && sp1 == 4 &&
+             eng_ratch_hits(q.lock[0].v + 1, &sp2) == 3 && sp2 == 2;
+    printf("RATCH over SPAN: 4 hits over 1, 2, 16 steps: %d %d %d, first to last %d %d %d blocks; a 0.16.2 project %s\n",
+           n1, n2, n16, s1, s2, s16, up ? "read (3:4 as 3 over 4, a lock's 3:2 as 3 over 2)" : "WRONG");
+    if (!span_ok || !up) ++failures, printf("FAIL: RATCH over SPAN\n");
     eng_defaults(p);
     eng_fresh();
   }

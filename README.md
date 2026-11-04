@@ -501,7 +501,7 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **PRESETS** | la piste active, de 1 à 4 (les presets eux-mêmes : EDIT tenu) |
 | **EDIT** | **tapé** : les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son ; **tenu : les presets** de la piste (touches noires : la banque, A celle d'usine ; blanches : le son, posé sur la piste et joué ; SAVE tenu : l'y garde ; REC tenu : l'efface) |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
-| **SEQ** | tapé : les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM, puis EUCLID, puis PLAY : SPEED, DIR, CURVE) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns** (touches noires : la banque, blanches : le pattern, plusieurs : un enchaînement ; REC tenu : efface) |
+| **SEQ** | tapé : les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM, puis EUCLID, puis PLAY : SPEED, DIR, SPAN, CURVE) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns** (touches noires : la banque, blanches : le pattern, plusieurs : un enchaînement ; REC tenu : efface) |
 | **ARP** | Endless, celui de la piste (voir plus bas) ; à nouveau : ses options (STRIDE, REST, HOLES, LEAP) |
 | **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leurs filtres (EQ), le DUCK, puis le bus master (COMP, OTT) ; ALGORITHM sur COMP ou OTT : le mode du bus (OFF, COMP, OTT) |
 | **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps ; SELECT parcourt leurs faces (leurs potards, les envois des pistes, leurs pas) |
@@ -575,20 +575,22 @@ son niveau, ses envois, son pan, sa note…) ; pour un effet, sur ses potards. L
 (LOCK dessous). Tenir un pas et taper SEL efface ses locks. La piste de pas suit la page : aller sur le delay (FX)
 montre les pas du delay. **REC** à nouveau : retour au mode KEY.
 
-**Les pas d'une piste** (SEQ) : **NOTE**, **PROB** (probabilité), **RATCH** (les ratchets : 1 à 8 coups dans le pas,
-puis, depuis 0.16, des **divisions qui débordent du pas**, coups:pas : **3:2** un triolet de croches, **3:4** un triolet
-de noires, **2:3** des croches pointées, **4:3**, **5:4**, **6:4**, **7:4**, **3:8** ; la figure court sur les pas
-suivants, un trig posé dedans la coupe et reprend la main) et **LENGTH** (le nombre de pas) ; les trois premiers se
-lockent aussi pas par pas : un pas en 3:4 au milieu de doubles croches, et le groove bascule.
+**Les pas d'une piste** (SEQ) : **NOTE**, **PROB** (probabilité), **RATCH** (les ratchets : 1 à 16 coups, répartis sur
+la durée que donne **SPAN**, sur la face PLAY : un pas par défaut) et **LENGTH** (le nombre de pas) ; les trois
+premiers se lockent aussi pas par pas.
 
 **La face PLAY** (0.16 ; SEQ, la dernière face des pas, celle d'une piste comme celle d'un effet) : **SPEED**, la
 vitesse de la piste (x1/8, x1/4, x1/2, x3/4, x1, x3/2, x2, x3, x4 : x3/4 et x3/2 pour du ternaire, x1/2 une piste qui
 traîne sous les autres) ; **DIR**, son sens : en avant, en arrière, l'aller-retour (PING), au hasard (RND), ivre (un
-pas de plus ou de moins à chaque fois, au hasard) et +2-1 (deux en avant, un en arrière) ; **CURVE**, la forme des
-ratchets jusqu'au pas suivant (ou au bout de leur division) : vers la droite les coups se resserrent et s'adoucissent,
-une balle qui rebondit ; vers la gauche ils s'écartent, un roulement qui se pose ; au milieu, réguliers. CURVE se
-locke pas par pas et a son aléatoire (ENV tenu + CURVE), comme les autres réglages ; sur un effet, ce potard est sa
-PROB. Puis **LENGTH**. GLO tenu : SPEED ou DIR sur les quatre pistes. Toutes les pistes repartent ensemble au début
+pas de plus ou de moins à chaque fois, au hasard) et +2-1 (deux en avant, un en arrière) ; puis, pour une piste, ses
+ratchets (0.16.4) : **SPAN**, la durée sur laquelle les coups de RATCH sont répartis, de 1 à 16 pas (RATCH 3, SPAN 4 :
+trois coups sur quatre doubles croches, un triolet de noires ; RATCH 8, SPAN 16 : huit coups sur la mesure ; la
+figure court sur les pas suivants, un trig posé dedans la coupe et reprend la main), et **CURVE**, la vitesse le long
+de ces coups : vers la droite ils se resserrent et s'adoucissent, une balle qui rebondit ; vers la gauche ils
+s'écartent, un roulement qui se pose ; au milieu, réguliers (rien à 1 coup). RATCH, SPAN et CURVE se lockent pas par
+pas (un pas tenu en STEP, un potard tourné) ; l'aléatoire de RATCH (ENV tenu) ajoute des coups et, au-delà de 50, de
+la durée. Sur un effet, ces deux potards sont sa PROB et sa LENGTH. GLO tenu : SPEED, DIR, RATCH ou SPAN sur les
+quatre pistes. Toutes les pistes repartent ensemble au début
 du pattern ; un pattern dure le temps de sa piste la plus longue à sa vitesse (un aller-retour compte ses deux sens).
 Effacer la piste (REC tenu) la remet à x1, en avant. La deuxième page du son (EDIT,
 SELECT) donne la **GATE** de la note (5 à 95 % du pas, lockable : des notes courtes et longues dans le même pattern),
@@ -750,7 +752,7 @@ retoucher à la main. L'écran montre les pas en cercle, les trigs allumés, cel
 **L'aléatoire** : la page RANDOM (SEQ, puis SELECT) a quatre potards, PAN, DECAY, TUNE et RATCHET. Tourné à droite,
 une nouvelle valeur au hasard à chaque trig ; à gauche, des valeurs au hasard mais qui reviennent les mêmes à chaque
 tour (une boucle) ; plus on tourne, plus l'écart est grand (100 : toute la course ; TUNE : une octave de part et
-d'autre ; RATCHET : jusqu'à 7 coups de plus et, au-delà de 50, aussi les divisions 3:2, 3:4… de plus en plus souvent). Au centre, rien : le réglage retrouve exactement sa valeur. **Chaque
+d'autre ; RATCHET : jusqu'à 7 coups de plus et, au-delà de 50, jusqu'à 15, et une durée (SPAN) plus longue). Au centre, rien : le réglage retrouve exactement sa valeur. **Chaque
 retour au centre tire une nouvelle boucle** pour ce réglage : une boucle qui ne plaît pas, on revient à 0 (ou on passe
 côté hasard), on retourne côté boucle, c'en est une autre (les boucles des autres réglages ne bougent pas ; un projet
 sauvegardé garde les siennes). **ENV tenu
