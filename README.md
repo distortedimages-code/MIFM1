@@ -543,7 +543,7 @@ piste FM d'un bloc payait ainsi ~170 µs pour charger le code de la FM, la même
 (mesuré : T2 passée sur un autre moteur, T3 montait de 26 à 32 %) ; un compte d'instructions ne le voit jamais, d'où
 une machine 20 à 40 % plus chargée que ce que l'émulateur annonçait. Ce que toutes les pistes exécutent à chaque bloc
 tourne donc depuis la RAM que le FM-1 garde pour le code (32 Ko, copiés au démarrage) : la chaîne d'une voix (son
-rendu, ses câbles, ses bits), les quatre filtres et la batterie MIFM1 (`MI_RAM`, `mi/bridge.h`). Les mêmes
+rendu, ses câbles, ses bits, TRAUMA), les quatre filtres et la batterie MIFM1 (`o2_ram`, `firmware/fm1.toml`). Les mêmes
 instructions, le même son, échantillon pour échantillon.
 
 **Le garde-fou** (0.8.2) : quand un bloc dépasse 92 % de son temps, la FM des filtres s'allège pendant 0,3 s (ses

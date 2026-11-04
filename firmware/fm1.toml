@@ -24,8 +24,23 @@ o2 = ["mi/*.cc",
 o2_cflags = ["-std=gnu++11", "-fno-exceptions", "-fno-rtti", "-fno-threadsafe-statics", "-fno-use-cxa-atexit",
              "-fdata-sections", "-DTEST",
              "-Wno-unused-local-typedef"]   # (stmlib's STATIC_ASSERT: a typedef per use)
-# the units with code in RAM (MI_RAM, mi/bridge.h): their calls between the RAM and the flash, 4 MB apart, beyond a
-# call's reach: JieLi's long calls, in the firmware only (fm1-base patched: patches/fm1-base-o2-device.patch)
+# the code the FM-1 runs from RAM (0.14.3). Its code runs in place from the flash, through a small cache: code not in
+# it yet waits for the flash, about 1 us a 32-byte line (on the stress test, the first FM track of a block paid
+# ~170 us for the FM's code, the same FM on the next track nothing: instruction counts never see it). What every
+# track runs at every block goes in the RAM the FM-1 keeps for code (32 KB, copied at boot): these functions as
+# compiled, the same instructions, their sections renamed into it (o2_ram: fm1-base patched,
+# patches/fm1-base-o2-device.patch); the RAM and the flash 4 MB apart, beyond a call's reach, their units with
+# JieLi's long calls (o2_device). The audio runs in its interrupt and on the second core, never while the flash is off
+o2_ram = ["mi/engine.cc:_ZN12_GLOBAL__N_18run_taskEij", "mi/engine.cc:_ZN12_GLOBAL__N_112render_voiceEij",
+          "mi/engine.cc:_ZN12_GLOBAL__N_19set_voiceEi", "mi/engine.cc:_ZN12_GLOBAL__N_110set_filterEi",
+          "mi/engine.cc:_ZN12_GLOBAL__N_19core1_jobEj", "mi/engine.cc:_ZN12_GLOBAL__N_18bend_oneERNS_4BendEf",
+          "mi/engine.cc:_ZN12_GLOBAL__N_112apply_cablesEv", "mi/engine.cc:_ZN12_GLOBAL__N_112apply_traumaEiPfj",
+          "mi/mi_filter.cc:mf_process", "mi/mi_filter.cc:mf_set", "mi/mi_filter.cc:_ZN12_GLOBAL__N_15coefsERNS_6FilterEf",
+          "mi/mi_filter.cc:_ZN12_GLOBAL__N_18drive_inERNS_6FilterEfffff",
+          "mi/mi_filter.cc:_ZN12_GLOBAL__N_19sub_blockERNS_6FilterERNS_3RunEjjPj",
+          "mi/mi_filter.cc:_ZN12_GLOBAL__N_18fm_coefsERNS_6FilterERKNS_3RunE",
+          "mi/mi_filter.cc:_ZN12_GLOBAL__N_17processERNS_6FilterEPfj",
+          "mi/mi_drum.cc:drum_render"]
 o2_device = ["mi/engine.cc", "mi/mi_filter.cc", "mi/mi_drum.cc"]
 o2_device_cflags = ["-mllvm", "-pi32v2-large-program=true"]
 include = ["third_party", "third_party/lxr"]

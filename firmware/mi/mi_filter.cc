@@ -122,7 +122,7 @@ void reset_state(Filter& f) {
 const float kInvVt2 = 1.0f / (2.0f * 0.312f);   // (the ladder: its transistors' thermal voltage, 0.312, twice)
 
 // the coefficients for a cutoff of c octaves over 20 Hz (the model's range kept)
-MI_RAM void coefs(Filter& f, float c) {
+void coefs(Filter& f, float c) {
   f.now_oct = c;
   float hz = hz_of(c);
   switch (f.model) {
@@ -237,7 +237,7 @@ inline float sat_adaa(float u, float u1) {
   float du = u - u1;
   return fm_fabsf(du) > 1e-3f ? (sat_F(u) - sat_F(u1)) / du : sat(0.5f * (u + u1));
 }
-MI_RAM inline float drive_in(Filter& f, float x, float dg, float bias, float sb, float lvl) {
+inline float drive_in(Filter& f, float x, float dg, float bias, float sb, float lvl) {
   float u = dg * x + bias, y;
   if (f.dstale) {
     y = sat(u);
@@ -276,7 +276,7 @@ struct Run {
 // the CPU guard (engine.cc): the FM's coefficients every sample (0), every 2nd (1), every 4th (3); -1: no FM
 volatile int fm_skip = 0;
 
-MI_RAM __attribute__((noinline)) void sub_block(Filter& f, Run& r, uint32_t i0, uint32_t i1, uint32_t* ping_at) {
+__attribute__((noinline)) void sub_block(Filter& f, Run& r, uint32_t i0, uint32_t i1, uint32_t* ping_at) {
   *ping_at = 0xFFFFFFFFu;
   while (r.ti < f.ntrig && f.trig[r.ti] < i1) {
     *ping_at = f.trig[r.ti] < i0 ? i0 : f.trig[r.ti];
@@ -290,7 +290,7 @@ MI_RAM __attribute__((noinline)) void sub_block(Filter& f, Run& r, uint32_t i0, 
   f.now_oct = c;
   if (!r.fm_on) coefs(f, c);
 }
-MI_RAM __attribute__((noinline)) void fm_coefs(Filter& f, const Run& r) {
+__attribute__((noinline)) void fm_coefs(Filter& f, const Run& r) {
   coefs(f, fm_clampf(f.now_oct + r.fm5 * r.y1, -0.5f, 10.2f));
 }
 inline float out(Filter& f, Run& r, float y) {   // its output kept within 2, a NaN reset
@@ -503,7 +503,7 @@ void mf_init(void) {
   }
 }
 
-MI_RAM void mf_set(int t, int model, int type, const float* k, float note) {
+void mf_set(int t, int model, int type, const float* k, float note) {
   if (t < 0 || t >= MF_TRACKS) return;
   Filter& f = flt[t];
   if (model != f.model || type != f.type) reset_state(f);
@@ -535,7 +535,7 @@ void mf_trigger(int t, uint32_t at) {
   if (f.ntrig < 8) f.trig[f.ntrig++] = at;
 }
 
-MI_RAM void mf_process(int t, float* x, uint32_t n) {
+void mf_process(int t, float* x, uint32_t n) {
   if (t < 0 || t >= MF_TRACKS) return;
   Filter& f = flt[t];
   if (f.model == MF_OFF) {

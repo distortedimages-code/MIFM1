@@ -1,10 +1,12 @@
 MIFM1's changes to fm1-base (base/), applied by tools/patch_base.sh before a build.
-More flags for some of the app's o2 units, in the firmware only (fm1.toml o2_device, o2_device_cflags): MIFM1's
-units with code in RAM (MI_RAM, firmware/mi/bridge.h) call into the flash and are called from it, 4 MB apart,
-beyond a call's reach: JieLi's long calls (-pi32v2-large-program, as fm1-base's radio units have them).
+Two things for MIFM1's code in RAM (fm1.toml): o2_device and o2_device_cflags, more flags for some o2 units in the
+firmware only (JieLi's long calls, -pi32v2-large-program, as fm1-base's radio units have them: the RAM and the flash
+are 4 MB apart, beyond a call's reach); o2_ram, functions of o2 units moved to the RAM code as compiled, their
+sections renamed (.text.F -> .c1_text.F) after the compiler (a section attribute in the source would keep the
+compiler from inlining into them anything that is not in the same section).
 
 diff --git a/tools/build.py b/tools/build.py
-index 2f2312d..41a7a72 100755
+index 2f2312d..7bd6381 100755
 --- a/tools/build.py
 +++ b/tools/build.py
 @@ -681,10 +681,12 @@ def build_app():
@@ -21,3 +23,19 @@ index 2f2312d..41a7a72 100755
              objs.append(o)
              o2_units.append((f, o))
      jieli = (BLE and not OWN) or WIFI             # JieLi's libraries linked (the shim, LTO)
+@@ -705,6 +707,15 @@ def build_app():
+         tc_all(("cc", *opt, "-c", OUT / "unity.pass.ll", "-o", OUT / "unity.o"),
+                *[("cc", *[f if f not in ("-Os", "-Oz") else "-O2" for f in opt], "-c", o.with_suffix(".pass.ll"), "-o", o)
+                  for _, o in o2_units])
++    ram = {}                                      # (MIFM1) o2_ram = ["unit:function", ...]: functions moved to the RAM
++    for e in CONF.get("o2_ram", []):              # code as compiled (their inlining as in the flash), their sections
++        unit, _, fn = e.partition(":")            # renamed .text.F -> .c1_text.F (in .ram_text, calls into the flash
++        ram.setdefault(unit, []).append(fn)       # allowed: the second core's part)
++    ren = [("common/bin/objcopy", *[a for fn in ram[f.relative_to(APP).as_posix()]
++                                    for a in ("--rename-section", f".text.{fn}=.c1_text.{fn}")], o)
++           for f, o in o2_units if f.relative_to(APP).as_posix() in ram]
++    if ren:
++        tc_all(*ren)
+     elf = OUT / (NAME + ".elf")
+     # unreferenced functions (each in its own section: -ffunction-sections) are dropped: the DSP keeps
+     # mono reference paths for the host tests that the firmware no longer calls. The BT libraries are LTO
