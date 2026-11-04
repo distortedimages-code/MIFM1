@@ -16,6 +16,19 @@ extern "C" {
 
 #define MI_SR 44100.0f                   /* the FM-1's rate */
 
+/* MI_RAM (0.14.3): a function the FM-1 runs from RAM. Its code runs in place from the flash, through a small cache:
+ * code not in it yet waits for the flash, a 32-byte line at a time (about 1 us: on the stress test, the first FM
+ * track of a block paid ~170 us for the FM's code, the same FM on the next track nothing; instruction counts never see
+ * it). What every track runs at every block goes in the RAM the FM-1 keeps for code (.ram_text, 32 KB, copied at
+ * boot): the same instructions, read without waiting. Its part where calls into the flash are allowed (.c1_text: the
+ * audio runs in the audio interrupt and on the second core, never while the flash is off, fm1-base's tools/build.py).
+ * The host and the browser: nothing. */
+#ifdef PLAT_HOST
+#define MI_RAM
+#else
+#define MI_RAM __attribute__((section(".c1_text.mifm1")))
+#endif
+
 /* ---- Plaits (Plaits 1.2: 24 models; the kSampleRate of the copy is 44.1 kHz) ---- */
 #define MP_MODELS 24
 uint32_t mp_size(void);                  /* bytes for one voice, its 16 KB engine buffer included */

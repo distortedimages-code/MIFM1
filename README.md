@@ -537,6 +537,15 @@ le cœur 1 les prend à la fin de son premier travail, sans attendre que le cœu
 lui passer (sur le stress test, cette attente faisait monter le pic de 70 à 96 %). Une voix silencieuse depuis un moment, sa note finie, se repose jusqu'à son
 trig suivant (elle ne coûte plus rien).
 
+**Le code en RAM** (0.14.3) : le FM-1 exécute son programme depuis la flash, à travers un petit cache ; du code qui
+n'y est pas encore attend la flash, une ligne de 32 octets à la fois (environ 1 µs). Sur le stress test, la première
+piste FM d'un bloc payait ainsi ~170 µs pour charger le code de la FM, la même FM sur la piste suivante presque rien
+(mesuré : T2 passée sur un autre moteur, T3 montait de 26 à 32 %) ; un compte d'instructions ne le voit jamais, d'où
+une machine 20 à 40 % plus chargée que ce que l'émulateur annonçait. Ce que toutes les pistes exécutent à chaque bloc
+tourne donc depuis la RAM que le FM-1 garde pour le code (32 Ko, copiés au démarrage) : la chaîne d'une voix (son
+rendu, ses câbles, ses bits), les quatre filtres et la batterie MIFM1 (`MI_RAM`, `mi/bridge.h`). Les mêmes
+instructions, le même son, échantillon pour échantillon.
+
 **Le garde-fou** (0.8.2) : quand un bloc dépasse 92 % de son temps, la FM des filtres s'allège pendant 0,3 s (ses
 coefficients recalculés un échantillon sur deux) ; quand un bloc arrive en retard (plus de 100 % : un clic), un sur
 quatre ; deux retards en 0,3 s, la FM des filtres coupée ; puis un cran de moins toutes les 0,3 s. Quand la machine est
