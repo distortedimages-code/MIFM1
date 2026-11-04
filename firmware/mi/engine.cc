@@ -321,6 +321,10 @@ float rat_pos[ENG_TRACKS], rat_lvl[ENG_TRACKS];
 float rat_t[ENG_TRACKS][17];            // the ratchets' hits: where each starts (samples into the trig), then their end
                                         // (0.16: over one step or several, CURVE drawing them closer or apart)
 int32_t lane_cnt[ENG_LANES];            // (0.16) the steps each lane took since PLAY, at its SPEED (-1: none yet)
+int32_t lane_grid[ENG_LANES];           // (0.16.6) its grid's point last seen (the sixteenths since PLAY at its SPEED,
+int8_t lane_spd[ENG_LANES];             // whole), the SPEED it is at: another, a grid anew (0.16..0.16.5 took the
+                                        // steps from the grid: back from x2 to x1, the lane waited as long as it had
+                                        // played; down to x1/2, the same)
 float lane_sl[ENG_LANES];               // its step's length now (samples)
 
 // (0.16) a lane's SPEED: its step a multiple of the sixteenth; its DIRECTION; the tuplets of RATCH (9..16): so many
@@ -1036,7 +1040,7 @@ void sequence(uint32_t n) {
     restart = 0;
     step_clk = 1e9f;                    // the first sixteenth at once
     tick = -1;
-    for (int l = 0; l < ENG_LANES; ++l) lane_cnt[l] = -1;
+    for (int l = 0; l < ENG_LANES; ++l) lane_cnt[l] = lane_grid[l] = -1, lane_spd[l] = static_cast<int8_t>(lane_speed(l));
     pad_pos = -1;                       // (PADS: its first trig its first chord)
     for (int t = 0; t < ENG_TRACKS; ++t) {
       e_clk[t] = 1e9f;
@@ -1084,10 +1088,15 @@ void sequence(uint32_t n) {
       float at = static_cast<float>(tick) + step_clk / six_len(sl);
       for (int l = 0; l < ENG_LANES; ++l) {
         int sp = lane_speed(l), adv;
-        int32_t want = sp == 4 ? tick : static_cast<int32_t>(at * kSpeedMul[sp]);
-        adv = want > lane_cnt[l];
+        int32_t g = sp == 4 ? tick : static_cast<int32_t>(at * kSpeedMul[sp]);
+        if (sp != lane_spd[l]) {        // another SPEED: on from its step, its next at the new grid's next point
+          lane_spd[l] = static_cast<int8_t>(sp);
+          if (lane_cnt[l] >= 0) lane_grid[l] = g;
+        }
+        adv = g > lane_grid[l];
         if (adv) {
-          lane_cnt[l] = want;
+          lane_grid[l] = g;
+          ++lane_cnt[l];
           cur_step[l] = lane_next(l);
         }
         if (!(adv && eng_trig(l, cur_step[l])) && !(l < ENG_TRACKS && fhit[l])) continue;
@@ -4246,7 +4255,7 @@ void eng_render(float* l, float* r, uint32_t n) {
         take_pattern(c);
         cue_p = 0;
         tick = -1;                      // (its next sixteenth its first step)
-        for (int l = 0; l < ENG_LANES; ++l) lane_cnt[l] = -1;
+        for (int l = 0; l < ENG_LANES; ++l) lane_cnt[l] = lane_grid[l] = -1, lane_spd[l] = static_cast<int8_t>(lane_speed(l));
         pat_end_seen = -2;
       }
     }

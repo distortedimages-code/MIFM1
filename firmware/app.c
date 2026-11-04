@@ -184,8 +184,9 @@ static void pat_name(int slot, char *b)  /* A1 .. K16 */
 #define VP_FLT2(t) (ENG_NPAGES + 12 + (t))
 #define VP_ENV2(t) (ENG_NPAGES + 16 + (t))
 #define VP_SYS (ENG_NPAGES + 20)
-#define VP_PLAY(l) (ENG_NPAGES + 21 + (l))   /* (0.16) a lane's PLAY face, its steps' last: SPEED, DIRECTION, then a
-                                          * track's ratchets' SPAN and CURVE (0.16.4), an effect's PROB and LENGTH */
+#define VP_PLAY(l) (ENG_NPAGES + 21 + (l))   /* (0.16) a lane's PLAY face: a track's ratchets (0.16.6: its steps'
+                                          * second face, RATCH, SPAN, CURVE, then DIRECTION; SPEED on the first, in
+                                          * RATCH's place), an effect's (its last) SPEED, DIRECTION, PROB, LENGTH */
 #define VP_ARP2(t) (ENG_NPAGES + 28 + (t))   /* (0.16.2) Endless' second face: STRIDE, REST, HOLES, LEAP */
 enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS, PT_PLAY, PT_ARP2 };
 /* a track's pages in four sets: EDIT goes from one to the next of the first three (its sound, its bending: the bits
@@ -335,10 +336,10 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
             int l = plane(page);
             return module_pages(l == LANE_DELAY ? PG_DELAY(0) : l == LANE_REVERB ? PG_REVERB : PG_WARPS(0), f);
         }
-        f[0] = PG_STEP(t);
-        f[1] = VP_RND(t);
-        f[2] = PG_EUC(t);
-        f[3] = VP_PLAY(t);
+        f[0] = PG_STEP(t);               /* (0.16.6: the ratchets second, by the steps) */
+        f[1] = VP_PLAY(t);
+        f[2] = VP_RND(t);
+        f[3] = PG_EUC(t);
         return 4;
     case PT_ARP: case PT_ARP2: f[0] = PG_ARP(t); f[1] = VP_ARP2(t); return 2;
     case PT_DELAY1: case PT_DELAY2: case PT_DSEND: case PT_LANE: case PT_REVERB: case PT_RSEND:
@@ -468,11 +469,12 @@ static int knob_param(int page, int k)
     if (ptype(page) == PT_ARP2)          /* (Endless' options: the project's bytes, byte_knob; its page's knobs
                                           * stand for them here) */
         return PG_ARP(ptrack(page)) * 4 + k;
-    if (ptype(page) == PT_PLAY) {        /* (SPEED and DIRECTION are the project's bytes: play_knob; their LENGTH
-                                          * stands for them here); a track's SPAN: RATCH's parameter (ratch_field) */
+    if (ptype(page) == PT_PLAY) {        /* (SPEED and DIRECTION are the project's bytes, byte_knob: a parameter
+                                          * stands for them here); a track's RATCH and SPAN: RATCH's parameter
+                                          * (ratch_field), then CURVE, DIRECTION */
         int l = plane(page);
         if (l < ENG_TRACKS)
-            return k == 3 ? PG_CURVE * 4 + l : PG_STEP(l) * 4 + 2;
+            return k == 2 ? PG_CURVE * 4 + l : PG_STEP(l) * 4 + 2;
         return k == 2 ? PG_STEP(l) * 4 + 1 : PG_STEP(l) * 4 + 3;
     }
     if (ptype(page) == PT_EUC && k >= 2)  /* the Euclidean face: then the lane's LENGTH and PROB */
@@ -1264,29 +1266,27 @@ static void draw_header(void)
         } else if (mode) {
             text_cat(m, M[mode], sizeof m);
         }
-        /* what the encoders do here: SELECT the pages (their LEDs between two arrows), ALGO a choice (a ringed A) */
+        /* what the encoders do here: SELECT the pages (0.16.6: a bar under the header, a part a face, the one shown
+         * lit; before, small LEDs by the name, unseen), ALGO a choice (a ringed A) */
         int faces = !ui.matrix && page_count(ui.page) > 1 ? page_count(ui.page) : 0;
         int alg = !ui.matrix && algo_here(ui.page);
-        int pw = mode ? text_w(&FONT_T, m) + 10 : 0, lx = x + (faces ? 15 + faces * 9 : 0) + (alg ? 18 : 0);
-        if (mode && lx + 8 + pw > SQ_X - 4 && alg) {   /* no room for all: the A gives way to the mode, then the LEDs */
+        int pw = mode ? text_w(&FONT_T, m) + 10 : 0, lx = x + (alg ? 18 : 0);
+        if (mode && lx + 8 + pw > SQ_X - 4 && alg) {   /* no room for both: the A gives way to the mode */
             alg = 0;
             lx -= 18;
         }
-        if (mode && lx + 8 + pw > SQ_X - 4) {
-            faces = 0;
-            lx = x;
-        }
-        if (faces) {
-            int rx = x + 14 + (faces - 1) * 9 + 6;
-            for (int i = 0; i < 4; i++) {
-                cv_rect(x + 5 + i, 14 - i, 1, 2 * i + 1, MUTED);
-                cv_rect(rx + 3 - i, 14 - i, 1, 2 * i + 1, MUTED);
+        if (faces) {                     /* the faces: 220 px in as many parts, 4 apart; the one shown lit, taller */
+            int cur = page_face(ui.page), gap = 4, w = (220 - gap * (faces - 1)) / faces;
+            for (int f = 0; f < faces; f++) {
+                int fx = 10 + f * (w + gap);
+                if (f == cur)
+                    cv_rect(fx, 23, w, 3, ac);
+                else
+                    cv_rect(fx, 24, w, 2, tint(ac, BG, 3));
             }
         }
-        for (int f = 0; f < faces; f++)  /* the faces: an LED each, the one shown lit */
-            led((float)(x + 14 + f * 9), 14.0f, 3.0f, ac, f == page_face(ui.page) ? 8 : 0);
         if (alg) {
-            float cx = (float)(x + (faces ? 15 + faces * 9 : 0) + 9);
+            float cx = (float)(x + 9);
             hoop(cx, 14.0f, 6.5f, 1.4f, ac);
             cv_text((int)cx - (text_w(&FONT_T, "A") + 1) / 2, 8, &FONT_T, "A", ac);
         }
@@ -1917,7 +1917,8 @@ static void panel_mixer(int pan)
     }
 }
 
-static void panel_steps(int l)            /* a lane's steps: how many, how many trigs; an effect's: held without */
+static void panel_steps(int l, int ratch)  /* a lane's steps: how many, how many trigs; an effect's: held without;
+                                           * (0.16.6) a track's ratchets' face: its ratchets */
 {
     static const char *const FX[3] = {"DELAY STEPS", "REVERB STEPS", "WARPS STEPS"};
     char s[48], n[8];
@@ -1926,6 +1927,22 @@ static void panel_steps(int l)            /* a lane's steps: how many, how many 
         trigs += eng_trig(l, i);
     hero_icon(IC_STEPS, lane_accent(l));
     s[0] = 0;
+    if (ratch) {                         /* RATCHETS: so many hits over so many steps (the track's, not a lock's) */
+        int sp, h = eng_ratch_hits((int)(eng_project()->val[PG_STEP(l) * 4 + 2] + 0.5f), &sp);
+        int y = hero_title("RATCHETS");
+        if (h <= 1) {
+            text_cat(s, "ONE HIT A TRIG", sizeof s);
+        } else {
+            int_text(h, n);
+            text_cat(s, n, sizeof s);
+            text_cat(s, " HITS OVER ", sizeof s);
+            int_text(sp, n);
+            text_cat(s, n, sizeof s);
+            text_cat(s, sp == 1 ? " STEP" : " STEPS", sizeof s);
+        }
+        hero_line(y, s);
+        return;
+    }
     if (l < ENG_TRACKS) {
         text_cat(s, "TRACK ", sizeof s);
         int_text(l + 1, n);
@@ -2153,6 +2170,7 @@ static void draw_panel(void)
         for (int i = 0; i < ENG_STEPS / 8; i++)
             s[2] = s[2] * 31 + p->trig[l][i];
         s[2] = s[2] * 7 + 11 * (int)p->val[PG_STEP(l) * 4 + 3] + (l == LANE_WARPS ? eng_warps_algo() * 3 : 0);
+        s[2] = s[2] * 263 + (pt == PT_PLAY ? 1 + (int)p->val[PG_STEP(l) * 4 + 2] : 0);   /* (the ratchets' face) */
         break;
     }
     case PT_DELAY1: case PT_DELAY2: case PT_DSEND:
@@ -2255,7 +2273,9 @@ static void draw_panel(void)
     case PT_EUC: panel_euclid(eng_page_lane(ui.page)); break;
     case PT_DUCK: panel_duck(); break;
     case PT_COMP: case PT_OTT: panel_bus(pt == PT_OTT); break;
-    case PT_STEP: case PT_LANE: case PT_PLAY: panel_steps(plane(ui.page)); break;
+    case PT_STEP: case PT_LANE: case PT_PLAY:
+        panel_steps(plane(ui.page), pt == PT_PLAY && plane(ui.page) < ENG_TRACKS);
+        break;
     case PT_RND: panel_random(tr); break;
     case PT_ARP: case PT_ARP2: panel_endless(tr); break;
     case PT_GLOBAL: panel_global(); break;
@@ -2413,24 +2433,38 @@ static int track_knobs(int page)
     return pt == PT_MIX || pt == PT_PAN || pt == PT_RSEND || pt == PT_DSEND || pt == PT_DUCK || pt == PT_EQ;
 }
 
-/* (0.16) the knobs on the project's bytes, not parameters (no lock, no random, no cable): the PLAY face's SPEED and
- * DIRECTION, Endless' second face's four (0.16.2). A choice (n > 0): a ring in as many parts; a share (n = 0): 0..100 */
-static int byte_knob(int page, int k) { return (ptype(page) == PT_PLAY && k < 2) || ptype(page) == PT_ARP2; }
+/* (0.16) the knobs on the project's bytes, not parameters (no lock, no random, no cable): a lane's SPEED and DIRECTION
+ * (0.16.6: a track's SPEED on its steps' first face, RATCH's place, its DIRECTION last on the ratchets' face; an
+ * effect's both first on its PLAY face), Endless' second face's four (0.16.2). A choice (n > 0): a ring in as many
+ * parts; a share (n = 0): 0..100 */
+static int play_byte(int page, int k)    /* 0 SPEED, 1 DIRECTION, -1 neither */
+{
+    int pt = ptype(page);
+    if (pt == PT_STEP)
+        return k == 2 ? 0 : -1;
+    if (pt != PT_PLAY)
+        return -1;
+    if (plane(page) < ENG_TRACKS)
+        return k == 3 ? 1 : -1;
+    return k < 2 ? k : -1;
+}
+static int byte_knob(int page, int k) { return play_byte(page, k) >= 0 || ptype(page) == PT_ARP2; }
 static int byte_value(int page, int k, int *n, char *txt, uint32_t max, const char **name)   /* its value (a choice's
                                                                                                * index) */
 {
     project_t *p = eng_project();
     int v;
     txt[0] = 0;
-    if (ptype(page) == PT_PLAY) {
+    int b = play_byte(page, k);
+    if (b >= 0) {
         int l = plane(page);
-        *n = k == 0 ? ENG_SPEEDS : DIR_N;
-        v = clamp(k == 0 ? p->speed[l] + 4 : p->dir[l], 0, *n - 1);
-        if (k == 0)                      /* (x1/2: its x lower case, a multiplier's) */
+        *n = b == 0 ? ENG_SPEEDS : DIR_N;
+        v = clamp(b == 0 ? p->speed[l] + 4 : p->dir[l], 0, *n - 1);
+        if (b == 0)                      /* (x1/2: its x lower case, a multiplier's) */
             text_cat(txt, eng_speed_name(v - 4), max);
         else
             label_text(eng_dir_name(v), txt, max);
-        *name = k == 0 ? "Speed" : "Dir";
+        *name = b == 0 ? "Speed" : "Dir";
         return v;
     }
     static const char *const N[4] = {"Stride", "Rest", "Holes", "Leap"};
@@ -2484,7 +2518,7 @@ static void draw_play_knob(int page, int k, int force)
         if (j == i)
             lit_arc(RX, RY, R0, R1, a, b, ac);
         else
-            arc(RX, RY, R0 + 0.5f, R1 - 0.5f, a, b, ptype(page) == PT_PLAY && k == 0 && j == 4 ? MUTED : TRACK);
+            arc(RX, RY, R0 + 0.5f, R1 - 0.5f, a, b, play_byte(page, k) == 0 && j == 4 ? MUTED : TRACK);
     }
     if (!n) {                            /* a share: lit from 0 */
         float u = (float)i / 100.0f;
@@ -2499,14 +2533,15 @@ static void draw_play_knob(int page, int k, int force)
     blit((uint32_t)(k * KNOB_W), KNOB_Y);
 }
 
-/* (0.16.4) a step's ratchets: RATCH (its hits, the steps' face) and SPAN (the steps they take, the PLAY face), both in
- * RATCH's parameter (engine.h eng_ratch_join), each turned and drawn alone: 1 the hits, 2 the span, 0 neither */
+/* (0.16.4) a step's ratchets: RATCH (its hits) and SPAN (the steps they take), both in RATCH's parameter (engine.h
+ * eng_ratch_join), each turned and drawn alone: 1 the hits, 2 the span, 0 neither (0.16.6: the two first on the
+ * ratchets' face, the steps' second) */
 static int ratch_field(int page, int k)
 {
     int t = ptrack(page);
-    if (t < 0 || k != 2)
+    if (t < 0 || ptype(page) != PT_PLAY || k > 1)
         return 0;
-    return ptype(page) == PT_STEP ? 1 : ptype(page) == PT_PLAY ? 2 : 0;
+    return k + 1;
 }
 
 static float ratch_moved(float v, int field, int32_t e)   /* its hits or its span a step on (1..16), the other kept */
@@ -2613,12 +2648,12 @@ static void play_turn(int k, int32_t e)  /* a byte knob turned (byte_knob): the 
             if (m == t || held(B_GLO))
                 eng_endless_opt_set(p, m, k, v);
     } else {
-        int l = plane(ui.page);
-        int v = k == 0 ? clamp(p->speed[l] + d, -4, 4) : clamp((int)p->dir[l] + d, 0, DIR_N - 1);
+        int l = plane(ui.page), b = play_byte(ui.page, k);
+        int v = b == 0 ? clamp(p->speed[l] + d, -4, 4) : clamp((int)p->dir[l] + d, 0, DIR_N - 1);
         for (int m = 0; m < ENG_LANES; m++) {
             if (m != l && !(held(B_GLO) && l < ENG_TRACKS && m < ENG_TRACKS))
                 continue;
-            if (k == 0)
+            if (b == 0)
                 p->speed[m] = (int8_t)v;
             else
                 p->dir[m] = (uint8_t)v;
@@ -4701,7 +4736,8 @@ static void module_button(int b)
     case B_LFO:                          /* the LFOs: 1, then 2, 3 */
         go_page(here && pt == PT_LFO ? next : PG_LFO(0));
         break;
-    case B_SEQ:                          /* the lane's steps (a track's: then its RANDOM face, its Euclidean one) */
+    case B_SEQ:                          /* the lane's steps (a track's: then its ratchets, its RANDOM face, its
+                                          * Euclidean one) */
         if (here && (pt == PT_STEP || pt == PT_RND || ((pt == PT_EUC || pt == PT_PLAY) && ptrack(ui.page) >= 0)))
             go_page(next);
         else

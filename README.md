@@ -505,7 +505,7 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **PRESETS** | la piste active, de 1 à 4 (les presets eux-mêmes : EDIT tenu) |
 | **EDIT** | **tapé** : les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son ; **tenu : les presets** de la piste (touches noires : la banque, A celle d'usine ; blanches : le son, posé sur la piste et joué ; SAVE tenu : l'y garde ; REC tenu : l'efface) |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
-| **SEQ** | tapé : les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM, puis EUCLID, puis PLAY : SPEED, DIR, SPAN, CURVE) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns** (touches noires : la banque, blanches : le pattern, plusieurs : un enchaînement ; REC tenu : efface) |
+| **SEQ** | tapé : les pas de la piste (NOTE, PROB, SPEED, LENGTH ; puis RATCHETS : RATCH, SPAN, CURVE, DIR ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns** (touches noires : la banque, blanches : le pattern, plusieurs : un enchaînement ; REC tenu : efface) |
 | **ARP** | Endless, celui de la piste (voir plus bas) ; à nouveau : ses options (STRIDE, REST, HOLES, LEAP) |
 | **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leurs filtres (EQ), le DUCK, puis le bus master (COMP, OTT) ; ALGORITHM sur COMP ou OTT : le mode du bus (OFF, COMP, OTT) |
 | **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps ; SELECT parcourt leurs faces (leurs potards, les envois des pistes, leurs pas) |
@@ -579,22 +579,26 @@ son niveau, ses envois, son pan, sa note…) ; pour un effet, sur ses potards. L
 (LOCK dessous). Tenir un pas et taper SEL efface ses locks. La piste de pas suit la page : aller sur le delay (FX)
 montre les pas du delay. **REC** à nouveau : retour au mode KEY.
 
-**Les pas d'une piste** (SEQ) : **NOTE**, **PROB** (probabilité), **RATCH** (les ratchets : 1 à 16 coups, répartis sur
-la durée que donne **SPAN**, sur la face PLAY : un pas par défaut) et **LENGTH** (le nombre de pas) ; les trois
-premiers se lockent aussi pas par pas.
+Les pages d'une section se suivent sous SELECT (ou en retapant son bouton) ; depuis 0.16.6, une barre sous l'en-tête
+les montre, une part par page, celle qu'on regarde allumée.
 
-**La face PLAY** (0.16 ; SEQ, la dernière face des pas, celle d'une piste comme celle d'un effet) : **SPEED**, la
-vitesse de la piste (x1/8, x1/4, x1/2, x3/4, x1, x3/2, x2, x3, x4 : x3/4 et x3/2 pour du ternaire, x1/2 une piste qui
-traîne sous les autres) ; **DIR**, son sens : en avant, en arrière, l'aller-retour (PING), au hasard (RND), ivre (un
-pas de plus ou de moins à chaque fois, au hasard) et +2-1 (deux en avant, un en arrière) ; puis, pour une piste, ses
-ratchets (0.16.4) : **SPAN**, la durée sur laquelle les coups de RATCH sont répartis, de 1 à 16 pas (RATCH 3, SPAN 4 :
-trois coups sur quatre doubles croches, un triolet de noires ; RATCH 8, SPAN 16 : huit coups sur la mesure ; la
-figure court sur les pas suivants, un trig posé dedans la coupe et reprend la main), et **CURVE**, la vitesse le long
-de ces coups : vers la droite ils se resserrent et s'adoucissent, une balle qui rebondit ; vers la gauche ils
-s'écartent, un roulement qui se pose ; au milieu, réguliers (rien à 1 coup). RATCH, SPAN et CURVE se lockent pas par
-pas (un pas tenu en STEP, un potard tourné) ; l'aléatoire de RATCH (ENV tenu) ajoute des coups et, au-delà de 50, de
-la durée. Sur un effet, ces deux potards sont sa PROB et sa LENGTH. GLO tenu : SPEED, DIR, RATCH ou SPAN sur les
-quatre pistes. Toutes les pistes repartent ensemble au début
+**Les pas d'une piste** (SEQ) : **NOTE**, **PROB** (probabilité), **SPEED** et **LENGTH** (le nombre de pas) ; NOTE et
+PROB se lockent aussi pas par pas. **SPEED** (0.16), la vitesse de la piste : x1/8, x1/4, x1/2, x3/4, x1, x3/2, x2,
+x3, x4 (x3/4 et x3/2 pour du ternaire, x1/2 une piste qui traîne sous les autres). Tournée en jouant, la piste repart
+aussitôt à sa nouvelle vitesse depuis le pas où elle est (avant 0.16.6, revenir de x2 à x1 la figeait aussi longtemps
+qu'elle avait joué, et descendre à x1/2 de même).
+
+**RATCHETS** (0.16.6 : SEQ, la deuxième page des pas ; avant, la face PLAY, la dernière) : **RATCH**, 1 à 16 coups
+par trig, répartis sur **SPAN**, de 1 à 16 pas (RATCH 3, SPAN 4 : trois coups sur quatre doubles croches, un triolet
+de noires ; RATCH 8, SPAN 16 : huit coups sur la mesure ; la figure court sur les pas suivants, un trig posé dedans la
+coupe et reprend la main), **CURVE**, la vitesse le long de ces coups (vers la droite ils se resserrent et
+s'adoucissent, une balle qui rebondit ; vers la gauche ils s'écartent, un roulement qui se pose ; au milieu,
+réguliers ; rien à 1 coup), et **DIR**, le sens de la piste : en avant, en arrière, l'aller-retour (PING), au hasard
+(RND), ivre (un pas de plus ou de moins à chaque fois, au hasard) et +2-1 (deux en avant, un en arrière). L'écran dit
+combien de coups sur combien de pas. RATCH, SPAN et CURVE se lockent pas par pas (un pas tenu en STEP, un potard
+tourné) ; l'aléatoire de RATCH (ENV tenu) ajoute des coups et, au-delà de 50, de la durée. **La face PLAY d'un effet**
+(sa dernière) : SPEED, DIR, PROB et LENGTH. GLO tenu : SPEED, DIR, RATCH ou SPAN sur les quatre pistes. Toutes les
+pistes repartent ensemble au début
 du pattern ; un pattern dure le temps de sa piste la plus longue à sa vitesse (un aller-retour compte ses deux sens).
 Effacer la piste (REC tenu) la remet à x1, en avant. La deuxième page du son (EDIT,
 SELECT) donne la **GATE** de la note (5 à 95 % du pas, lockable : des notes courtes et longues dans le même pattern),
@@ -632,7 +636,7 @@ laquelle l'a. Les presets vivent avec les patterns dans la flash (un son : une c
 preset s'enregistre même en jouant, sauf s'il faut d'abord faire de la place (un secteur effacé, le son coupé un
 instant) : l'écran demande alors l'arrêt.
 
-**Les pas d'un effet** (SEQ sur un effet, ou sa dernière face) : **DECAY** (10 ms à 5 s), **PROB**, **DEPTH** et
+**Les pas d'un effet** (SEQ sur un effet, ou ses pages sous FX, avant ses rythmes euclidiens et sa face PLAY) : **DECAY** (10 ms à 5 s), **PROB**, **DEPTH** et
 **LENGTH**. Sans aucun trig, l'effet est toujours là (mode hold : en bas, la rangée des pas est pleine, de la
 couleur de l'effet, HOLD écrit dedans) ; dès qu'il y a des trigs, chaque trig ouvre l'effet
 et il se referme avec DECAY jusqu'à 1 − DEPTH (DEPTH 100 % : fermé entre les trigs). Pour le delay et la réverbe,
@@ -748,7 +752,7 @@ bloc : la part du filtre dans T1..T4 de la page machine) ; celui de l'enveloppe,
 Les projets d'avant 0.6.0 sont relus tels quels : le type de filtre passe sur TYPE, le NOISE de SEM et le BREATH de
 VOX sur NOISE (au même niveau de bruit).
 
-**Les rythmes euclidiens** (SEQ, troisième face ; sur les effets, la dernière face) : **FILLS** coups répartis aussi
+**Les rythmes euclidiens** (SEQ, quatrième page ; sur les effets, l'avant-dernière) : **FILLS** coups répartis aussi
 régulièrement que possible sur la longueur de la piste, **ROTATE** les décale ; LENGTH et PROB sont ceux de la piste
 de pas. Tourner FILLS, ROTATE ou LENGTH **réécrit les trigs** de la piste (ses locks restent) ; on peut ensuite les
 retoucher à la main. L'écran montre les pas en cercle, les trigs allumés, celui qui joue entouré.

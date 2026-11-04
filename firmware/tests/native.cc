@@ -3791,6 +3791,59 @@ int main(int argc, char** argv) {
     eng_fresh();
   }
 
+  {                                     // 58. SPEED turned while playing (0.16.6): the lane goes on at once at its new
+    // pace (0.16..0.16.5 took its steps from the grid since PLAY: back from x2 to x1 it waited as long as it had played,
+    // down to x1/2 the same); its steps on from where they were
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    eng_blank(p);
+    eng_fresh();
+    eng_set_model(0, eng_model_find(MK_DRUM, 0));
+    p->val[PG_GLOBAL * 4 + 0] = 0.60206f;   // (120 BPM: a bar 689 blocks)
+    for (int st = 0; st < 16; ++st) eng_trig_set(0, st, 1);
+    int last = 0;
+    auto bar = [&](int blocks) {        // the gate's rises on T1 over so many blocks
+      int n = 0;
+      for (int b = 0; b < blocks; ++b) {
+        eng_render(l, r, 128);
+        int g = (eng_gates() & 1u) != 0;
+        n += g && !last;
+        last = g;
+      }
+      return n;
+    };
+    const int kFrom[4] = {2, 0, 0, 4}, kTo[4] = {0, -2, -4, -2};   // x2 to x1, x1 to x1/2, x1 to x1/8, x4 to x1/2
+    const int kWant[4] = {16, 8, 2, 8};
+    int got[4], ok = 1;
+    for (int c = 0; c < 4; ++c) {
+      p->speed[0] = static_cast<int8_t>(kFrom[c]);
+      last = 0;
+      eng_play(1);
+      bar(2 * 689);
+      p->speed[0] = static_cast<int8_t>(kTo[c]);
+      bar(20);                          // (the change's own step: in or out)
+      got[c] = bar(689);
+      eng_play(0);
+      ok &= std::abs(got[c] - kWant[c]) <= 1;
+    }
+    // its steps on from where they were: a lane of 16 at x2 for 20 steps (on its fifth), then x1: its next the sixth
+    p->speed[0] = 2;
+    eng_play(1);
+    int seen = -1, before = -1;
+    for (int b = 0; b < 10 * 43 + 30; ++b) eng_render(l, r, 128);   // (10 sixteenths: 20 of its steps, plus a bit)
+    before = eng_step_now(0);
+    p->speed[0] = 0;
+    for (int b = 0; b < 43; ++b) eng_render(l, r, 128);
+    seen = eng_step_now(0);
+    eng_play(0);
+    ok &= seen == (before + 1) % 16;
+    printf("SPEED turned while playing: a bar after x2 to x1 %d trigs, x1 to x1/2 %d, x1 to x1/8 %d, x4 to x1/2 %d; on "
+           "from step %d to %d\n", got[0], got[1], got[2], got[3], before, seen);
+    if (!ok) ++failures, printf("FAIL: SPEED turned while playing\n");
+    eng_defaults(p);
+    eng_fresh();
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }
