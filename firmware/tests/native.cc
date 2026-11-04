@@ -68,6 +68,12 @@ struct Wav {
   void close() { if (f) fclose(f); }
 };
 
+// the locks a project had before 0.16.7 (384; 380 now): a project's of now into an old layout's, the last free
+#define OLD_LOCKS 384
+static void old_locks(plock_t* o, const plock_t* q) {
+  for (int i = 0; i < OLD_LOCKS; ++i) o[i] = i < ENG_PLOCKS ? q[i] : plock_t{0xFF, 0, 0, 0};
+}
+
 // a project of now, written as 0.7 to 0.15 kept theirs (versions 15 to 23: 41 parameters a lane, no SPEED, DIRECTION or
 // CURVE, 3776 bytes), its version as the test set it: what eng_upgrade reads from an older FM-1 or a backup
 struct V23 {
@@ -80,7 +86,7 @@ struct V23 {
   uint8_t trig[ENG_LANES][ENG_STEPS / 8];
   int8_t rnd[ENG_LANES][41];
   uint16_t seed[ENG_LANES];
-  plock_t lock[ENG_PLOCKS];
+  plock_t lock[OLD_LOCKS];
   uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
   uint8_t endless_len[ENG_TRACKS];
   int8_t endless_key[ENG_TRACKS];
@@ -100,7 +106,7 @@ static project_t* as_v23(project_t* q) {
   for (int l = 0; l < ENG_LANES; ++l)
     for (int i = 0; i < 41; ++i) o.rnd[l][i] = q->rnd[l][i], o.rseed[l][i] = q->rseed[l][i];
   memcpy(o.seed, q->seed, sizeof o.seed);
-  memcpy(o.lock, q->lock, sizeof o.lock);
+  old_locks(o.lock, q->lock);
   memcpy(o.endless, q->endless, sizeof o.endless);
   memcpy(o.endless_len, q->endless_len, sizeof o.endless_len);
   memcpy(o.endless_key, q->endless_key, sizeof o.endless_key);
@@ -108,6 +114,55 @@ static project_t* as_v23(project_t* q) {
   memset(q, 0xA5, sizeof *q);
   memcpy(q, &o, sizeof o);
   return q;
+}
+
+// a project of now, written as 0.16.0 to 0.16.6 kept theirs (versions 24 to 26: 42 parameters a lane, 384 locks, no
+// CLIMB; 3820 bytes, 0.16.0's 3804 without Endless' options), its version as the test set it
+struct V26 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[ENG_NPARAMS];
+  uint8_t algo[ENG_NPAGES];
+  uint8_t out_mode, warps_hq, theme, dice, dice_seed;
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+  int8_t rnd[ENG_LANES][42];
+  uint16_t seed[ENG_LANES];
+  plock_t lock[OLD_LOCKS];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+  uint8_t rseed[ENG_LANES][42];
+  uint8_t trauma;
+  int8_t speed[ENG_LANES];
+  uint8_t dir[ENG_LANES];
+  uint8_t endless_opt[ENG_TRACKS][4];
+};
+static_assert(sizeof(V26) == PROJECT_SIZE_26 && sizeof(V26) <= sizeof(project_t), "0.16.6's layout");
+static int as_v26(project_t* q, int version) {   // (its bytes: what eng_upgrade is given)
+  static V26 o;
+  memset(&o, 0, sizeof o);
+  o.magic = q->magic, o.version = static_cast<uint16_t>(version);
+  o.size = static_cast<uint16_t>(version == 24 ? PROJECT_SIZE_24 : PROJECT_SIZE_26);
+  memcpy(o.val, q->val, sizeof o.val);
+  memcpy(o.algo, q->algo, sizeof o.algo);
+  o.out_mode = q->out_mode, o.warps_hq = q->warps_hq, o.theme = q->theme, o.dice = q->dice, o.dice_seed = q->dice_seed;
+  memcpy(o.cable, q->cable, sizeof o.cable);
+  memcpy(o.trig, q->trig, sizeof o.trig);
+  for (int l = 0; l < ENG_LANES; ++l)
+    for (int i = 0; i < 42; ++i) o.rnd[l][i] = q->rnd[l][i], o.rseed[l][i] = q->rseed[l][i];
+  memcpy(o.seed, q->seed, sizeof o.seed);
+  old_locks(o.lock, q->lock);
+  memcpy(o.endless, q->endless, sizeof o.endless);
+  memcpy(o.endless_len, q->endless_len, sizeof o.endless_len);
+  memcpy(o.endless_key, q->endless_key, sizeof o.endless_key);
+  o.trauma = q->trauma;
+  memcpy(o.speed, q->speed, sizeof o.speed);
+  memcpy(o.dir, q->dir, sizeof o.dir);
+  memcpy(o.endless_opt, q->endless_opt, sizeof o.endless_opt);
+  memset(q, 0xA5, sizeof *q);
+  memcpy(q, &o, sizeof o);
+  return o.size;
 }
 
 int main(int argc, char** argv) {
@@ -723,7 +778,7 @@ int main(int argc, char** argv) {
     lock[0] = 1 << 6 | 4;                                 // track 2, step 5: its note
     lock[1] = TP_NOTE;
     lock[2] = 200;
-    for (int i = 1; i < ENG_PLOCKS; ++i) lock[i * 4 + 1] = 0xFF;
+    for (int i = 1; i < OLD_LOCKS; ++i) lock[i * 4 + 1] = 0xFF;
     int ok = eng_upgrade(q, 2680);
     char tx[24];
     eng_param_text(PG_GLOBAL * 4, q->val[PG_GLOBAL * 4], tx, sizeof tx);
@@ -1115,7 +1170,7 @@ int main(int argc, char** argv) {
         uint8_t trig[ENG_LANES][ENG_STEPS / 8];
         int8_t rnd[ENG_LANES][37];
         uint16_t seed[ENG_LANES];
-        plock_t lock[ENG_PLOCKS];
+        plock_t lock[OLD_LOCKS];
         uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
         uint8_t endless_len[ENG_TRACKS];
         int8_t endless_key[ENG_TRACKS];
@@ -1133,7 +1188,7 @@ int main(int argc, char** argv) {
       o->theme = 5;
       o->rnd[1][TP_CLOCK + 1] = 40;                       // (the grit's SHAPE's random: gone)
       o->rnd[1][TP_CUTOFF] = 30;                          // (the filter's: kept)
-      for (int i = 0; i < ENG_PLOCKS; ++i) o->lock[i].lane = 0xFF;
+      for (int i = 0; i < OLD_LOCKS; ++i) o->lock[i].lane = 0xFF;
       o->lock[0].lane = 2, o->lock[0].step = 3, o->lock[0].tp = TP_CLOCK + 3, o->lock[0].v = 9;   // (gone)
       o->lock[1].lane = 2, o->lock[1].step = 4, o->lock[1].tp = TP_RESO, o->lock[1].v = 7;        // (kept)
       o->cable[0][0].src = SRC_L1, o->cable[0][0].dst = PG_BEND(0) * 4, o->cable[0][0].depth = 50;   // (gone)
@@ -1196,7 +1251,7 @@ int main(int argc, char** argv) {
       uint8_t trig[ENG_LANES][ENG_STEPS / 8];
       int8_t rnd[ENG_LANES][25];
       uint16_t seed[ENG_LANES];
-      plock_t lock[ENG_PLOCKS];
+      plock_t lock[OLD_LOCKS];
       uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
       uint8_t endless_len[ENG_TRACKS];
       int8_t endless_key[ENG_TRACKS];
@@ -1211,7 +1266,7 @@ int main(int argc, char** argv) {
     o9->size = sizeof(v9);
     for (int i = 0; i < 52 * 4; ++i) o9->val[i] = q->val[i];
     for (int i = 0; i < 52; ++i) o9->algo[i] = q->algo[i];
-    for (int i = 0; i < ENG_PLOCKS; ++i) o9->lock[i] = q->lock[i];
+    old_locks(o9->lock, q->lock);
     project_t* w = q;                                    // (made as 0.4's, then copied into the old layout)
     static const float kOld[8] = {0.6f, 0.3f, 0.7f, 0.8f, static_cast<float>(WC_T3), 1.0f, 1.0f, 0.0f};
     for (int k = 0; k < 8; ++k) q->val[PG_WARPS(k / 4) * 4 + k % 4] = kOld[k];   // 0.3's: ALGO TIMBRE L1 L2, CAR MOD DRY MODE
@@ -1221,7 +1276,7 @@ int main(int argc, char** argv) {
     q->cable[0][1] = {4, 5, 20, 0};                      // Tides A4 -> track 1's HARMONICS: gone
     q->cable[4][0] = {2, 12 * 4 + 0, 30, 0};             // Tides A2 -> Tides A's frequency: gone
     for (int i = 0; i < 52 * 4; ++i) o9->val[i] = w->val[i];
-    for (int i = 0; i < ENG_PLOCKS; ++i) o9->lock[i] = w->lock[i];
+    old_locks(o9->lock, w->lock);
     for (int g = 0; g <= ENG_TRACKS; ++g)
       for (int c = 0; c < ENG_CABLES; ++c) o9->cable[g][c] = w->cable[g][c];
     for (int l = 0; l < ENG_LANES; ++l)
@@ -1733,7 +1788,7 @@ int main(int argc, char** argv) {
       uint8_t trig[ENG_LANES][ENG_STEPS / 8];
       int8_t rnd[ENG_LANES][25];
       uint16_t seed[ENG_LANES];
-      plock_t lock[ENG_PLOCKS];
+      plock_t lock[OLD_LOCKS];
       uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
       uint8_t endless_len[ENG_TRACKS];
       int8_t endless_key[ENG_TRACKS];
@@ -1756,7 +1811,7 @@ int main(int argc, char** argv) {
         for (int i = 0; i < ENG_STEPS / 8; ++i) o.trig[l][i] = cur.trig[l][i];
         o.seed[l] = cur.seed[l];
       }
-      for (int i = 0; i < ENG_PLOCKS; ++i) o.lock[i] = cur.lock[i];
+      old_locks(o.lock, cur.lock);
       o.lock[0] = plock_t{2, 5, TP_NOTE, 200};
       memcpy(&q, &o, sizeof o);
       int bytes = v == 12 ? static_cast<int>(sizeof o) : 3104;
@@ -1777,7 +1832,7 @@ int main(int argc, char** argv) {
       uint8_t trig[ENG_LANES][ENG_STEPS / 8];
       int8_t rnd[ENG_LANES][33];
       uint16_t seed[ENG_LANES];
-      plock_t lock[ENG_PLOCKS];
+      plock_t lock[OLD_LOCKS];
       uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
       uint8_t endless_len[ENG_TRACKS];
       int8_t endless_key[ENG_TRACKS];
@@ -1798,7 +1853,7 @@ int main(int argc, char** argv) {
         for (int i = 0; i < ENG_STEPS / 8; ++i) o.trig[l][i] = cur.trig[l][i];
         o.seed[l] = cur.seed[l];
       }
-      for (int i = 0; i < ENG_PLOCKS; ++i) o.lock[i] = cur.lock[i];
+      old_locks(o.lock, cur.lock);
       for (int t = 0; t < ENG_TRACKS; ++t) o.val[(52 + 2 * t) * 4] = 0.7f, o.val[(52 + 2 * t) * 4 + 3] = 0.4f;
       o.algo[52 + 2] = MF_SEM, o.algo[52 + 3] = MF_HP;
       o.val[(52 + 2) * 4] = 0.3f, o.val[(52 + 3) * 4] = 0.5f, o.val[(52 + 3) * 4 + 1] = 0.6f;
@@ -3650,10 +3705,8 @@ int main(int argc, char** argv) {
     // a 0.16.0 project (version 24, 3804 bytes): read, Endless' options none (its padding byte left alone)
     static project_t q;
     eng_defaults(&q);
-    q.version = 24;
-    q.size = PROJECT_SIZE_24;
     memset(q.endless_opt, 0xA5, sizeof q.endless_opt);
-    int up = eng_upgrade(&q, PROJECT_SIZE_24) && eng_check(&q);
+    int up = eng_upgrade(&q, as_v26(&q, 24)) && eng_check(&q);
     for (int t = 0; t < ENG_TRACKS; ++t)
       for (int i = 0; i < 4; ++i) up &= q.endless_opt[t][i] == 0;
     printf("Endless' options: STRIDE 2 over 5 %d %d %d %d %d %d; REST 3 %d %d %d %d %d %d; HOLES 100 %s; LEAP 100 %s; "
@@ -3705,9 +3758,8 @@ int main(int argc, char** argv) {
     q.val[PG_STEP(1) * 4 + 2] = 10.0f;    // (0.16.2's 3:4)
     for (int i = 0; i < ENG_PLOCKS; ++i) q.lock[i].lane = 0xFF;
     q.lock[0] = plock_t{2, 4, TP_RATCHET, static_cast<uint8_t>(8.0f * 255.0f / 15.0f + 0.5f)};   // (its 3:2, 9 then)
-    q.version = 25;
     int sp1 = 0, sp2 = 0;
-    int up = eng_upgrade(&q, sizeof q) && eng_check(&q) &&
+    int up = eng_upgrade(&q, as_v26(&q, 25)) && eng_check(&q) &&
              eng_ratch_hits(static_cast<int>(q.val[PG_STEP(1) * 4 + 2] + 0.5f), &sp1) == 3 && sp1 == 4 &&
              eng_ratch_hits(q.lock[0].v + 1, &sp2) == 3 && sp2 == 2;
     printf("RATCH over SPAN: 4 hits over 1, 2, 16 steps: %d %d %d, first to last %d %d %d blocks; a 0.16.2 project %s\n",
@@ -3840,6 +3892,108 @@ int main(int argc, char** argv) {
     printf("SPEED turned while playing: a bar after x2 to x1 %d trigs, x1 to x1/2 %d, x1 to x1/8 %d, x4 to x1/2 %d; on "
            "from step %d to %d\n", got[0], got[1], got[2], got[3], before, seen);
     if (!ok) ++failures, printf("FAIL: SPEED turned while playing\n");
+    eng_defaults(p);
+    eng_fresh();
+  }
+
+  {                                     // 59. CLIMB (0.16.7): a step's trig higher each time it plays, back to its note
+    // after TIMES; BOUNCE; on the ratchets' hits; both; in the scale's notes with SCALE on; a lock on one step alone;
+    // a 0.16.6 project read (CLIMB off, its locks and randoms where they were)
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    auto notes = [&](int blocks, int* out, int max) {   // the notes T1's gate rises on
+      int n = 0, last = 0;
+      eng_play(1);
+      for (int b = 0; b < blocks; ++b) {
+        eng_render(l, r, 128);
+        int g = (eng_gates() & 1u) != 0;
+        if (g && !last && n < max) out[n++] = eng_note(0);
+        last = g;
+      }
+      eng_play(0);
+      return n;
+    };
+    auto setup = [&](int climb, int times, int on, int shape, int scale) {
+      eng_blank(p);
+      eng_fresh();
+      p->val[PG_GLOBAL * 4 + 0] = 0.60206f;   // (120 BPM: a sixteenth 43 blocks)
+      p->val[PG_GLOBAL * 4 + 1] = static_cast<float>(scale);
+      p->val[PG_GLOBAL * 4 + 2] = 0.0f;       // (C)
+      p->val[PG_STEP(0) * 4 + 3] = 4.0f;      // (a trig on its first step, every four sixteenths)
+      eng_trig_set(0, 0, 1);
+      p->val[PG_EUC(0) * 4 + 2] = static_cast<float>(climb);
+      eng_climb_opt_set(p, 0, CL_TIMES, times);
+      eng_climb_opt_set(p, 0, CL_ON, on);
+      eng_climb_opt_set(p, 0, CL_SHAPE, shape);
+    };
+    static int got[32];
+    auto same = [&](const int* want, int n, int base) {
+      for (int i = 0; i < n; ++i)
+        if (got[i] - base != want[i]) return 0;
+      return 1;
+    };
+    auto show = [&](const char* what, int n, int base) {
+      printf("  %s:", what);
+      for (int i = 0; i < n; ++i) printf(" %+d", got[i] - base);
+      printf("\n");
+    };
+    int ok = 1;
+    setup(2, 3, CLON_TRIG, CLSH_RAMP, 0);
+    notes(7 * 4 * 43 + 20, got, 32);
+    const int kRamp[7] = {0, 2, 4, 0, 2, 4, 0};
+    int ramp = same(kRamp, 7, 48);
+    if (!ramp) show("ramp", 7, 48);
+    setup(2, 3, CLON_TRIG, CLSH_BOUNCE, 0);
+    notes(7 * 4 * 43 + 20, got, 32);
+    const int kBounce[7] = {0, 2, 4, 2, 0, 2, 4};
+    int bounce = same(kBounce, 7, 48);
+    if (!bounce) show("bounce", 7, 48);
+    setup(-1, 4, CLON_RATCH, CLSH_RAMP, 0);
+    p->val[PG_STEP(0) * 4 + 2] = static_cast<float>(eng_ratch_join(4, 1));
+    notes(2 * 4 * 43 + 20, got, 32);
+    const int kRatch[8] = {0, -1, -2, -3, 0, -1, -2, -3};
+    int ratch = same(kRatch, 8, 48);
+    if (!ratch) show("ratch", 8, 48);
+    setup(1, 3, CLON_BOTH, CLSH_RAMP, 0);
+    p->val[PG_STEP(0) * 4 + 2] = static_cast<float>(eng_ratch_join(2, 1));
+    notes(3 * 4 * 43 + 20, got, 32);
+    const int kBoth[6] = {0, 1, 2, 0, 1, 2};
+    int both = same(kBoth, 6, 48);
+    if (!both) show("both", 6, 48);
+    setup(1, 4, CLON_TRIG, CLSH_RAMP, 2);   // (C minor: C D Eb F)
+    notes(4 * 4 * 43 + 20, got, 32);
+    const int kScale[4] = {0, 2, 3, 5};
+    int scale = same(kScale, 4, 48);
+    if (!scale) show("scale", 4, 48);
+    setup(0, 2, CLON_TRIG, CLSH_RAMP, 0);   // (CLIMB 0 on the track; step 3 locked to +5: it alone climbs)
+    eng_trig_set(0, 2, 1);
+    eng_lock_set(0, 2, TP_CLIMB, 5.0f);
+    notes(3 * 4 * 43 + 20, got, 32);
+    const int kLock[6] = {0, 0, 0, 5, 0, 0};
+    int lock = same(kLock, 6, 48);
+    if (!lock) show("lock", 6, 48);
+    // a 0.16.6 project: its slot's junk not read as CLIMB, its randoms and locks where they were
+    static project_t q;
+    eng_defaults(&q);
+    q.val[PG_EUC(1) * 4 + 2] = 7.0f;
+    q.rnd[2][TP_CURVE] = 44;
+    q.rseed[3][TP_GDROP] = 9;
+    for (int i = 0; i < ENG_PLOCKS; ++i) q.lock[i].lane = 0xFF;
+    q.lock[5] = plock_t{1, 9, TP_NOTE, 77};
+    int bytes = as_v26(&q, 26);
+    reinterpret_cast<V26*>(&q)->lock[383] = plock_t{2, 1, TP_PROB, 33};   // (in a slot 0.16.7 has no more)
+    int up = eng_upgrade(&q, bytes) && eng_check(&q) && q.val[PG_EUC(1) * 4 + 2] == 0.0f && q.rnd[2][TP_CURVE] == 44 &&
+             q.rseed[3][TP_GDROP] == 9 && q.rnd[2][TP_CLIMB] == 0 && eng_climb_opt(1, CL_TIMES) == 4;
+    int found = 0;
+    for (int i = 0; i < ENG_PLOCKS; ++i)
+      found += (q.lock[i].lane == 1 && q.lock[i].step == 9 && q.lock[i].tp == TP_NOTE && q.lock[i].v == 77) +
+               (q.lock[i].lane == 2 && q.lock[i].step == 1 && q.lock[i].tp == TP_PROB && q.lock[i].v == 33);
+    up &= found == 2;
+    ok = ramp && bounce && ratch && both && scale && lock && up;
+    printf("CLIMB: +2 three times %s, bouncing %s; -1 on four ratchets %s; both %s; in C minor %s; a lock alone %s; a "
+           "0.16.6 project %s\n", ramp ? "ok" : "WRONG", bounce ? "ok" : "WRONG", ratch ? "ok" : "WRONG",
+           both ? "ok" : "WRONG", scale ? "ok" : "WRONG", lock ? "ok" : "WRONG", up ? "read" : "WRONG");
+    if (!ok) ++failures, printf("FAIL: CLIMB\n");
     eng_defaults(p);
     eng_fresh();
   }

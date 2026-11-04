@@ -29,7 +29,8 @@ extern "C" {
 #define ENG_NPAGES 68
 #define ENG_NPARAMS (ENG_NPAGES * 4)
 #define ENG_STEPS 64                     /* the steps a lane: four pages of 16 */
-#define ENG_PLOCKS 384                   /* parameter locks, for all the lanes' steps */
+#define ENG_PLOCKS 380                   /* parameter locks, for all the lanes' steps (384 until 0.16.6: four gave
+                                          * their room to CLIMB's randoms, 0.16.7) */
 #define ENG_ENDLESS 64                   /* an Endless sequence's notes (and rests), a track */
 #define ENDLESS_REST 0xFF
 
@@ -64,7 +65,10 @@ extern "C" {
                                           * on, inverted or muted), SHAPE (a digital shaper) */
 #define PG_EUC(l) (45 + (l))             /* a lane's Euclidean rhythm (its steps' last face): FILLS spread as evenly
                                           * as they go over the lane's LENGTH, ROTATE; turning them writes its trigs
-                                          * (the screen: its third and fourth knobs are the lane's LENGTH and PROB) */
+                                          * (the screen: its third and fourth knobs are the lane's LENGTH and PROB);
+                                          * then (0.16.7, a track's, in what was unused) CLIMB, the semitones (SCALE
+                                          * on: its notes) a step's trig climbs each time it plays, -12..12; the
+                                          * fourth unused */
 #define PG_FILT(t, f) (52 + (t) * 3 + (f))   /* a track's filter (mi_filter.cc), three pages of four (the screen shows
                                           * them otherwise: app.c): CUTOFF, RESO, ENV, DECAY; DRIVE, PING, FM, KEY;
                                           * TYPE (LP, BP, HP; VOX: low, mid, high voices), NOISE, COLOR, ATTACK. The
@@ -94,8 +98,8 @@ enum { DL_SYNC, DL_FREE };              /* the delay's ALGORITHM: its time in di
 enum { TP_DECAY = 4, TP_PITCHENV = 8, TP_LENGTH, TP_TRANSPOSE, TP_OCTAVE, TP_LEVEL, TP_SEND, TP_PAN, TP_NOTE, TP_PROB,
        TP_RATCHET, TP_DSEND, TP_DUCK, TP_EQ, TP_CLOCK, TP_CRUSH, TP_MASK, TP_BSHAPE, TP_CUTOFF, TP_RESO, TP_FENV,
        TP_FDECAY, TP_FDRIVE, TP_PING, TP_FM, TP_KEY, TP_FTYPE, TP_NOISE, TP_COLOR, TP_FATTACK, TP_GLITCH, TP_GSIZE,
-       TP_GBEND, TP_GDROP, TP_CURVE, ENG_NTP };   /* (0.7: the grit's four the bits', the glitch's four after the
-                                         * filter's; 0.16: the ratchets' CURVE) */
+       TP_GBEND, TP_GDROP, TP_CURVE, TP_CLIMB, ENG_NTP };   /* (0.7: the grit's four the bits', the glitch's four
+                                         * after the filter's; 0.16: the ratchets' CURVE; 0.16.7: CLIMB) */
                                          /* (T1 has no TP_DUCK: it ducks the others) */
 int eng_track_param(int lane, int tp);   /* its parameter (an effect lane: its effect's knob tp) */
 int eng_param_tp(int param, int *lane);  /* a parameter's tp and lane, -1 if none */
@@ -192,7 +196,9 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 26u              /* (25: 0.16.2's and 0.16.3's, RATCH 1..8 then eight tuplets (9..16): read, each
+#define PROJECT_VERSION 27u              /* (26: 0.16.4's to 0.16.6's, without CLIMB (42 parameters a lane, 384 locks,
+                                          * 3820 bytes): read, CLIMB off, its locks the first 380;
+                                          * 25: 0.16.2's and 0.16.3's, RATCH 1..8 then eight tuplets (9..16): read, each
                                           * as hits over a span, its locks too;
                                           * 24: 0.16.0's and 0.16.1's, without Endless' options: read, all its notes;
                                           * 23: 0.14's and 0.15's, without the lanes' speeds and directions, the ratchets
@@ -240,10 +246,23 @@ typedef struct {
     int8_t speed[ENG_LANES];             /* (0.16) each lane's SPEED: -4..4, x1/8 x1/4 x1/2 x3/4 x1 x3/2 x2 x3 x4 (0: x1) */
     uint8_t dir[ENG_LANES];              /* its DIRECTION: DIR_* */
     uint8_t endless_opt[ENG_TRACKS][4];  /* (0.16.2) Endless' options (its second face): STRIDE (bits 0..2: 1..7, 0 as
-                                          * 1) and REST (bits 3..6: 0 none, 2..8) a byte; HOLES, LEAP (0..100 %); a
-                                          * byte spare */
+                                          * 1) and REST (bits 3..6: 0 none, 2..8) a byte; HOLES, LEAP (0..100 %);
+                                          * then (0.16.7, its spare byte) CLIMB's: TIMES (bits 0..3: 0 as 4, else
+                                          * 1 + them, 2..16), ON (bits 4, 5: CLON_*), SHAPE (bits 6, 7: CLSH_*) */
+    uint8_t rsv[8];                      /* (0.16.7) spare, 0: the project at the patterns' record's size */
 } project_t;
 #define PROJECT_SIZE_24 3804u            /* (0.16.0's and 0.16.1's project, version 24) */
+#define PROJECT_SIZE_26 3820u            /* (0.16.2's to 0.16.6's, versions 25, 26) */
+enum { CL_TIMES, CL_ON, CL_SHAPE };      /* (0.16.7) CLIMB's options: how many times before the note again (2..16), */
+enum { CLON_TRIG, CLON_RATCH, CLON_BOTH, CLON_N };   /* what climbs: each play of the trig, each hit of its ratchets
+                                          * (from the trig's note again), both (each hit on from the last) */
+enum { CLSH_RAMP, CLSH_BOUNCE, CLSH_RANDOM, CLSH_N };   /* how: up to the last then the note again, up and back down,
+                                          * any of them */
+int eng_climb_opt(int t, int o);         /* TIMES 2..16, ON CLON_*, SHAPE CLSH_* */
+void eng_climb_opt_set(project_t *p, int t, int o, int v);
+const char *eng_climb_on_name(int v);
+const char *eng_climb_shape_name(int v);
+int eng_climb_now(int t, int step);      /* the transposition that step plays now (its last), 0 none */
 enum { EO_STRIDE, EO_REST, EO_HOLES, EO_LEAP, EO_N };   /* Endless' options as the screen reads and writes them */
 int eng_endless_opt(int t, int o);       /* STRIDE 1..7, REST 0 or 2..8, HOLES and LEAP 0..100 */
 void eng_endless_opt_set(project_t *p, int t, int o, int v);

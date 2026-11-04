@@ -188,7 +188,8 @@ static void pat_name(int slot, char *b)  /* A1 .. K16 */
                                           * second face, RATCH, SPAN, CURVE, then DIRECTION; SPEED on the first, in
                                           * RATCH's place), an effect's (its last) SPEED, DIRECTION, PROB, LENGTH */
 #define VP_ARP2(t) (ENG_NPAGES + 28 + (t))   /* (0.16.2) Endless' second face: STRIDE, REST, HOLES, LEAP */
-enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS, PT_PLAY, PT_ARP2 };
+#define VP_CLIMB(t) (ENG_NPAGES + 32 + (t))  /* (0.16.7) a track's steps' third face: CLIMB, NOTES, ON, SHAPE */
+enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS, PT_PLAY, PT_ARP2, PT_CLIMB };
 /* a track's pages in four sets: EDIT goes from one to the next of the first three (its sound, its bending: the bits
  * and the glitch, its filter),
  * ENV to the envelopes; SELECT through a set's pages; ALGO changes what the page shows (the sound's model, the
@@ -244,11 +245,13 @@ static struct {
 /* ------------------------------------------------------------ the pages --- */
 static int ptype(int page)
 {
-    return page >= VP_ARP2(0) ? PT_ARP2 : page >= VP_PLAY(0) ? PT_PLAY : page >= VP_SYS ? PT_SYS : page >= ENG_NPAGES ? PT_RND + (page - ENG_NPAGES) / 4
+    return page >= VP_CLIMB(0) ? PT_CLIMB : page >= VP_ARP2(0) ? PT_ARP2 : page >= VP_PLAY(0) ? PT_PLAY : page >= VP_SYS ? PT_SYS : page >= ENG_NPAGES ? PT_RND + (page - ENG_NPAGES) / 4
                                                                                         : eng_page_type(page);
 }
 static int ptrack(int page)              /* the track a page belongs to, -1: none */
 {
+    if (page >= VP_CLIMB(0))
+        return page - VP_CLIMB(0);
     if (page >= VP_ARP2(0))
         return page - VP_ARP2(0);
     if (page >= VP_PLAY(0))
@@ -257,6 +260,8 @@ static int ptrack(int page)              /* the track a page belongs to, -1: non
 }
 static int plane(int page)               /* a lane's page (its steps', its effect's), the lane: -1 none */
 {
+    if (page >= VP_CLIMB(0))
+        return page - VP_CLIMB(0);
     if (page >= VP_ARP2(0))
         return -1;
     if (page >= VP_PLAY(0))
@@ -331,16 +336,17 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
                                                                           * (its two modes) */
         f[0] = PG_MIX, f[1] = PG_PAN, f[2] = PG_EQ, f[3] = PG_DUCK, f[4] = PG_COMP, f[5] = PG_OTT;
         return 6;
-    case PT_STEP: case PT_RND: case PT_EUC: case PT_PLAY:
+    case PT_STEP: case PT_RND: case PT_EUC: case PT_PLAY: case PT_CLIMB:
         if (t < 0) {                     /* an effect's Euclidean or PLAY face: its module's */
             int l = plane(page);
             return module_pages(l == LANE_DELAY ? PG_DELAY(0) : l == LANE_REVERB ? PG_REVERB : PG_WARPS(0), f);
         }
-        f[0] = PG_STEP(t);               /* (0.16.6: the ratchets second, by the steps) */
+        f[0] = PG_STEP(t);               /* (0.16.6: the ratchets second, by the steps; 0.16.7: CLIMB third) */
         f[1] = VP_PLAY(t);
-        f[2] = VP_RND(t);
-        f[3] = PG_EUC(t);
-        return 4;
+        f[2] = VP_CLIMB(t);
+        f[3] = VP_RND(t);
+        f[4] = PG_EUC(t);
+        return 5;
     case PT_ARP: case PT_ARP2: f[0] = PG_ARP(t); f[1] = VP_ARP2(t); return 2;
     case PT_DELAY1: case PT_DELAY2: case PT_DSEND: case PT_LANE: case PT_REVERB: case PT_RSEND:
     case PT_WARPS1: case PT_WARPS2: {    /* an effect: its knobs, the tracks' sends, its steps */
@@ -419,6 +425,7 @@ static int track_page(int page, int t)   /* the same page on track t (a track's 
     case PT_STEP: return PG_STEP(t);
     case PT_ARP: return PG_ARP(t);
     case PT_ARP2: return VP_ARP2(t);
+    case PT_CLIMB: return VP_CLIMB(t);
     case PT_RND: return VP_RND(t);
     case PT_PLAY: return ptrack(page) >= 0 ? VP_PLAY(t) : page;
     default: return page;
@@ -469,6 +476,9 @@ static int knob_param(int page, int k)
     if (ptype(page) == PT_ARP2)          /* (Endless' options: the project's bytes, byte_knob; its page's knobs
                                           * stand for them here) */
         return PG_ARP(ptrack(page)) * 4 + k;
+    if (ptype(page) == PT_CLIMB)         /* (0.16.7) CLIMB, its parameter (in the Euclidean page's third place); the
+                                          * others the project's bytes (byte_knob): it stands for them */
+        return PG_EUC(ptrack(page)) * 4 + 2;
     if (ptype(page) == PT_PLAY) {        /* (SPEED and DIRECTION are the project's bytes, byte_knob: a parameter
                                           * stands for them here); a track's RATCH and SPAN: RATCH's parameter
                                           * (ratch_field), then CURVE, DIRECTION */
@@ -524,6 +534,7 @@ static const char *module_name(int page)
         return l < ENG_TRACKS ? "Steps" : l == LANE_DELAY ? "Delay" : l == LANE_REVERB ? "Reverb" : "Warps";
     }
     case PT_ARP: case PT_ARP2: return "Endless";
+    case PT_CLIMB: return "Steps";
     case PT_PLAY: {
         int l = plane(page);
         return l < ENG_TRACKS ? "Steps" : l == LANE_DELAY ? "Delay" : l == LANE_REVERB ? "Reverb" : "Warps";
@@ -565,7 +576,7 @@ static uint16_t page_accent(int page)
 {
     project_t *p = eng_project();
     switch (ptype(page)) {
-    case PT_STEP: case PT_RND: case PT_ARP: case PT_ARP2: return track_accent(ptrack(page));
+    case PT_STEP: case PT_RND: case PT_ARP: case PT_ARP2: case PT_CLIMB: return track_accent(ptrack(page));
     case PT_PAN: case PT_GLOBAL: case PT_SYS: case PT_MIX: case PT_EQ: return AC1;
     case PT_DUCK: return track_accent(0);    /* T1's: it ducks the others */
     case PT_COMP: return AC2;
@@ -1369,10 +1380,11 @@ static int hero_title(const char *name)  /* the name: one line of L, two cut at 
 }
 
 static void hero_line(int y, const char *s)   /* the line under the name: its parts ('|') apart, a dot between; a
-                                                 * part that would run off the screen is left out, and the rest */
+                                                 * part that would run off the screen is left out, and the rest (0.16.7:
+                                                 * its dot too) */
 {
     char part[40];
-    int x = 85, n = 0;
+    int x = 85, n = 0, sep = 0;
     s = dec(s, 3);
     for (;; s++) {
         if (*s && *s != '|' && n < (int)sizeof part - 1) {
@@ -1380,14 +1392,17 @@ static void hero_line(int y, const char *s)   /* the line under the name: its pa
             continue;
         }
         part[n] = 0;
-        if (x + text_w(&FONT_XS, part) > 238)
+        if (x + (sep ? 11 : 0) + text_w(&FONT_XS, part) > 238)
             break;
+        if (sep) {
+            disc((float)x + 5.0f, (float)y + 8.0f, 1.4f, DIM);
+            x += 11;
+        }
         x = cv_text(x, y, &FONT_XS, part, MUTED);
         n = 0;
+        sep = 1;
         if (!*s)
             break;
-        disc((float)x + 5.0f, (float)y + 8.0f, 1.4f, DIM);
-        x += 11;
     }
 }
 
@@ -1965,6 +1980,35 @@ static void panel_steps(int l, int ratch)  /* a lane's steps: how many, how many
     hero_line(y, s);
 }
 
+static void panel_climb(int t)           /* (0.16.7) CLIMB: how far a time (semitones, or the scale's notes), over how
+                                          * many notes, on what */
+{
+    project_t *p = eng_project();
+    char s[48], v[16], n[8];
+    float c = p->val[PG_EUC(t) * 4 + 2];
+    hero_icon(IC_STEPS, track_accent(t));
+    int y = hero_title("CLIMB");
+    s[0] = 0;
+    if (c > -0.5f && c < 0.5f) {
+        text_cat(s, "OFF|OR LOCKED ON A STEP", sizeof s);
+    } else {
+        static const char *const ON[CLON_N] = {"ON TRIGS", "ON HITS", "TRIG+HITS"};
+        int i = 0, deg = 0;
+        eng_param_text(PG_EUC(t) * 4 + 2, c, v, sizeof v);   /* ("+2 semitones", "+2 degrees": SCALE on) */
+        while (v[i] && v[i] != ' ')
+            i++;
+        deg = v[i] == ' ' && v[i + 1] == 'd';
+        v[i] = 0;
+        text_cat(s, v, sizeof s);
+        text_cat(s, deg ? " DEG|" : " ST|", sizeof s);
+        int_text(eng_climb_opt(t, CL_TIMES), n);
+        text_cat(s, n, sizeof s);
+        text_cat(s, " NOTES|", sizeof s);
+        text_cat(s, ON[eng_climb_opt(t, CL_ON)], sizeof s);
+    }
+    hero_line(y, s);
+}
+
 static void panel_random(int t)
 {
     hero_icon(IC_DICE, track_accent(t));
@@ -2173,6 +2217,10 @@ static void draw_panel(void)
         s[2] = s[2] * 263 + (pt == PT_PLAY ? 1 + (int)p->val[PG_STEP(l) * 4 + 2] : 0);   /* (the ratchets' face) */
         break;
     }
+    case PT_CLIMB:                       /* (CLIMB, its options, the scale: semitones or its notes) */
+        s[2] = (int)(p->val[PG_EUC(tr) * 4 + 2] * 2.0f) + 64 + (int)p->endless_opt[tr][3] * 256 +
+               (eng_quantize(61) != 61 || eng_quantize(66) != 66) * 65536 + (int)p->val[PG_GLOBAL * 4 + 1] * 131072;
+        break;
     case PT_DELAY1: case PT_DELAY2: case PT_DSEND:
         s[2] = (int)p->val[PG_DELAY(0) * 4] | (int)p->val[PG_DELAY(1) * 4 + 1] << 5 |
                (int)(eng_final(PG_DELAY(0) * 4 + 1) * 100.0f) << 6;
@@ -2276,6 +2324,7 @@ static void draw_panel(void)
     case PT_STEP: case PT_LANE: case PT_PLAY:
         panel_steps(plane(ui.page), pt == PT_PLAY && plane(ui.page) < ENG_TRACKS);
         break;
+    case PT_CLIMB: panel_climb(tr); break;
     case PT_RND: panel_random(tr); break;
     case PT_ARP: case PT_ARP2: panel_endless(tr); break;
     case PT_GLOBAL: panel_global(); break;
@@ -2448,7 +2497,10 @@ static int play_byte(int page, int k)    /* 0 SPEED, 1 DIRECTION, -1 neither */
         return k == 3 ? 1 : -1;
     return k < 2 ? k : -1;
 }
-static int byte_knob(int page, int k) { return play_byte(page, k) >= 0 || ptype(page) == PT_ARP2; }
+static int byte_knob(int page, int k)
+{
+    return play_byte(page, k) >= 0 || ptype(page) == PT_ARP2 || (ptype(page) == PT_CLIMB && k > 0);
+}
 static int byte_value(int page, int k, int *n, char *txt, uint32_t max, const char **name)   /* its value (a choice's
                                                                                                * index) */
 {
@@ -2466,6 +2518,21 @@ static int byte_value(int page, int k, int *n, char *txt, uint32_t max, const ch
             label_text(eng_dir_name(v), txt, max);
         *name = b == 0 ? "Speed" : "Dir";
         return v;
+    }
+    if (ptype(page) == PT_CLIMB) {       /* (0.16.7) CLIMB's options: NOTES (2..16), ON, SHAPE */
+        int t = ptrack(page), o = eng_climb_opt(t, k - 1);
+        char d[8];
+        if (k == 1) {
+            *n = 15;
+            int_text(o, d);
+            text_cat(txt, d, max);
+            *name = "Notes";
+            return o - 2;
+        }
+        *n = k == 2 ? CLON_N : CLSH_N;
+        label_text(k == 2 ? eng_climb_on_name(o) : eng_climb_shape_name(o), txt, max);
+        *name = k == 2 ? "On" : "Shape";
+        return o;
     }
     static const char *const N[4] = {"Stride", "Rest", "Holes", "Leap"};
     int t = ptrack(page), o = eng_endless_opt(t, k);
@@ -2636,7 +2703,13 @@ static void play_turn(int k, int32_t e)  /* a byte knob turned (byte_knob): the 
 {
     project_t *p = eng_project();
     int d = e > 0 ? 1 : -1;
-    if (ptype(ui.page) == PT_ARP2) {     /* Endless' options: a step each (HOLES, LEAP: 2 %, 10 turned fast) */
+    if (ptype(ui.page) == PT_CLIMB) {    /* (0.16.7) CLIMB's options: a step each, the track's (GLO held: the four's) */
+        int t = ptrack(ui.page), o = k - 1, v = eng_climb_opt(t, o) + d;
+        v = o == CL_TIMES ? clamp(v, 2, 16) : clamp(v, 0, (o == CL_ON ? CLON_N : CLSH_N) - 1);
+        for (int m = 0; m < ENG_TRACKS; m++)
+            if (m == t || held(B_GLO))
+                eng_climb_opt_set(p, m, o, v);
+    } else if (ptype(ui.page) == PT_ARP2) {   /* Endless' options: a step each (HOLES, LEAP: 2 %, 10 turned fast) */
         int t = ptrack(ui.page), o = eng_endless_opt(t, k), v;
         if (k == EO_STRIDE)
             v = clamp(o + d, 1, 7);
@@ -3001,7 +3074,7 @@ static int foot_lane(void)               /* the lane whose steps the row shows, 
     int pt = ptype(ui.page);
     if (ui.grid)
         return ui.lane;
-    if (pt == PT_PLAY)
+    if (pt == PT_PLAY || pt == PT_CLIMB)
         return plane(ui.page);
     if (pt == PT_STEP || pt == PT_RND || pt == PT_EUC)
         return eng_page_lane(ui.page) >= 0 ? eng_page_lane(ui.page) : ptrack(ui.page);
@@ -3175,7 +3248,7 @@ static uint32_t hold_ms(int b, char *label, uint32_t max)
         text_cat(l, "ERASE ENDLESS", sizeof l);
         ms = 1000u;
     } else if (b == B_REC && ui.erec < 0 && (ui.grid || pt == PT_STEP || pt == PT_RND || pt == PT_LANE ||
-                                             pt == PT_EUC || pt == PT_PLAY)) {
+                                             pt == PT_EUC || pt == PT_PLAY || pt == PT_CLIMB)) {
         int e = erase_lane();             /* the lane erased: its steps, locks, randoms (a track: its cables); GLO
                                            * held: all of them */
         if (e >= ENG_TRACKS) {
@@ -4738,7 +4811,7 @@ static void module_button(int b)
         break;
     case B_SEQ:                          /* the lane's steps (a track's: then its ratchets, its RANDOM face, its
                                           * Euclidean one) */
-        if (here && (pt == PT_STEP || pt == PT_RND || ((pt == PT_EUC || pt == PT_PLAY) && ptrack(ui.page) >= 0)))
+        if (here && (pt == PT_STEP || pt == PT_RND || pt == PT_CLIMB || ((pt == PT_EUC || pt == PT_PLAY) && ptrack(ui.page) >= 0)))
             go_page(next);
         else
             go_page(PG_STEP(ui.lane));
@@ -4839,6 +4912,8 @@ static void lane_erase(int l)            /* its pattern, its randoms; a track's 
     eng_steps_clear(l);
     p->speed[l] = 0;
     p->dir[l] = DIR_FWD;
+    if (l < ENG_TRACKS)                  /* (0.16.7) CLIMB off, its options as new */
+        p->val[PG_EUC(l) * 4 + 2] = 0.0f, p->endless_opt[l][3] = 0;
     for (int i = 0; i < ENG_NTP; i++)
         p->rnd[l][i] = 0;
     if (l < ENG_TRACKS)
@@ -4931,7 +5006,8 @@ static void button_long(int b)
             dirty = 1;
             app_say("ENDLESS", "CLEARED");
         } else if (ui.erec < 0 && (ui.grid || ptype(ui.page) == PT_STEP || ptype(ui.page) == PT_RND ||
-                                   ptype(ui.page) == PT_LANE || ptype(ui.page) == PT_EUC || ptype(ui.page) == PT_PLAY)) {
+                                   ptype(ui.page) == PT_LANE || ptype(ui.page) == PT_EUC || ptype(ui.page) == PT_PLAY ||
+                                   ptype(ui.page) == PT_CLIMB)) {
             /* the steps: the lane erased (its trigs, locks, randoms; a track's cables), with GLO held all of them
              * and the global cables (the effects' knobs stay) */
             static const char *const FX[3] = {"DELAY STEPS", "REVERB STEPS", "WARPS STEPS"};
@@ -5107,7 +5183,8 @@ static void set_track(int t)             /* the active track: the keys' notes st
  * the sends); an effect: its knobs (or its steps) */
 static void select_lane(int l)
 {
-    int pl = page_lane(ui.page), pt = ptype(ui.page), steps = pt == PT_STEP || pt == PT_RND || pt == PT_LANE || pt == PT_PLAY;
+    int pl = page_lane(ui.page), pt = ptype(ui.page);
+    int steps = pt == PT_STEP || pt == PT_RND || pt == PT_LANE || pt == PT_PLAY || pt == PT_CLIMB;
     ui.held_step = -1;
     if (pt == PT_EUC) {                  /* the Euclidean face: the other lane's */
         if (l < ENG_TRACKS)
@@ -5409,14 +5486,15 @@ static void input(void)
      * TRAUMA;
      * the keys: the steps (the one playing blinks), or held; MOD mode: the LFOs' keys blinking at their rates */
     {
-        static const uint8_t PAGE_BTN[PT_ARP2 + 1] = {
+        static const uint8_t PAGE_BTN[PT_CLIMB + 1] = {
             [PT_PLAITS1] = B_EDIT, [PT_PLAITS2] = B_ENV, [PT_PLAITS3] = B_EDIT, [PT_LFO] = B_LFO,
             [PT_MIX] = B_HOME, [PT_PAN] = B_HOME, [PT_REVERB] = B_FX, [PT_RSEND] = B_FX, [PT_DELAY1] = B_FX,
             [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
             [PT_ARP] = B_ARP, [PT_WARPS1] = B_FX, [PT_WARPS2] = B_FX, [PT_DUCK] = B_HOME, [PT_COMP] = B_HOME,
             [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_BEND] = B_EDIT, [PT_GLITCH] = B_EDIT, [PT_EUC] = B_SEQ, [PT_RND] = B_SEQ,
             [PT_FILT1] = B_EDIT, [PT_FILT2] = B_EDIT, [PT_FILT3] = B_EDIT, [PT_SON2] = B_EDIT, [PT_VFLT1] = B_EDIT,
-            [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO, [PT_PLAY] = B_SEQ, [PT_ARP2] = B_ARP};
+            [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO, [PT_PLAY] = B_SEQ, [PT_ARP2] = B_ARP,
+            [PT_CLIMB] = B_SEQ};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
         uint32_t bb = ui.dice ? 1u << B_OCTDN : ui.trauma ? 1u << B_OCTUP : 0, kk = ui.keys;
         int pt = ptype(ui.page);

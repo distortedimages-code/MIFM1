@@ -142,7 +142,7 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}},
   {{"Clock", K_UNI, 0, 0, 0}, {"Bits", K_UNI, 0, 0, 0}, {"Mask", K_ENUM, 0, BM_N - 1, kBendMasks},
    {"Shape", K_ENUM, 0, BS_N - 1, kBendShapes}},
-  {{"Fills", K_INT, 0, 64, 0}, {"Rotate", K_INT, 0, 63, 0}, {"Length", K_INT, 1, 64, 0}, {"Prob", K_UNI, 0, 0, 0}},
+  {{"Fills", K_INT, 0, 64, 0}, {"Rotate", K_INT, 0, 63, 0}, {"Climb", K_INT, -12, 12, 0}, {"Prob", K_UNI, 0, 0, 0}},
   {{"Cutoff", K_UNI, 0, 0, 0}, {"Reso", K_UNI, 0, 0, 0}, {"Env", K_BIP, 0, 0, 0}, {"Decay", K_UNI, 0, 0, 0}},
   {{"Drive", K_UNI, 0, 0, 0}, {"Ping", K_UNI, 0, 0, 0}, {"FM", K_BIP, 0, 0, 0}, {"Key", K_UNI, 0, 0, 0}},
   {{"Type", K_ENUM, 0, 2, kFiltTypes}, {"Noise", K_UNI, 0, 0, 0}, {"Color", K_BIP, 0, 0, 0}, {"Attack", K_UNI, 0, 0, 0}},
@@ -321,6 +321,10 @@ float rat_pos[ENG_TRACKS], rat_lvl[ENG_TRACKS];
 float rat_t[ENG_TRACKS][17];            // the ratchets' hits: where each starts (samples into the trig), then their end
                                         // (0.16: over one step or several, CURVE drawing them closer or apart)
 int32_t lane_cnt[ENG_LANES];            // (0.16) the steps each lane took since PLAY, at its SPEED (-1: none yet)
+uint8_t climb_cnt[ENG_TRACKS][ENG_STEPS];   // (0.16.7) CLIMB: each step's place in its cycle (its plays since PLAY)
+int8_t climb_off[ENG_TRACKS][ENG_STEPS];    // the transposition it played last (the screen's)
+int climb_t[ENG_TRACKS], climb_amt[ENG_TRACKS], climb_base[ENG_TRACKS];   // the trig climbing: its step (-1: none),
+                                        // its CLIMB (a lock's, a random's), its note before
 int32_t lane_grid[ENG_LANES];           // (0.16.6) its grid's point last seen (the sixteenths since PLAY at its SPEED,
 int8_t lane_spd[ENG_LANES];             // whole), the SPEED it is at: another, a grid anew (0.16..0.16.5 took the
                                         // steps from the grid: back from x2 to x1, the lane waited as long as it had
@@ -1032,6 +1036,48 @@ void ratchet_layout(int t) {
   rat_lvl[t] = tdelta[t][TP_LEVEL];
 }
 
+// (0.16.7) CLIMB: a step's trig a little higher (or lower) each time it plays, CLIMB semitones (SCALE on: its notes)
+// a time, back to its note after TIMES of them (RAMP; BOUNCE: up, then back down; RANDOM: any of them); ON: each play
+// of the trig (its ratchets on its note), each hit of its ratchets (from the trig's note), or both (each hit on from
+// the last, across its plays). Each step its own count, from PLAY
+int climb_by(int n, int d) {            // n moved d of the scale's notes (SCALE off: d semitones), within 0..127
+  uint32_t m = scale_mask(Pi(PG_GLOBAL, 1));
+  if (!m) {
+    n += d;
+  } else {
+    int root = Pi(PG_GLOBAL, 2), s = d > 0 ? 1 : -1;
+    for (int k = 0, g = 0; k != d && g < 400; ++g) {
+      n += s;
+      if ((m >> (((n - root) % 12 + 12) % 12)) & 1u) k += s;
+    }
+  }
+  return n < 0 ? 0 : n > 127 ? 127 : n;
+}
+void climb_play(int t, int hit) {       // a trig climbing (hit 0) or one of its ratchets' hits: its note
+  int st = climb_t[t];
+  if (st < 0) return;
+  int on = eng_climb_opt(t, CL_ON), n = eng_climb_opt(t, CL_TIMES), sh = eng_climb_opt(t, CL_SHAPE), c;
+  int per = sh == CLSH_BOUNCE ? 2 * n - 2 : n;
+  if (on == CLON_RATCH) {
+    c = hit;
+  } else {
+    if (hit > 0 && on == CLON_TRIG) return;
+    c = climb_cnt[t][st] % per;
+    climb_cnt[t][st] = static_cast<uint8_t>((c + 1) % per);
+  }
+  int at = sh == CLSH_RANDOM ? static_cast<int>(rand_u32() % static_cast<uint32_t>(n))
+         : sh == CLSH_BOUNCE ? (c % per < n ? c % per : per - c % per) : c % n;
+  int off = climb_amt[t] * at;
+  climb_off[t][st] = static_cast<int8_t>(off < -127 ? -127 : off > 127 ? 127 : off);
+  tnote[t] = static_cast<float>(climb_by(climb_base[t], off));
+}
+void climb_fresh() {                    // (PLAY, another pattern: each step from its note)
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    climb_t[t] = -1;
+    for (int i = 0; i < ENG_STEPS; ++i) climb_cnt[t][i] = 0, climb_off[t][i] = 0;
+  }
+}
+
 // the trigs of one block, frame by frame: fg (the gates) and fnote (the notes) for the voices; the effects' trigs
 void sequence(uint32_t n) {
   float fl = static_cast<float>(n / kFrames);
@@ -1041,6 +1087,7 @@ void sequence(uint32_t n) {
     step_clk = 1e9f;                    // the first sixteenth at once
     tick = -1;
     for (int l = 0; l < ENG_LANES; ++l) lane_cnt[l] = lane_grid[l] = -1, lane_spd[l] = static_cast<int8_t>(lane_speed(l));
+    climb_fresh();
     pad_pos = -1;                       // (PADS: its first trig its first chord)
     for (int t = 0; t < ENG_TRACKS; ++t) {
       e_clk[t] = 1e9f;
@@ -1163,7 +1210,20 @@ void sequence(uint32_t n) {
         tnote[t] = static_cast<float>(quantize(iround(48.0f + 12.0f * static_cast<float>(iround(E(t, TP_OCTAVE))) +
                                                       static_cast<float>(iround(E(t, TP_TRANSPOSE))) +
                                                       E(t, TP_NOTE)) + fdn[t]));
+        climb_t[t] = -1;                // CLIMB (0.16.7): a trig that plays, its step's count
+        int ca = iround(E(t, TP_CLIMB)), cs = cur_step[t];
+        if (cs >= 0 && cs < ENG_STEPS) {
+          if (ca && rat_on[t]) {
+            climb_t[t] = cs;
+            climb_amt[t] = ca;
+            climb_base[t] = iround(tnote[t]);
+            climb_play(t, 0);
+          } else if (!ca) {
+            climb_off[t][cs] = 0;
+          }
+        }
       } else if (rise) {                // Endless' note: its randoms, no locks
+        climb_t[t] = -1;
         new_trig(t, e_pos[t], 0);
         {                               // (Endless: its ratchets over its own step)
           float keep = lane_sl[t];
@@ -1189,8 +1249,9 @@ void sequence(uint32_t n) {
       } else {                          // the ratchets: n gates over their span (ratchet_layout), each half its gap
         int i = rat_i[t] < 0 ? 0 : rat_i[t], n = rat_n[t] > 16 ? 16 : rat_n[t];
         while (i < n && rat_pos[t] >= rat_t[t][i + 1]) ++i;
-        if (i != rat_i[t]) {            // a hit: CURVE to the right, each softer (a bounce's)
+        if (i != rat_i[t]) {            // a hit: CURVE to the right, each softer (a bounce's); CLIMB's (0.16.7)
           rat_i[t] = i;
+          if (i > 0 && i < n) climb_play(t, i);
           float c = E(t, TP_CURVE);
           if (c > 0.0f && n > 1) tdelta[t][TP_LEVEL] = rat_lvl[t] - 0.35f * c * static_cast<float>(i) / static_cast<float>(n - 1);
         }
@@ -2273,6 +2334,28 @@ void eng_endless_opt_set(project_t* p, int t, int o, int v) {
   else if (o == EO_HOLES || o == EO_LEAP) b[o == EO_HOLES ? 1 : 2] = static_cast<uint8_t>(v < 0 ? 0 : v > 100 ? 100 : v);
 }
 
+// (0.16.7) CLIMB's options, in Endless' options' spare byte (engine.h)
+const char* const kClimbOn[CLON_N] = {"Trig", "Ratch", "Both"};
+const char* const kClimbShape[CLSH_N] = {"Ramp", "Bounce", "Random"};
+int eng_climb_opt(int t, int o) {
+  if (t < 0 || t >= ENG_TRACKS) return 0;
+  unsigned b = proj.endless_opt[t][3];
+  if (o == CL_TIMES) return (b & 15u) ? static_cast<int>(b & 15u) + 1 : 4;
+  if (o == CL_ON) { int v = static_cast<int>((b >> 4) & 3u); return v >= CLON_N ? CLON_TRIG : v; }
+  if (o == CL_SHAPE) { int v = static_cast<int>(b >> 6); return v >= CLSH_N ? CLSH_RAMP : v; }
+  return 0;
+}
+void eng_climb_opt_set(project_t* p, int t, int o, int v) {
+  if (t < 0 || t >= ENG_TRACKS) return;
+  unsigned b = p->endless_opt[t][3];
+  if (o == CL_TIMES) b = (b & ~15u) | static_cast<unsigned>((v < 2 ? 2 : v > 16 ? 16 : v) - 1);
+  else if (o == CL_ON) b = (b & ~0x30u) | static_cast<unsigned>(v < 0 ? 0 : v >= CLON_N ? CLON_N - 1 : v) << 4;
+  else if (o == CL_SHAPE) b = (b & 0x3Fu) | static_cast<unsigned>(v < 0 ? 0 : v >= CLSH_N ? CLSH_N - 1 : v) << 6;
+  p->endless_opt[t][3] = static_cast<uint8_t>(b);
+}
+const char* eng_climb_on_name(int v) { return kClimbOn[v < 0 || v >= CLON_N ? 0 : v]; }
+const char* eng_climb_shape_name(int v) { return kClimbShape[v < 0 || v >= CLSH_N ? 0 : v]; }
+
 const char* eng_speed_name(int s) { return kSpeedNames[(s + 4) < 0 ? 0 : (s + 4) >= ENG_SPEEDS ? ENG_SPEEDS - 1 : s + 4]; }
 const char* eng_dir_name(int d) { return kDirNames[d < 0 || d >= DIR_N ? 0 : d]; }
 int eng_ratch_hits(int r, int* span) {
@@ -2306,6 +2389,7 @@ int eng_track_param(int lane, int tp) {
   if (tp == TP_DUCK) return PG_DUCK * 4 + lane;   // (T1's: the duck's DECAY, not a parameter of T1's: not lockable)
   if (tp == TP_EQ) return PG_EQ * 4 + lane;
   if (tp == TP_CURVE) return PG_CURVE * 4 + lane;
+  if (tp == TP_CLIMB) return PG_EUC(lane) * 4 + 2;
   if (tp >= TP_GLITCH) return PG_GLITCH(lane) * 4 + (tp - TP_GLITCH);
   if (tp >= TP_CUTOFF) return PG_FILT(lane, (tp - TP_CUTOFF) / 4) * 4 + (tp - TP_CUTOFF) % 4;
   if (tp >= TP_CLOCK) return PG_BEND(lane) * 4 + (tp - TP_CLOCK);
@@ -2343,6 +2427,9 @@ int eng_param_tp(int param, int* lane) {
   } else if (page == PG_CURVE) {
     l = k;
     tp = TP_CURVE;
+  } else if (page >= PG_EUC(0) && page < PG_EUC(ENG_TRACKS) && k == 2) {
+    l = page - PG_EUC(0);
+    tp = TP_CLIMB;
   } else if (page >= PG_BEND(0) && page < PG_BEND(ENG_TRACKS)) {
     l = page - PG_BEND(0);
     tp = TP_CLOCK + k;
@@ -2692,6 +2779,16 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
   } else if (pt == PT_STEP && k == 2) {   // RATCH: its hits (0.16.4: SPAN, the steps they take, on the PLAY face)
     put(b, n, "x");
     put_num(b + 1, n - 1, eng_ratch_hits(iround(v), 0), 0, 0);
+  } else if (pt == PT_EUC && k == 2) {   // CLIMB (0.16.7): semitones, or (SCALE on) the scale's notes
+    int32_t c = static_cast<int32_t>(v + (v < 0 ? -0.5f : 0.5f));
+    if (!c) {
+      put(b, n, "Off");
+    } else {
+      put_num(b, n, c, 0, 1);
+      int l = 0;
+      while (b[l]) ++l;
+      put(b + l, n - l, scale_on() ? " degrees" : " semitones");   // (the knob: the number in its ring)
+    }
   } else if (d->kind == K_INT) {
     put_num(b, n, static_cast<int32_t>(v + (v < 0 ? -0.5f : 0.5f)), 0, d->lo < 0);
   } else if (pt == PT_PAN) {
@@ -3291,6 +3388,16 @@ int eng_check(const project_t* p) {
 
 namespace {
 
+// the locks a project had before 0.16.7: 384 (now 380); the used ones read in order into the ones there are now (more
+// than 380 used: the last left out)
+const int kOldLocks = 384;
+MI_COLD void locks_from(project_t* p, const plock_t* o) {
+  int j = 0;
+  for (int i = 0; i < kOldLocks && j < ENG_PLOCKS; ++i)
+    if (o[i].lane != 0xFF) p->lock[j++] = o[i];
+  for (; j < ENG_PLOCKS; ++j) p->lock[j].lane = 0xFF, p->lock[j].step = 0, p->lock[j].tp = 0, p->lock[j].v = 0;
+}
+
 // 0.1.4's to 0.2's projects (versions 4 and 5, 33 and 35 pages): with Marbles, three effects fewer
 struct lock_v5 {
   uint8_t ts;                           // track << 6 | step
@@ -3309,7 +3416,7 @@ struct project_old {
   uint8_t trig[ENG_TRACKS][ENG_STEPS / 8];
   int8_t rnd[ENG_TRACKS][18];
   uint16_t seed[ENG_TRACKS];
-  lock_v5 lock[ENG_PLOCKS];
+  lock_v5 lock[kOldLocks];
   uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
   uint8_t endless_len[ENG_TRACKS];
   int8_t endless_key[ENG_TRACKS];
@@ -3327,7 +3434,7 @@ struct project_v6 {
   uint8_t trig[ENG_LANES][ENG_STEPS / 8];
   int8_t rnd[ENG_LANES][19];
   uint16_t seed[ENG_LANES];
-  plock_t lock[ENG_PLOCKS];
+  plock_t lock[kOldLocks];
   uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
   uint8_t endless_len[ENG_TRACKS];
   int8_t endless_key[ENG_TRACKS];
@@ -3344,7 +3451,7 @@ struct project_v8 {
   uint8_t trig[ENG_LANES][ENG_STEPS / 8];
   int8_t rnd[ENG_LANES][21];
   uint16_t seed[ENG_LANES];
-  plock_t lock[ENG_PLOCKS];
+  plock_t lock[kOldLocks];
   uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
   uint8_t endless_len[ENG_TRACKS];
   int8_t endless_key[ENG_TRACKS];
@@ -3361,7 +3468,7 @@ struct project_v7 {
   uint8_t trig[ENG_LANES][ENG_STEPS / 8];
   int8_t rnd[ENG_LANES][20];
   uint16_t seed[ENG_LANES];
-  plock_t lock[ENG_PLOCKS];
+  plock_t lock[kOldLocks];
   uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
   uint8_t endless_len[ENG_TRACKS];
   int8_t endless_key[ENG_TRACKS];
@@ -3378,7 +3485,7 @@ struct project_v9 {
   uint8_t trig[ENG_LANES][ENG_STEPS / 8];
   int8_t rnd[ENG_LANES][25];
   uint16_t seed[ENG_LANES];
-  plock_t lock[ENG_PLOCKS];
+  plock_t lock[kOldLocks];
   uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
   uint8_t endless_len[ENG_TRACKS];
   int8_t endless_key[ENG_TRACKS];
@@ -3395,7 +3502,7 @@ struct project_v12 {
   uint8_t trig[ENG_LANES][ENG_STEPS / 8];
   int8_t rnd[ENG_LANES][25];
   uint16_t seed[ENG_LANES];
-  plock_t lock[ENG_PLOCKS];
+  plock_t lock[kOldLocks];
   uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
   uint8_t endless_len[ENG_TRACKS];
   int8_t endless_key[ENG_TRACKS];
@@ -3424,7 +3531,7 @@ void upgrade_v12(project_t* p, const project_v12& o) {   // its pages and lane p
     }
     p->seed[l] = o.seed[l];
   }
-  for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i] = o.lock[i];
+  locks_from(p, o.lock);
   for (int t = 0; t < ENG_TRACKS; ++t) {
     for (int i = 0; i < ENG_ENDLESS; ++i) p->endless[t][i] = o.endless[t][i];
     p->endless_len[t] = o.endless_len[t];
@@ -3444,7 +3551,7 @@ struct project_v13 {
   uint8_t trig[ENG_LANES][ENG_STEPS / 8];
   int8_t rnd[ENG_LANES][33];
   uint16_t seed[ENG_LANES];
-  plock_t lock[ENG_PLOCKS];
+  plock_t lock[kOldLocks];
   uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
   uint8_t endless_len[ENG_TRACKS];
   int8_t endless_key[ENG_TRACKS];
@@ -3489,7 +3596,7 @@ void upgrade_v13(project_t* p, const project_v13& o) {
     }
     p->seed[l] = o.seed[l];
   }
-  for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i] = o.lock[i];
+  locks_from(p, o.lock);
   for (int t = 0; t < ENG_TRACKS; ++t) {
     for (int i = 0; i < ENG_ENDLESS; ++i) p->endless[t][i] = o.endless[t][i];
     p->endless_len[t] = o.endless_len[t];
@@ -3509,7 +3616,7 @@ struct project_v14 {
   uint8_t trig[ENG_LANES][ENG_STEPS / 8];
   int8_t rnd[ENG_LANES][37];
   uint16_t seed[ENG_LANES];
-  plock_t lock[ENG_PLOCKS];
+  plock_t lock[kOldLocks];
   uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
   uint8_t endless_len[ENG_TRACKS];
   int8_t endless_key[ENG_TRACKS];
@@ -3537,7 +3644,7 @@ void upgrade_v14(project_t* p, const project_v14& o) {
     }
     p->seed[l] = o.seed[l];
   }
-  for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i] = o.lock[i];
+  locks_from(p, o.lock);
   for (int t = 0; t < ENG_TRACKS; ++t) {
     for (int i = 0; i < ENG_ENDLESS; ++i) p->endless[t][i] = o.endless[t][i];
     p->endless_len[t] = o.endless_len[t];
@@ -3578,7 +3685,7 @@ MI_COLD void upgrade_78(project_t* p, const P& o) {
     for (int i = 0; i < NTP; ++i) p->rnd[l][i] = o.rnd[l][i];
     p->seed[l] = o.seed[l];
   }
-  for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i] = o.lock[i];
+  locks_from(p, o.lock);
   for (int t = 0; t < ENG_TRACKS; ++t) {
     for (int i = 0; i < ENG_ENDLESS; ++i) p->endless[t][i] = o.endless[t][i];
     p->endless_len[t] = o.endless_len[t];
@@ -3598,7 +3705,7 @@ MI_COLD void upgrade_v6(project_t* p, const project_v6& o) {
     for (int i = 0; i < 19; ++i) p->rnd[l][i] = o.rnd[l][i];
     p->seed[l] = o.seed[l];
   }
-  for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i] = o.lock[i];
+  locks_from(p, o.lock);
   for (int t = 0; t < ENG_TRACKS; ++t) {
     for (int i = 0; i < ENG_ENDLESS; ++i) p->endless[t][i] = o.endless[t][i];
     p->endless_len[t] = o.endless_len[t];
@@ -3707,7 +3814,7 @@ MI_COLD void upgrade_from(project_t* p, const project_old<NP>& o) {
     p->endless_key[t] = o.endless_key[t];
   }
   int j = 0;
-  for (int i = 0; i < ENG_PLOCKS; ++i) {
+  for (int i = 0; i < kOldLocks && j < ENG_PLOCKS; ++i) {
     const lock_v5& l = o.lock[i];
     if (l.tp >= 18 || l.tp == 8 || l.tp == 9) continue;
     p->lock[j].lane = static_cast<uint8_t>(l.ts >> 6);
@@ -3832,8 +3939,6 @@ void shapes_from_move(project_t* p) {
   }
 }
 
-static_assert(offsetof(project_t, endless_opt) <= PROJECT_SIZE_24 && offsetof(project_t, endless_opt) + 4u > PROJECT_SIZE_24,
-              "0.16.0's project: this one's, Endless' options from its padding on");
 static_assert(sizeof(project_t) <= 3824u, "a project in one record of the patterns' store (pat_store.h: a sector's 0xF00 "
                                           "bytes, its header and the record's), in one object of the platform's store");
 // 0.7's to 0.15's projects (versions 15 to 23): 41 parameters a lane (no CURVE), no speeds or directions; TRAUMA in
@@ -3848,7 +3953,7 @@ struct project_v23 {
   uint8_t trig[ENG_LANES][ENG_STEPS / 8];
   int8_t rnd[ENG_LANES][41];
   uint16_t seed[ENG_LANES];
-  plock_t lock[ENG_PLOCKS];
+  plock_t lock[kOldLocks];
   uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
   uint8_t endless_len[ENG_TRACKS];
   int8_t endless_key[ENG_TRACKS];
@@ -3859,6 +3964,32 @@ static_assert(sizeof(project_v23) == PROJECT_SIZE_22 && offsetof(project_v23, tr
               "0.7's to 0.15's layout");
 static_assert(TP_CURVE == 41, "CURVE after the 41 parameters 0.15's lanes had");
 // the old layouts read in place of the live one (one at a time, the main loop's: a project read)
+// 0.16.0's to 0.16.6's (versions 24 to 26; 24 without Endless' options, its bytes 0): 42 parameters a lane, 384 locks
+struct project_v26 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[ENG_NPARAMS];
+  uint8_t algo[ENG_NPAGES];
+  uint8_t out_mode, warps_hq, theme, dice, dice_seed;
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+  int8_t rnd[ENG_LANES][42];
+  uint16_t seed[ENG_LANES];
+  plock_t lock[kOldLocks];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+  uint8_t rseed[ENG_LANES][42];
+  uint8_t trauma;
+  int8_t speed[ENG_LANES];
+  uint8_t dir[ENG_LANES];
+  uint8_t endless_opt[ENG_TRACKS][4];
+};
+static_assert(sizeof(project_v26) == PROJECT_SIZE_26 && offsetof(project_v26, endless_opt) <= PROJECT_SIZE_24 &&
+              offsetof(project_v26, endless_opt) + 4u > PROJECT_SIZE_24,
+              "0.16.0's to 0.16.6's layout (0.16.0's: Endless' options from its padding on)");
+static_assert(TP_CLIMB == 42 && sizeof(project_t) >= PROJECT_SIZE_26, "CLIMB after the 42 parameters 0.16.6's lanes "
+              "had; a project's buffer holds an older one");
 union UpgBuf {
   project_old<33> v4;
   project_old<35> v5;
@@ -3870,6 +4001,7 @@ union UpgBuf {
   project_v13 v13;
   project_v14 v14;
   project_v23 v23;
+  project_v26 v26;
 };
 UpgBuf upg PLAT_POOL;                    // (0.16.1: in the pool, out of the RAM the screen and the engine share)
 MI_COLD void upgrade_v23(project_t* p, const project_v23& o) {
@@ -3890,13 +4022,45 @@ MI_COLD void upgrade_v23(project_t* p, const project_v23& o) {
     for (int i = 0; i < 41; ++i) p->rnd[l][i] = o.rnd[l][i], p->rseed[l][i] = o.rseed[l][i];
     p->seed[l] = o.seed[l];
   }
-  for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i] = o.lock[i];
+  locks_from(p, o.lock);
   for (int t = 0; t < ENG_TRACKS; ++t) {
     for (int i = 0; i < ENG_ENDLESS; ++i) p->endless[t][i] = o.endless[t][i];
     p->endless_len[t] = o.endless_len[t];
     p->endless_key[t] = o.endless_key[t];
   }
   p->trauma = o.trauma;
+}
+MI_COLD void upgrade_v26(project_t* p, const project_v26& o) {   // (CLIMB off: its parameter 0, its options 0)
+  uint8_t* raw = reinterpret_cast<uint8_t*>(p);
+  for (uint32_t i = 0; i < sizeof(project_t); ++i) raw[i] = 0;
+  p->magic = PROJECT_MAGIC;
+  p->version = PROJECT_VERSION;
+  p->size = sizeof(project_t);
+  for (int i = 0; i < ENG_NPARAMS; ++i) p->val[i] = o.val[i];
+  for (int i = 0; i < ENG_NPAGES; ++i) p->algo[i] = o.algo[i];
+  p->out_mode = o.out_mode, p->warps_hq = o.warps_hq, p->theme = o.theme, p->dice = o.dice;
+  p->dice_seed = o.dice_seed;
+  for (int g = 0; g <= ENG_TRACKS; ++g)
+    for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c] = o.cable[g][c];
+  for (int l = 0; l < ENG_LANES; ++l) {
+    for (int b = 0; b < ENG_STEPS / 8; ++b) p->trig[l][b] = o.trig[l][b];
+    for (int i = 0; i < 42; ++i) p->rnd[l][i] = o.rnd[l][i], p->rseed[l][i] = o.rseed[l][i];
+    p->seed[l] = o.seed[l];
+    p->speed[l] = o.speed[l];
+    p->dir[l] = o.dir[l];
+  }
+  locks_from(p, o.lock);
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    for (int i = 0; i < ENG_ENDLESS; ++i) p->endless[t][i] = o.endless[t][i];
+    p->endless_len[t] = o.endless_len[t];
+    p->endless_key[t] = o.endless_key[t];
+    for (int i = 0; i < 3; ++i) p->endless_opt[t][i] = o.endless_opt[t][i];
+  }
+  p->trauma = o.trauma;
+}
+MI_COLD void climb_off_all(project_t* p) {   // (a project before 0.16.7: CLIMB where nothing was, 0)
+  for (int l = 0; l < ENG_LANES; ++l) p->val[PG_EUC(l) * 4 + 2] = p->val[PG_EUC(l) * 4 + 3] = 0.0f;
+  for (int t = 0; t < ENG_TRACKS; ++t) p->endless_opt[t][3] = 0;
 }
 // RATCH's travel: 1..8 before 0.16, 1..8 then eight tuplets (9..16) in 0.16.0 to 0.16.3, hits over a span (1..256)
 // since 0.16.4: a project before, its knobs and its locks as they were (a lock is a share of the travel; old_max: 8 or
@@ -3919,20 +4083,23 @@ MI_COLD void ratch_widened(project_t* p, int old_max) {
   }
 }
 int upgrade_before_16(project_t* p, int bytes);
-MI_COLD int eng_upgrade(project_t* p, int bytes) {
+int upgrade_any(project_t* p, int bytes);
+MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them, sizeof(project_t) >= the largest)
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
+  if (!upgrade_any(p, bytes)) return 0;
+  climb_off_all(p);
+  return 1;
+}
+MI_COLD int upgrade_any(project_t* p, int bytes) {
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
-  if (v == 25 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
-    p->version = PROJECT_VERSION;        // (0.16.2, 0.16.3: this one's, RATCH's tuplets)
-    ratch_widened(p, 16);
-    return 1;
-  }
-  if (v == 24 && bytes == static_cast<int>(PROJECT_SIZE_24) && p->size == PROJECT_SIZE_24) {
-    uint8_t* raw = reinterpret_cast<uint8_t*>(p);   // (0.16.0, 0.16.1: this one's layout, without Endless' options)
-    for (uint32_t i = offsetof(project_t, endless_opt); i < sizeof(project_t); ++i) raw[i] = 0;
-    p->version = PROJECT_VERSION;
-    p->size = sizeof(project_t);
-    ratch_widened(p, 16);
+  if (v >= 24 && v <= 26 && bytes == static_cast<int>(v == 24 ? PROJECT_SIZE_24 : PROJECT_SIZE_26) &&
+      p->size == (v == 24 ? PROJECT_SIZE_24 : PROJECT_SIZE_26)) {
+    const uint8_t* from = reinterpret_cast<const uint8_t*>(p);   // (0.16.0 to 0.16.6: their layout widened; 0.16.0's
+    uint8_t* to = reinterpret_cast<uint8_t*>(&upg.v26);          // and 0.16.1's without Endless' options, 0)
+    uint32_t keep = v == 24 ? offsetof(project_v26, endless_opt) : sizeof(project_v26);
+    for (uint32_t i = 0; i < sizeof(project_v26); ++i) to[i] = i < keep ? from[i] : 0;
+    upgrade_v26(p, upg.v26);
+    if (v <= 25) ratch_widened(p, 16);   // (0.16.0 to 0.16.3: RATCH's tuplets)
     return 1;
   }
   if (v >= 15 && v <= 23 && bytes == static_cast<int>(PROJECT_SIZE_22) && p->size == PROJECT_SIZE_22) {
@@ -4006,6 +4173,7 @@ MI_COLD int eng_init(void) {
   mf_init();                            // (the tracks' filters: their own static state)
   make_mu();                            // (the glitch's slices)
   for (int t = 0; t < ENG_TRACKS; ++t) gl_at[t] = -1;
+  climb_fresh();
   need = 4u * ((mp_size() + 7u) & ~7u) + ((mrv_size() + 7u) & ~7u) +
          ((mw_size() + 7u) & ~7u) + ((mdl_size() + 7u) & ~7u) + ((mms_size() + 7u) & ~7u) + ENG_TRACKS * kGlBytes;
   if (need > sizeof(arena)) return -1;
@@ -4256,6 +4424,7 @@ void eng_render(float* l, float* r, uint32_t n) {
         cue_p = 0;
         tick = -1;                      // (its next sixteenth its first step)
         for (int l = 0; l < ENG_LANES; ++l) lane_cnt[l] = lane_grid[l] = -1, lane_spd[l] = static_cast<int8_t>(lane_speed(l));
+        climb_fresh();
         pat_end_seen = -2;
       }
     }
@@ -4718,6 +4887,9 @@ void eng_endless_key(int t, int note) {   // from its first note
     }
 }
 int eng_endless_pos(int t) { return eng_endless_on(t) && playing ? e_pos[t] : -1; }
+int eng_climb_now(int t, int step) {
+  return t >= 0 && t < ENG_TRACKS && step >= 0 && step < ENG_STEPS && playing ? climb_off[t][step] : 0;
+}
 int eng_endless_state(int t) { return t >= 0 && t < ENG_TRACKS && eng_endless_on(t) && playing ? e_state[t] : ES_NOTE; }
 
 }  // extern "C"
