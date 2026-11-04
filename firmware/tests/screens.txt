@@ -3,7 +3,7 @@
 # Warps, their steps), a cable made in MOD mode (hold an LFO's key, turn a knob), the random dose (OCT- held,
 # SELECT: its own screen, its fills), TRAUMA (OCT+ held, SELECT: its screen, 20, 50, 100 %, back to 0), the matrix, every cable erased (REC and SEL held), the global page (the machine: Warps HQ, another theme), STEP mode (REC: a step held and locked, the lanes on
 # the black keys, the delay's lane and a lock on its time, the pages on OCT- OCT+), the RANDOM page, ENV held, GLO
-# held: ALL, Endless (recorded, played,
+# held: ALL, Endless (recorded, played, its options: STRIDE, REST, HOLES, LEAP,
 # transposed by a key), Warps (off, patched, its algorithms, its oscillator, the frequency shifter), a save kept across
 # a power-off and in a backup, the patterns (SEQ held) and the presets (EDIT held: a factory sound, one saved, one
 # erased, the dark pad on another track), a new project (INIT: GLO, SELECT, REC held), the saved one back, the stress test (on
@@ -422,6 +422,21 @@ wait 100
 key 5 up
 wait 1500
 shot 16x_endless_key.png
+tap ARP
+wait 400
+shot 16x2_endless_options.png
+turn K1 1
+turn K2 4
+turn K3 10
+turn K4 5
+wait 1500
+shot 16x3_endless_stride_rest.png
+turn K1 -1
+turn K2 -4
+turn K3 -10
+turn K4 -5
+tap ARP
+wait 300
 tap FX
 wait 300
 shot 16y_fx_back.png

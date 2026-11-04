@@ -3607,6 +3607,71 @@ int main(int argc, char** argv) {
     eng_fresh();
   }
 
+  {                                     // 54. Endless' options (0.16.2): STRIDE (one note in so many), REST (a rest
+    // every so many steps, the notes waiting), HOLES (rests at random), LEAP (an octave up at random); a 0.16.0 project
+    // read, its options none
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    auto play = [&](int stride, int rest, int holes, int leap, int len, int* got) {   // the notes of 10 steps (-1 a rest)
+      eng_blank(p);
+      eng_fresh();
+      eng_set_model(0, eng_model_find(MK_FM, 0));
+      p->val[PG_GLOBAL * 4 + 0] = 0.60206f;   // (120 BPM)
+      p->val[PG_GLOBAL * 4 + 1] = 0.0f;       // (SCALE Off: the notes as recorded, a semitone apart)
+      for (int i = 0; i < len; ++i) p->endless[0][i] = static_cast<uint8_t>(60 + i);
+      p->endless_len[0] = static_cast<uint8_t>(len);
+      p->val[PG_ARP(0) * 4 + 0] = 2.0f;       // (sixteenths)
+      eng_endless_opt_set(p, 0, EO_STRIDE, stride);
+      eng_endless_opt_set(p, 0, EO_REST, rest);
+      eng_endless_opt_set(p, 0, EO_HOLES, holes);
+      eng_endless_opt_set(p, 0, EO_LEAP, leap);
+      eng_play(1);
+      int k = 0;
+      for (int b = 0; b < 10 * 43 + 20 && k < 10; ++b) {
+        eng_render(l, r, 128);
+        if (b % 43 == 10) got[k++] = (eng_gates() & 1u) ? eng_note(0) - 48 - 12 : -1;   // (C3 +12: the Endless note's)
+      }
+      eng_play(0);
+    };
+    int a[10], b2[10], c[10], d[10], e[10];
+    play(2, 0, 0, 0, 5, a);             // 0 2 4 1 3 0 2 4 1 3
+    play(1, 3, 0, 0, 4, b2);            // 0 1 - 2 3 - 0 1 - 2
+    play(1, 0, 100, 0, 4, c);           // all rests
+    play(1, 0, 0, 100, 4, d);           // each an octave up
+    play(1, 0, 0, 0, 4, e);             // as before: 0 1 2 3 0 1 ...
+    const int kA[10] = {0, 2, 4, 1, 3, 0, 2, 4, 1, 3}, kB[10] = {0, 1, -1, 2, 3, -1, 0, 1, -1, 2};
+    int ok = 1, rests = 1, leaps = 1, plain = 1;
+    for (int i = 0; i < 10; ++i) {
+      ok &= a[i] == kA[i] + 0 && b2[i] == kB[i];
+      rests &= c[i] == -1;
+      leaps &= d[i] == i % 4 + 12;
+      plain &= e[i] == i % 4;
+    }
+    // a 0.16.0 project (version 24, 3804 bytes): read, Endless' options none (its padding byte left alone)
+    static project_t q;
+    eng_defaults(&q);
+    q.version = 24;
+    q.size = PROJECT_SIZE_24;
+    memset(q.endless_opt, 0xA5, sizeof q.endless_opt);
+    int up = eng_upgrade(&q, PROJECT_SIZE_24) && eng_check(&q);
+    for (int t = 0; t < ENG_TRACKS; ++t)
+      for (int i = 0; i < 4; ++i) up &= q.endless_opt[t][i] == 0;
+    printf("Endless' options: STRIDE 2 over 5 %d %d %d %d %d %d; REST 3 %d %d %d %d %d %d; HOLES 100 %s; LEAP 100 %s; "
+           "none: as before %s; a 0.16.0 project %s\n", a[0], a[1], a[2], a[3], a[4], a[5], b2[0], b2[1], b2[2], b2[3],
+           b2[4], b2[5], rests ? "all rests" : "WRONG", leaps ? "an octave up" : "WRONG", plain ? "ok" : "WRONG",
+           up ? "read" : "WRONG");
+    if (!ok || !rests || !leaps || !plain || !up) {
+      printf("  plain:");
+      for (int i = 0; i < 10; ++i) printf(" %d", e[i]);
+      printf("  leap:");
+      for (int i = 0; i < 10; ++i) printf(" %d", d[i]);
+      printf("\n");
+      ++failures, printf("FAIL: Endless' options\n");
+    }
+    eng_defaults(p);
+    eng_fresh();
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

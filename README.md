@@ -502,7 +502,7 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **EDIT** | **tapé** : les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son ; **tenu : les presets** de la piste (touches noires : la banque, A celle d'usine ; blanches : le son, posé sur la piste et joué ; SAVE tenu : l'y garde ; REC tenu : l'efface) |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
 | **SEQ** | tapé : les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM, puis EUCLID, puis PLAY : SPEED, DIR, CURVE) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns** (touches noires : la banque, blanches : le pattern, plusieurs : un enchaînement ; REC tenu : efface) |
-| **ARP** | Endless, celui de la piste (voir plus bas) |
+| **ARP** | Endless, celui de la piste (voir plus bas) ; à nouveau : ses options (STRIDE, REST, HOLES, LEAP) |
 | **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leurs filtres (EQ), le DUCK, puis le bus master (COMP, OTT) ; ALGORITHM sur COMP ou OTT : le mode du bus (OFF, COMP, OTT) |
 | **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps ; SELECT parcourt leurs faces (leurs potards, les envois des pistes, leurs pas) |
 | **ENV** | tout ce qui est enveloppe sur la piste active : l'enveloppe de Plaits (DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV) ; ENV encore (ou SELECT) : P.ENV et l'enveloppe du filtre (F.ATK, F.DECAY, PING) |
@@ -771,7 +771,11 @@ nouveau : la piste joue ces notes en boucle sur le tempo, à la place de ses pas
 touche transpose** la boucle depuis sa première note (la transposition reste). Ses potards : RATE (1/32 à 1/4, avec
 les triolets), GATE (la longueur des notes), DIRECTION (avant, arrière, aller-retour, au hasard), TRANSPOSE. **REC
 tenu** efface la boucle (la piste retrouve ses pas). Probabilité, ratchets, aléatoire et quantiseur s'appliquent aussi
-à ses notes. En bas, ses notes en barres, la note jouée en blanc.
+à ses notes. En bas, ses notes en barres, la note jouée en blanc. **Sa deuxième face** (0.16.2 ; ARP à nouveau, ou
+SELECT) choisit ce qui joue : **STRIDE**, une note sur combien (ALL : toutes ; 1/2 : une sur deux, les autres sautées ;
+sur une boucle de longueur impaire, la suite finit par les passer toutes, dans un autre ordre), **REST**, un silence
+tous les combien de pas (1/5 : quatre notes puis un silence ; la boucle reprend où elle en était), **HOLES**, des
+silences au hasard (0 à 100 %), **LEAP**, des notes une octave plus haut au hasard. GLO tenu : sur les quatre pistes.
 
 **Warps** (FX, troisième effet) : le module de modulation croisée de Mutable, entre deux pistes. Sa première page
 suffit pour jouer : **CARRIER**, la porteuse (Off : Warps éteint ; une piste T1-T4 ; ou son oscillateur interne,

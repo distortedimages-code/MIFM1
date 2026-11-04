@@ -356,6 +356,7 @@ int fx_hit[kFx];
 // Endless: its clock, the note playing, ping-pong's way, recording
 float e_clk[ENG_TRACKS];
 int e_pos[ENG_TRACKS], e_dir[ENG_TRACKS], e_note[ENG_TRACKS];
+int32_t e_cnt[ENG_TRACKS];              // (0.16.2) Endless' steps since PLAY (its REST counts them)
 volatile int e_rec[ENG_TRACKS];
 
 // the voices' blocks, two: the voices play this one (vbuf) while the mix takes the last one (mbuf), a block behind
@@ -1031,6 +1032,7 @@ void sequence(uint32_t n) {
       e_clk[t] = 1e9f;
       e_pos[t] = -1;
       e_dir[t] = 1;
+      e_cnt[t] = 0;
     }
   }
   pad_track = -1;                       // PADS: its track (the first holding it), its chord as the knobs have it now
@@ -1087,20 +1089,35 @@ void sequence(uint32_t n) {
       int t = pad_track < 0 ? oi : oi == 0 ? pad_track : oi <= pad_track ? oi - 1 : oi;
       int raw, g, rise = 0;
       if (endless[t] && playing && (e_clk[t] += fl) >= el[t]) {   // Endless: its next note (or rest)
-        int len = proj.endless_len[t], d = Pi(PG_ARP(t), 2);
+        int len = proj.endless_len[t], d = Pi(PG_ARP(t), 2), sd = eng_endless_opt(t, EO_STRIDE);
+        int rn = eng_endless_opt(t, EO_REST), pause = rn >= 2 && e_cnt[t] % rn == rn - 1;
         e_clk[t] = e_clk[t] >= 2.0f * el[t] ? 0.0f : e_clk[t] - el[t];
-        if (d == 1) {
-          e_pos[t] = e_pos[t] <= 0 ? len - 1 : e_pos[t] - 1;
+        ++e_cnt[t];
+        if (pause) {                    // (0.16.2) REST: a rest every so many steps, the notes waiting for it
+        } else if (d == 1) {            // STRIDE: so many notes on at a time (1: each)
+          e_pos[t] = e_pos[t] < 0 ? len - 1 : ((e_pos[t] - sd) % len + len) % len;
         } else if (d == 2) {
-          e_pos[t] += e_dir[t];
-          if (e_pos[t] >= len) e_dir[t] = -1, e_pos[t] = len > 1 ? len - 2 : 0;
-          if (e_pos[t] < 0) e_dir[t] = 1, e_pos[t] = len > 1 ? 1 : 0;
+          if (sd == 1) {
+            e_pos[t] += e_dir[t];
+            if (e_pos[t] >= len) e_dir[t] = -1, e_pos[t] = len > 1 ? len - 2 : 0;
+            if (e_pos[t] < 0) e_dir[t] = 1, e_pos[t] = len > 1 ? 1 : 0;
+          } else {                      // (there and back by STRIDE: its ends a mirror)
+            int q = e_pos[t] < 0 ? 0 : e_pos[t] + e_dir[t] * sd;
+            for (int g = 0; g < 4 && (q >= len || q < 0); ++g) {
+              if (q >= len) q = 2 * (len - 1) - q, e_dir[t] = -1;
+              if (q < 0) q = -q, e_dir[t] = 1;
+            }
+            e_pos[t] = len > 1 ? (q < 0 ? 0 : q >= len ? len - 1 : q) : 0;
+          }
         } else if (d == 3) {
           e_pos[t] = static_cast<int>(rand_u32() % static_cast<uint32_t>(len));
         } else {
-          e_pos[t] = (e_pos[t] + 1) % len;
+          e_pos[t] = e_pos[t] < 0 ? 0 : (e_pos[t] + sd) % len;
         }
-        int nt = proj.endless[t][e_pos[t]];
+        int nt = pause ? ENDLESS_REST : proj.endless[t][e_pos[t]];
+        int holes = eng_endless_opt(t, EO_HOLES), leap = eng_endless_opt(t, EO_LEAP);
+        if (nt != ENDLESS_REST && holes && rand_u32() % 100u < static_cast<uint32_t>(holes)) nt = ENDLESS_REST;   // HOLES
+        if (nt != ENDLESS_REST && leap && rand_u32() % 100u < static_cast<uint32_t>(leap)) nt += 12;   // LEAP: an octave up
         if (nt != ENDLESS_REST) {
           int rests = 0;                // (PADS held: to its next note, over the rests after it, forward)
           if (held_pad(t) && d == 0)
@@ -2185,6 +2202,25 @@ int eng_euclid(int len, int fills, int rot, int step) {
   if (fills >= len) return 1;
   int i = ((step - rot) % len + len) % len;
   return (i * fills) % len < fills;
+}
+
+int eng_endless_opt(int t, int o) {
+  if (t < 0 || t >= ENG_TRACKS) return 0;
+  const uint8_t* b = proj.endless_opt[t];
+  switch (o) {
+    case EO_STRIDE: { int v = b[0] & 7; return v < 1 ? 1 : v; }
+    case EO_REST: { int v = (b[0] >> 3) & 15; return v < 2 ? 0 : v > 8 ? 8 : v; }
+    case EO_HOLES: return b[1] > 100 ? 100 : b[1];
+    case EO_LEAP: return b[2] > 100 ? 100 : b[2];
+    default: return 0;
+  }
+}
+void eng_endless_opt_set(project_t* p, int t, int o, int v) {
+  if (t < 0 || t >= ENG_TRACKS) return;
+  uint8_t* b = p->endless_opt[t];
+  if (o == EO_STRIDE) b[0] = static_cast<uint8_t>((b[0] & ~7u) | static_cast<unsigned>(v < 1 ? 1 : v > 7 ? 7 : v));
+  else if (o == EO_REST) b[0] = static_cast<uint8_t>((b[0] & 7u) | static_cast<unsigned>(v < 2 ? 0 : v > 8 ? 8 : v) << 3);
+  else if (o == EO_HOLES || o == EO_LEAP) b[o == EO_HOLES ? 1 : 2] = static_cast<uint8_t>(v < 0 ? 0 : v > 100 ? 100 : v);
 }
 
 const char* eng_speed_name(int s) { return kSpeedNames[(s + 4) < 0 ? 0 : (s + 4) >= ENG_SPEEDS ? ENG_SPEEDS - 1 : s + 4]; }
@@ -3750,6 +3786,10 @@ void shapes_from_move(project_t* p) {
   }
 }
 
+static_assert(offsetof(project_t, endless_opt) <= PROJECT_SIZE_24 && offsetof(project_t, endless_opt) + 4u > PROJECT_SIZE_24,
+              "0.16.0's project: this one's, Endless' options from its padding on");
+static_assert(sizeof(project_t) <= 3824u, "a project in one record of the patterns' store (pat_store.h: a sector's 0xF00 "
+                                          "bytes, its header and the record's), in one object of the platform's store");
 // 0.7's to 0.15's projects (versions 15 to 23): 41 parameters a lane (no CURVE), no speeds or directions; TRAUMA in
 // what was 0.13's padding
 struct project_v23 {
@@ -3825,6 +3865,13 @@ int upgrade_before_16(project_t* p, int bytes);
 MI_COLD int eng_upgrade(project_t* p, int bytes) {
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
+  if (v == 24 && bytes == static_cast<int>(PROJECT_SIZE_24) && p->size == PROJECT_SIZE_24) {
+    uint8_t* raw = reinterpret_cast<uint8_t*>(p);   // (0.16.0, 0.16.1: this one's layout, without Endless' options)
+    for (uint32_t i = offsetof(project_t, endless_opt); i < sizeof(project_t); ++i) raw[i] = 0;
+    p->version = PROJECT_VERSION;
+    p->size = sizeof(project_t);
+    return 1;
+  }
   if (v >= 15 && v <= 23 && bytes == static_cast<int>(PROJECT_SIZE_22) && p->size == PROJECT_SIZE_22) {
     const uint8_t* from = reinterpret_cast<const uint8_t*>(p);   // (0.7 to 0.15: their layout widened)
     uint8_t* to = reinterpret_cast<uint8_t*>(&upg.v23);

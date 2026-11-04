@@ -192,7 +192,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 24u              /* (23: 0.14's and 0.15's, without the lanes' speeds and directions, the ratchets
+#define PROJECT_VERSION 25u              /* (24: 0.16.0's and 0.16.1's, without Endless' options: read, all its notes;
+                                          * 23: 0.14's and 0.15's, without the lanes' speeds and directions, the ratchets
                                           * 1 to 8 only, no CURVE: read, x1, forward, their locks of RATCH kept;
                                           * 22: 0.13's, without TRAUMA (its byte where 0.13's ended, unused): read, TRAUMA at 0;
                                           * 21: 0.12's, without PROPHET: read, renumbered; 20: 0.11.1's, without POLY: read, renumbered;
@@ -236,7 +237,14 @@ typedef struct {
                                           * padding: its projects the same size */
     int8_t speed[ENG_LANES];             /* (0.16) each lane's SPEED: -4..4, x1/8 x1/4 x1/2 x3/4 x1 x3/2 x2 x3 x4 (0: x1) */
     uint8_t dir[ENG_LANES];              /* its DIRECTION: DIR_* */
+    uint8_t endless_opt[ENG_TRACKS][4];  /* (0.16.2) Endless' options (its second face): STRIDE (bits 0..2: 1..7, 0 as
+                                          * 1) and REST (bits 3..6: 0 none, 2..8) a byte; HOLES, LEAP (0..100 %); a
+                                          * byte spare */
 } project_t;
+#define PROJECT_SIZE_24 3804u            /* (0.16.0's and 0.16.1's project, version 24) */
+enum { EO_STRIDE, EO_REST, EO_HOLES, EO_LEAP, EO_N };   /* Endless' options as the screen reads and writes them */
+int eng_endless_opt(int t, int o);       /* STRIDE 1..7, REST 0 or 2..8, HOLES and LEAP 0..100 */
+void eng_endless_opt_set(project_t *p, int t, int o, int v);
 #define PROJECT_SIZE_22 3776u            /* (0.7's to 0.15's project, version 15 to 23: its bytes) */
 enum { DIR_FWD, DIR_BACK, DIR_PINGPONG, DIR_RANDOM, DIR_DRUNK, DIR_TWO_ONE, DIR_N };   /* a lane's DIRECTION: forward,
                                           * backward, there and back, a step at random, a step either way at random,

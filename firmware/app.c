@@ -23,7 +23,7 @@
  *               a bank, a white key a pattern (several: an order, looped), from the playing one's end; REC held, a
  *               white key erases one
  *   ARP         Endless, the track's: REC records (a key a note, SEL a rest), REC again plays it, a key transposes
- *               it; REC held clears it
+ *               it; REC held clears it. Again: its options (0.16.2: STRIDE, REST, HOLES, LEAP)
  *   HOME        the mixer: the levels, the pans
  *   FX          the effects, one after the other: the delay, the reverb, Warps; SELECT their faces (their knobs,
  *               the tracks' sends, their steps)
@@ -186,7 +186,8 @@ static void pat_name(int slot, char *b)  /* A1 .. K16 */
 #define VP_SYS (ENG_NPAGES + 20)
 #define VP_PLAY(l) (ENG_NPAGES + 21 + (l))   /* (0.16) a lane's PLAY face, its steps' last: SPEED, DIRECTION, then a
                                           * track's ratchets' CURVE (an effect's PROB), LENGTH */
-enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS, PT_PLAY };
+#define VP_ARP2(t) (ENG_NPAGES + 28 + (t))   /* (0.16.2) Endless' second face: STRIDE, REST, HOLES, LEAP */
+enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS, PT_PLAY, PT_ARP2 };
 /* a track's pages in four sets: EDIT goes from one to the next of the first three (its sound, its bending: the bits
  * and the glitch, its filter),
  * ENV to the envelopes; SELECT through a set's pages; ALGO changes what the page shows (the sound's model, the
@@ -242,17 +243,21 @@ static struct {
 /* ------------------------------------------------------------ the pages --- */
 static int ptype(int page)
 {
-    return page >= VP_PLAY(0) ? PT_PLAY : page >= VP_SYS ? PT_SYS : page >= ENG_NPAGES ? PT_RND + (page - ENG_NPAGES) / 4
+    return page >= VP_ARP2(0) ? PT_ARP2 : page >= VP_PLAY(0) ? PT_PLAY : page >= VP_SYS ? PT_SYS : page >= ENG_NPAGES ? PT_RND + (page - ENG_NPAGES) / 4
                                                                                         : eng_page_type(page);
 }
 static int ptrack(int page)              /* the track a page belongs to, -1: none */
 {
+    if (page >= VP_ARP2(0))
+        return page - VP_ARP2(0);
     if (page >= VP_PLAY(0))
         return page - VP_PLAY(0) < ENG_TRACKS ? page - VP_PLAY(0) : -1;
     return page >= VP_SYS ? -1 : page >= ENG_NPAGES ? (page - ENG_NPAGES) % 4 : eng_page_track(page);
 }
 static int plane(int page)               /* a lane's page (its steps', its effect's), the lane: -1 none */
 {
+    if (page >= VP_ARP2(0))
+        return -1;
     if (page >= VP_PLAY(0))
         return page - VP_PLAY(0);
     return page < ENG_NPAGES ? eng_page_lane(page) : -1;
@@ -335,7 +340,7 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
         f[2] = PG_EUC(t);
         f[3] = VP_PLAY(t);
         return 4;
-    case PT_ARP: f[0] = PG_ARP(t); return 1;
+    case PT_ARP: case PT_ARP2: f[0] = PG_ARP(t); f[1] = VP_ARP2(t); return 2;
     case PT_DELAY1: case PT_DELAY2: case PT_DSEND: case PT_LANE: case PT_REVERB: case PT_RSEND:
     case PT_WARPS1: case PT_WARPS2: {    /* an effect: its knobs, the tracks' sends, its steps */
         int l = eng_page_lane(page);
@@ -412,6 +417,7 @@ static int track_page(int page, int t)   /* the same page on track t (a track's 
     case PT_EUC: return ptrack(page) >= 0 ? PG_EUC(t) : page;
     case PT_STEP: return PG_STEP(t);
     case PT_ARP: return PG_ARP(t);
+    case PT_ARP2: return VP_ARP2(t);
     case PT_RND: return VP_RND(t);
     case PT_PLAY: return ptrack(page) >= 0 ? VP_PLAY(t) : page;
     default: return page;
@@ -459,6 +465,9 @@ static int knob_param(int page, int k)
     }
     if (ptype(page) == PT_RND)
         return eng_track_param(ptrack(page), RND_TP[k]);
+    if (ptype(page) == PT_ARP2)          /* (Endless' options: the project's bytes, byte_knob; its page's knobs
+                                          * stand for them here) */
+        return PG_ARP(ptrack(page)) * 4 + k;
     if (ptype(page) == PT_PLAY) {        /* (SPEED and DIRECTION are the project's bytes: play_knob; their LENGTH
                                           * stands for them here) */
         int l = plane(page);
@@ -510,7 +519,7 @@ static const char *module_name(int page)
         int l = eng_page_lane(page);
         return l < ENG_TRACKS ? "Steps" : l == LANE_DELAY ? "Delay" : l == LANE_REVERB ? "Reverb" : "Warps";
     }
-    case PT_ARP: return "Endless";
+    case PT_ARP: case PT_ARP2: return "Endless";
     case PT_PLAY: {
         int l = plane(page);
         return l < ENG_TRACKS ? "Steps" : l == LANE_DELAY ? "Delay" : l == LANE_REVERB ? "Reverb" : "Warps";
@@ -552,7 +561,7 @@ static uint16_t page_accent(int page)
 {
     project_t *p = eng_project();
     switch (ptype(page)) {
-    case PT_STEP: case PT_RND: case PT_ARP: return track_accent(ptrack(page));
+    case PT_STEP: case PT_RND: case PT_ARP: case PT_ARP2: return track_accent(ptrack(page));
     case PT_PAN: case PT_GLOBAL: case PT_SYS: case PT_MIX: case PT_EQ: return AC1;
     case PT_DUCK: return track_accent(0);    /* T1's: it ducks the others */
     case PT_COMP: return AC2;
@@ -2246,7 +2255,7 @@ static void draw_panel(void)
     case PT_COMP: case PT_OTT: panel_bus(pt == PT_OTT); break;
     case PT_STEP: case PT_LANE: case PT_PLAY: panel_steps(plane(ui.page)); break;
     case PT_RND: panel_random(tr); break;
-    case PT_ARP: panel_endless(tr); break;
+    case PT_ARP: case PT_ARP2: panel_endless(tr); break;
     case PT_GLOBAL: panel_global(); break;
     case PT_WARPS1: case PT_WARPS2: panel_warps(); break;
     case PT_DELAY1: case PT_DELAY2: case PT_DSEND: panel_delay(); break;
@@ -2402,20 +2411,58 @@ static int track_knobs(int page)
     return pt == PT_MIX || pt == PT_PAN || pt == PT_RSEND || pt == PT_DSEND || pt == PT_DUCK || pt == PT_EQ;
 }
 
-static void draw_play_knob(int page, int k, int force)   /* (0.16) the PLAY face's SPEED and DIRECTION: the project's
-                                                          * bytes, a ring in as many parts as their choices */
+/* (0.16) the knobs on the project's bytes, not parameters (no lock, no random, no cable): the PLAY face's SPEED and
+ * DIRECTION, Endless' second face's four (0.16.2). A choice (n > 0): a ring in as many parts; a share (n = 0): 0..100 */
+static int byte_knob(int page, int k) { return (ptype(page) == PT_PLAY && k < 2) || ptype(page) == PT_ARP2; }
+static int byte_value(int page, int k, int *n, char *txt, uint32_t max, const char **name)   /* its value (a choice's
+                                                                                               * index) */
 {
     project_t *p = eng_project();
-    int l = plane(page), n = k == 0 ? ENG_SPEEDS : DIR_N, i = clamp(k == 0 ? p->speed[l] + 4 : p->dir[l], 0, n - 1);
+    int v;
+    txt[0] = 0;
+    if (ptype(page) == PT_PLAY) {
+        int l = plane(page);
+        *n = k == 0 ? ENG_SPEEDS : DIR_N;
+        v = clamp(k == 0 ? p->speed[l] + 4 : p->dir[l], 0, *n - 1);
+        if (k == 0)                      /* (x1/2: its x lower case, a multiplier's) */
+            text_cat(txt, eng_speed_name(v - 4), max);
+        else
+            label_text(eng_dir_name(v), txt, max);
+        *name = k == 0 ? "Speed" : "Dir";
+        return v;
+    }
+    static const char *const N[4] = {"Stride", "Rest", "Holes", "Leap"};
+    int t = ptrack(page), o = eng_endless_opt(t, k);
+    char d[8];
+    *name = N[k];
+    if (k == EO_STRIDE || k == EO_REST) {   /* one note in so many (the others over), one step in so many a rest */
+        *n = k == EO_STRIDE ? 7 : 8;
+        v = k == EO_STRIDE ? o - 1 : (o ? o - 1 : 0);
+        if (k == EO_STRIDE && o == 1)
+            text_cat(txt, "ALL", max);
+        else if (k == EO_REST && !o)
+            text_cat(txt, "OFF", max);
+        else
+            int_text(o, d), text_cat(txt, "1/", max), text_cat(txt, d, max);
+        return v;
+    }
+    *n = 0;                              /* HOLES, LEAP: a share */
+    int_text(o, d);
+    text_cat(txt, d, max);
+    text_cat(txt, "%", max);
+    return o;
+}
+
+static void draw_play_knob(int page, int k, int force)
+{
+    int n, i;
+    const char *name;
     int hot = page == ui.page && ui.touched_k == k && plat_ms() - ui.touched_at[k] < 1200u;
     uint16_t ac = page_accent(page);
     char txt[24], lab[24], under[24];
-    txt[0] = under[0] = 0;
-    if (k == 0)                          /* (x1/2: its x lower case, a multiplier's) */
-        text_cat(txt, eng_speed_name(i - 4), sizeof txt);
-    else
-        label_text(eng_dir_name(i), txt, sizeof txt);
-    label_text(k == 0 ? "Speed" : "Dir", lab, sizeof lab);
+    under[0] = 0;
+    i = byte_value(page, k, &n, txt, sizeof txt, &name);
+    label_text(name, lab, sizeof lab);
     int32_t s[4] = {i | k << 8 | 0x4000000, text_hash(txt) * 31 + text_hash(lab), 0x5EED, hot | (int32_t)ac << 2};
     if (!force && !ui.full && !ui.body_knobs && !memcmp(s, ui.knob_shown[k], sizeof s))
         return;
@@ -2435,26 +2482,48 @@ static void draw_play_knob(int page, int k, int force)   /* (0.16) the PLAY face
         if (j == i)
             lit_arc(RX, RY, R0, R1, a, b, ac);
         else
-            arc(RX, RY, R0 + 0.5f, R1 - 0.5f, a, b, k == 0 && j == 4 ? MUTED : TRACK);
+            arc(RX, RY, R0 + 0.5f, R1 - 0.5f, a, b, ptype(page) == PT_PLAY && k == 0 && j == 4 ? MUTED : TRACK);
     }
-    ring_text(ring_short(txt), HI, under, sizeof under);
+    if (!n) {                            /* a share: lit from 0 */
+        float u = (float)i / 100.0f;
+        arc(RX, RY, R0 + 0.5f, R1 - 0.5f, 0.0f, 1.0f, TRACK);
+        if (u > 0.004f)
+            lit_arc(RX, RY, R0, R1, 0.0f, u, ac);
+        ring_end(u, ac, 1);
+    }
+    ring_text(ring_short(txt), i || n ? HI : DIM, under, sizeof under);
     if (under[0])
         cv_text(30 - text_w(&FONT_XS, under) / 2, 78, &FONT_XS, under, MUTED);
     blit((uint32_t)(k * KNOB_W), KNOB_Y);
 }
 
-static void play_turn(int k, int32_t e)  /* (0.16) SPEED, DIRECTION turned: the lane's (GLO held: the four tracks') */
+static void play_turn(int k, int32_t e)  /* a byte knob turned (byte_knob): the lane's, the track's (GLO held: the
+                                          * four tracks') */
 {
     project_t *p = eng_project();
-    int l = plane(ui.page), d = e > 0 ? 1 : -1;
-    int v = k == 0 ? clamp(p->speed[l] + d, -4, 4) : clamp((int)p->dir[l] + d, 0, DIR_N - 1);
-    for (int m = 0; m < ENG_LANES; m++) {
-        if (m != l && !(held(B_GLO) && l < ENG_TRACKS && m < ENG_TRACKS))
-            continue;
-        if (k == 0)
-            p->speed[m] = (int8_t)v;
+    int d = e > 0 ? 1 : -1;
+    if (ptype(ui.page) == PT_ARP2) {     /* Endless' options: a step each (HOLES, LEAP: 2 %, 10 turned fast) */
+        int t = ptrack(ui.page), o = eng_endless_opt(t, k), v;
+        if (k == EO_STRIDE)
+            v = clamp(o + d, 1, 7);
+        else if (k == EO_REST)
+            v = o == 0 ? (d > 0 ? 2 : 0) : o + d < 2 ? 0 : clamp(o + d, 2, 8);
         else
-            p->dir[m] = (uint8_t)v;
+            v = clamp(o + (int)e * (e > 1 || e < -1 ? 10 : 2), 0, 100);
+        for (int m = 0; m < ENG_TRACKS; m++)
+            if (m == t || held(B_GLO))
+                eng_endless_opt_set(p, m, k, v);
+    } else {
+        int l = plane(ui.page);
+        int v = k == 0 ? clamp(p->speed[l] + d, -4, 4) : clamp((int)p->dir[l] + d, 0, DIR_N - 1);
+        for (int m = 0; m < ENG_LANES; m++) {
+            if (m != l && !(held(B_GLO) && l < ENG_TRACKS && m < ENG_TRACKS))
+                continue;
+            if (k == 0)
+                p->speed[m] = (int8_t)v;
+            else
+                p->dir[m] = (uint8_t)v;
+        }
     }
     if (held(B_GLO))
         ui.used[B_GLO] = 1;
@@ -2466,7 +2535,7 @@ static void play_turn(int k, int32_t e)  /* (0.16) SPEED, DIRECTION turned: the 
 static void draw_knob_at(int page, int k, int force)
 {
     project_t *p = eng_project();
-    if (ptype(page) == PT_PLAY && k < 2) {
+    if (byte_knob(page, k)) {
         draw_play_knob(page, k, force);
         return;
     }
@@ -2807,7 +2876,7 @@ static int foot_mode(void)
 {
     if (ui.matrix || ui.page == VP_SYS)
         return 0;
-    if (ui.erec >= 0 || (ptype(ui.page) == PT_ARP && !ui.grid))
+    if (ui.erec >= 0 || ((ptype(ui.page) == PT_ARP || ptype(ui.page) == PT_ARP2) && !ui.grid))
         return 6;
     if (foot_lane() >= 0)
         return 5;
@@ -2940,7 +3009,7 @@ static uint32_t hold_ms(int b, char *label, uint32_t max)
     } else if (b == B_REC && ui.page == VP_SYS) {
         text_cat(l, LOAD[ui.init_sel % 5], sizeof l);
         ms = 1000u;
-    } else if (b == B_REC && pt == PT_ARP && ui.erec < 0 && !ui.grid) {
+    } else if (b == B_REC && (pt == PT_ARP || pt == PT_ARP2) && ui.erec < 0 && !ui.grid) {
         text_cat(l, "ERASE ENDLESS", sizeof l);
         ms = 1000u;
     } else if (b == B_REC && ui.erec < 0 && (ui.grid || pt == PT_STEP || pt == PT_RND || pt == PT_LANE ||
@@ -4509,8 +4578,8 @@ static void module_button(int b)
         else
             go_page(PG_STEP(ui.lane));
         break;
-    case B_ARP:                          /* Endless, the active track's */
-        go_page(PG_ARP(ui.track));
+    case B_ARP:                          /* Endless, the active track's (again: its second face, 0.16.2) */
+        go_page(here && (pt == PT_ARP || pt == PT_ARP2) ? next : PG_ARP(ui.track));
         break;
     case B_HOME:
         go_page(here && (pt == PT_MIX || pt == PT_PAN || pt == PT_EQ || pt == PT_DUCK || pt == PT_COMP || pt == PT_OTT)
@@ -4691,7 +4760,8 @@ static void button_long(int b)
     } else if (b == B_REC) {
         if (ui.page == VP_SYS) {
             project_init(ui.init_sel);
-        } else if (ptype(ui.page) == PT_ARP && ui.erec < 0 && !ui.grid) {   /* Endless: its notes cleared */
+        } else if ((ptype(ui.page) == PT_ARP || ptype(ui.page) == PT_ARP2) && ui.erec < 0 && !ui.grid) {   /* Endless: its
+                                          * notes cleared */
             eng_endless_clear(ui.track);
             dirty = 1;
             app_say("ENDLESS", "CLEARED");
@@ -4776,7 +4846,7 @@ static void button_up(int b)
             ui.full = 1;
             break;
         }
-        if (pt == PT_ARP && !ui.grid) {  /* Endless: recording from nothing */
+        if ((pt == PT_ARP || pt == PT_ARP2) && !ui.grid) {   /* Endless: recording from nothing */
             eng_endless_clear(ui.track);
             eng_endless_rec(ui.track, 1);
             ui.erec = ui.track;
@@ -5137,7 +5207,7 @@ static void input(void)
             matrix_turn(i, e);
             continue;
         }
-        if (ptype(ui.page) == PT_PLAY && i < 2) {   /* SPEED, DIRECTION: the project's bytes, not a lock's */
+        if (byte_knob(ui.page, i)) {     /* SPEED, DIRECTION, Endless' options: the project's bytes, not a lock's */
             play_turn(i, e);
             continue;
         }
@@ -5168,14 +5238,14 @@ static void input(void)
      * TRAUMA;
      * the keys: the steps (the one playing blinks), or held; MOD mode: the LFOs' keys blinking at their rates */
     {
-        static const uint8_t PAGE_BTN[PT_PLAY + 1] = {
+        static const uint8_t PAGE_BTN[PT_ARP2 + 1] = {
             [PT_PLAITS1] = B_EDIT, [PT_PLAITS2] = B_ENV, [PT_PLAITS3] = B_EDIT, [PT_LFO] = B_LFO,
             [PT_MIX] = B_HOME, [PT_PAN] = B_HOME, [PT_REVERB] = B_FX, [PT_RSEND] = B_FX, [PT_DELAY1] = B_FX,
             [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
             [PT_ARP] = B_ARP, [PT_WARPS1] = B_FX, [PT_WARPS2] = B_FX, [PT_DUCK] = B_HOME, [PT_COMP] = B_HOME,
             [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_BEND] = B_EDIT, [PT_GLITCH] = B_EDIT, [PT_EUC] = B_SEQ, [PT_RND] = B_SEQ,
             [PT_FILT1] = B_EDIT, [PT_FILT2] = B_EDIT, [PT_FILT3] = B_EDIT, [PT_SON2] = B_EDIT, [PT_VFLT1] = B_EDIT,
-            [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO, [PT_PLAY] = B_SEQ};
+            [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO, [PT_PLAY] = B_SEQ, [PT_ARP2] = B_ARP};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
         uint32_t bb = ui.dice ? 1u << B_OCTDN : ui.trauma ? 1u << B_OCTUP : 0, kk = ui.keys;
         int pt = ptype(ui.page);

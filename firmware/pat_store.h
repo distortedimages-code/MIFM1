@@ -414,7 +414,7 @@ static int pat_append(int slot, uint32_t kind, const uint8_t *p, uint32_t n)
 
 static int pat_save(int slot, const void *src, uint32_t n)   /* 0 done, -1 no room, -2 flash, -3 (pat_quick) */
 {
-    uint8_t buf[PAT_USE - 32u];
+    uint8_t buf[PAT_USE - 16u - sizeof(pat_sec_t)];   /* (a record's most: a sector's bytes, its header and the record's) */
     uint32_t k;
     int e;
     if (!pat_ok || slot < 0 || slot >= PAT_KEYS || n > sizeof buf)
