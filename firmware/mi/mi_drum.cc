@@ -149,7 +149,7 @@ static float rand_hz(float u) { return 2.0f * fm_exp2f(u * 13.288f); }         /
 static float decay_s(float u) { return 0.01f * fm_exp2f(u * 8.644f); }         // 10 ms .. 4 s
 static float filter_hz(float u) { return 30.0f * fm_exp2f(u * 9.229f); }       // 30 Hz .. 18 kHz
 
-void drum_render(int t, float* out, uint32_t n) {
+MI_RAM void drum_render(int t, float* out, uint32_t n) {
   if (t < 0 || t >= MF_TRACKS) return;
   Drum& d = drum[t];
   const Kit& kit = kKits[d.model];

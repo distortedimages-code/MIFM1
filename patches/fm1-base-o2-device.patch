@@ -1,0 +1,23 @@
+MIFM1's changes to fm1-base (base/), applied by tools/patch_base.sh before a build.
+More flags for some of the app's o2 units, in the firmware only (fm1.toml o2_device, o2_device_cflags): MIFM1's
+units with code in RAM (MI_RAM, firmware/mi/bridge.h) call into the flash and are called from it, 4 MB apart,
+beyond a call's reach: JieLi's long calls (-pi32v2-large-program, as fm1-base's radio units have them).
+
+diff --git a/tools/build.py b/tools/build.py
+index 2f2312d..41a7a72 100755
+--- a/tools/build.py
++++ b/tools/build.py
+@@ -681,10 +681,12 @@ def build_app():
+     o2_more = [*CONF.get("o2_cflags", []),
+                *[a for h in CONF.get("o2_include", []) for a in ("-include", str((APP / h).resolve().relative_to(ROOT)))]]
+     o2_units = []
++    o2_dev = set(CONF.get("o2_device", []))       # (MIFM1) units with more flags, the firmware only: o2_device_cflags
+     for u in CONF.get("o2", []):
+         for f in (sorted(APP.glob(u)) if any(ch in u for ch in "*?[") else [APP / u]):
+             o = OUT / "o2" / ("_".join(f.relative_to(APP).with_suffix("").parts) + ".o")
+-            units.append(("cc", *o2, *o2_more, *inc(f.parent), *ir_out, "-c", f, "-o", o.with_suffix(".ll") if ir else o))
++            dev = CONF.get("o2_device_cflags", []) if f.relative_to(APP).as_posix() in o2_dev else []
++            units.append(("cc", *o2, *o2_more, *dev, *inc(f.parent), *ir_out, "-c", f, "-o", o.with_suffix(".ll") if ir else o))
+             objs.append(o)
+             o2_units.append((f, o))
+     jieli = (BLE and not OWN) or WIFI             # JieLi's libraries linked (the shim, LTO)
