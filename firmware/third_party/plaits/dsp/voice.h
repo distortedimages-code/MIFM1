@@ -35,30 +35,19 @@
 #include "stmlib/dsp/limiter.h"
 #include "stmlib/utils/buffer_allocator.h"
 
-#include "plaits/dsp/engine/additive_engine.h"
-#include "plaits/dsp/engine/bass_drum_engine.h"
-#include "plaits/dsp/engine/chord_engine.h"
+// MIFM1 (0.16.1): the eight engines its models play (CHIPTUNE 7, the grain's FORMANT 11, SPEECH 15, SWARM 16, NOISE
+// 17, PARTICLES 18, STRING 19, MODAL 20), each at its number; the sixteen others (gone from MIFM1's models in 0.9)
+// a silent engine in their places, their code and their state out of the firmware
 #include "plaits/dsp/engine/engine.h"
-#include "plaits/dsp/engine/fm_engine.h"
 #include "plaits/dsp/engine/grain_engine.h"
-#include "plaits/dsp/engine/hi_hat_engine.h"
 #include "plaits/dsp/engine/modal_engine.h"
 #include "plaits/dsp/engine/noise_engine.h"
 #include "plaits/dsp/engine/particle_engine.h"
-#include "plaits/dsp/engine/snare_drum_engine.h"
 #include "plaits/dsp/engine/speech_engine.h"
 #include "plaits/dsp/engine/string_engine.h"
 #include "plaits/dsp/engine/swarm_engine.h"
-#include "plaits/dsp/engine/virtual_analog_engine.h"
-#include "plaits/dsp/engine/waveshaping_engine.h"
-#include "plaits/dsp/engine/wavetable_engine.h"
 
 #include "plaits/dsp/engine2/chiptune_engine.h"
-#include "plaits/dsp/engine2/phase_distortion_engine.h"
-#include "plaits/dsp/engine2/six_op_engine.h"
-#include "plaits/dsp/engine2/string_machine_engine.h"
-#include "plaits/dsp/engine2/virtual_analog_vcf_engine.h"
-#include "plaits/dsp/engine2/wave_terrain_engine.h"
 
 #include "plaits/dsp/envelope.h"
 
@@ -67,6 +56,19 @@
 namespace plaits {
 
 const int kMaxEngines = 24;
+
+class NullEngine : public Engine {      // (MIFM1: an engine it does not play: silence)
+ public:
+  NullEngine() { }
+  ~NullEngine() { }
+  virtual void Init(stmlib::BufferAllocator* allocator) { }
+  virtual void Reset() { }
+  virtual void LoadUserData(const uint8_t* user_data) { }
+  virtual void Render(const EngineParameters& parameters, float* out, float* aux, size_t size,
+                      bool* already_enveloped) {
+    for (size_t i = 0; i < size; ++i) out[i] = aux[i] = 0.0f;
+  }
+};
 const int kMaxTriggerDelay = 8;
 const int kTriggerDelay = 5;
 
@@ -202,13 +204,8 @@ class Voice {
     return value;
   }
 
-  VirtualAnalogEngine virtual_analog_engine_;
-  WaveshapingEngine waveshaping_engine_;
-  FMEngine fm_engine_;
+  NullEngine null_engine_;              // (MIFM1: in the sixteen engines' places)
   GrainEngine grain_engine_;
-  AdditiveEngine additive_engine_;
-  WavetableEngine wavetable_engine_;
-  ChordEngine chord_engine_;
   SpeechEngine speech_engine_;
 
   SwarmEngine swarm_engine_;
@@ -216,15 +213,7 @@ class Voice {
   ParticleEngine particle_engine_;
   StringEngine string_engine_;
   ModalEngine modal_engine_;
-  BassDrumEngine bass_drum_engine_;
-  SnareDrumEngine snare_drum_engine_;
-  HiHatEngine hi_hat_engine_;
-  
-  VirtualAnalogVCFEngine virtual_analog_vcf_engine_;
-  PhaseDistortionEngine phase_distortion_engine_;
-  SixOpEngine six_op_engine_;
-  WaveTerrainEngine wave_terrain_engine_;
-  StringMachineEngine string_machine_engine_;
+
   ChiptuneEngine chiptune_engine_;
 
   stmlib::HysteresisQuantizer2 engine_quantizer_;

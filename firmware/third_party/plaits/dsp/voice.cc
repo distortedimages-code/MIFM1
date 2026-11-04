@@ -37,22 +37,23 @@ using namespace stmlib;
 void Voice::Init(BufferAllocator* allocator) {
   engines_.Init();
 
-  engines_.RegisterInstance(&virtual_analog_vcf_engine_, false, 1.0f, 1.0f);
-  engines_.RegisterInstance(&phase_distortion_engine_, false, 0.7f, 0.7f);
-  engines_.RegisterInstance(&six_op_engine_, true, 1.0f, 1.0f);
-  engines_.RegisterInstance(&six_op_engine_, true, 1.0f, 1.0f);
-  engines_.RegisterInstance(&six_op_engine_, true, 1.0f, 1.0f);
-  engines_.RegisterInstance(&wave_terrain_engine_, false, 0.7f, 0.7f);
-  engines_.RegisterInstance(&string_machine_engine_, false, 0.8f, 0.8f);
+  // (MIFM1: the engines it does not play, a silent one in their places: the others at their numbers)
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 0 VA-VCF
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 1 phase distortion
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 2..4 the six-op FM
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 5 wave terrain
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 6 string machine
   engines_.RegisterInstance(&chiptune_engine_, false, 0.5f, 0.5f);
   
-  engines_.RegisterInstance(&virtual_analog_engine_, false, 0.8f, 0.8f);
-  engines_.RegisterInstance(&waveshaping_engine_, false, 0.7f, 0.6f);
-  engines_.RegisterInstance(&fm_engine_, false, 0.6f, 0.6f);
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 8 virtual analog
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 9 waveshaping
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 10 FM
   engines_.RegisterInstance(&grain_engine_, false, 0.7f, 0.6f);
-  engines_.RegisterInstance(&additive_engine_, false, 0.8f, 0.8f);
-  engines_.RegisterInstance(&wavetable_engine_, false, 0.6f, 0.6f);
-  engines_.RegisterInstance(&chord_engine_, false, 0.8f, 0.8f);
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 12 additive
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 13 wavetable
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 14 chords
   engines_.RegisterInstance(&speech_engine_, false, -0.7f, 0.8f);
 
   engines_.RegisterInstance(&swarm_engine_, false, -3.0f, 1.0f);
@@ -60,9 +61,9 @@ void Voice::Init(BufferAllocator* allocator) {
   engines_.RegisterInstance(&particle_engine_, false, -2.0f, 1.0f);
   engines_.RegisterInstance(&string_engine_, true, -1.0f, 0.8f);
   engines_.RegisterInstance(&modal_engine_, true, -1.0f, 0.8f);
-  engines_.RegisterInstance(&bass_drum_engine_, true, 0.8f, 0.8f);
-  engines_.RegisterInstance(&snare_drum_engine_, true, 0.8f, 0.8f);
-  engines_.RegisterInstance(&hi_hat_engine_, true, 0.8f, 0.8f);
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 21..23 Plaits' drums (MIFM1's own since 0.9)
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);
   
   for (int i = 0; i < engines_.size(); ++i) {
     // All engines will share the same RAM space.

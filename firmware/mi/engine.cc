@@ -273,9 +273,11 @@ float src[NSRC];
 #ifndef ENG_ARENA_BYTES
 #if UINTPTR_MAX > 0xFFFFFFFFu           /* a computer's 64-bit pointers: a little more */
 #define ENG_ARENA_BYTES (292u * 1024u)
-#else                                   /* the FM-1: 4 Plaits 100 KB, the reverb 32 (16-bit words), the delay 103,
-                                         * Warps 8, the glitch's slices 32 (276 KB) */
-#define ENG_ARENA_BYTES (280u * 1024u)
+#else                                   /* the FM-1: 4 Plaits 74 KB (0.16.1: the eight engines MIFM1 plays, 100 KB
+                                         * before), the reverb 32 (16-bit words), the delay 103, Warps 8, the
+                                         * glitch's slices 32 (251.5 KB, 8.5 left; 32-bit sizes, tools/device_check.sh's
+                                         * objects: mp_size and the others) */
+#define ENG_ARENA_BYTES (260u * 1024u)
 #endif
 #endif
 uint8_t arena[ENG_ARENA_BYTES] __attribute__((aligned(8))) PLAT_POOL;
@@ -3783,7 +3785,7 @@ union UpgBuf {
   project_v14 v14;
   project_v23 v23;
 };
-UpgBuf upg;
+UpgBuf upg PLAT_POOL;                    // (0.16.1: in the pool, out of the RAM the screen and the engine share)
 MI_COLD void upgrade_v23(project_t* p, const project_v23& o) {
   uint8_t* raw = reinterpret_cast<uint8_t*>(p);
   for (uint32_t i = 0; i < sizeof(project_t); ++i) raw[i] = 0;   // (SPEED x1, forward, CURVE even)

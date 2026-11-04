@@ -553,7 +553,11 @@ enveloppes, une fois tous les 8 échantillons : 18,5 Ko déroulés, 5 Ko ainsi, 
 échantillons), ses six boucles à part, 11,6 Ko en tout ; la zone de code en RAM passe à 42 Ko (10 Ko pris au pool,
 qui en avait de trop). Depuis 0.15.1, ce qui tourne hors du son (les textes des potards à l'écran, la lecture d'un projet
 ancien, les démos) est compilé pour la taille aussi (`MI_COLD`, `firmware/mi/bridge.h`) : une quinzaine de Ko de flash
-rendus aux presets, le code du son inchangé.
+rendus aux presets, le code du son inchangé. En 0.16.1, les seize moteurs de Plaits que MIFM1 ne joue plus depuis la
+0.9 (VA, waveshaping, FM, additif, wavetable, accords, le six-opérateurs, string machine, wave terrain, phase
+distortion, VA-VCF, ses trois batteries) sortent du firmware : un moteur muet tient leurs places (les huit joués gardent
+leurs numéros), une cinquantaine de Ko de flash et 26 Ko de mémoire rendus (l'arène du son passe de 280 à 260 Ko ; le
+projet de travail et le tampon de lecture des anciens projets passent dans le pool, hors de la RAM).
 
 **Le garde-fou** (0.8.2) : quand un bloc dépasse 92 % de son temps, la FM des filtres s'allège pendant 0,3 s (ses
 coefficients recalculés un échantillon sur deux) ; quand un bloc arrive en retard (plus de 100 % : un clic), un sur

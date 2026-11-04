@@ -138,8 +138,9 @@ static int halted;                       /* app_panic: the engine stopped until 
 static int engine_ok;
 static int cpu2_ok;
 static int save_hold, dirty;
-static project_t scratch;                /* a project read or made before it replaces the live one (and the next
-                                          * pattern, read before the playing one ends: pat_unstage first) */
+static project_t scratch PLAT_POOL;      /* a project read or made before it replaces the live one (and the next
+                                          * pattern, read before the playing one ends: pat_unstage first); (0.16.1)
+                                          * in the pool, out of the RAM */
 static int proj_stored;                  /* project_load: the saved project read (else a demo) */
 static void pattern_boot(void);          /* (the patterns: further down) */
 static void pattern_forget(void);
