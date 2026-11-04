@@ -10,7 +10,7 @@ OUT = build
 SRC = $(wildcard firmware/mi/*.cc) $(shell find firmware/third_party -name '*.cc')
 OBJ = $(patsubst %.cc,$(OUT)/obj/%.o,$(SRC))
 
-.PHONY: all test lxr-check uac-multi base-patch device-check firmware host web clean
+.PHONY: pat-store all test lxr-check uac-multi base-patch device-check firmware host web clean
 all: test
 
 $(OUT)/obj/%.o: %.cc
@@ -24,9 +24,16 @@ $(OUT)/native: firmware/tests/native.cc $(OBJ)
 	$(CC) $(OUT)/obj/native.o $(OBJ) -lm -o $@
 
 # the engine on a computer: the default patch plays, every track and model sounds, no NaN; WAVs in build/wav
-test: $(OUT)/native lxr-check uac-multi
+test: $(OUT)/native lxr-check uac-multi pat-store
 	@mkdir -p $(OUT)/wav
 	$(OUT)/native $(OUT)/wav 16
+
+# the patterns' store (firmware/pat_store.h) on a simulated flash: saves, room made, power cuts anywhere
+$(OUT)/pat_store_test: firmware/tests/pat_store_test.c firmware/pat_store.h
+	@mkdir -p $(OUT)
+	$(CC) -std=c11 -O2 -Wall -Wextra -Wno-unused-function -Ibase/include firmware/tests/pat_store_test.c -o $@
+pat-store: $(OUT)/pat_store_test
+	$(OUT)/pat_store_test
 
 # the FM drums (third_party/lxr) as the FM-1 computes them, against the LXR-02's arithmetic (doubles, fused
 # multiply-adds): the same voices, sample by sample

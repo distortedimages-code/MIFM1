@@ -500,7 +500,7 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **PRESETS** | la piste active, de 1 à 4 |
 | **EDIT** | les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
-| **SEQ** | les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) |
+| **SEQ** | tapé : les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns** (touches noires : la banque, blanches : le pattern, plusieurs : un enchaînement ; REC tenu : efface) |
 | **ARP** | Endless, celui de la piste (voir plus bas) |
 | **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leurs filtres (EQ), le DUCK, puis le bus master (COMP, OTT) ; ALGORITHM sur COMP ou OTT : le mode du bus (OFF, COMP, OTT) |
 | **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps ; SELECT parcourt leurs faces (leurs potards, les envois des pistes, leurs pas) |
@@ -511,7 +511,7 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **OCT− tenu + SELECT** | la **dose d'aléatoire**, sur son écran (voir plus bas) |
 | **OCT+ tenu + SELECT** | **TRAUMA**, la dose de saturation, sur son écran (voir plus bas) |
 | **SEL** | le mode MOD (voir plus bas) ; **tenu** : la matrice de la piste |
-| **SAVE tenu** | sauvegarde le projet (à l'arrêt) |
+| **SAVE tenu** | sauvegarde le pattern dans sa case (à l'arrêt) |
 | **GLO** | TEMPO, SCALE, ROOT, SWING ; SELECT : le projet (INIT) et la machine ; GLO encore : retour |
 | **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en noir sur la couleur du thème. Les réglages restent ; pendant 4 s (cinq carrés jaunes en bas), **GLO** les remet comme avant ALL au début de la mesure suivante (GLO encore avant la mesure : ils restent) |
 | **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage (avec GLO tenu aussi : sur les 4 pistes) |
@@ -573,6 +573,22 @@ montre les pas du delay. **REC** à nouveau : retour au mode KEY.
 SELECT) donne la **GATE** de la note (5 à 95 % du pas, lockable : des notes courtes et longues dans le même pattern),
 la transposition, l'octave et **F.KEY** (le filtre qui suit la note) ; la deuxième page d'ENV le **P.ENV** (l'enveloppe
 interne de Plaits sur la hauteur, pour des toms, des kicks qui plongent, des bulles).
+
+**Les patterns** (0.15 ; **SEQ tenu**, d'après les Pocket Operator de Teenage Engineering) : 11 banques (A à K) de
+16 patterns, **chacun un projet entier**, sons compris (seuls les réglages de la machine, la sortie, la qualité de
+Warps et les couleurs, restent communs). SEQ tenu, l'écran des patterns s'ouvre : en haut les banques, sur les
+**touches noires** ; dessous les 16 patterns de la banque, sur les **touches blanches** (pleins : remplis ; vides :
+un cadre ; celui qui joue dans la première couleur ; le suivant encadré dans la deuxième, qui clignote). **Une touche
+joue ce pattern**, en boucle ; **plusieurs à la suite font un enchaînement**, joué en boucle dans l'ordre : A1, A1,
+A2, A5 joue A1 deux fois, puis A2, puis A5 (le mode song). Le changement se fait **à la fin du pattern en cours** (sa
+plus longue LENGTH), tout de suite à l'arrêt. **SAVE tenu** (à l'arrêt) enregistre le pattern en cours dans sa case ;
+un pattern quitté sans SAVE revient tel qu'il était sauvé (ses modifs perdues). Une case vide prend le pattern en
+cours tel quel : c'est ainsi qu'on fait une variation (SAVE la remplit). **REC tenu et une touche blanche** efface un
+pattern (à l'arrêt). Ils sont gardés compressés dans la flash (un projet de 3,8 Ko en tient dans 0,7 à 1,5 Ko : de
+70 à 100 patterns selon leurs P-locks ; l'écran dit la place qui reste), à l'abri d'une coupure (une sauvegarde
+coupée laisse le pattern comme il était). Au premier démarrage, le projet sauvé devient A1. La sauvegarde de la page
+d'installation (backup) garde le pattern en cours, pas encore les autres ; dans le navigateur, ils durent le temps de
+la page.
 
 **Les pas d'un effet** (SEQ sur un effet, ou sa dernière face) : **DECAY** (10 ms à 5 s), **PROB**, **DEPTH** et
 **LENGTH**. Sans aucun trig, l'effet est toujours là (mode hold : en bas, la rangée des pas est pleine, de la

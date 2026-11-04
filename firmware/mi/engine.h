@@ -284,6 +284,14 @@ void eng_cut(void);                      /* STOP twice: stopped, every sound cut
                                           * silent until the next trig) */
 int eng_cut_pending(void);
 int eng_playing(void);
+/* the patterns (0.15: app.c keeps them, each a whole project): the next one cued, taken where the playing one ends
+ * (its longest lane's LENGTH; the machine's settings stay, the lanes from their first step); next must stay as it is
+ * until taken (eng_cue_pending 0), 0 cancels */
+void eng_cue(const project_t *next);
+int eng_cue_pending(void);
+uint32_t eng_cycles(void);               /* the patterns played to their end (taken or again) */
+int eng_pattern_len(void);               /* the playing one's, in sixteenths */
+int eng_pattern_pos(void);               /* its sixteenth now, -1 stopped */
 /* ALL undone in time: these knobs, models and randoms put back as the next bar starts (16 sixteenths of the tempo from
  * PLAY; stopped: at once) */
 void eng_back_at_bar(const float *val, const uint8_t *algo, const int8_t *rnd);

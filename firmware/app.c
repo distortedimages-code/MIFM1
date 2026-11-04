@@ -14,8 +14,10 @@
  *   KNOB 1..4   the page's four parameters        SELECT   the module's other face (1/3, 2/3...)
  *   ALGORITHM   the page's model or mode (the delay: SYNC or FREE)   PRESETS  the active track, 1 to 4
  *   EDIT        Plaits, the active track          LFO      the three LFOs, one after the other
- *   SEQ         the lane's steps (a track's: NOTE, PROB, RATCHET, LENGTH, then its RANDOM; an effect's: DECAY,
- *               PROB, DEPTH, LENGTH)
+ *   SEQ         a tap: the lane's steps (a track's: NOTE, PROB, RATCHET, LENGTH, then its RANDOM; an effect's: DECAY,
+ *               PROB, DEPTH, LENGTH). Held: the patterns (0.15), 11 banks of 16, each a whole project: a black key
+ *               a bank, a white key a pattern (several: an order, looped), from the playing one's end; REC held, a
+ *               white key erases one
  *   ARP         Endless, the track's: REC records (a key a note, SEL a rest), REC again plays it, a key transposes
  *               it; REC held clears it
  *   HOME        the mixer: the levels, the pans
@@ -32,7 +34,7 @@
  *               held and a knob turned: a lock (the lane's knobs); a step held and SEL: its locks cleared. Held: the
  *               lane erased (with GLO, 3 s: everything as a new project has it but the four sounds, the tempo and
  *               the scale). REC and SEL held: every cable erased (the modulations)
- *   PLAY        the clock runs or stops (twice quickly: stopped, every sound cut)   SAVE  held: the project saved
+ *   PLAY        the clock runs or stops (twice quickly: stopped, every sound cut)   SAVE  held: the pattern saved
  *   SEL         MOD mode: hold an LFO's key, turn a knob: a cable, as deep as turned (to the left: upside down).
  *               Held: the track's cables (MATRIX)
  *   keys        play the active track (MOD mode: the first three white keys are the LFOs, blinking at their rates)
@@ -131,7 +133,32 @@ static int halted;                       /* app_panic: the engine stopped until 
 static int engine_ok;
 static int cpu2_ok;
 static int save_hold, dirty;
-static project_t scratch;                /* a project read or made before it replaces the live one */
+static project_t scratch;                /* a project read or made before it replaces the live one (and the next
+                                          * pattern, read before the playing one ends: pat_unstage first) */
+static int proj_stored;                  /* project_load: the saved project read (else a demo) */
+static void pattern_boot(void);          /* (the patterns: further down) */
+static void pattern_forget(void);
+/* the patterns (0.15): their store, the one playing, the order (their section further down) */
+#include "pat_store.h"
+static int pat_cur;                      /* the pattern playing (its slot) */
+static uint8_t chain[64], chain_new[64]; /* the order playing; the one SEQ is making */
+static int chain_n, chain_new_n, chain_pos = -1;   /* chain_pos: its entry playing, -1 not yet */
+static int chain_staged = -1, chain_again;          /* the entry next (cued in scratch, or the same again), -1 none */
+static uint32_t chain_cycles;            /* eng_cycles seen */
+static int pat_bank;                     /* the bank its screen shows */
+static int pat_open;                     /* SEQ held: its screen */
+static int pat_used;                     /* a key pressed while SEQ held (its tap not SEQ's page then) */
+
+static void pat_name(int slot, char *b)  /* A1 .. K16 */
+{
+    int n = slot % PAT_PER_BANK + 1;
+    b[0] = (char)('A' + slot / PAT_PER_BANK);
+    if (n >= 10)
+        b[1] = '1', b[2] = (char)('0' + n - 10), b[3] = 0;
+    else
+        b[1] = (char)('0' + n), b[2] = 0;
+}
+
 
 /* the screen's own pages, after the engine's, four of each (a track's): the RANDOM page (its steps' second face); the
  * sound's second (GATE, TRANSP, OCTAVE, the filter's KEY); the filter's two (TYPE, CUTOFF, RESO, ENV; DRIVE, NOISE,
@@ -617,7 +644,8 @@ static void project_load(void)            /* the saved project (v0.1's read into
 {
     project_t *p = eng_project();
     int got = plat_store_load(OBJ_PROJECT, &scratch, sizeof scratch);
-    if (got > 0 && eng_upgrade(&scratch, got))
+    proj_stored = got > 0 && eng_upgrade(&scratch, got);
+    if (proj_stored)
         *p = scratch;
     else
 #if defined(PLAT_HOST) && !defined(PLAT_WEB)
@@ -651,6 +679,7 @@ void app_backup_flush(void)
 void app_backup_hold(int on) { save_hold = on; }
 void app_backup_restored(void)
 {
+    pattern_forget();
     project_load();
     ui.full = 1;
 }
@@ -696,6 +725,7 @@ void app_init(void)
     cpu2_ok = plat_cpu2_set(1) == 0;     /* the one time it may start: here, at power-on */
     data_ok = data_check();
     project_load();
+    pattern_boot();
     engine_ok = data_ok && eng_init() == 0;   /* (not before the tables: the modules' set-up may read them) */
     ui.track = ui.lane = 0;
     ui.page = ui.prev_page = PG_TRACK(0, 0);
@@ -2777,6 +2807,10 @@ static uint32_t hold_ms(int b, char *label, uint32_t max)
     l[0] = 0;
     if (b == B_SEL && held(B_REC)) {      /* REC and SEL: REC's hold */
         ms = 0xFFFFFFFFu;
+    } else if (b == B_REC && held(B_SEQ)) {   /* (SEQ held: REC and a white key erase a pattern) */
+        ms = 0xFFFFFFFFu;
+    } else if (b == B_SEQ) {             /* the patterns' screen */
+        ms = 350u;
     } else if (b == B_REC && held(B_SEL)) {
         text_cat(l, "ERASE ALL CABLES", sizeof l);
         ms = 1500u;
@@ -2786,7 +2820,11 @@ static uint32_t hold_ms(int b, char *label, uint32_t max)
     } else if (b == B_SEL && ui.held_step < 0 && !ui.matrix) {
         text_cat(l, "MATRIX", sizeof l);
     } else if (b == B_SAVE) {
-        text_cat(l, eng_playing() ? "SAVE: STOP FIRST" : "SAVE PROJECT", sizeof l);
+        char n[6];
+        pat_name(pat_cur, n);
+        text_cat(l, eng_playing() ? "SAVE: STOP FIRST" : "SAVE PATTERN ", sizeof l);
+        if (!eng_playing())
+            text_cat(l, n, sizeof l);
         ms = 1000u;
     } else if (b == B_REC && ui.page == VP_SYS) {
         text_cat(l, LOAD[ui.init_sel % 5], sizeof l);
@@ -3348,6 +3386,272 @@ static void dice_close(void)             /* back to the page, all of it drawn ag
     }
 }
 
+/* ------------------------------------------------------------- patterns --- */
+/* The patterns (0.15, pat_store.h): 11 banks (A to K) of 16, each a whole project. SEQ held: their screen; a black
+ * key a bank, a white key a pattern. One pressed plays it, looped: from the playing one's end (its longest lane's
+ * LENGTH), at once when stopped; several in a row, an order played in a loop (A1 A1 A2 A5: A1 twice, A2, then A5),
+ * after Teenage Engineering's Pocket Operators. With REC held, a white key erases one (stopped). SAVE held (stopped):
+ * the pattern saved in its slot, and the project as before (the backup's). An empty slot takes the pattern playing as
+ * it is (a copy to make another one from); a pattern left without SAVE comes back as it was saved. The machine's
+ * settings (the output, Warps' quality, the colours) stay whatever plays */
+
+static void pat_unstage(void)            /* scratch wanted for something else: nothing cued from it */
+{
+    eng_cue(0);
+    chain_staged = -1;
+}
+
+static int pat_read(int slot)            /* a saved pattern into scratch (as this version reads it): 0, -1 none, bad */
+{
+    project_t *p = eng_project();
+    int got = pat_load(slot, &scratch, sizeof scratch);
+    if (got <= 0 || !eng_upgrade(&scratch, got))
+        return -1;
+    scratch.out_mode = p->out_mode;      /* (the machine's settings stay) */
+    scratch.warps_hq = p->warps_hq;
+    scratch.theme = p->theme;
+    return 0;
+}
+
+static void pat_switch_now(int slot)     /* stopped: that pattern at once (an empty slot: the one playing, copied) */
+{
+    char was[6], to[6], l1[16], l2[24];
+    int lost = dirty && slot != pat_cur, full = pat_full(slot);
+    pat_name(pat_cur, was);
+    pat_name(slot, to);
+    pat_unstage();
+    if (full && pat_read(slot) == 0) {
+        *eng_project() = scratch;
+        eng_fresh();
+        dirty = 0;
+    } else if (slot != pat_cur) {
+        dirty = 1;                       /* (a copy, until SAVE) */
+    }
+    l1[0] = l2[0] = 0;
+    text_cat(l1, "PATTERN ", sizeof l1);
+    text_cat(l1, to, sizeof l1);
+    if (lost)
+        text_cat(l2, was, sizeof l2), text_cat(l2, " NOT SAVED", sizeof l2);
+    else if (!full && slot != pat_cur)
+        text_cat(l2, "NEW, FROM ", sizeof l2), text_cat(l2, was, sizeof l2);
+    else
+        text_cat(l2, "LOADED", sizeof l2);
+    pat_cur = slot;
+    app_say(l1, l2);
+    ui.full = 1;
+}
+
+static void chain_apply(void)            /* SEQ let go: the order made, from the playing pattern's end */
+{
+    char n[6], l1[16];
+    memcpy(chain, chain_new, (size_t)chain_new_n);
+    chain_n = chain_new_n;
+    chain_new_n = 0;
+    pat_unstage();
+    chain_cycles = eng_cycles();
+    if (!eng_playing()) {
+        pat_switch_now(chain[0]);
+        chain_pos = 0;
+        return;
+    }
+    chain_pos = chain[0] == pat_cur ? 0 : -1;
+    pat_name(chain[chain_pos < 0 ? 0 : (chain_n > 1 ? 1 : 0)], n);
+    l1[0] = 0;
+    text_cat(l1, chain_n > 1 ? "ORDER OF " : "NEXT ", sizeof l1);
+    if (chain_n > 1) {
+        char c[4];
+        int_text(chain_n, c);
+        text_cat(l1, c, sizeof l1);
+    } else {
+        text_cat(l1, n, sizeof l1);
+    }
+    app_say(l1, "AT THE PATTERN'S END");
+}
+
+static void chain_service(void)          /* each frame: the order going on, its next pattern read and cued */
+{
+    uint32_t c;
+    if (!chain_n)
+        return;
+    if (!eng_playing()) {                /* (stopped: the next one read again when it plays) */
+        if (chain_staged >= 0)
+            pat_unstage();
+        chain_cycles = eng_cycles();
+        return;
+    }
+    c = eng_cycles();
+    if (c != chain_cycles) {             /* a pattern played to its end: the next one in (or again) */
+        chain_cycles = c;
+        if (chain_staged >= 0 && (chain_again || !eng_cue_pending())) {
+            int slot = chain[chain_staged];
+            if (!chain_again)
+                dirty = 0;
+            else if (slot != pat_cur)
+                dirty = 1;               /* (an empty slot: the one playing, copied) */
+            chain_pos = chain_staged;
+            pat_cur = slot;
+            chain_staged = -1;
+            ui.full = 1;
+        }
+    }
+    if (chain_staged < 0) {
+        int np = chain_pos < 0 ? 0 : (chain_pos + 1) % chain_n, slot = chain[np];
+        chain_again = slot == pat_cur || !pat_full(slot) || pat_read(slot) != 0;
+        if (!chain_again)
+            eng_cue(&scratch);
+        chain_staged = np;
+    }
+}
+
+static void pattern_key(int k, int down) /* SEQ held: a black key a bank, a white key a pattern (REC held: erased) */
+{
+    static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
+    if (!down)
+        return;
+    pat_open = 1;
+    pat_used = 1;
+    for (int i = 0; i < 11; i++)
+        if (Bk[i] == k)
+            pat_bank = i, ui.full = 1;
+    for (int i = 0; i < 16; i++) {
+        int slot;
+        if (W[i] != k)
+            continue;
+        slot = pat_bank * PAT_PER_BANK + i;
+        if (held(B_REC)) {               /* erased (stopped: the flash written) */
+            char n[6], l1[16];
+            ui.long_done[B_REC] = 1;     /* (REC's own tap or hold not taken) */
+            pat_name(slot, n);
+            l1[0] = 0;
+            text_cat(l1, "PATTERN ", sizeof l1);
+            text_cat(l1, n, sizeof l1);
+            if (eng_playing())
+                app_say("ERASE: STOP FIRST", n);
+            else if (pat_erase(slot) == 0) {
+                if (slot == pat_cur)
+                    dirty = 1;           /* (the one playing: as it is, saved nowhere now) */
+                app_say(l1, pat_full(slot) ? "NOT ERASED" : "ERASED");
+            }
+            else
+                app_say("COULD NOT ERASE", n);
+        } else if (chain_new_n < (int)sizeof chain_new) {
+            chain_new[chain_new_n++] = (uint8_t)slot;
+        }
+        ui.full = 1;
+    }
+}
+
+static void pattern_seq_up(void)         /* SEQ let go: the order made, if keys were pressed */
+{
+    if (chain_new_n)
+        chain_apply();
+    if (pat_open) {
+        pat_open = 0;
+        ui.full = 1;
+        ui.head_shown[0] = -1;
+        ui.foot_shown[0] = -1;
+    }
+}
+
+/* SEQ held: the patterns' screen, over everything. At the top the banks, A to K on the black keys (the one shown lit,
+ * those holding patterns brighter); the bank's 16 on the white keys, four rows of four (saved: filled; empty: a
+ * frame; the one playing in the first colour, the next one framed in the second, blinking); the order being made or
+ * playing; the room left */
+static void draw_patterns(void)
+{
+    static int32_t shown[9];
+    char line[48], n[6], v[8];
+    uint32_t now = plat_ms();
+    int len = eng_pattern_len(), pos = eng_pattern_pos(), next = chain_staged >= 0 ? chain[chain_staged] : -1;
+    int32_t st[9] = {pat_bank, pat_cur, chain_new_n, next, (int32_t)((now / 250u) & 1u), pos, dirty, chain_n,
+                     (int32_t)pat_seq};
+    if (!ui.full && !memcmp(st, shown, sizeof st))
+        return;                          /* (nothing moved) */
+    memcpy(shown, st, sizeof st);
+    for (int b = 0; b < 3; b++) {
+        cv_begin(240, 80, BG);
+        cv_oy = -80 * b;
+        cv_y0 = 0;
+        cv_y1 = 80;
+        pat_name(pat_cur, n);
+        cv_text(10, 6, &FONT_B, "PATTERNS", HI);
+        line[0] = 0;
+        text_cat(line, n, sizeof line);
+        if (dirty)
+            text_cat(line, "*", sizeof line);
+        cv_text(230 - text_w(&FONT_M, line), 2, &FONT_M, line, AC1);
+        if (pos >= 0 && len > 0)         /* the pattern's place */
+            cv_rect(10, 28, 220 * (pos + 1) / len, 2, AC1);
+        for (int k = 0; k < PAT_BANKS; k++) {   /* the banks */
+            int any = 0, x = 10 + k * 20;
+            char c[2] = {(char)('A' + k), 0};
+            for (int i = 0; i < PAT_PER_BANK && !any; i++)
+                any = pat_full(k * PAT_PER_BANK + i);
+            cv_rect(x, 36, 18, 20, k == pat_bank ? AC1 : any ? RULE : BG);
+            if (k != pat_bank)
+                cv_rect(x, 36, 18, 1, any ? MUTED : RULE), cv_rect(x, 55, 18, 1, any ? MUTED : RULE),
+                    cv_rect(x, 36, 1, 20, any ? MUTED : RULE), cv_rect(x + 17, 36, 1, 20, any ? MUTED : RULE);
+            cv_text(x + 9 - text_w(&FONT_S, c) / 2, 38, &FONT_S, c, k == pat_bank ? BG : any ? HI : MUTED);
+            if (pat_cur / PAT_PER_BANK == k)
+                cv_rect(x + 5, 58, 8, 2, AC1);
+        }
+        for (int i = 0; i < PAT_PER_BANK; i++) {   /* its 16 */
+            int slot = pat_bank * PAT_PER_BANK + i, x = 10 + (i % 4) * 56, y = 66 + (i / 4) * 30;
+            int full = pat_full(slot), cur = slot == pat_cur, nx = slot == next && slot != pat_cur;
+            uint16_t fill = cur ? AC1 : full ? TRACK : BG, ink = cur ? BG : full ? HI : MUTED;
+            int_text(i + 1, v);
+            cv_rect(x, y, 52, 26, fill);
+            if (!cur && (!full || nx)) { /* a frame: empty, or the next one (blinking) */
+                uint16_t fc = nx ? ((now / 250u) & 1u ? AC2 : RULE) : RULE;
+                cv_rect(x, y, 52, 2, fc), cv_rect(x, y + 24, 52, 2, fc), cv_rect(x, y, 2, 26, fc),
+                    cv_rect(x + 50, y, 2, 26, fc);
+            }
+            cv_text(x + 26 - text_w(&FONT_B, v) / 2, y + 5, &FONT_B, v, ink);
+            for (int c = 0; c < chain_new_n; c++)   /* in the order being made: a dot */
+                if (chain_new[c] == slot)
+                    cv_rect(x + 44, y + 4, 4, 4, AC3);
+        }
+        line[0] = 0;                     /* the order: being made, or playing */
+        {
+            const uint8_t *o = chain_new_n ? chain_new : chain;
+            int on = chain_new_n ? chain_new_n : chain_n;
+            for (int c = 0; c < on && text_w(&FONT_XS, line) < 196; c++) {
+                pat_name(o[c], n);
+                if (c)
+                    text_cat(line, " ", sizeof line);
+                text_cat(line, n, sizeof line);
+            }
+            if (!on)
+                text_cat(line, "A KEY: A PATTERN, SEVERAL: AN ORDER", sizeof line);
+            cv_text(10, 190, &FONT_XS, line, chain_new_n ? AC3 : on > 1 ? TXT : MUTED);
+        }
+        line[0] = 0;
+        int_text((int32_t)(pat_room() / 1024u), v);
+        text_cat(line, "REC+KEY ERASES   ", sizeof line);
+        text_cat(line, v, sizeof line);
+        text_cat(line, " KB FREE", sizeof line);
+        cv_text(10, 214, &FONT_T, line, MUTED);
+        cv_oy = 0;
+        blit(0, (uint32_t)(80 * b));
+    }
+}
+
+static void pattern_boot(void)           /* power-on: the patterns read; the playing one the pattern saved last, else
+                                          * A1 (an older version's saved project becomes A1) */
+{
+    pat_init();
+    pat_cur = pat_last >= 0 ? pat_last : 0;
+    if (pat_last < 0 && proj_stored && pat_ok)
+        pat_save(0, eng_project(), sizeof(project_t));
+}
+
+static void pattern_forget(void)         /* another project read in (a restore, INIT, the demo): no order going on */
+{
+    pat_unstage();
+    chain_n = chain_new_n = 0;
+    chain_pos = -1;
+}
+
 /* --------------------------------------------------------------- trauma --- */
 /* TRAUMA (OCT+ held, SELECT turned): a dose of saturation (engine.cc: the drives, the filters' FM, Warps, the
  * delay's drive), after Audiotrauma, its own screen over everything, in black and white (0.14.6). White bars coming
@@ -3550,6 +3854,13 @@ static void draw(void)
         ui.body_panel = ui.body_knobs = 0;
         return;
     }
+    if (pat_open && data_ok && engine_ok) {   /* SEQ held: the patterns' screen, over everything */
+        draw_patterns();
+        poll_keys();
+        ui.full = 0;
+        ui.body_panel = ui.body_knobs = 0;
+        return;
+    }
     if (ui.trauma && data_ok && engine_ok) {   /* OCT+ held, SELECT: TRAUMA's own screen, over everything */
         draw_trauma();
         poll_keys();
@@ -3647,6 +3958,7 @@ static void project_init(int which)
                                           * Warps' quality, the colours */
     uint8_t out = p->out_mode, hq = p->warps_hq, theme = p->theme;
     eng_play(0);
+    pattern_forget();
     if (which == 2) {
         project_load();
         app_say("SAVED PROJECT", "LOADED");
@@ -3905,6 +4217,10 @@ static void button_down(int b)
         break;
     case B_SAVE: case B_ENV:
         break;                           /* on release (a tap), held long, or held with a knob */
+    case B_SEQ:                          /* a tap: the steps (let go); held: the patterns (0.15) */
+        pat_used = 0;
+        chain_new_n = 0;
+        break;
     default:
         module_button(b);
         break;
@@ -3940,6 +4256,7 @@ static void erase_all(void)              /* GLO and REC held 3 s: the project as
                                           * duck and the bus as new, no swing, the random dose and TRAUMA at 0 */
 {
     project_t *p = eng_project();
+    pat_unstage();                       /* (scratch: no next pattern in it) */
     eng_blank(&scratch);
     for (int t = 0; t < ENG_TRACKS; t++)
         for (int pg = 0; pg < 3; pg++) {
@@ -3958,6 +4275,13 @@ static void erase_all(void)              /* GLO and REC held 3 s: the project as
 
 static void button_long(int b)
 {
+    if (b == B_SEQ) {                    /* the patterns' screen, as long as SEQ is held */
+        pat_open = 1;
+        ui.full = 1;
+        return;
+    }
+    if (b == B_REC && held(B_SEQ))
+        return;
     if (b == B_REC && held(B_SEL)) {     /* REC and SEL: every cable, the tracks' and the global ones */
         for (int g = 0; g <= ENG_TRACKS; g++)
             cables_erase(g);
@@ -3980,13 +4304,21 @@ static void button_long(int b)
         ui.grid = 0;
         ui.msel = 0;
         ui.full = 1;
-    } else if (b == B_SAVE) {
+    } else if (b == B_SAVE) {            /* the pattern in its slot, and the project (the backup's, the next power-on's) */
+        char n[6], l1[16];
+        int e;
+        pat_name(pat_cur, n);
+        l1[0] = 0;
+        text_cat(l1, "PATTERN ", sizeof l1);
+        text_cat(l1, n, sizeof l1);
         if (eng_playing())
             app_say("STOP FIRST", "THEN SAVE");
-        else if (project_save() == 0)
-            app_say("PROJECT", "SAVED");
-        else
+        else if (project_save() != 0)
             app_say("COULD NOT", "SAVE");
+        else if ((e = pat_save(pat_cur, eng_project(), sizeof(project_t))) == 0)
+            app_say(l1, "SAVED");
+        else
+            app_say(l1, e == -1 ? "NO ROOM LEFT" : "NOT SAVED");
     } else if (b == B_REC) {
         if (ui.page == VP_SYS) {
             project_init(ui.init_sel);
@@ -4026,6 +4358,11 @@ static void button_up(int b)
 {
     int pt = ptype(ui.page);
     switch (b) {
+    case B_SEQ:                          /* a tap: the lane's steps; held: the order made, the screen closed */
+        if (!pat_used && !ui.long_done[b])
+            module_button(B_SEQ);
+        pattern_seq_up();
+        break;
     case B_SEL:
         if (ui.combo && !held(B_REC))
             ui.combo = 0;
@@ -4228,9 +4565,17 @@ static void poll_keys(void)
     for (k = 0; k < NKEYS; k++) {
         uint32_t bit = 1u << k;
         int down = (keys & bit) && !(ui.keys & bit), up = !(keys & bit) && (ui.keys & bit);
-        if ((!down && !up) || ui.mod)    /* MOD: the keys are the sources (held_source) */
-            continue;
         int note = 53 + (int)k + 12 * ui.octave;
+        if (!down && !up)
+            continue;
+        if (held(B_SEQ)) {               /* the patterns' (a note let go meanwhile: let go) */
+            pattern_key((int)k, down);
+            if (up && !ui.grid && !ui.mod && ui.erec < 0)
+                eng_key(ui.track, note, 0);
+            continue;
+        }
+        if (ui.mod)                      /* MOD: the keys are the sources (held_source) */
+            continue;
         if (ui.grid) {
             grid_key((int)k, down);
         } else if (ui.erec >= 0) {       /* Endless recording: a note a key, heard */
@@ -4522,6 +4867,7 @@ void app_frame(void)
         ui.full = 1;
     }
     input();
+    chain_service();
     if (ui.msg_until && now >= ui.msg_until) {
         ui.msg_until = 0;
         ui.foot_shown[0] = -1;

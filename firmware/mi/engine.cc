@@ -3663,6 +3663,43 @@ void eng_back_at_bar(const float* val, const uint8_t* algo, const int8_t* rnd) {
 int eng_back_pending(void) { return back_pending; }
 void eng_back_cancel(void) { back_pending = 0; }
 
+// the patterns (0.15, app.c's: each a whole project): the next one cued by the main loop, taken by the render in the
+// block where the playing one ends (its longest lane's LENGTH in sixteenths), the lanes from their first step
+const project_t* volatile cue_p;        // the next pattern (the main loop's copy, untouched until taken), 0 none
+volatile uint32_t pat_cycles;           // the patterns played to their end (taken or again)
+int32_t pat_end_seen = -2;
+int pattern_len() {
+  int len = 1;
+  for (int l = 0; l < ENG_LANES; ++l) {
+    int k = Pi(PG_STEP(l), 3);
+    len = k > len ? k : len;
+  }
+  return len;
+}
+void take_pattern(const project_t* c) {   // the machine's settings stay (the FM-1's, not the music's)
+  uint8_t out = proj.out_mode, hq = proj.warps_hq, th = proj.theme;
+  proj = *c;
+  proj.out_mode = out;
+  proj.warps_hq = hq;
+  proj.theme = th;
+  for (int l = 0; l < ENG_LANES; ++l) lane_fresh(l);
+  ++lock_gen;
+  pad_pos = -1;
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    e_clk[t] = 1e9f;
+    e_pos[t] = -1;
+    e_dir[t] = 1;
+  }
+}
+void eng_cue(const project_t* next) {   // (its bytes all written before the pointer is)
+  __atomic_signal_fence(__ATOMIC_SEQ_CST);
+  cue_p = next;
+}
+int eng_cue_pending(void) { return cue_p != 0; }
+uint32_t eng_cycles(void) { return pat_cycles; }
+int eng_pattern_len(void) { return pattern_len(); }
+int eng_pattern_pos(void) { return playing && tick >= 0 ? static_cast<int>(tick % pattern_len()) : -1; }
+
 void eng_key(int track, int note, int on) {
   if (track < 0 || track >= ENG_TRACKS) return;
   if (on) {
@@ -3734,6 +3771,20 @@ void eng_render(float* l, float* r, uint32_t n) {
       for (int t = 0; t < ENG_TRACKS; ++t)
         for (int i = 0; i < ENG_NTP; ++i) proj.rnd[t][i] = back_rnd[t][i];
       back_pending = 0;
+    }
+  }
+  if (playing && !restart && tick >= 0 && pat_end_seen != tick) {   // the pattern's end in this block: the next one
+    int len = pattern_len();                                         // in (cued), or the same again
+    if ((tick + 1) % len == 0 && six_len(step_len_now()) - step_clk <= static_cast<float>(n)) {
+      pat_end_seen = tick;
+      ++pat_cycles;
+      const project_t* c = cue_p;
+      if (c) {
+        take_pattern(c);
+        cue_p = 0;
+        tick = -1;                      // (its next sixteenth its first step)
+        pat_end_seen = -2;
+      }
     }
   }
   // 1. the LFOs, with the knobs and cables of the last block
