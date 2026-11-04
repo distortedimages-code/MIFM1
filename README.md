@@ -547,7 +547,10 @@ rendu, ses câbles, ses bits, TRAUMA), les quatre filtres et la batterie MIFM1 (
 instructions, le même son, échantillon pour échantillon. Mesuré sur la machine, le stress test : les cœurs de 95 et
 89 % à 78 et 72 %, son pic de 120 % (G3, des blocs en retard, des grésillements) à 99 % (G1), plus rien n'y grésille ;
 les effets aussi s'allègent (35 à 30 %), leur code plus souvent dans le cache. L'émulateur annonce de nouveau ce que
-la machine fait (75 % par cœur). La FM (19 Ko) reste en flash : la première piste FM d'un bloc paie encore son code.
+la machine fait (75 % par cœur). Depuis 0.14.5, la FM aussi : son rendu compilé pour la taille (ses réglages, ses
+enveloppes, une fois tous les 8 échantillons : 18,5 Ko déroulés, 5 Ko ainsi, 3 % d'instructions en plus, les mêmes
+échantillons), ses six boucles à part, 11,6 Ko en tout ; la zone de code en RAM passe à 42 Ko (10 Ko pris au pool,
+qui en avait de trop).
 
 **Le garde-fou** (0.8.2) : quand un bloc dépasse 92 % de son temps, la FM des filtres s'allège pendant 0,3 s (ses
 coefficients recalculés un échantillon sur deux) ; quand un bloc arrive en retard (plus de 100 % : un clic), un sur

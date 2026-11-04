@@ -27,7 +27,7 @@ o2_cflags = ["-std=gnu++11", "-fno-exceptions", "-fno-rtti", "-fno-threadsafe-st
 # the code the FM-1 runs from RAM (0.14.4). Its code runs in place from the flash, through a small cache: code not in
 # it yet waits for the flash, about 1 us a 32-byte line (on the stress test, the first FM track of a block paid
 # ~170 us for the FM's code, the same FM on the next track nothing: instruction counts never see it). What every
-# track runs at every block goes in the RAM the FM-1 keeps for code (32 KB, copied at boot): these functions as
+# track runs at every block goes in the RAM the FM-1 keeps for code (42 KB since 0.14.5, copied at boot): these functions as
 # compiled, the same instructions, their sections renamed into it (o2_ram: fm1-base patched,
 # patches/fm1-base-o2-device.patch, elf_rename); the RAM and the flash 4 MB apart, beyond a call's reach, their units with
 # JieLi's long calls (o2_device). The audio runs in its interrupt and on the second core, never while the flash is off
@@ -40,8 +40,16 @@ o2_ram = ["mi/engine.cc:_ZN12_GLOBAL__N_18run_taskEij", "mi/engine.cc:_ZN12_GLOB
           "mi/mi_filter.cc:_ZN12_GLOBAL__N_19sub_blockERNS_6FilterERNS_3RunEjjPj",
           "mi/mi_filter.cc:_ZN12_GLOBAL__N_18fm_coefsERNS_6FilterERKNS_3RunE",
           "mi/mi_filter.cc:_ZN12_GLOBAL__N_17processERNS_6FilterEPfj",
-          "mi/mi_drum.cc:drum_render"]
-o2_device = ["mi/engine.cc", "mi/mi_filter.cc", "mi/mi_drum.cc"]
+          "mi/mi_drum.cc:drum_render",
+          "mi/mi_fm4.cc:fm4_render", "mi/mi_fm4.cc:_ZN12_GLOBAL__N_14coreILb0ELi0EEEvRNS_5VoiceERKNS_4CoreEPfi",
+          "mi/mi_fm4.cc:_ZN12_GLOBAL__N_14coreILb1ELi0EEEvRNS_5VoiceERKNS_4CoreEPfi",
+          "mi/mi_fm4.cc:_ZN12_GLOBAL__N_14coreILb0ELi1EEEvRNS_5VoiceERKNS_4CoreEPfi",
+          "mi/mi_fm4.cc:_ZN12_GLOBAL__N_14coreILb1ELi1EEEvRNS_5VoiceERKNS_4CoreEPfi",
+          "mi/mi_fm4.cc:_ZN12_GLOBAL__N_14coreILb0ELi2EEEvRNS_5VoiceERKNS_4CoreEPfi",
+          "mi/mi_fm4.cc:_ZN12_GLOBAL__N_14coreILb1ELi2EEEvRNS_5VoiceERKNS_4CoreEPfi",
+          "mi/mi_fm4.cc:_ZN12_GLOBAL__N_18shape_atERKNS_5ShapeEf", "mi/mi_fm4.cc:_ZN12_GLOBAL__N_15t60_sEf",
+          "mi/mi_fm4.cc:_ZL7fm_expff", "mi/mi_fm4.cc:_ZL8fm_exp2ff", "mi/mi_fm4.cc:_ZL8fm_log2ff"]
+o2_device = ["mi/engine.cc", "mi/mi_filter.cc", "mi/mi_drum.cc", "mi/mi_fm4.cc"]
 o2_device_cflags = ["-mllvm", "-pi32v2-large-program=true"]
 include = ["third_party", "third_party/lxr"]
 device_include = ["shim"]      # the C and C++ headers the FM-1's toolchain has not (no libm, no C++ library)

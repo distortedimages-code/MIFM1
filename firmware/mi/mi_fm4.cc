@@ -263,9 +263,10 @@ struct Core {
   float kn, s1, s2;                     // PW: the knee, the two halves' slopes
 };
 
-// m samples at twice the rate: SQ the first operator a square (else its feedback a saw), MUT 1 PW, 2 SYNC
+// m samples at twice the rate: SQ the first operator a square (else its feedback a saw), MUT 1 PW, 2 SYNC. Each its
+// own function (0.14.5): the six no longer copied into fm4_render, each where the FM-1 runs it from RAM (fm1.toml)
 template <bool SQ, int MUT>
-void core(Voice& v, const Core& c, float* y, int m) {
+__attribute__((noinline)) void core(Voice& v, const Core& c, float* y, int m) {
   uint32_t p1 = v.ph[0], p2 = v.ph[1], p3 = v.ph[2], p4 = v.ph[3], pm = v.pm;
   float fa0 = v.fa0, fa1 = v.fa1, fb0 = v.fb0, fb1 = v.fb1;
   float g1 = c.g[0], g2 = c.g[1], g3 = c.g[2], g4 = c.g[3], e1 = c.e1;
@@ -393,7 +394,10 @@ void fm4_gate(int t, int g) {
   v.gate = g;
 }
 
-void fm4_render(int t, float* out, uint32_t n) {
+// compiled for size (0.14.5): its settings, its envelopes and its sub-blocks once each 8 samples, not its samples (the
+// cores'): 18.5 KB unrolled, 5 KB so, 3 % more instructions, the same samples (the same operations in the same order).
+// The FM-1 reads its code through a small cache: 13 KB less to wait for at each block, and room for it in RAM
+__attribute__((minsize)) void fm4_render(int t, float* out, uint32_t n) {
   if (t < 0 || t >= MF_TRACKS) return;
   Voice& v = voice[t];
   const int algo = v.algo;

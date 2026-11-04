@@ -1,13 +1,33 @@
 MIFM1's changes to fm1-base (base/), applied by tools/patch_base.sh before a build.
-Two things for MIFM1's code in RAM (fm1.toml): o2_device and o2_device_cflags, more flags for some o2 units in the
+Three things for MIFM1's code in RAM (fm1.toml): o2_device and o2_device_cflags, more flags for some o2 units in the
 firmware only (JieLi's long calls, -pi32v2-large-program, as fm1-base's radio units have them: the RAM and the flash
 are 4 MB apart, beyond a call's reach); o2_ram, functions of o2 units moved to the RAM code as compiled, their
 sections renamed (.text.F -> .c1_text.F) in the objects after the compiler (elf_rename: JieLi's objcopy renames
 nothing; a section attribute in the source would keep the compiler from inlining into those functions anything that
 is not in the same section).
 
+Since 0.14.5 the RAM code's region is 42 KB (app.ld: RAMTEXT 0xA800, RAM and POOL after it; the pool 10 KB less,
+its spare 2 KB: MIFM1 builds no mirror), the build's RAM and pool figures with it.
+
+diff --git a/device/app.ld b/device/app.ld
+index 06002a2..1e032a5 100644
+--- a/device/app.ld
++++ b/device/app.ld
+@@ -14,9 +14,9 @@ MEMORY
+ {
+     XIP    (rx)  : ORIGIN = 0x02000120, LENGTH = 0x9DFBC   /* the app slot (0x8DFBC) and 64 KB: the image before
+                                                        * boot_pack packs it; build.py checks the slot */
+-    RAMTEXT (rwx): ORIGIN = 0x01C00000, LENGTH = 0x8000
+-    RAM    (rwx) : ORIGIN = 0x01C08000, LENGTH = 96K
+-    POOL   (rw)  : ORIGIN = 0x01C20000, LENGTH = 0x54000
++    RAMTEXT (rwx): ORIGIN = 0x01C00000, LENGTH = 0xA800   /* (MIFM1: 42 KB, its audio code; the pool 10 KB less) */
++    RAM    (rwx) : ORIGIN = 0x01C0A800, LENGTH = 96K
++    POOL   (rw)  : ORIGIN = 0x01C22800, LENGTH = 0x51800
+     NOINIT (rw)  : ORIGIN = 0x01C7C000, LENGTH = 0x3D50
+ }
+ SECTIONS
 diff --git a/tools/build.py b/tools/build.py
-index 2f2312d..58d19cb 100755
+index 2f2312d..22f9be9 100755
 --- a/tools/build.py
 +++ b/tools/build.py
 @@ -611,6 +611,34 @@ def radio_units():
@@ -73,3 +93,15 @@ index 2f2312d..58d19cb 100755
      elf = OUT / (NAME + ".elf")
      # unreferenced functions (each in its own section: -ffunction-sections) are dropped: the DSP keeps
      # mono reference paths for the host tests that the firmware no longer calls. The BT libraries are LTO
+@@ -861,9 +898,9 @@ def check(img, syms, dis, rt):
+     def sym(name):
+         mm = re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M)
+         return int(mm.group(1), 16) if mm else 0
+-    bss = sym("_bss_end") - 0x01C08000
++    bss = sym("_bss_end") - (0x01C08000 if WIFI else 0x01C0A800)   # (MIFM1: app.ld's RAM after 42 KB of RAM code)
+     pool = sym("_pool_end") - sym("_pool_start")
+-    ram, pool_max, spare = (128 * 1024, 0x4C000, 2048) if WIFI else (96 * 1024, 0x54000, 8192)   # (app_wifi.ld)
++    ram, pool_max, spare = (128 * 1024, 0x4C000, 2048) if WIFI else (96 * 1024, 0x51800, 2048)   # (app_wifi.ld)
+     if os.environ.get("FM1B_POOL_SPARE", "").isdigit():   # an app's own build for itself (a demo build with mirror)
+         spare = int(os.environ["FM1B_POOL_SPARE"])
+     notes.append(f"image {len(img)} B; RAM .data+.bss {bss} B of {ram}; pool {pool} B of {pool_max}")
