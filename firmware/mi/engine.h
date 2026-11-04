@@ -316,6 +316,9 @@ void eng_endless_clear(int t);
 int eng_endless_on(int t);               /* 1: it plays the track */
 void eng_endless_key(int t, int note);   /* a key: its transposition */
 int eng_endless_pos(int t);              /* the note playing, -1 none */
+enum { ES_NOTE, ES_REST, ES_PAUSE, ES_HOLE, ES_LEAP };   /* (0.16.3) what Endless' last step did: a note, a recorded
+                                          * rest, REST's pause, a hole (HOLES), a note an octave up (LEAP) */
+int eng_endless_state(int t);
 void eng_render(float *l, float *r, uint32_t n);   /* audio interrupt: the last block out (the effects and the master
                                           * bus play a block behind the voices: 2.9 ms) */
 /* the USB audio input's channels for the block eng_render just gave (the audio interrupt, after it; its calls tell the

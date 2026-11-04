@@ -775,7 +775,10 @@ tenu** efface la boucle (la piste retrouve ses pas). Probabilité, ratchets, al�
 SELECT) choisit ce qui joue : **STRIDE**, une note sur combien (ALL : toutes ; 1/2 : une sur deux, les autres sautées ;
 sur une boucle de longueur impaire, la suite finit par les passer toutes, dans un autre ordre), **REST**, un silence
 tous les combien de pas (1/5 : quatre notes puis un silence ; la boucle reprend où elle en était), **HOLES**, des
-silences au hasard (0 à 100 %), **LEAP**, des notes une octave plus haut au hasard. GLO tenu : sur les quatre pistes.
+silences au hasard (0 à 100 %), **LEAP**, des notes une octave plus haut au hasard. GLO tenu : sur les quatre pistes. En bas
+(0.16.3), la frise le montre : les notes que STRIDE n'atteint jamais en gris, la note en cours encadrée et vide
+pendant un silence de REST (en gris) ou un trou de HOLES (en blanc), relevée avec une marque au-dessus quand LEAP la
+monte d'une octave.
 
 **Warps** (FX, troisième effet) : le module de modulation croisée de Mutable, entre deux pistes. Sa première page
 suffit pour jouer : **CARRIER**, la porteuse (Off : Warps éteint ; une piste T1-T4 ; ou son oscillateur interne,

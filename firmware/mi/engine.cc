@@ -357,6 +357,7 @@ int fx_hit[kFx];
 float e_clk[ENG_TRACKS];
 int e_pos[ENG_TRACKS], e_dir[ENG_TRACKS], e_note[ENG_TRACKS];
 int32_t e_cnt[ENG_TRACKS];              // (0.16.2) Endless' steps since PLAY (its REST counts them)
+int e_state[ENG_TRACKS];                // (0.16.3) what its last step did (ES_*: the screen shows it)
 volatile int e_rec[ENG_TRACKS];
 
 // the voices' blocks, two: the voices play this one (vbuf) while the mix takes the last one (mbuf), a block behind
@@ -1116,8 +1117,11 @@ void sequence(uint32_t n) {
         }
         int nt = pause ? ENDLESS_REST : proj.endless[t][e_pos[t]];
         int holes = eng_endless_opt(t, EO_HOLES), leap = eng_endless_opt(t, EO_LEAP);
-        if (nt != ENDLESS_REST && holes && rand_u32() % 100u < static_cast<uint32_t>(holes)) nt = ENDLESS_REST;   // HOLES
-        if (nt != ENDLESS_REST && leap && rand_u32() % 100u < static_cast<uint32_t>(leap)) nt += 12;   // LEAP: an octave up
+        e_state[t] = pause ? ES_PAUSE : nt == ENDLESS_REST ? ES_REST : ES_NOTE;
+        if (nt != ENDLESS_REST && holes && rand_u32() % 100u < static_cast<uint32_t>(holes))   // HOLES
+          nt = ENDLESS_REST, e_state[t] = ES_HOLE;
+        if (nt != ENDLESS_REST && leap && rand_u32() % 100u < static_cast<uint32_t>(leap))     // LEAP: an octave up
+          nt += 12, e_state[t] = ES_LEAP;
         if (nt != ENDLESS_REST) {
           int rests = 0;                // (PADS held: to its next note, over the rests after it, forward)
           if (held_pad(t) && d == 0)
@@ -4655,5 +4659,6 @@ void eng_endless_key(int t, int note) {   // from its first note
     }
 }
 int eng_endless_pos(int t) { return eng_endless_on(t) && playing ? e_pos[t] : -1; }
+int eng_endless_state(int t) { return t >= 0 && t < ENG_TRACKS && eng_endless_on(t) && playing ? e_state[t] : ES_NOTE; }
 
 }  // extern "C"

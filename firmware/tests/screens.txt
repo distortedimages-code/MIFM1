@@ -431,6 +431,12 @@ turn K3 10
 turn K4 5
 wait 1500
 shot 16x3_endless_stride_rest.png
+wait 130
+shot 16x4_endless_next.png
+wait 130
+shot 16x5_endless_next.png
+wait 130
+shot 16x6_endless_next.png
 turn K1 -1
 turn K2 -4
 turn K3 -10

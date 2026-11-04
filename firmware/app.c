@@ -2940,10 +2940,23 @@ static void foot_steps(int t)            /* the steps of a page: a trig lit, a l
     }
 }
 
-static void foot_endless(int t)          /* Endless's notes, 16 at a time: a bar as high as the note, a rest a dot */
+static int gcd(int a, int b)
+{
+    while (b) {
+        int r = a % b;
+        a = b, b = r;
+    }
+    return a;
+}
+
+/* Endless's notes, 16 at a time: a bar as high as the note, a rest a dot; the one playing white. Its options seen
+ * (0.16.3): the notes STRIDE never reaches dim; REST's pause and a hole (HOLES) the playing one in a frame, empty; a
+ * leap (LEAP) its bar raised, a mark over it */
+static void foot_endless(int t)
 {
     project_t *p = eng_project();
-    int len = p->endless_len[t], pos = eng_endless_pos(t), first, lo = 127, hi = 0;
+    int len = p->endless_len[t], pos = eng_endless_pos(t), first, lo = 127, hi = 0, st = eng_endless_state(t);
+    int sd = eng_endless_opt(t, EO_STRIDE), dir = (int)p->val[PG_ARP(t) * 4 + 2], g = len ? gcd(sd, len) : 1;
     uint16_t ac = ui.erec == t ? AC3 : track_accent(t);
     if (!len) {
         cv_text(10, 11, &FONT_XS, ui.erec == t ? "PLAY THE NOTES, ONE BY ONE" : "NO NOTES YET", DIM);
@@ -2956,13 +2969,24 @@ static void foot_endless(int t)          /* Endless's notes, 16 at a time: a bar
             hi = p->endless[t][i] > hi ? p->endless[t][i] : hi;
         }
     for (int i = 0; i < 16 && first + i < len; i++) {
-        int x = 9 + i * 13, nt = p->endless[t][first + i], on = first + i == pos;
+        int x = 9 + i * 13, nt = p->endless[t][first + i], on = first + i == pos, idx = first + i;
+        int reach = ui.erec == t || g <= 1 || dir >= 2 || (dir == 1 ? (len - 1 - idx) % g == 0 : idx % g == 0);
         if (nt == ENDLESS_REST) {
             disc((float)x + 5.0f, 24.0f, 1.6f, on ? HI : DIM);
             continue;
         }
         int h = 5 + (hi > lo ? (nt - lo) * 15 / (hi - lo) : 8);
-        cv_rect(x, 27 - h, 11, h, on ? HI : ac);
+        if (on && (st == ES_PAUSE || st == ES_HOLE)) {   /* (silent this step: a frame) */
+            uint16_t fc = st == ES_PAUSE ? MUTED : HI;
+            cv_rect(x, 27 - h, 11, 1, fc), cv_rect(x, 26, 11, 1, fc), cv_rect(x, 27 - h, 1, h, fc),
+                cv_rect(x + 10, 27 - h, 1, h, fc);
+        } else if (on && st == ES_LEAP) {   /* (an octave up: raised, a mark over it) */
+            int hh = h + 4 > 22 ? 22 : h + 4;
+            cv_rect(x, 27 - hh, 11, hh, HI);
+            cv_rect(x + 3, 27 - hh - 3, 5, 2, HI);
+        } else {
+            cv_rect(x, 27 - h, 11, h, on ? HI : reach ? ac : DIM);
+        }
     }
 }
 
@@ -3156,7 +3180,9 @@ static void draw_footer(void)
         lh = lh * 9 + lv[i];
     }
     if (mode == 6) {                     /* Endless: its notes, the one playing */
-        lh = eng_endless_pos(ui.track) + 1 + (ui.erec >= 0) * 100 + p->endless_len[ui.track] * 1000;
+        lh = eng_endless_pos(ui.track) + 1 + (ui.erec >= 0) * 100 + p->endless_len[ui.track] * 1000 +
+             eng_endless_state(ui.track) * 100000 + eng_endless_opt(ui.track, EO_STRIDE) * 1000000 +
+             (int)p->val[PG_ARP(ui.track) * 4 + 2] * 10000000;
         for (int i = 0; i < p->endless_len[ui.track]; i++)
             lh = lh * 31 + p->endless[ui.track][i];
     }
