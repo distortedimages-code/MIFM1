@@ -3817,7 +3817,9 @@ static void preset_edit_up(void)         /* EDIT let go: the screen closed, the 
 
 static void fit_text(char *b, const felucca_font_t *f, int w)   /* cut to w pixels */
 {
-    int n = (int)strlen(b);
+    int n = 0;                           /* (no strlen on the FM-1: felucca-bsp's libc is memset, memcpy, memcmp) */
+    while (b[n])
+        n++;
     while (n > 0 && text_w(f, b) > w)
         b[--n] = 0;
 }
