@@ -99,12 +99,11 @@ jobs:
       - name: Diagnostic (the device code's helpers and hot loops)
         run: |
           OD="$JIELI_TOOLCHAIN/common/bin/objdump"
-          echo "HELPERS IN THE IMAGE:"; grep -E '^__[A-Za-z0-9_]+:' firmware/build/mifm1.dis | tr '\n' ' '; echo
-          mkdir -p diag
-          for o in firmware/build/o2/*.o; do "$OD" -d -r -mcpu=r3 "$o" > "diag/$(basename "$o").dis" 2>/dev/null || true; done
-          grep -n -E '^(__|fm1_|plat_|eng_render|render_)[A-Za-z0-9_]*:' firmware/build/mifm1.dis > diag/elf_funcs.txt || true
-          tar czf diag.tgz diag
-          echo "DIAG-BEGIN $(wc -c < diag.tgz)"; base64 -w 120 diag.tgz; echo "DIAG-END"
+          "$OD" -h firmware/build/mifm1.elf | grep -E "ram_text|\.text|\.data|\.bss"
+          echo "RAM TEXT SYMBOLS:"
+          "$OD" -t firmware/build/mifm1.elf | grep -E "\.ram_text" | sort -k5 | tail -60
+          echo "WHERE:"
+          "$OD" -t firmware/build/mifm1.elf | grep -E "render_voice|run_task|set_voice|set_filter|core1_job|bend_one|apply_cables|mf_process|mf_set|coefs|drive_in|sub_block|drum_render|_c1_start|_c1_end|_rt_start|_rt_end"
       - name: The moved tables' references, as linked (their addresses, none with its halfwords swapped)
         run: python3 tools/check_res_links.py firmware/build/mifm1.elf firmware/res/symbols.txt
       - name: No static initializer in the modules as JieLi's compiler built them (the FM-1 never runs one)
