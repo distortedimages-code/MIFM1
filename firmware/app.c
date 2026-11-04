@@ -17,8 +17,9 @@
  *               track's sound each, 11 banks of 16 (A the factory's): a black key a bank, a white key that sound onto
  *               the track (heard while held); SAVE held, a white key: saved there; REC held: erased
  *   LFO         the three LFOs, one after the other
- *   SEQ         a tap: the lane's steps (a track's: NOTE, PROB, RATCHET, LENGTH, then its RANDOM; an effect's: DECAY,
- *               PROB, DEPTH, LENGTH). Held: the patterns (0.15), 11 banks of 16, each a whole project: a black key
+ *   SEQ         a tap: the lane's steps (a track's: NOTE, PROB, RATCHET (0.16: 1..8, then the tuplets 3:2, 3:4...),
+ *               LENGTH, then its RANDOM, its EUCLID; an effect's: DECAY, PROB, DEPTH, LENGTH), last its PLAY face (0.16:
+ *               SPEED, DIRECTION, a track's ratchets' CURVE or an effect's PROB, LENGTH). Held: the patterns (0.15), 11 banks of 16, each a whole project: a black key
  *               a bank, a white key a pattern (several: an order, looped), from the playing one's end; REC held, a
  *               white key erases one
  *   ARP         Endless, the track's: REC records (a key a note, SEL a rest), REC again plays it, a key transposes
@@ -182,7 +183,9 @@ static void pat_name(int slot, char *b)  /* A1 .. K16 */
 #define VP_FLT2(t) (ENG_NPAGES + 12 + (t))
 #define VP_ENV2(t) (ENG_NPAGES + 16 + (t))
 #define VP_SYS (ENG_NPAGES + 20)
-enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS };
+#define VP_PLAY(l) (ENG_NPAGES + 21 + (l))   /* (0.16) a lane's PLAY face, its steps' last: SPEED, DIRECTION, then a
+                                          * track's ratchets' CURVE (an effect's PROB), LENGTH */
+enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS, PT_PLAY };
 /* a track's pages in four sets: EDIT goes from one to the next of the first three (its sound, its bending: the bits
  * and the glitch, its filter),
  * ENV to the envelopes; SELECT through a set's pages; ALGO changes what the page shows (the sound's model, the
@@ -238,11 +241,20 @@ static struct {
 /* ------------------------------------------------------------ the pages --- */
 static int ptype(int page)
 {
-    return page >= VP_SYS ? PT_SYS : page >= ENG_NPAGES ? PT_RND + (page - ENG_NPAGES) / 4 : eng_page_type(page);
+    return page >= VP_PLAY(0) ? PT_PLAY : page >= VP_SYS ? PT_SYS : page >= ENG_NPAGES ? PT_RND + (page - ENG_NPAGES) / 4
+                                                                                        : eng_page_type(page);
 }
 static int ptrack(int page)              /* the track a page belongs to, -1: none */
 {
+    if (page >= VP_PLAY(0))
+        return page - VP_PLAY(0) < ENG_TRACKS ? page - VP_PLAY(0) : -1;
     return page >= VP_SYS ? -1 : page >= ENG_NPAGES ? (page - ENG_NPAGES) % 4 : eng_page_track(page);
+}
+static int plane(int page)               /* a lane's page (its steps', its effect's), the lane: -1 none */
+{
+    if (page >= VP_PLAY(0))
+        return page - VP_PLAY(0);
+    return page < ENG_NPAGES ? eng_page_lane(page) : -1;
 }
 
 static int drum_track(int t)             /* a model with its own eight knobs on it (a drum, an FM drum, ZERO) */
@@ -312,30 +324,33 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
                                                                           * (its two modes) */
         f[0] = PG_MIX, f[1] = PG_PAN, f[2] = PG_EQ, f[3] = PG_DUCK, f[4] = PG_COMP, f[5] = PG_OTT;
         return 6;
-    case PT_STEP: case PT_RND: case PT_EUC:
-        if (t < 0) {                     /* an effect's Euclidean face: its module's */
-            int l = eng_page_lane(page);
+    case PT_STEP: case PT_RND: case PT_EUC: case PT_PLAY:
+        if (t < 0) {                     /* an effect's Euclidean or PLAY face: its module's */
+            int l = plane(page);
             return module_pages(l == LANE_DELAY ? PG_DELAY(0) : l == LANE_REVERB ? PG_REVERB : PG_WARPS(0), f);
         }
         f[0] = PG_STEP(t);
         f[1] = VP_RND(t);
         f[2] = PG_EUC(t);
-        return 3;
+        f[3] = VP_PLAY(t);
+        return 4;
     case PT_ARP: f[0] = PG_ARP(t); return 1;
     case PT_DELAY1: case PT_DELAY2: case PT_DSEND: case PT_LANE: case PT_REVERB: case PT_RSEND:
     case PT_WARPS1: case PT_WARPS2: {    /* an effect: its knobs, the tracks' sends, its steps */
         int l = eng_page_lane(page);
         if (l == LANE_DELAY) {
             f[0] = PG_DELAY(0), f[1] = PG_DELAY(1), f[2] = PG_DSEND, f[3] = PG_STEP(LANE_DELAY);
-            f[4] = PG_EUC(LANE_DELAY);
-            return 5;
+            f[4] = PG_EUC(LANE_DELAY), f[5] = VP_PLAY(LANE_DELAY);
+            return 6;
         }
         if (l == LANE_REVERB) {
             f[0] = PG_REVERB, f[1] = PG_RSEND, f[2] = PG_STEP(LANE_REVERB), f[3] = PG_EUC(LANE_REVERB);
-            return 4;
+            f[4] = VP_PLAY(LANE_REVERB);
+            return 5;
         }
         f[0] = PG_WARPS(0), f[1] = PG_WARPS(1), f[2] = PG_STEP(LANE_WARPS), f[3] = PG_EUC(LANE_WARPS);
-        return 4;
+        f[4] = VP_PLAY(LANE_WARPS);
+        return 5;
     }
     default: f[0] = PG_GLOBAL; f[1] = VP_SYS; return 2;
     }
@@ -397,6 +412,7 @@ static int track_page(int page, int t)   /* the same page on track t (a track's 
     case PT_STEP: return PG_STEP(t);
     case PT_ARP: return PG_ARP(t);
     case PT_RND: return VP_RND(t);
+    case PT_PLAY: return ptrack(page) >= 0 ? VP_PLAY(t) : page;
     default: return page;
     }
 }
@@ -407,6 +423,8 @@ static int page_lane(int page)
     int t = ptrack(page);
     if (t >= 0)
         return t;
+    if (ptype(page) == PT_PLAY)
+        return plane(page);
     if (page >= ENG_NPAGES || page == PG_DSEND || page == PG_RSEND)
         return -1;
     int l = eng_page_lane(page);
@@ -440,6 +458,11 @@ static int knob_param(int page, int k)
     }
     if (ptype(page) == PT_RND)
         return eng_track_param(ptrack(page), RND_TP[k]);
+    if (ptype(page) == PT_PLAY) {        /* (SPEED and DIRECTION are the project's bytes: play_knob; their LENGTH
+                                          * stands for them here) */
+        int l = plane(page);
+        return k == 2 ? (l < ENG_TRACKS ? PG_CURVE * 4 + l : PG_STEP(l) * 4 + 1) : PG_STEP(l) * 4 + 3;
+    }
     if (ptype(page) == PT_EUC && k >= 2)  /* the Euclidean face: then the lane's LENGTH and PROB */
         return PG_STEP(eng_page_lane(page)) * 4 + (k == 2 ? 3 : 1);
     return page * 4 + k;
@@ -487,6 +510,10 @@ static const char *module_name(int page)
         return l < ENG_TRACKS ? "Steps" : l == LANE_DELAY ? "Delay" : l == LANE_REVERB ? "Reverb" : "Warps";
     }
     case PT_ARP: return "Endless";
+    case PT_PLAY: {
+        int l = plane(page);
+        return l < ENG_TRACKS ? "Steps" : l == LANE_DELAY ? "Delay" : l == LANE_REVERB ? "Reverb" : "Warps";
+    }
     case PT_GLOBAL: case PT_SYS: return "Global";
     default: {
         int l = eng_page_lane(page);
@@ -533,6 +560,7 @@ static uint16_t page_accent(int page)
     case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2:
         return model_accent(p->algo[PG_TRACK(ptrack(page), 0)]);
     case PT_EUC: return lane_accent(eng_page_lane(page));
+    case PT_PLAY: return lane_accent(plane(page));
     case PT_LFO: return accent3(page - PG_LFO(0));   /* LFO 1, 2, 3: the three colours */
     default: return lane_accent(eng_page_lane(page));
     }
@@ -2042,7 +2070,7 @@ static void panel_delay(void)            /* the delay: its time, its mode, its r
 static void fx_meter(int force)
 {
     static int shown = -1;
-    int pt = ptype(ui.page), l = ui.page < ENG_NPAGES ? eng_page_lane(ui.page) : -1, m;
+    int pt = ptype(ui.page), l = plane(ui.page), m;
     if (pt == PT_DUCK || pt == PT_COMP || pt == PT_OTT) {
         int mode = bus_mode(), h[3] = {0, 0, 0}, key;
         if (pt == PT_DUCK)
@@ -2108,8 +2136,8 @@ static void draw_panel(void)
         s[2] = (int)p->val[ui.page * 4] | (int)p->val[ui.page * 4 + 2] << 4 |
                (int)(eng_final(ui.page * 4 + 1) * 1000.0f) << 8;
         break;
-    case PT_STEP: case PT_LANE: {
-        int l = eng_page_lane(ui.page);
+    case PT_STEP: case PT_LANE: case PT_PLAY: {
+        int l = plane(ui.page);
         for (int i = 0; i < ENG_STEPS / 8; i++)
             s[2] = s[2] * 31 + p->trig[l][i];
         s[2] = s[2] * 7 + 11 * (int)p->val[PG_STEP(l) * 4 + 3] + (l == LANE_WARPS ? eng_warps_algo() * 3 : 0);
@@ -2215,7 +2243,7 @@ static void draw_panel(void)
     case PT_EUC: panel_euclid(eng_page_lane(ui.page)); break;
     case PT_DUCK: panel_duck(); break;
     case PT_COMP: case PT_OTT: panel_bus(pt == PT_OTT); break;
-    case PT_STEP: case PT_LANE: panel_steps(eng_page_lane(ui.page)); break;
+    case PT_STEP: case PT_LANE: case PT_PLAY: panel_steps(plane(ui.page)); break;
     case PT_RND: panel_random(tr); break;
     case PT_ARP: panel_endless(tr); break;
     case PT_GLOBAL: panel_global(); break;
@@ -2358,7 +2386,7 @@ static const char *ring_short(const char *s)
         {"MAJOR", "MAJ"}, {"MINOR", "MIN"}, {"DORIAN", "DOR"}, {"PHRYGIAN", "PHR"}, {"LYDIAN", "LYD"},
         {"MIXOLYDIAN", "MIX"}, {"LOCRIAN", "LOC"}, {"HARM. MINOR", "HMIN"}, {"MEL. MINOR", "MMIN"},
         {"MAJ. PENTA", "PMAJ"}, {"MIN. PENTA", "PMIN"}, {"WHOLE TONE", "WHOLE"}, {"HIRAJOSHI", "HIRA"},
-        {"DIGITAL", "DIGI"}, {"COMPAR", "COMP"}};
+        {"DIGITAL", "DIGI"}, {"COMPAR", "COMP"}, {"2 FWD 1 BACK", "+2-1"}};
     for (uint32_t i = 0; i < sizeof M / sizeof M[0]; i++)
         if (text_eq(s, M[i][0]))
             return M[i][1];
@@ -2373,9 +2401,74 @@ static int track_knobs(int page)
     return pt == PT_MIX || pt == PT_PAN || pt == PT_RSEND || pt == PT_DSEND || pt == PT_DUCK || pt == PT_EQ;
 }
 
+static void draw_play_knob(int page, int k, int force)   /* (0.16) the PLAY face's SPEED and DIRECTION: the project's
+                                                          * bytes, a ring in as many parts as their choices */
+{
+    project_t *p = eng_project();
+    int l = plane(page), n = k == 0 ? ENG_SPEEDS : DIR_N, i = clamp(k == 0 ? p->speed[l] + 4 : p->dir[l], 0, n - 1);
+    int hot = page == ui.page && ui.touched_k == k && plat_ms() - ui.touched_at[k] < 1200u;
+    uint16_t ac = page_accent(page);
+    char txt[24], lab[24], under[24];
+    txt[0] = under[0] = 0;
+    if (k == 0)                          /* (x1/2: its x lower case, a multiplier's) */
+        text_cat(txt, eng_speed_name(i - 4), sizeof txt);
+    else
+        label_text(eng_dir_name(i), txt, sizeof txt);
+    label_text(k == 0 ? "Speed" : "Dir", lab, sizeof lab);
+    int32_t s[4] = {i | k << 8 | 0x4000000, text_hash(txt) * 31 + text_hash(lab), 0x5EED, hot | (int32_t)ac << 2};
+    if (!force && !ui.full && !ui.body_knobs && !memcmp(s, ui.knob_shown[k], sizeof s))
+        return;
+    if (page == ui.page)
+        memcpy(ui.knob_shown[k], s, sizeof s);
+    if (slide_s && (k * KNOB_W + slide_s >= 240 || k * KNOB_W + KNOB_W + slide_s <= 0))
+        return;
+    cv_begin(KNOB_W, KNOB_H, BG);
+    {
+        int w = text_w(&FONT_S, lab);
+        cv_text(30 - w / 2, 0, &FONT_S, lab, hot ? HI : MUTED);
+        if (hot)
+            cv_rect(30 - w / 2, 17, w, 1, ac);
+    }
+    for (int j = 0; j < n; j++) {        /* (x1 lit apart: the middle of SPEED's travel) */
+        float gap = n > 6 ? 0.008f : 0.014f, a = (float)j / (float)n + gap, b = (float)(j + 1) / (float)n - gap;
+        if (j == i)
+            lit_arc(RX, RY, R0, R1, a, b, ac);
+        else
+            arc(RX, RY, R0 + 0.5f, R1 - 0.5f, a, b, k == 0 && j == 4 ? MUTED : TRACK);
+    }
+    ring_text(ring_short(txt), HI, under, sizeof under);
+    if (under[0])
+        cv_text(30 - text_w(&FONT_XS, under) / 2, 78, &FONT_XS, under, MUTED);
+    blit((uint32_t)(k * KNOB_W), KNOB_Y);
+}
+
+static void play_turn(int k, int32_t e)  /* (0.16) SPEED, DIRECTION turned: the lane's (GLO held: the four tracks') */
+{
+    project_t *p = eng_project();
+    int l = plane(ui.page), d = e > 0 ? 1 : -1;
+    int v = k == 0 ? clamp(p->speed[l] + d, -4, 4) : clamp((int)p->dir[l] + d, 0, DIR_N - 1);
+    for (int m = 0; m < ENG_LANES; m++) {
+        if (m != l && !(held(B_GLO) && l < ENG_TRACKS && m < ENG_TRACKS))
+            continue;
+        if (k == 0)
+            p->speed[m] = (int8_t)v;
+        else
+            p->dir[m] = (uint8_t)v;
+    }
+    if (held(B_GLO))
+        ui.used[B_GLO] = 1;
+    dirty = 1;
+    ui.touched_at[k] = plat_ms();
+    ui.touched_k = k;
+}
+
 static void draw_knob_at(int page, int k, int force)
 {
     project_t *p = eng_project();
+    if (ptype(page) == PT_PLAY && k < 2) {
+        draw_play_knob(page, k, force);
+        return;
+    }
     int param = knob_param(page, k), t, tp, view = knob_view(page, param, &t, &tp), locked = 0, rnd = 0;
     const eng_pdef_t *d = eng_pdef(param);
     float v = p->val[param], f = eng_final(param), u, uf;
@@ -2700,6 +2793,8 @@ static int foot_lane(void)               /* the lane whose steps the row shows, 
     int pt = ptype(ui.page);
     if (ui.grid)
         return ui.lane;
+    if (pt == PT_PLAY)
+        return plane(ui.page);
     if (pt == PT_STEP || pt == PT_RND || pt == PT_EUC)
         return eng_page_lane(ui.page) >= 0 ? eng_page_lane(ui.page) : ptrack(ui.page);
     if (ui.page < ENG_NPAGES && eng_page_lane(ui.page) >= ENG_TRACKS)
@@ -2805,7 +2900,7 @@ static void foot_endless(int t)          /* Endless's notes, 16 at a time: a bar
  * footer counts it down; "": nothing to show) */
 static int erase_lane(void)              /* the lane REC held erases: STEP mode's, or the steps' page's */
 {
-    return ui.grid ? ui.lane : ui.page < ENG_NPAGES ? eng_page_lane(ui.page) : ptrack(ui.page);
+    return ui.grid ? ui.lane : ui.page < ENG_NPAGES || ptype(ui.page) == PT_PLAY ? plane(ui.page) : ptrack(ui.page);
 }
 
 static uint32_t hold_ms(int b, char *label, uint32_t max)
@@ -2848,7 +2943,7 @@ static uint32_t hold_ms(int b, char *label, uint32_t max)
         text_cat(l, "ERASE ENDLESS", sizeof l);
         ms = 1000u;
     } else if (b == B_REC && ui.erec < 0 && (ui.grid || pt == PT_STEP || pt == PT_RND || pt == PT_LANE ||
-                                             pt == PT_EUC)) {
+                                             pt == PT_EUC || pt == PT_PLAY)) {
         int e = erase_lane();             /* the lane erased: its steps, locks, randoms (a track: its cables); GLO
                                            * held: all of them */
         if (e >= ENG_TRACKS) {
@@ -4205,7 +4300,7 @@ static void go_page_dir(int page, int dir)
         anim_start();
     if (l >= 0 && l != ui.lane)
         set_lane(l);
-    if (page < ENG_NPAGES && eng_page_lane(page) >= ENG_TRACKS)
+    if (plane(page) >= ENG_TRACKS)
         ui.fx_page = page;               /* FX goes back to it */
     ui.page = page;
     ui.touched_k = -1;
@@ -4408,7 +4503,7 @@ static void module_button(int b)
         go_page(here && pt == PT_LFO ? next : PG_LFO(0));
         break;
     case B_SEQ:                          /* the lane's steps (a track's: then its RANDOM face, its Euclidean one) */
-        if (here && (pt == PT_STEP || pt == PT_RND || (pt == PT_EUC && ptrack(ui.page) >= 0)))
+        if (here && (pt == PT_STEP || pt == PT_RND || ((pt == PT_EUC || pt == PT_PLAY) && ptrack(ui.page) >= 0)))
             go_page(next);
         else
             go_page(PG_STEP(ui.lane));
@@ -4421,7 +4516,7 @@ static void module_button(int b)
                 ? next : PG_MIX);
         break;
     case B_FX: {                         /* the effect shown last; on an effect: the next one (delay, reverb, Warps) */
-        int l = ui.page < ENG_NPAGES ? eng_page_lane(ui.page) : -1;
+        int l = plane(ui.page);
         if (here && l >= ENG_TRACKS)
             go_page(l == LANE_DELAY ? PG_REVERB : l == LANE_REVERB ? PG_WARPS(0) : PG_DELAY(0));
         else
@@ -4503,10 +4598,12 @@ static void cables_erase(int g)          /* a track's cables (g = ENG_TRACKS: th
     }
 }
 
-static void lane_erase(int l)            /* its pattern, its randoms; a track's cables too */
+static void lane_erase(int l)            /* its pattern, its randoms; a track's cables too; its SPEED x1, forward */
 {
     project_t *p = eng_project();
     eng_steps_clear(l);
+    p->speed[l] = 0;
+    p->dir[l] = DIR_FWD;
     for (int i = 0; i < ENG_NTP; i++)
         p->rnd[l][i] = 0;
     if (l < ENG_TRACKS)
@@ -4598,7 +4695,7 @@ static void button_long(int b)
             dirty = 1;
             app_say("ENDLESS", "CLEARED");
         } else if (ui.erec < 0 && (ui.grid || ptype(ui.page) == PT_STEP || ptype(ui.page) == PT_RND ||
-                                   ptype(ui.page) == PT_LANE || ptype(ui.page) == PT_EUC)) {
+                                   ptype(ui.page) == PT_LANE || ptype(ui.page) == PT_EUC || ptype(ui.page) == PT_PLAY)) {
             /* the steps: the lane erased (its trigs, locks, randoms; a track's cables), with GLO held all of them
              * and the global cables (the effects' knobs stay) */
             static const char *const FX[3] = {"DELAY STEPS", "REVERB STEPS", "WARPS STEPS"};
@@ -4774,7 +4871,7 @@ static void set_track(int t)             /* the active track: the keys' notes st
  * the sends); an effect: its knobs (or its steps) */
 static void select_lane(int l)
 {
-    int pl = page_lane(ui.page), pt = ptype(ui.page), steps = pt == PT_STEP || pt == PT_RND || pt == PT_LANE;
+    int pl = page_lane(ui.page), pt = ptype(ui.page), steps = pt == PT_STEP || pt == PT_RND || pt == PT_LANE || pt == PT_PLAY;
     ui.held_step = -1;
     if (pt == PT_EUC) {                  /* the Euclidean face: the other lane's */
         if (l < ENG_TRACKS)
@@ -5039,6 +5136,10 @@ static void input(void)
             matrix_turn(i, e);
             continue;
         }
+        if (ptype(ui.page) == PT_PLAY && i < 2) {   /* SPEED, DIRECTION: the project's bytes, not a lock's */
+            play_turn(i, e);
+            continue;
+        }
         int param = knob_param(ui.page, i), h = ui.mod ? held_source() : SRC_NONE;
         if (held(B_GLO))
             ui.used[B_GLO] = 1;
@@ -5066,19 +5167,19 @@ static void input(void)
      * TRAUMA;
      * the keys: the steps (the one playing blinks), or held; MOD mode: the LFOs' keys blinking at their rates */
     {
-        static const uint8_t PAGE_BTN[PT_SYS + 1] = {
+        static const uint8_t PAGE_BTN[PT_PLAY + 1] = {
             [PT_PLAITS1] = B_EDIT, [PT_PLAITS2] = B_ENV, [PT_PLAITS3] = B_EDIT, [PT_LFO] = B_LFO,
             [PT_MIX] = B_HOME, [PT_PAN] = B_HOME, [PT_REVERB] = B_FX, [PT_RSEND] = B_FX, [PT_DELAY1] = B_FX,
             [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
             [PT_ARP] = B_ARP, [PT_WARPS1] = B_FX, [PT_WARPS2] = B_FX, [PT_DUCK] = B_HOME, [PT_COMP] = B_HOME,
             [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_BEND] = B_EDIT, [PT_GLITCH] = B_EDIT, [PT_EUC] = B_SEQ, [PT_RND] = B_SEQ,
             [PT_FILT1] = B_EDIT, [PT_FILT2] = B_EDIT, [PT_FILT3] = B_EDIT, [PT_SON2] = B_EDIT, [PT_VFLT1] = B_EDIT,
-            [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO};
+            [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO, [PT_PLAY] = B_SEQ};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
         uint32_t bb = ui.dice ? 1u << B_OCTDN : ui.trauma ? 1u << B_OCTUP : 0, kk = ui.keys;
         int pt = ptype(ui.page);
         if (!ui.matrix)
-            bb |= 1u << (pt == PT_EUC && ptrack(ui.page) < 0 ? B_FX : track_cat(ui.page) == CAT_ENV ? B_ENV
+            bb |= 1u << ((pt == PT_EUC || pt == PT_PLAY) && ptrack(ui.page) < 0 ? B_FX : track_cat(ui.page) == CAT_ENV ? B_ENV
                          : track_cat(ui.page) != CAT_NONE ? B_EDIT : PAGE_BTN[pt]);
         if (ui.mod || ui.matrix)
             bb |= 1u << B_SEL;

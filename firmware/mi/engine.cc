@@ -126,7 +126,7 @@ const eng_pdef_t kPages[NPT][4] = {
    {"Drive", K_UNI, 0, 0, 0}},
   {{"Reso", K_UNI, 0, 0, 0}, {"Mode", K_ENUM, 0, 1, kDelayMode}, {"Mod", K_UNI, 0, 0, 0}, {"Return", K_UNI, 0, 0, 0}},
   {{"Delay", K_UNI, 0, 0, 0}, {"Delay", K_UNI, 0, 0, 0}, {"Delay", K_UNI, 0, 0, 0}, {"Delay", K_UNI, 0, 0, 0}},
-  {{"Note", K_INT, -24, 24, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Ratch", K_INT, 1, 8, 0}, {"Length", K_INT, 1, 64, 0}},
+  {{"Note", K_INT, -24, 24, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Ratch", K_INT, 1, ENG_RATCH_MAX, 0}, {"Length", K_INT, 1, 64, 0}},
   {{"Decay", K_UNI, 0, 0, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Depth", K_UNI, 0, 0, 0}, {"Length", K_INT, 1, 64, 0}},
   {{"Tempo", K_UNI, 0, 0, 0}, {"Scale", K_ENUM, 0, 15, kScaleNames}, {"Root", K_ENUM, 0, 11, kNoteName},
    {"Swing", K_UNI, 0, 0, 0}},
@@ -148,6 +148,7 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Type", K_ENUM, 0, 2, kFiltTypes}, {"Noise", K_UNI, 0, 0, 0}, {"Color", K_BIP, 0, 0, 0}, {"Attack", K_UNI, 0, 0, 0}},
   {{"Glitch", K_UNI, 0, 0, 0}, {"Size", K_ENUM, 0, GL_N - 1, kGlitchSizes}, {"Bend", K_BIP, 0, 0, 0},
    {"Drop", K_UNI, 0, 0, 0}},
+  {{"Curve", K_BIP, 0, 0, 0}, {"Curve", K_BIP, 0, 0, 0}, {"Curve", K_BIP, 0, 0, 0}, {"Curve", K_BIP, 0, 0, 0}},
 };
 const char* const kBusModes[3] = {"OFF", "COMP", "OTT"};
 const char* const kDelayAlgos[2] = {"SYNC", "FREE"};
@@ -212,6 +213,7 @@ int page_type(int page) {
   if (page >= PG_GLITCH(0)) return PT_GLITCH;
   if (page >= PG_FILT(0, 0)) return PT_FILT1 + (page - PG_FILT(0, 0)) % 3;
   if (page < 12) return PT_PLAITS1 + page % 3;
+  if (page == PG_CURVE) return PT_CURVE;
   if (page < 16) return PT_LFO;
   if (page < PG_STEP(0)) {
     static const uint8_t kT[7] = {PT_MIX, PT_PAN, PT_REVERB, PT_RSEND, PT_DELAY1, PT_DELAY2, PT_DSEND};
@@ -312,8 +314,28 @@ float gl_six = 5000.0f;                 // a sixteenth, samples
 void glitch_stop_all();
 float raw_left[ENG_TRACKS];             // a step's gate: its samples left
 int last_g[ENG_TRACKS];                 // the gate of the last frame
-int rat_on[ENG_TRACKS], rat_n[ENG_TRACKS];
-float rat_pos[ENG_TRACKS], rat_period[ENG_TRACKS];
+int rat_on[ENG_TRACKS], rat_n[ENG_TRACKS], rat_span[ENG_TRACKS], rat_i[ENG_TRACKS];
+float rat_pos[ENG_TRACKS], rat_lvl[ENG_TRACKS];
+float rat_t[ENG_TRACKS][9];             // the ratchets' hits: where each starts (samples into the trig), then their end
+                                        // (0.16: over one step or several, CURVE drawing them closer or apart)
+int32_t lane_cnt[ENG_LANES];            // (0.16) the steps each lane took since PLAY, at its SPEED (-1: none yet)
+float lane_sl[ENG_LANES];               // its step's length now (samples)
+
+// (0.16) a lane's SPEED: its step a multiple of the sixteenth; its DIRECTION; the tuplets of RATCH (9..16): so many
+// hits over so many of the lane's steps
+const float kSpeedMul[ENG_SPEEDS] = {0.125f, 0.25f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f};
+const char* const kSpeedNames[ENG_SPEEDS] = {"x1/8", "x1/4", "x1/2", "x3/4", "x1", "x3/2", "x2", "x3", "x4"};
+const char* const kDirNames[DIR_N] = {"Forward", "Backward", "Ping-pong", "Random", "Drunk", "2 fwd 1 back"};
+const uint8_t kTuplet[8][2] = {{3, 2}, {3, 4}, {2, 3}, {4, 3}, {5, 4}, {6, 4}, {7, 4}, {3, 8}};   // hits, steps
+inline int lane_speed(int l) {          // 0..8 (4: x1)
+  int v = proj.speed[l] + 4;
+  return v < 0 ? 0 : v >= ENG_SPEEDS ? ENG_SPEEDS - 1 : v;
+}
+int lane_steps(int l) {                 // its pass, in its steps (there and back: twice, its ends once)
+  int len = static_cast<int>(proj.val[PG_STEP(l) * 4 + 3] + 0.5f);
+  len = len < 1 ? 1 : len > ENG_STEPS ? ENG_STEPS : len;
+  return proj.dir[l] == DIR_PINGPONG && len > 1 ? 2 * len - 2 : len;
+}
 float tdelta[ENG_LANES][ENG_NTP];       // the trig's locks and randoms, over the knobs, until the next trig (a lane
                                         // left without trigs, or another project: back to the knobs, eng_fresh)
 void lane_fresh(int lane) {
@@ -797,7 +819,8 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
     if (r) {                            // > 0: a new random at each trig; < 0: the same at each pass (a loop)
       float a = static_cast<float>(r < 0 ? -r : r) * 0.01f, x = r > 0 ? rand01() : loop01(lane, step, tp);
       float c = p_cab[param];
-      if (lane < ENG_TRACKS && tp == TP_RATCHET) v += a * x * 7.0f;               // only more
+      if (lane < ENG_TRACKS && tp == TP_RATCHET)   // only more; over half its knob's travel the tuplets too (0.16)
+        v += a * x * (a <= 0.5f ? 7.0f : 7.0f + 16.0f * (a - 0.5f));
       else if (lane < ENG_TRACKS && tp == TP_NOTE) v += a * (x * 2.0f - 1.0f) * 12.0f;   // an octave either way
       else v += a * (x * 2.0f - 1.0f) * (c != 0.0f ? c : p_hi[param] - p_lo[param]);
     }
@@ -835,8 +858,10 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
     return;
   }
   float prob = E(lane, TP_PROB);
-  rat_n[lane] = static_cast<int>(clampf(static_cast<float>(iround(fin[eng_track_param(lane, TP_RATCHET)] +
-                                                                   tdelta[lane][TP_RATCHET])), 1.0f, 8.0f));
+  rat_n[lane] = eng_ratch_tuplet(static_cast<int>(clampf(static_cast<float>(iround(fin[eng_track_param(lane, TP_RATCHET)] +
+                                                                                  tdelta[lane][TP_RATCHET])),
+                                                          1.0f, static_cast<float>(ENG_RATCH_MAX))),
+                                 &rat_span[lane]);
   rat_on[lane] = prob >= 0.999f || rand01() < prob;
   rat_pos[lane] = 0.0f;
 }
@@ -943,9 +968,51 @@ int held_pad(int t) { return mdef(proj.algo[PG_TRACK(t, 0)]).kind == MK_PADS && 
 int steps_to_next(int t, int step) {    // the steps to the lane's next trig (its whole length: none other)
   int len = Pi(PG_STEP(t), 3);
   if (len < 1) len = 1;
+  if (proj.dir[t] != DIR_FWD) return 1;   // (another direction: its next step, whatever it is)
   for (int d = 1; d < len; ++d)
     if (eng_trig(t, (step + d) % len)) return d;
   return len;
+}
+
+// (0.16) a lane's next step, by its DIRECTION (lane_cnt: its steps since PLAY, 0 its first)
+int lane_next(int l) {
+  int len = Pi(PG_STEP(l), 3);
+  if (len < 1) len = 1;
+  int32_t c = lane_cnt[l];
+  int p;
+  switch (proj.dir[l]) {
+    case DIR_BACK: return len - 1 - static_cast<int>(c % len);
+    case DIR_PINGPONG: {
+      if (len < 2) return 0;
+      int per = 2 * len - 2, m = static_cast<int>(c % per);
+      return m < len ? m : per - m;
+    }
+    case DIR_RANDOM: return c == 0 ? 0 : static_cast<int>(rand_u32() % static_cast<uint32_t>(len));
+    case DIR_DRUNK: p = c == 0 ? 0 : cur_step[l] + ((rand_u32() >> 9) & 1u ? 1 : -1); break;
+    case DIR_TWO_ONE: p = c == 0 ? 0 : cur_step[l] + (c % 3 == 0 ? -1 : 1); break;
+    default: return static_cast<int>(c % len);
+  }
+  return (p % len + len) % len;
+}
+
+// (0.16) a trig's ratchets laid out: RATCH's hits over its span (one step, or the tuplet's), CURVE drawing each gap a
+// share of the last (to the right: 2^(-0.6 CURVE), closer and closer, a ball bouncing; to the left wider and wider)
+void ratchet_layout(int t) {
+  int n = rat_n[t];
+  float span = lane_sl[t] * static_cast<float>(rat_span[t]), c = clampf(E(t, TP_CURVE), -1.0f, 1.0f);
+  float r = fm_exp2f(-0.6f * c), d = 1.0f, sum = 0.0f;   // (each gap two thirds of the last at most, or 1.5 times)
+  if (n > 8) n = 8;
+  for (int i = 0; i < n; ++i) sum += d, d *= r;   // (the gaps, the first 1)
+  float g = span / sum, at = 0.0f;
+  d = 1.0f;
+  for (int i = 0; i < n; ++i) {
+    rat_t[t][i] = at;
+    at += g * d;
+    d *= r;
+  }
+  rat_t[t][n] = span;
+  rat_i[t] = -1;
+  rat_lvl[t] = tdelta[t][TP_LEVEL];
 }
 
 // the trigs of one block, frame by frame: fg (the gates) and fnote (the notes) for the voices; the effects' trigs
@@ -956,6 +1023,7 @@ void sequence(uint32_t n) {
     restart = 0;
     step_clk = 1e9f;                    // the first sixteenth at once
     tick = -1;
+    for (int l = 0; l < ENG_LANES; ++l) lane_cnt[l] = -1;
     pad_pos = -1;                       // (PADS: its first trig its first chord)
     for (int t = 0; t < ENG_TRACKS; ++t) {
       e_clk[t] = 1e9f;
@@ -975,6 +1043,7 @@ void sequence(uint32_t n) {
     el[t] = sl * kArpMult[r < 0 ? 0 : r > 5 ? 5 : r];
     gate_seen[t] = 0;
   }
+  for (int l = 0; l < ENG_LANES; ++l) lane_sl[l] = sl / kSpeedMul[lane_speed(l)];
   for (int t = 0; t < ENG_TRACKS; ++t) gl_at[t] = -1;
   gl_six = sl;
   if (!playing) glitch_stop_all();
@@ -995,10 +1064,19 @@ void sequence(uint32_t n) {
         fill_plan(tick / 16, stepping);
         for (int t = 0; t < ENG_TRACKS; ++t) fhit[t] = stepping[t] ? fill_hit(t, &fdn[t]) : 0;
       }
+    }
+    if (playing && tick >= 0) {         // (0.16) each lane's step at its SPEED (x1: the sixteenth's, as ever), in its
+                                        // DIRECTION; a fill's trig at the sixteenth
+      float at = static_cast<float>(tick) + step_clk / six_len(sl);
       for (int l = 0; l < ENG_LANES; ++l) {
-        int len = Pi(PG_STEP(l), 3);
-        cur_step[l] = static_cast<int>(tick % (len < 1 ? 1 : len));
-        if (!eng_trig(l, cur_step[l]) && !(l < ENG_TRACKS && fhit[l])) continue;
+        int sp = lane_speed(l), adv;
+        int32_t want = sp == 4 ? tick : static_cast<int32_t>(at * kSpeedMul[sp]);
+        adv = want > lane_cnt[l];
+        if (adv) {
+          lane_cnt[l] = want;
+          cur_step[l] = lane_next(l);
+        }
+        if (!(adv && eng_trig(l, cur_step[l])) && !(l < ENG_TRACKS && fhit[l])) continue;
         if (l >= ENG_TRACKS) new_trig(l, cur_step[l], 1);
         else if (!endless[l] && !e_rec[l]) fresh[l] = 1;
       }
@@ -1035,18 +1113,24 @@ void sequence(uint32_t n) {
         new_trig(t, cur_step[t], 1);
         if (fhit[t]) {                  // a fill's: it plays, its ratchets and its note the fill's
           rat_on[t] = 1;
-          if (rat_n[t] < fhit[t]) rat_n[t] = fhit[t];
+          if (rat_n[t] < fhit[t]) rat_n[t] = fhit[t], rat_span[t] = 1;
           ++fill_trigs[t];
         }
-        raw_left[t] = fm_maxf(fl * 2.0f, held_pad(t) ? sl * (static_cast<float>(steps_to_next(t, cur_step[t])) + 0.5f)
-                                                      : sl * gate_frac(E(t, TP_LENGTH)));
-        rat_period[t] = sl / static_cast<float>(rat_n[t]);
+        raw_left[t] = fm_maxf(fl * 2.0f, held_pad(t) ? lane_sl[t] * (static_cast<float>(steps_to_next(t, cur_step[t])) + 0.5f)
+                                                      : lane_sl[t] * gate_frac(E(t, TP_LENGTH)));
+        ratchet_layout(t);
         tnote[t] = static_cast<float>(quantize(iround(48.0f + 12.0f * static_cast<float>(iround(E(t, TP_OCTAVE))) +
                                                       static_cast<float>(iround(E(t, TP_TRANSPOSE))) +
                                                       E(t, TP_NOTE)) + fdn[t]));
       } else if (rise) {                // Endless' note: its randoms, no locks
         new_trig(t, e_pos[t], 0);
-        rat_period[t] = el[t] / static_cast<float>(rat_n[t]);
+        {                               // (Endless: its ratchets over its own step)
+          float keep = lane_sl[t];
+          lane_sl[t] = el[t];
+          if (rat_span[t] > 1) rat_n[t] = 1, rat_span[t] = 1;   // (no tuplet over Endless' steps)
+          ratchet_layout(t);
+          lane_sl[t] = keep;
+        }
         tnote[t] = static_cast<float>(quantize(e_note[t] + proj.endless_key[t] + Pi(PG_ARP(t), 3) +
                                                12 * iround(E(t, TP_OCTAVE)) + iround(E(t, TP_TRANSPOSE)) +
                                                iround(tdelta[t][TP_NOTE])));
@@ -1062,11 +1146,17 @@ void sequence(uint32_t n) {
       } else if (rat_n[t] <= 1) {
         g = raw;
         if (!raw) rat_on[t] = 0;
-      } else {                          // the ratchets: n gates in the step
-        int i = static_cast<int>(rat_pos[t] / rat_period[t]);
-        g = i < rat_n[t] && rat_pos[t] - static_cast<float>(i) * rat_period[t] < rat_period[t] * 0.5f;
+      } else {                          // the ratchets: n gates over their span (ratchet_layout), each half its gap
+        int i = rat_i[t] < 0 ? 0 : rat_i[t], n = rat_n[t] > 8 ? 8 : rat_n[t];
+        while (i < n && rat_pos[t] >= rat_t[t][i + 1]) ++i;
+        if (i != rat_i[t]) {            // a hit: CURVE to the right, each softer (a bounce's)
+          rat_i[t] = i;
+          float c = E(t, TP_CURVE);
+          if (c > 0.0f && n > 1) tdelta[t][TP_LEVEL] = rat_lvl[t] - 0.35f * c * static_cast<float>(i) / static_cast<float>(n - 1);
+        }
+        g = i < n && rat_pos[t] - rat_t[t][i] < 0.5f * (rat_t[t][i + 1] - rat_t[t][i]);
         rat_pos[t] += fl;
-        if (i >= rat_n[t]) rat_on[t] = 0;
+        if (i >= n) rat_on[t] = 0, tdelta[t][TP_LEVEL] = rat_lvl[t];
       }
       if ((fresh[t] || rise) && last_g[t]) g = 0;   // a trig on a gate still high (swung, legato): low for a frame
       fnote[t][k] = tnote[t];
@@ -2095,6 +2185,18 @@ int eng_euclid(int len, int fills, int rot, int step) {
   return (i * fills) % len < fills;
 }
 
+const char* eng_speed_name(int s) { return kSpeedNames[(s + 4) < 0 ? 0 : (s + 4) >= ENG_SPEEDS ? ENG_SPEEDS - 1 : s + 4]; }
+const char* eng_dir_name(int d) { return kDirNames[d < 0 || d >= DIR_N ? 0 : d]; }
+int eng_ratch_tuplet(int r, int* steps) {
+  if (r <= 8) {
+    if (steps) *steps = 1;
+    return r < 1 ? 1 : r;
+  }
+  const uint8_t* q = kTuplet[(r > ENG_RATCH_MAX ? ENG_RATCH_MAX : r) - 9];
+  if (steps) *steps = q[1];
+  return q[0];
+}
+
 int eng_lane_params(int lane) {
   if (lane < 0 || lane >= ENG_LANES) return 0;
   return lane < ENG_TRACKS ? ENG_NTP : kLaneKnobs[lane] + 3;
@@ -2114,6 +2216,7 @@ int eng_track_param(int lane, int tp) {
   if (tp == TP_DSEND) return PG_DSEND * 4 + lane;
   if (tp == TP_DUCK) return PG_DUCK * 4 + lane;   // (T1's: the duck's DECAY, not a parameter of T1's: not lockable)
   if (tp == TP_EQ) return PG_EQ * 4 + lane;
+  if (tp == TP_CURVE) return PG_CURVE * 4 + lane;
   if (tp >= TP_GLITCH) return PG_GLITCH(lane) * 4 + (tp - TP_GLITCH);
   if (tp >= TP_CUTOFF) return PG_FILT(lane, (tp - TP_CUTOFF) / 4) * 4 + (tp - TP_CUTOFF) % 4;
   if (tp >= TP_CLOCK) return PG_BEND(lane) * 4 + (tp - TP_CLOCK);
@@ -2148,6 +2251,9 @@ int eng_param_tp(int param, int* lane) {
   } else if (page == PG_EQ) {
     l = k;
     tp = TP_EQ;
+  } else if (page == PG_CURVE) {
+    l = k;
+    tp = TP_CURVE;
   } else if (page >= PG_BEND(0) && page < PG_BEND(ENG_TRACKS)) {
     l = page - PG_BEND(0);
     tp = TP_CLOCK + k;
@@ -2494,6 +2600,11 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
     put(b, n, kNoteName[nt % 12]);
     while (b[l]) ++l;
     put_num(b + l, n - l, nt / 12 - 1, 0, 0);
+  } else if (pt == PT_STEP && k == 2 && iround(v) > 8) {   // (0.16) RATCH's tuplets: hits:steps
+    int st = 1, h = eng_ratch_tuplet(iround(v), &st);
+    put_num(b, n, h, 0, 0);
+    put_end(b, n, ":");
+    put_num(b + 2, n - 2, st, 0, 0);
   } else if (pt == PT_STEP && k == 2) {
     put(b, n, "x");
     put_num(b + 1, n - 1, static_cast<int32_t>(v + 0.5f), 0, 0);
@@ -2630,6 +2741,14 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
   } else if (pt == PT_OTT && k == 1) {    // OTT's time: x1 its own
     put(b, n, "x");
     put_num(b + 1, n - 1, static_cast<int32_t>(ott_time(v) * 100.0f + 0.5f), 2, 0);
+  } else if (pt == PT_CURVE) {          // (0.16) the ratchets' CURVE: closer (a bounce), apart, or even
+    int c = static_cast<int>(v * 100.0f + (v < 0 ? -0.5f : 0.5f));
+    if (c == 0) {
+      put(b, n, "Even");
+    } else {
+      put_num(b, n, c < 0 ? -c : c, 0, 0);
+      put_end(b, n, c > 0 ? "% Fast" : "% Slow");
+    }
   } else if (pt == PT_PLAITS3 && k == 1) {   // LENGTH: the gate, in % of the sixteenth
     put_num(b, n, static_cast<int32_t>(gate_frac(v) * 100.0f + 0.5f), 0, 0);
     put_end(b, n, "%");
@@ -3629,36 +3748,100 @@ void shapes_from_move(project_t* p) {
   }
 }
 
-static_assert(sizeof(project_t) == PROJECT_SIZE_22 && offsetof(project_t, trauma) + 4u > PROJECT_SIZE_22,
-              "TRAUMA in what was 0.13's padding: the projects the same size");
+// 0.7's to 0.15's projects (versions 15 to 23): 41 parameters a lane (no CURVE), no speeds or directions; TRAUMA in
+// what was 0.13's padding
+struct project_v23 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[ENG_NPARAMS];
+  uint8_t algo[ENG_NPAGES];
+  uint8_t out_mode, warps_hq, theme, dice, dice_seed;
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+  int8_t rnd[ENG_LANES][41];
+  uint16_t seed[ENG_LANES];
+  plock_t lock[ENG_PLOCKS];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+  uint8_t rseed[ENG_LANES][41];
+  uint8_t trauma;
+};
+static_assert(sizeof(project_v23) == PROJECT_SIZE_22 && offsetof(project_v23, trauma) + 4u > PROJECT_SIZE_22,
+              "0.7's to 0.15's layout");
+static_assert(TP_CURVE == 41, "CURVE after the 41 parameters 0.15's lanes had");
+// the old layouts read in place of the live one (one at a time, the main loop's: a project read)
+union UpgBuf {
+  project_old<33> v4;
+  project_old<35> v5;
+  project_v6 v6;
+  project_v7 v7;
+  project_v8 v8;
+  project_v9 v9;
+  project_v12 v12;
+  project_v13 v13;
+  project_v14 v14;
+  project_v23 v23;
+};
+UpgBuf upg;
+MI_COLD void upgrade_v23(project_t* p, const project_v23& o) {
+  uint8_t* raw = reinterpret_cast<uint8_t*>(p);
+  for (uint32_t i = 0; i < sizeof(project_t); ++i) raw[i] = 0;   // (SPEED x1, forward, CURVE even)
+  p->magic = PROJECT_MAGIC;
+  p->version = PROJECT_VERSION;
+  p->size = sizeof(project_t);
+  for (int i = 0; i < ENG_NPARAMS; ++i) p->val[i] = o.val[i];
+  p->val[PG_CURVE * 4 + 0] = p->val[PG_CURVE * 4 + 1] = p->val[PG_CURVE * 4 + 2] = p->val[PG_CURVE * 4 + 3] = 0.0f;
+  for (int i = 0; i < ENG_NPAGES; ++i) p->algo[i] = o.algo[i];
+  p->out_mode = o.out_mode, p->warps_hq = o.warps_hq, p->theme = o.theme, p->dice = o.dice;
+  p->dice_seed = o.dice_seed;
+  for (int g = 0; g <= ENG_TRACKS; ++g)
+    for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c] = o.cable[g][c];
+  for (int l = 0; l < ENG_LANES; ++l) {
+    for (int b = 0; b < ENG_STEPS / 8; ++b) p->trig[l][b] = o.trig[l][b];
+    for (int i = 0; i < 41; ++i) p->rnd[l][i] = o.rnd[l][i], p->rseed[l][i] = o.rseed[l][i];
+    p->seed[l] = o.seed[l];
+  }
+  for (int i = 0; i < ENG_PLOCKS; ++i) p->lock[i] = o.lock[i];
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    for (int i = 0; i < ENG_ENDLESS; ++i) p->endless[t][i] = o.endless[t][i];
+    p->endless_len[t] = o.endless_len[t];
+    p->endless_key[t] = o.endless_key[t];
+  }
+  p->trauma = o.trauma;
+}
+// RATCH's travel 1..8 then (0.16) 1..16: the locks of a project before, as they were (a lock is a share of the travel)
+MI_COLD void ratch_widened(project_t* p) {
+  for (int i = 0; i < ENG_PLOCKS; ++i) {
+    plock_t& k = p->lock[i];
+    if (k.lane >= ENG_TRACKS || k.tp != TP_RATCHET) continue;
+    int r = static_cast<int>(1.0f + static_cast<float>(k.v) * 7.0f / 255.0f + 0.5f);
+    k.v = static_cast<uint8_t>(static_cast<float>(r - 1) * 255.0f / static_cast<float>(ENG_RATCH_MAX - 1) + 0.5f);
+  }
+}
 int upgrade_before_16(project_t* p, int bytes);
 MI_COLD int eng_upgrade(project_t* p, int bytes) {
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
-  if (v >= 15 && v <= 22 && bytes == static_cast<int>(PROJECT_SIZE_22) && p->size == PROJECT_SIZE_22) {
-    p->version = PROJECT_VERSION;        // (0.7 to 0.13: this one's layout; TRAUMA, in their padding, at 0)
-    p->trauma = 0;
+  if (v >= 15 && v <= 23 && bytes == static_cast<int>(PROJECT_SIZE_22) && p->size == PROJECT_SIZE_22) {
+    const uint8_t* from = reinterpret_cast<const uint8_t*>(p);   // (0.7 to 0.15: their layout widened)
+    uint8_t* to = reinterpret_cast<uint8_t*>(&upg.v23);
+    for (uint32_t i = 0; i < sizeof(project_v23); ++i) to[i] = from[i];
+    upgrade_v23(p, upg.v23);
+    if (v <= 22) p->trauma = 0;          // (0.7 to 0.13: TRAUMA, in their padding, at 0)
     if (v <= 21) models_renumbered(p, v);
     if (v == 18 || v == 19) shapes_from_move(p);   // (before: the FM came in on its own knobs, SHAPE's)
+    ratch_widened(p);
     return 1;
   }
   if (!upgrade_before_16(p, bytes)) return 0;
   models_renumbered(p, 15);
+  ratch_widened(p);
   return 1;
 }
 
 MI_COLD int upgrade_before_16(project_t* p, int bytes) {
-  static union {
-    project_old<33> v4;
-    project_old<35> v5;
-    project_v6 v6;
-    project_v7 v7;
-    project_v8 v8;
-    project_v9 v9;
-    project_v12 v12;
-    project_v13 v13;
-    project_v14 v14;
-  } u;
+  UpgBuf& u = upg;
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
   if (v == 14 && bytes == static_cast<int>(sizeof(project_v14)) && p->size == sizeof(project_v14)) {
@@ -3844,10 +4027,11 @@ void eng_back_cancel(void) { back_pending = 0; }
 const project_t* volatile cue_p;        // the next pattern (the main loop's copy, untouched until taken), 0 none
 volatile uint32_t pat_cycles;           // the patterns played to their end (taken or again)
 int32_t pat_end_seen = -2;
-int pattern_len() {
+int pattern_len() {                     // in sixteenths: the longest lane's pass at its SPEED (0.16)
   int len = 1;
   for (int l = 0; l < ENG_LANES; ++l) {
-    int k = Pi(PG_STEP(l), 3);
+    int sp = lane_speed(l), k = lane_steps(l);
+    if (sp != 4) k = static_cast<int>(static_cast<float>(k) / kSpeedMul[sp] + 0.999f);
     len = k > len ? k : len;
   }
   return len;
@@ -3959,6 +4143,7 @@ void eng_render(float* l, float* r, uint32_t n) {
         take_pattern(c);
         cue_p = 0;
         tick = -1;                      // (its next sixteenth its first step)
+        for (int l = 0; l < ENG_LANES; ++l) lane_cnt[l] = -1;
         pat_end_seen = -2;
       }
     }

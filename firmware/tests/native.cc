@@ -68,6 +68,48 @@ struct Wav {
   void close() { if (f) fclose(f); }
 };
 
+// a project of now, written as 0.7 to 0.15 kept theirs (versions 15 to 23: 41 parameters a lane, no SPEED, DIRECTION or
+// CURVE, 3776 bytes), its version as the test set it: what eng_upgrade reads from an older FM-1 or a backup
+struct V23 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[ENG_NPARAMS];
+  uint8_t algo[ENG_NPAGES];
+  uint8_t out_mode, warps_hq, theme, dice, dice_seed;
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+  int8_t rnd[ENG_LANES][41];
+  uint16_t seed[ENG_LANES];
+  plock_t lock[ENG_PLOCKS];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+  uint8_t rseed[ENG_LANES][41];
+  uint8_t trauma;
+};
+static_assert(sizeof(V23) == PROJECT_SIZE_22, "0.15's layout");
+static project_t* as_v23(project_t* q) {
+  static V23 o;
+  memset(&o, 0, sizeof o);
+  o.magic = q->magic, o.version = q->version, o.size = PROJECT_SIZE_22;
+  memcpy(o.val, q->val, sizeof o.val);
+  memcpy(o.algo, q->algo, sizeof o.algo);
+  o.out_mode = q->out_mode, o.warps_hq = q->warps_hq, o.theme = q->theme, o.dice = q->dice, o.dice_seed = q->dice_seed;
+  memcpy(o.cable, q->cable, sizeof o.cable);
+  memcpy(o.trig, q->trig, sizeof o.trig);
+  for (int l = 0; l < ENG_LANES; ++l)
+    for (int i = 0; i < 41; ++i) o.rnd[l][i] = q->rnd[l][i], o.rseed[l][i] = q->rseed[l][i];
+  memcpy(o.seed, q->seed, sizeof o.seed);
+  memcpy(o.lock, q->lock, sizeof o.lock);
+  memcpy(o.endless, q->endless, sizeof o.endless);
+  memcpy(o.endless_len, q->endless_len, sizeof o.endless_len);
+  memcpy(o.endless_key, q->endless_key, sizeof o.endless_key);
+  o.trauma = q->trauma;
+  memset(q, 0xA5, sizeof *q);
+  memcpy(q, &o, sizeof o);
+  return q;
+}
+
 int main(int argc, char** argv) {
   const char* dir = argc > 1 ? argv[1] : ".";
   if (getenv("MIFM1_ONE_CORE")) cpu2_sim = 0;
@@ -2730,7 +2772,7 @@ int main(int argc, char** argv) {
     }
     for (int i = 0; i < ENG_PLOCKS; ++i) q19.lock[i].lane = 0xFF;
     q19.lock[0].lane = 1, q19.lock[0].step = 3, q19.lock[0].tp = 6, q19.lock[0].v = 51;   // (-60 %)
-    int v19 = eng_upgrade(&q19, sizeof q19) && eng_check(&q19);
+    int v19 = eng_upgrade(as_v23(&q19), PROJECT_SIZE_22) && eng_check(&q19);
     const int kWant[4] = {-2, 2, 3, 0};
     for (int t = 0; t < ENG_TRACKS; ++t) v19 &= fm4_shape((q19.val[PG_TRACK(t, 1) * 4 + 2] + 1.0f) * 0.5f) == kWant[t];
     v19 &= fm4_shape(static_cast<float>(q19.lock[0].v) / 255.0f) == -2;
@@ -2746,7 +2788,7 @@ int main(int argc, char** argv) {
     const uint8_t kOld[4] = {19, 18, 10, 31};
     for (int t = 0; t < ENG_TRACKS; ++t) q16.algo[PG_TRACK(t, 0)] = kOld[t];
     q16.val[PG_TRACK(0, 0) * 4 + 3] = 0.123f;
-    int up_ok = eng_upgrade(&q16, sizeof q16) && eng_check(&q16) && q16.algo[PG_TRACK(0, 0)] == fm &&
+    int up_ok = eng_upgrade(as_v23(&q16), PROJECT_SIZE_22) && eng_check(&q16) && q16.algo[PG_TRACK(0, 0)] == fm &&
                 q16.algo[PG_TRACK(1, 0)] == eng_model_find(MK_PLAITS, 7) &&
                 q16.algo[PG_TRACK(2, 0)] == eng_model_find(MK_ZERO, 0) && q16.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PLAITS, 20);
     up_ok &= std::fabs(q16.val[PG_TRACK(0, 0) * 4 + 3] - kl[2]) < 1e-6f &&
@@ -2755,7 +2797,7 @@ int main(int argc, char** argv) {
     q16.version = 17;
     const uint8_t kOld17[4] = {11, 16, 19, 26};
     for (int t = 0; t < ENG_TRACKS; ++t) q16.algo[PG_TRACK(t, 0)] = kOld17[t];
-    up_ok &= eng_upgrade(&q16, sizeof q16) && eng_check(&q16) && q16.algo[PG_TRACK(0, 0)] == fm &&
+    up_ok &= eng_upgrade(as_v23(&q16), PROJECT_SIZE_22) && eng_check(&q16) && q16.algo[PG_TRACK(0, 0)] == fm &&
              q16.algo[PG_TRACK(1, 0)] == fm && q16.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 7) &&
              q16.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PLAITS, 20) &&
              std::fabs(q16.val[PG_TRACK(0, 0) * 4 + 1] - 0.5f / 8.0f) < 1e-6f &&
@@ -3048,7 +3090,7 @@ int main(int argc, char** argv) {
     q20.version = 20;
     const uint8_t kOld20[4] = {13, 12, 20, 11};
     for (int t = 0; t < ENG_TRACKS; ++t) q20.algo[PG_TRACK(t, 0)] = kOld20[t];
-    int v20 = eng_upgrade(&q20, sizeof q20) && eng_check(&q20) &&
+    int v20 = eng_upgrade(as_v23(&q20), PROJECT_SIZE_22) && eng_check(&q20) &&
               q20.algo[PG_TRACK(0, 0)] == eng_model_find(MK_PLAITS, 7) &&
               q20.algo[PG_TRACK(1, 0)] == eng_model_find(MK_PADS, 0) &&
               q20.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 20) &&
@@ -3228,7 +3270,7 @@ int main(int argc, char** argv) {
     q21.version = 21;
     const uint8_t kOld21[4] = {14, 13, 21, 12};
     for (int t = 0; t < ENG_TRACKS; ++t) q21.algo[PG_TRACK(t, 0)] = kOld21[t];
-    int v21 = eng_upgrade(&q21, sizeof q21) && eng_check(&q21) &&
+    int v21 = eng_upgrade(as_v23(&q21), PROJECT_SIZE_22) && eng_check(&q21) &&
               q21.algo[PG_TRACK(0, 0)] == eng_model_find(MK_PLAITS, 7) &&
               q21.algo[PG_TRACK(1, 0)] == eng_model_find(MK_POLY, 0) &&
               q21.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 20) &&
@@ -3321,7 +3363,7 @@ int main(int argc, char** argv) {
     eng_defaults(&q22);
     q22.version = 22;
     q22.trauma = 0xA5;
-    int v22 = eng_upgrade(&q22, sizeof q22) && eng_check(&q22) && q22.trauma == 0 && q22.version == PROJECT_VERSION;
+    int v22 = eng_upgrade(as_v23(&q22), PROJECT_SIZE_22) && eng_check(&q22) && q22.trauma == 0 && q22.version == PROJECT_VERSION;
     printf("TRAUMA: harmonics against the note 0 %.3f, 50 %% %.3f, 100 %% %.3f; the note %.1f Hz %s, over its "
            "neighbours x%.0f; rms %.3f %.3f %.3f, peak at 100 %% %.2f; the filter's FM at 30 %% %.3f, 70 %% %.3f, "
            "100 %% %.3f (at most %.3f); version 22 %s\n",
@@ -3433,6 +3475,134 @@ int main(int argc, char** argv) {
     printf("PADS held: its gate up %.0f %% of the bar at Hold (one trig), %.0f %% under it; Endless %.0f %%, %.0f %%\n",
            held * 100.0, timed * 100.0, eheld * 100.0, etimed * 100.0);
     if (held < 0.9 || timed > 0.06 || eheld < 0.9 || etimed > 0.3) ++failures, printf("FAIL: PADS held\n");
+    eng_defaults(p);
+    eng_fresh();
+  }
+
+  {                                     // 53. the lanes' SPEED and DIRECTION, RATCH's tuplets, CURVE (0.16): a lane's
+    // trigs as many as its speed says over a bar; its steps in each direction; 3:4 three hits evenly over four
+    // sixteenths; CURVE's gaps closer and closer (or apart); the pattern's length at its lanes' speeds; a 0.15 project
+    // read: its locks of RATCH the same, its randoms where they were, x1 and forward
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    auto setup = [&]() {
+      eng_blank(p);
+      eng_fresh();
+      eng_set_model(0, eng_model_find(MK_DRUM, 0));
+      p->val[PG_GLOBAL * 4 + 0] = 0.60206f;   // (120 BPM: a sixteenth 5512.5 samples, a bar 2 s)
+    };
+    auto rises = [&](int blocks, int* at, int max) {   // the gate's rises on T1, their blocks
+      int n = 0, last = 0;
+      eng_play(1);
+      for (int b = 0; b < blocks; ++b) {
+        eng_render(l, r, 128);
+        int g = (eng_gates() & 1u) != 0;
+        if (g && !last && n < max) at[n++] = b;
+        else if (g && !last) ++n;
+        last = g;
+      }
+      eng_play(0);
+      return n;
+    };
+    static int at[64];
+    const int kSp[4] = {-2, -1, 0, 2};  // x1/2, x3/4, x1, x2
+    const int kWant[4] = {8, 12, 16, 32};
+    int speed_ok = 1, counts[4];
+    for (int c = 0; c < 4; ++c) {
+      setup();
+      for (int st = 0; st < 16; ++st) eng_trig_set(0, st, 1);
+      p->speed[0] = static_cast<int8_t>(kSp[c]);
+      counts[c] = rises(689 - 4, at, 64);   // (a bar, the last frames left out)
+      speed_ok &= counts[c] == kWant[c];
+    }
+    // the directions: the steps a lane of 4 goes through
+    const int kDir[6][8] = {{0, 1, 2, 3, 0, 1, 2, 3}, {3, 2, 1, 0, 3, 2, 1, 0}, {0, 1, 2, 3, 2, 1, 0, 1},
+                            {0, -1, -1, -1, -1, -1, -1, -1}, {0, -2, -2, -2, -2, -2, -2, -2}, {0, 1, 2, 1, 2, 3, 2, 3}};
+    int dir_ok = 1;
+    for (int d = 0; d < DIR_N; ++d) {
+      int seen[8], k = 0;               // the lane's step at each sixteenth's middle
+      setup();
+      p->val[PG_STEP(0) * 4 + 3] = 4.0f;
+      p->dir[0] = static_cast<uint8_t>(d);
+      eng_play(1);
+      k = 0;
+      for (int b = 0; b < 8 * 43 + 30 && k < 8; ++b) {
+        eng_render(l, r, 128);
+        if (b % 43 == 21) seen[k++] = eng_step_now(0);   // (5512 samples a sixteenth: 43.07 blocks)
+      }
+      eng_play(0);
+      for (int i = 0; i < 8; ++i) {
+        int w = kDir[d][i];
+        if (w >= 0) dir_ok &= seen[i] == w;
+        else if (w == -1) dir_ok &= seen[i] >= 0 && seen[i] < 4;
+        else if (i) dir_ok &= seen[i] >= 0 && seen[i] < 4 && ((seen[i] - seen[i - 1] + 4) % 4 == 1 || (seen[i - 1] - seen[i] + 4) % 4 == 1);
+      }
+      if (!dir_ok) {
+        printf("  direction %s:", eng_dir_name(d));
+        for (int i = 0; i < 8; ++i) printf(" %d", seen[i]);
+        printf("\n");
+      }
+    }
+    // 3:4 (RATCH 10): one trig, three hits over four sixteenths, evenly
+    setup();
+    eng_trig_set(0, 0, 1);
+    p->val[PG_STEP(0) * 4 + 2] = 10.0f;
+    char txt[16], tup[16];
+    eng_param_text(PG_STEP(0) * 4 + 2, 10.0f, tup, sizeof tup);
+    int n34 = rises(4 * 43 + 10, at, 64);
+    double g1 = at[1] - at[0], g2 = at[2] - at[1];
+    int tup_ok = n34 == 3 && std::fabs(g1 - 4.0 * 43.07 / 3.0) < 3.0 && std::fabs(g2 - g1) < 2.0 && !strcmp(tup, "3:4");
+    // CURVE: eight hits over a step at x1/4 (half a second), to the right closer and closer, to the left apart
+    auto curve_gaps = [&](float c, double* first, double* last) {
+      setup();
+      eng_trig_set(0, 0, 1);
+      p->speed[0] = -3;                 // (x1/4)
+      p->val[PG_STEP(0) * 4 + 2] = 8.0f;
+      p->val[PG_CURVE * 4 + 0] = c;
+      int k = rises(4 * 43 + 10, at, 64), mono = 1;
+      for (int i = 2; i < k && i < 8; ++i) mono &= c > 0 ? at[i] - at[i - 1] <= at[i - 1] - at[i - 2] : at[i] - at[i - 1] >= at[i - 1] - at[i - 2];
+      *first = at[1] - at[0];
+      *last = at[k - 1] - at[k - 2];
+      return k == 8 && mono;
+    };
+    double f1, l1, f2, l2;
+    int curve_ok = curve_gaps(1.0f, &f1, &l1) && curve_gaps(-1.0f, &f2, &l2) && l1 < f1 * 0.2 && l2 > f2 * 5.0;
+    eng_param_text(PG_CURVE * 4 + 0, 0.4f, txt, sizeof txt);
+    curve_ok &= !strcmp(txt, "40% Fast");
+    // the pattern's length: 16 at x1/2 is 32 sixteenths; there and back over 16, 30
+    setup();
+    p->speed[0] = -2;
+    int len_half = eng_pattern_len();
+    p->speed[0] = 0;
+    p->dir[1] = DIR_PINGPONG;
+    int len_pp = eng_pattern_len();
+    // a 0.15 project (version 23): RATCH locked to 2 (its travel 1..8 then), a random on GDROP, the last parameter then
+    setup();
+    eng_trig_set(0, 3, 1);
+    eng_lock_set(0, 3, TP_RATCHET, 2.0f);   // (as 0.16 writes it: re-written below as 0.15 did)
+    for (int i = 0; i < ENG_PLOCKS; ++i)
+      if (p->lock[i].lane == 0 && p->lock[i].tp == TP_RATCHET) p->lock[i].v = static_cast<uint8_t>(255.0f / 7.0f + 0.5f);
+    p->rnd[2][TP_GDROP] = 33;
+    p->rseed[2][TP_GDROP] = 7;
+    p->version = 23;
+    static project_t q;
+    q = *p;
+    int up = eng_upgrade(as_v23(&q), PROJECT_SIZE_22) && eng_check(&q);
+    float lv = -1.0f;
+    for (int i = 0; i < ENG_PLOCKS; ++i)
+      if (q.lock[i].lane == 0 && q.lock[i].tp == TP_RATCHET) lv = 1.0f + static_cast<float>(q.lock[i].v) / 255.0f * 15.0f;
+    up &= std::fabs(lv - 2.0f) < 0.1f && q.rnd[2][TP_GDROP] == 33 && q.rseed[2][TP_GDROP] == 7 && !q.rnd[2][TP_CURVE] &&
+          !q.speed[0] && !q.dir[0] && q.val[PG_CURVE * 4] == 0.0f;
+    printf("the lanes (0.16): a bar of sixteenths at x1/2 x3/4 x1 x2: %d %d %d %d trigs; the directions %s; 3:4 (\"%s\"): "
+           "%d hits, %.0f and %.0f blocks apart; CURVE: gaps %.0f to %.0f blocks to the right, %.0f to %.0f to the left; "
+           "the pattern %d sixteenths at x1/2, %d there and back; a 0.15 project %s\n",
+           counts[0], counts[1], counts[2], counts[3], dir_ok ? "ok" : "WRONG", tup, n34, g1, g2, f1, l1, f2,
+           l2, len_half, len_pp, up ? "read, its RATCH locks the same" : "WRONG");
+    if (!speed_ok || !dir_ok || !tup_ok || !curve_ok || len_half != 32 || len_pp != 30 || !up) {
+      printf("FAIL: the lanes (speed %d dir %d tuplet %d curve %d len %d %d upgrade %d)\n", speed_ok, dir_ok, tup_ok,
+             curve_ok, len_half, len_pp, up);
+      ++failures;
+    }
     eng_defaults(p);
     eng_fresh();
   }

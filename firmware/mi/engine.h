@@ -36,7 +36,10 @@ extern "C" {
 /* the pages */
 #define PG_TRACK(t, p) ((t) * 3 + (p))   /* Plaits: its sound, its envelope, its pitch */
 #define PG_LFO(i) (12 + (i))              /* the three LFOs (0.4: in Tides' place): WAVE, RATE, MODE (free, synced to the
-                                          * tempo, or started again at a track's trigs), SLEW (page 15: not used) */
+                                          * tempo, or started again at a track's trigs), SLEW */
+#define PG_CURVE 15                      /* (0.16; page 15 unused before, 0 in every project) the tracks' ratchets'
+                                          * CURVE, a knob a track: to the right the hits closer and closer and softer (a
+                                          * ball bouncing), to the left further and further apart, 0 even */
 #define PG_MIX 16                        /* the levels */
 #define PG_PAN 17
 #define PG_REVERB 18                     /* Clouds' reverb: its knobs, then the tracks' sends */
@@ -71,7 +74,7 @@ extern "C" {
                                           * and higher), DROP (a repeat's chance of an accident: backwards, a hole) */
 enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_LFO, PT_MIX, PT_PAN, PT_REVERB, PT_RSEND, PT_DELAY1,
        PT_DELAY2, PT_DSEND, PT_STEP, PT_LANE, PT_GLOBAL, PT_ARP, PT_WARPS1, PT_WARPS2, PT_DUCK, PT_COMP, PT_OTT, PT_EQ,
-       PT_BEND, PT_EUC, PT_FILT1, PT_FILT2, PT_FILT3, PT_GLITCH, NPT };
+       PT_BEND, PT_EUC, PT_FILT1, PT_FILT2, PT_FILT3, PT_GLITCH, PT_CURVE, NPT };
 enum { BS_OFF, BS_RECT, BS_DOWN, BS_DOWN3, BS_FOLD, BS_SWAP, BS_N };   /* the bits' SHAPE */
 #define BM_N 12                          /* the bits' MASKs */
 enum { GL_64, GL_32, GL_16, GL_8, GL_N };   /* the glitch's SIZE */
@@ -91,7 +94,8 @@ enum { DL_SYNC, DL_FREE };              /* the delay's ALGORITHM: its time in di
 enum { TP_DECAY = 4, TP_PITCHENV = 8, TP_LENGTH, TP_TRANSPOSE, TP_OCTAVE, TP_LEVEL, TP_SEND, TP_PAN, TP_NOTE, TP_PROB,
        TP_RATCHET, TP_DSEND, TP_DUCK, TP_EQ, TP_CLOCK, TP_CRUSH, TP_MASK, TP_BSHAPE, TP_CUTOFF, TP_RESO, TP_FENV,
        TP_FDECAY, TP_FDRIVE, TP_PING, TP_FM, TP_KEY, TP_FTYPE, TP_NOISE, TP_COLOR, TP_FATTACK, TP_GLITCH, TP_GSIZE,
-       TP_GBEND, TP_GDROP, ENG_NTP };    /* (0.7: the grit's four the bits', the glitch's four after the filter's) */
+       TP_GBEND, TP_GDROP, TP_CURVE, ENG_NTP };   /* (0.7: the grit's four the bits', the glitch's four after the
+                                         * filter's; 0.16: the ratchets' CURVE) */
                                          /* (T1 has no TP_DUCK: it ducks the others) */
 int eng_track_param(int lane, int tp);   /* its parameter (an effect lane: its effect's knob tp) */
 int eng_param_tp(int param, int *lane);  /* a parameter's tp and lane, -1 if none */
@@ -188,7 +192,9 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 23u              /* (22: 0.13's, without TRAUMA (its byte where 0.13's ended, unused): read, TRAUMA at 0;
+#define PROJECT_VERSION 24u              /* (23: 0.14's and 0.15's, without the lanes' speeds and directions, the ratchets
+                                          * 1 to 8 only, no CURVE: read, x1, forward, their locks of RATCH kept;
+                                          * 22: 0.13's, without TRAUMA (its byte where 0.13's ended, unused): read, TRAUMA at 0;
                                           * 21: 0.12's, without PROPHET: read, renumbered; 20: 0.11.1's, without POLY: read, renumbered;
                                           * 19: 0.11.0's, the FM's MOVE where SHAPE is: read, its nearest shape;
                                           * 18: 0.10.1's, without PADS: read, renumbered, MOVE as SHAPE; 17: 0.10.0's, the FM in eight models: read, one FM, ALGO theirs;
@@ -228,8 +234,18 @@ typedef struct {
     uint8_t trauma;                      /* TRAUMA (0.14, OCT+ held, SELECT): 0..100 % of a dose of saturation (engine.cc:
                                           * the drives, the filters' FM, Warps), 0 nothing; last, in what was 0.13's
                                           * padding: its projects the same size */
+    int8_t speed[ENG_LANES];             /* (0.16) each lane's SPEED: -4..4, x1/8 x1/4 x1/2 x3/4 x1 x3/2 x2 x3 x4 (0: x1) */
+    uint8_t dir[ENG_LANES];              /* its DIRECTION: DIR_* */
 } project_t;
-#define PROJECT_SIZE_22 3776u            /* (0.7's to 0.13's project, version 15 to 22: its bytes, this one's too) */
+#define PROJECT_SIZE_22 3776u            /* (0.7's to 0.15's project, version 15 to 23: its bytes) */
+enum { DIR_FWD, DIR_BACK, DIR_PINGPONG, DIR_RANDOM, DIR_DRUNK, DIR_TWO_ONE, DIR_N };   /* a lane's DIRECTION: forward,
+                                          * backward, there and back, a step at random, a step either way at random,
+                                          * two steps forward and one back */
+#define ENG_SPEEDS 9                     /* a lane's SPEED: -4..4 */
+const char *eng_speed_name(int s);       /* x1/8 .. x4 */
+const char *eng_dir_name(int d);
+#define ENG_RATCH_MAX 16                 /* RATCH: 1..8 hits in the step, then 9..16 the tuplets (eng_ratch_tuplet) */
+int eng_ratch_tuplet(int r, int *steps); /* RATCH r's hits, over *steps of the lane (1 for 1..8) */
 void eng_rnd_redraw(project_t *p, int lane, int tp);   /* a random knob back at 0: its next loop another */
 int eng_algo_count(int page);            /* 0: the page has no ALGORITHM choice */
 float eng_dice_span(int param);          /* how far the random dose moves a parameter at 100 % (0: not at all) */
