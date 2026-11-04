@@ -90,4 +90,11 @@ for e in errors:
     print(e)
 sys.exit(1 if errors else 0)
 PY
-echo "device check: ok (no libm, no C++ library, no double; fm1-base's rules for the app's C)"
+# the app's C (app.c and its headers, built with the platform): no libc beyond memset, memcpy, memcmp (felucca-bsp's);
+# a strlen or a printf links on a computer, not on the FM-1 (0.15.1's first build)
+libc=$(grep -nE '(^|[^_a-z0-9.>])(str(len|cmp|ncmp|cpy|ncpy|cat|chr|rchr|str|dup)|s?n?printf|atoi|atof|strto[a-z]+|malloc|free|qsort)\(' \
+    "$ROOT"/firmware/*.c "$ROOT"/firmware/*.h | grep -vE ':[0-9]+:[ ]*(/\*|\*|//)' || true)
+if [ -n "$libc" ]; then
+    echo "FAILED: libc the FM-1 has not, in the app's C:"; echo "$libc"; exit 1
+fi
+echo "device check: ok (no libm, no C++ library, no double; fm1-base's rules for the app's C; no libc beyond memset, memcpy, memcmp)"
