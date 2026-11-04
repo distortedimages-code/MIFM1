@@ -224,9 +224,15 @@ shot 13g_trauma_20.png
 turn SELECT 15
 wait 400
 shot 13h_trauma_50.png
+wait 1050
+shot 13h2_trauma_50_next.png
+wait 1050
+shot 13h3_trauma_50_after.png
 turn SELECT 25
 wait 400
 shot 13i_trauma_100.png
+wait 330
+shot 13i2_trauma_100_more.png
 release OCT+
 wait 300
 shot 13j_trauma_kept.png

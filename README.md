@@ -790,12 +790,16 @@ reste dans la gamme) :
   branché : TRAUMA ne l'allume jamais (son CPU : un cinquième d'un cœur, le même ouvert ou fermé) ;
 - **à partir de 60 %**, le **DRIVE du delay** (des échos qui saturent).
 
-Son écran, en noir et blanc : des barres blanches qui entrent des deux côtés, puis la phrase du label en Anton (une
-Impact libre), ses lettres et ses lignes serrées : VOUS ÊTES LE, et dessous BRUIT en très grand, aussi large. Ses
-bandes sont poussées de côté d'autant plus que la dose monte (un fantôme gris derrière à partir d'un tiers), une
-lettre ou quelques-unes passent au rouge au hasard (une, deux à partir de 40 %, trois à 80 %) ; **sur le dernier
-cinquième, un stroboscope** : l'écran passe au blanc une image sur quatre (60 ms), puis une sur trois à 90 %, une sur
-deux à 100 %. Dessous, la dose et sa barre. On lâche OCT+ : retour à la page, TRAUMA reste (en bas, un
+Son écran, en noir et blanc : des barres blanches qui entrent des deux côtés, puis le slogan du label en Anton (une
+Impact libre), ses lettres et ses lignes serrées : VOUS ÊTES LE, et dessous BRUIT en très grand, aussi large. À 0, il
+ne bouge pas ; dosé, **ses lettres sont tirées au hasard aussi vite que l'écran va** (un quart à quelques %, trois sur
+cinq à 100 %), et à travers elles **le slogan passe d'une langue à l'autre** toutes les 1,4 s (0,7 s à 100 %), ses
+lettres retombant une à une : VOUS ÊTES LE BRUIT, YOU ARE THE NOISE, あなたたちは ノイズだ, VY JSTE TEN HLUK, IHR
+SEID DER KRACH, VOI SIETE IL RUMOR, NI ÄR RENT OLJUD (le mot exact a six lettres en italien et en suédois : trop
+large en grand ; les kana en Dela Gothic One). Une lettre ou quelques-unes passent au rouge au hasard ; **sur le
+dernier cinquième, un stroboscope** (l'écran blanc une image sur quatre, puis sur trois, une sur deux à 100 %).
+Dessous, la dose et sa jauge ; **à 100 %, la jauge sort de son cadre** jusqu'au bord de l'écran, en rouge, et son
+chiffre file au-delà de 100. On lâche OCT+ : retour à la page, TRAUMA reste (en bas, un
 trait orange sous celui de la dose d'aléatoire). Les deux doses se combinent. Elle se sauve avec le projet ; un
 projet de 0.13 revient avec TRAUMA à 0.
 

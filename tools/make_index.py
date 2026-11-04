@@ -123,9 +123,9 @@ a {{ color: inherit; text-underline-offset: 3px; }} a:hover {{ color: var(--oran
             "Le projet sauvegardé sur le FM-1, vers un fichier sur l'ordinateur, et retour.")}</p>
       <span class="go">{t("Save or restore →", "Sauvegarder ou restaurer →")}</span></a></li>
   </ul>
-  <p class="fine">{t('MIFM1 is designed by Yoann, an active member of the Audiotrauma label: '
+  <p class="fine">{t('MIFM1 is designed by Yoann, an active member of the Audiotrauma label. Vous êtes le bruit: '
                      '<a href="emu/#about">about the designer</a>. ',
-                     'MIFM1 est conçu par Yoann, membre actif du label Audiotrauma : '
+                     'MIFM1 est conçu par Yoann, membre actif du label Audiotrauma. Vous êtes le bruit : '
                      '<a href="emu/#about">à propos du concepteur</a>. ')}{t('Open source (MPL-2.0), built on <a href="https://github.com/charlesvestal/fm1-base">fm1-base</a> '
                      'and the code of Mutable Instruments. The controls, one by one: <a href="emu/#h-panel">the panel</a>.',
                      'Open source (MPL-2.0), sur <a href="https://github.com/charlesvestal/fm1-base">fm1-base</a> et le '

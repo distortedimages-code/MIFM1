@@ -3,12 +3,9 @@
 # Copyright (C) 2026 Yoann
 """MIFM1's name at power-on and the random dose's screen, in Syne ExtraBold (firmware/fonts: Syne[wght].ttf from
 google/fonts' ofl/syne, SIL OFL 1.1, Syne-OFL.txt): firmware/logo_font.h (FONT_LOGO, 31 px) and firmware/rand_font.h
-(FONT_RAND, 48 px: RAN over DOM); TRAUMA's screen in Anton (an Impact of its own: firmware/fonts/Anton-Regular.ttf,
-Fontsource's @fontsource/anton 5.3.0, its Latin subset, SIL OFL 1.1, Anton-OFL.txt): firmware/noise_font.h (VOUS ETES
-LE over BRUIT, two sizes, the second line as wide as the first). Felucca fonts (fm1-base tools/gen_font.py's format
-and rendering: 4-bit anti-aliasing) with only the signs written, the words' and those their letters pass through on
-their way (the others are empty: nothing drawn, no room taken); a sign beyond ASCII written at a free code ('[': E
-circumflex).
+(FONT_RAND, 48 px: RAN over DOM). Felucca fonts (fm1-base tools/gen_font.py's format and rendering: 4-bit
+anti-aliasing) with only the signs written, the words' and those their letters pass through on their way (the others
+are empty: nothing drawn, no room taken). TRAUMA's screen: tools/gen_noise_glyphs.py.
 
     tools/gen_logo_font.py"""
 from pathlib import Path
@@ -17,17 +14,12 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 SYNE = ("Syne ExtraBold", "Syne[wght].ttf", 800, "Syne-OFL.txt")
-ANTON = ("Anton", "Anton-Regular.ttf", None, "Anton-OFL.txt")
-MAP = {"[": "\u00ca"}                          # (a code free in these fonts: the sign drawn there)
+MAP = {}                                       # (a sign beyond ASCII written at a free code: none now)
 FONTS = [  # (name, face, px, signs, file, what)
     ("FONT_LOGO", SYNE, 31, "MIFM1" + "#%+0268",   # (app.c LOGO_SIGNS: the ones after the name; Syne's other figures
      "logo_font.h", "MIFM1's name at power-on"),   # go under the line)
     ("FONT_RAND", SYNE, 48, "RANDOM" + "#%+&?KXZ",   # (app.c RAND_SIGNS; '*' over and '@' under the others' rows)
      "rand_font.h", "the random dose's screen"),
-    ("FONT_NOISE1", ANTON, 49, "VOUS[TESL",          # (VOUS ETES LE: 225 px wide, its letters 1 px tighter)
-     "noise_font.h", "TRAUMA's screen, its first line"),
-    ("FONT_NOISE2", ANTON, 115, "BRUIT",             # (BRUIT as wide, its letters 3 px tighter)
-     "noise_font.h", "TRAUMA's screen, its second line"),
 ]
 PAD = 2                                        # (gen_font.py's)
 written = {}                                   # (the files written this run: a second font appended)

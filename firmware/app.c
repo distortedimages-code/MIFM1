@@ -3351,93 +3351,86 @@ static void dice_close(void)             /* back to the page, all of it drawn ag
 /* --------------------------------------------------------------- trauma --- */
 /* TRAUMA (OCT+ held, SELECT turned): a dose of saturation (engine.cc: the drives, the filters' FM, Warps, the
  * delay's drive), after Audiotrauma, its own screen over everything, in black and white (0.14.6). White bars coming
- * in from both sides (260 ms); the label's line in Anton (noise_font.h), its letters and its lines tight: VOUS ETES LE
- * over BRUIT, as wide; its strips pushed sideways as the dose is high (none at 0, a few at a few %, nearly all at
- * 100 %; pushed again every 90 ms and at each detent), a grey ghost behind the pushed ones from a third of the way, a
- * letter or a few red at random (one at a few %, three at 100 %, thrown with the strips); from 80 % a strobe, the
- * screen turned white a frame at a time (60 ms), one frame in four, then in three, every other one at 100 %; the dose
- * and its bar */
-#include "noise_font.h"
+ * in from both sides (260 ms), then the label's slogan in Anton, its letters and its lines tight: VOUS ETES LE over
+ * BRUIT, as wide (noise_glyphs.h). At 0 it stands still; dosed, its letters are thrown at random as fast as the screen
+ * goes (a throw each 50 ms: a quarter of them at a few %, three in five at 100 %), and through them the slogan comes
+ * in another language each 1.4 s (0.7 s at 100 %), its letters landing one by one (0.14.8): French, English,
+ * Japanese, Czech, German, Italian, Swedish. A letter or a few red at random (one, two from 40 %, three at 80 %);
+ * from 80 % a strobe, the screen turned white a frame at a time (60 ms), one in four, then in three, every other one
+ * at 100 %. Under it the dose and its gauge; at 100 % the gauge breaks out of its frame to the screen's edge, in red,
+ * and its figure runs on past 100 */
+#include "noise_glyphs.h"
 #define TRAUMA_OPEN_MS 260u
-static uint32_t trauma_turns;            /* the detents turned on it (each pushes the strips again) */
-static const char NOISE1[] = "VOUS [TES LE";   /* ('[': E circumflex, in FONT_NOISE1 only) */
-#define NOISE1_TRACK (-1)                /* (the letters closer than Anton has them: 1 px, 3 px on BRUIT) */
-#define NOISE2_TRACK (-3)
-#define NOISE_SPACE 10                   /* (a space on the first line: Anton's 11 px, a little tighter) */
+static uint32_t trauma_turns;            /* the detents turned on it (each throws the letters again) */
+static int trauma_lang;                  /* the slogan's language now (noise_glyphs.h's order: French first) */
+static uint32_t trauma_lang_at;          /* since when */
 
-static int32_t noise_adv(const felucca_font_t *f, char ch)
+/* a glyph at x (its pen), the line's cap top at y: its rows' runs, those in this band drawn */
+static void noise_glyph(const noise_glyph_t *g, const uint8_t *runs, int32_t x, int32_t y, uint16_t c)
 {
-    char o[2] = {ch, 0};
-    return ch == ' ' ? NOISE_SPACE : text_w(f, o);
-}
-
-static int32_t noise_w(const felucca_font_t *f, const char *w, int32_t track)
-{
-    int32_t x = 0, n = 0;
-    for (; *w; w++, n++)
-        x += noise_adv(f, *w);
-    return x + track * (n - 1);
-}
-
-/* rows r0..r1 of a glyph at x, y (gfx.c's cv_text, those rows alone: a line drawn in strips costs one drawing) */
-static void noise_rows(const felucca_font_t *f, char ch, int32_t x, int32_t y, int32_t r0, int32_t r1, uint16_t c)
-{
-    uint32_t gi = glyph(f, (uint8_t)ch), w = f->bw[gi], bpr = (w + 1u) / 2u;
-    const uint8_t *gd = f->data + f->off[gi];
-    uint32_t r = c >> 11, g = (c >> 5) & 63u, b = c & 31u;
-    int32_t ya = cv_y0 - y - cv_oy, yb = cv_y1 - y - cv_oy;
-    r0 = r0 > ya ? r0 : ya;
-    r0 = r0 > 0 ? r0 : 0;
-    r1 = r1 < yb ? r1 : yb;
-    r1 = r1 < (int32_t)f->h ? r1 : (int32_t)f->h;
-    for (int32_t gy = r0; gy < r1; gy++) {
-        uint32_t row = (uint32_t)(y + gy + cv_oy) * cv_w;
-        for (uint32_t gx = 0; gx < w; gx++) {
-            uint32_t a = gd[(uint32_t)gy * bpr + gx / 2u];
-            int32_t px = x - f->pad + (int32_t)gx;
-            a = (gx & 1u) ? (a & 15u) : (a >> 4);
-            if (!a || (uint32_t)px >= cv_w)
-                continue;
-            if (a == 15u) {
-                cv_px[row + (uint32_t)px] = swap16(c);
-            } else {
-                uint32_t bg = swap16(cv_px[row + (uint32_t)px]);
-                uint32_t br = bg >> 11, bgg = (bg >> 5) & 63u, bb = bg & 31u;
-                cv_px[row + (uint32_t)px] = swap16(((r * a + br * (15u - a)) / 15u) << 11 |
-                                                   ((g * a + bgg * (15u - a)) / 15u) << 5 | (b * a + bb * (15u - a)) / 15u);
+    const uint8_t *p = runs + g->off;
+    uint32_t r = c >> 11, gg = (c >> 5) & 63u, b = c & 31u;
+    int32_t y0 = y + g->y0 + cv_oy;
+    for (int32_t row = 0; row < (int32_t)g->h; row++) {
+        int32_t py = y0 + row, px = x + g->x0;
+        int in = py >= cv_y0;
+        if (py >= cv_y1)
+            break;                       /* (the rows under the band: none needed) */
+        for (int32_t k = 0; k < (int32_t)g->w;) {
+            uint32_t v = *p++, a = v >> 4, n = (v & 15u) + 1u;
+            for (uint32_t m = 0; in && a && m < n; m++) {
+                uint32_t at = (uint32_t)py * cv_w + (uint32_t)(px + (int32_t)m);
+                if ((uint32_t)(px + (int32_t)m) >= cv_w)
+                    continue;
+                if (a == 15u) {
+                    cv_px[at] = swap16(c);
+                } else {
+                    uint32_t bg = swap16(cv_px[at]), br = bg >> 11, bgg = (bg >> 5) & 63u, bb = bg & 31u;
+                    cv_px[at] = swap16(((r * a + br * (15u - a)) / 15u) << 11 |
+                                       ((gg * a + bgg * (15u - a)) / 15u) << 5 | (b * a + bb * (15u - a)) / 15u);
+                }
             }
+            k += (int32_t)n;
+            px += (int32_t)n;
         }
     }
 }
 
-/* a line centred at y in `strips` strips, each pushed or not (this throw's), its letters from `first` (of the 15)
- * red when their bit is in `red` */
-static void noise_line(const felucca_font_t *f, const char *w, int32_t track, int32_t y, int strips, int first,
-                       uint32_t red, int d, uint32_t shake, uint16_t ink, uint16_t ghost)
+/* a line of the slogan in a language, centred, its cap top at y: each letter its own or, thrown, another of the
+ * line's (a kana for a kana); `first` its first letter's number among the slogan's (the red ones' bits in `red`),
+ * `landed` how many of them are back from the language's change */
+static int noise_line(int li, int lang, int32_t y, uint32_t frame, int d, int first, int landed, uint32_t red,
+                      uint16_t ink)
 {
-    int32_t x0 = (240 - noise_w(f, w, track)) / 2, sh = ((int32_t)f->h + strips - 1) / strips;
-    int32_t far = 3 + d / 5;             /* (how far a strip goes: 3 px at a few %, 23 at 100 %) */
-    for (int k = 0; k < strips; k++) {
-        int32_t dx = 0, x = x0;
-        uint32_t h = rand_hash((uint32_t)(y * 8 + k), shake * 131u + trauma_turns);
-        if (d && (int)(h % 110u) < d)
-            dx = (int32_t)((h >> 8) % (uint32_t)(2 * far + 1)) - far;
-        for (int i = 0, n = first; w[i]; i++) {
-            if (w[i] != ' ') {
-                if (dx && d > 33)
-                    noise_rows(f, w[i], x - dx / 2, y, k * sh, k * sh + sh, ghost);
-                noise_rows(f, w[i], x + dx, y, k * sh, k * sh + sh, (red >> n) & 1u ? NOISE_RED : ink);
-                n++;
-            }
-            x += noise_adv(f, w[i]) + track;
+    const noise_glyph_t *G = li ? NOISE2_G : NOISE1_G;
+    const uint8_t *R = li ? NOISE2_RUNS : NOISE1_RUNS, *ph = li ? NOISE2_PHRASE[lang] : NOISE1_PHRASE[lang];
+    int32_t track = li ? NOISE2_TRACK : NOISE1_TRACK, space = li ? NOISE2_SPACE : NOISE1_SPACE, w = 0, x;
+    uint32_t nlat = li ? NOISE2_LATIN : NOISE1_LATIN, nall = li ? NOISE2_N : NOISE1_N;
+    uint32_t share = d ? 250u + 35u * (uint32_t)d / 10u : 0u;   /* (per mille: the letters thrown) */
+    int n = first;
+    for (int i = 0; ph[i] != 254u; i++)
+        w += (ph[i] == 255u ? space : (int32_t)G[ph[i]].adv) + (i ? track : 0);
+    x = (240 - w) / 2;
+    for (int i = 0; ph[i] != 254u; i++) {
+        if (ph[i] == 255u) {
+            x += space + track;
+            continue;
         }
+        uint32_t gi = ph[i], h = rand_hash((uint32_t)(n * 3 + li), frame * 977u + trauma_turns);
+        if (n >= landed || h % 1000u < share)   /* thrown: another of the line's, a kana for a kana */
+            gi = G[gi].latin ? (h >> 10) % nlat : nlat + (h >> 10) % (nall - nlat);
+        noise_glyph(&G[gi], R, x + ((int32_t)G[ph[i]].adv - (int32_t)G[gi].adv) / 2, y,
+                    (red >> n) & 1u ? NOISE_RED : ink);
+        x += (int32_t)G[ph[i]].adv + track;
+        n++;
     }
+    return n;
 }
 
-static void trauma_scene(uint32_t t, int d, uint32_t shake, int strobe)
+static void trauma_scene(uint32_t t, int d, uint32_t frame, int landed, int strobe)
 {
-    uint16_t ink = strobe ? 0x0000u : 0xFFFFu, ghost = 0x7BEFu, dim = strobe ? 0xBDF7u : 0x4208u;
-    uint32_t red = 0;
+    uint16_t ink = strobe ? 0x0000u : 0xFFFFu, dim = strobe ? 0xBDF7u : 0x4208u;
+    uint32_t red = 0, shake = d ? frame * 50u / 90u : 0u;
     char line[16], v[8];
     if (t < TRAUMA_OPEN_MS) {            /* the bars from both sides, quick then slowing, then gone */
         float q = (float)t / (float)TRAUMA_OPEN_MS, r = 1.0f - (1.0f - q) * (1.0f - q) * (1.0f - q);
@@ -3449,32 +3442,50 @@ static void trauma_scene(uint32_t t, int d, uint32_t shake, int strobe)
         }
     }
     for (int k = 0; d && k < 1 + d / 40; k++)   /* the red letters: one, two from 40 %, three at 80 % */
-        red |= 1u << (rand_hash((uint32_t)k + 40u, shake * 7u + trauma_turns) % 15u);
-    if (t >= 120u) {                     /* VOUS ETES LE (its first glyph row 3 px over its accent), BRUIT 4 px under */
-        noise_line(&FONT_NOISE1, NOISE1, NOISE1_TRACK, 4, 5, 0, red, d, shake, ink, ghost);
-        noise_line(&FONT_NOISE2, "BRUIT", NOISE2_TRACK, 62, 8, 10, red, d, shake, ink, ghost);
+        red |= 1u << (rand_hash((uint32_t)k + 40u, shake * 7u + trauma_turns) % 16u);
+    if (t >= 120u) {                     /* the first line's cap top 17 px down, the second's 4 px under its base */
+        int n = noise_line(0, trauma_lang, 17, frame, d, 0, landed, red, ink);
+        noise_line(1, trauma_lang, 17 + NOISE1_CAP + 4, frame, d, n, landed, red, ink);
     }
-    if (t >= 300u) {                     /* the dose, its bar drawn out */
-        int_text(d, v);
+    if (t >= 300u) {                     /* the dose, its gauge drawn out; at 100 % both past it */
+        int over = d >= 100 && t >= 520u;
+        int_text(over ? 100 + (int)(frame * 37u % 900u) : d, v);
         line[0] = 0;
         text_cat(line, v, sizeof line);
         text_cat(line, " %", sizeof line);
-        cv_text(232 - text_w(&FONT_L, line), 186, &FONT_L, line, ink);
+        cv_text(232 - text_w(&FONT_L, line), 176, &FONT_L, line, over ? NOISE_RED : ink);
         float uu = t >= 520u ? 1.0f : (float)(t - 300u) / 220.0f;
-        int32_t bw = (int32_t)(130.0f * uu), fw = (int32_t)(130.0f * uu * (float)d * 0.01f);   /* (clear of 100 %) */
-        cv_rect(10, 202, bw, 6, dim);
-        cv_rect(10, 202, fw, 6, ink);
+        int32_t bw = (int32_t)(140.0f * uu), fw = (int32_t)(140.0f * uu * (float)d * 0.01f);
+        cv_rect(10, 222, bw, 6, dim);
+        cv_rect(10, 222, fw, 6, ink);
+        if (over)                        /* out of its frame to the edge, broken where it goes */
+            for (int32_t x = 150, k = 0; x < 240; k++) {
+                uint32_t h = rand_hash((uint32_t)k + 60u, frame);
+                int32_t run = 6 + (int32_t)(h % 18u), gap = (int32_t)((h >> 8) % 5u);
+                cv_rect(x, 222 - (int32_t)((h >> 12) % 3u), run, 6, NOISE_RED);
+                x += run + gap;
+            }
     }
 }
 
 static void draw_trauma(void)
 {
-    static int32_t shown[5] = {-1, -1, -1, -1, -1};
-    uint32_t t = plat_ms() - ui.trauma_at, frame = plat_ms() / 60u;
-    int d = eng_project()->trauma > 100 ? 100 : eng_project()->trauma;
-    uint32_t shake = d ? plat_ms() / 90u : 0u;
-    int strobe = d >= 80 && t >= 520u && frame % (d >= 100 ? 2u : d >= 90 ? 3u : 4u) == 0u;
-    int32_t s[5] = {t < 600u ? (int32_t)t : -2, d, (int32_t)shake, (int32_t)trauma_turns, strobe};
+    static int32_t shown[6] = {-1, -1, -1, -1, -1, -1};
+    uint32_t now = plat_ms(), t = now - ui.trauma_at, frame;
+    int d = eng_project()->trauma > 100 ? 100 : eng_project()->trauma, landed;
+    int strobe = d >= 80 && t >= 520u && (now / 60u) % (d >= 100 ? 2u : d >= 90 ? 3u : 4u) == 0u;
+    if (!d) {                            /* at 0: the French, still */
+        trauma_lang = 0;
+        trauma_lang_at = now - 1000u;
+    } else if (now - trauma_lang_at >= 1400u - 7u * (uint32_t)d) {
+        trauma_lang = (trauma_lang + 1) % NOISE_LANGS;
+        trauma_lang_at = now;
+    }
+    frame = d ? now / 50u : 0u;
+    landed = (int)((now - trauma_lang_at) / 25u);   /* (a letter back each 25 ms after a change) */
+    landed = landed > 16 ? 16 : landed;
+    int32_t s[6] = {t < 600u ? (int32_t)t : -2, d, (int32_t)frame, (int32_t)trauma_turns, strobe,
+                    trauma_lang * 32 + landed};
     if (!ui.full && !memcmp(s, shown, sizeof s))
         return;                          /* (nothing moved) */
     memcpy(shown, s, sizeof s);
@@ -3483,7 +3494,7 @@ static void draw_trauma(void)
         cv_oy = -80 * b;
         cv_y0 = 0;
         cv_y1 = 80;
-        trauma_scene(t, d, shake, strobe);
+        trauma_scene(t, d, frame, landed, strobe);
         cv_oy = 0;
         blit(0, (uint32_t)(80 * b));
     }
@@ -3495,6 +3506,8 @@ static void trauma_open(void)
         ui.trauma = 1;
         ui.trauma_at = plat_ms();
         ui.full = 1;
+        trauma_lang = 0;                 /* (the French first, its letters landing) */
+        trauma_lang_at = ui.trauma_at;
     }
 }
 
