@@ -3401,6 +3401,42 @@ int main(int argc, char** argv) {
     eng_fresh();
   }
 
+  {                                     // 52. PADS held (0.15.2): DECAY at Hold, one trig a bar: its gate up the whole
+    // bar (to the next trig), not GATE's share of a step; DECAY under Hold: GATE's share as before; Endless the same,
+    // over its rests
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    auto bar_up = [&](float decay, int endless) {   // the share of the first bar the gate is up
+      eng_blank(p);
+      eng_fresh();
+      eng_set_model(0, eng_model_find(MK_PADS, 0));
+      p->val[PG_TRACK(0, 1) * 4 + 0] = decay;
+      p->val[PG_GLOBAL * 4 + 0] = 0.60206f;   // (120 BPM: a bar 2 s)
+      if (endless) {
+        p->endless[0][0] = 60;
+        for (int i = 1; i < 4; ++i) p->endless[0][i] = ENDLESS_REST;
+        p->endless_len[0] = 4;
+        p->val[PG_ARP(0) * 4 + 0] = 5.0f;     // (quarters: four a bar, one note then three rests)
+      } else {
+        eng_trig_set(0, 0, 1);
+      }
+      eng_play(1);
+      int up = 0, all = 0;
+      for (int b = 0; b < 689; ++b) {   // (2 s)
+        eng_render(l, r, 128);
+        if (b >= 4) up += (eng_gates() & 1u) != 0, ++all;
+      }
+      eng_play(0);
+      return static_cast<double>(up) / all;
+    };
+    double held = bar_up(1.0f, 0), timed = bar_up(0.8f, 0), eheld = bar_up(1.0f, 1), etimed = bar_up(0.8f, 1);
+    printf("PADS held: its gate up %.0f %% of the bar at Hold (one trig), %.0f %% under it; Endless %.0f %%, %.0f %%\n",
+           held * 100.0, timed * 100.0, eheld * 100.0, etimed * 100.0);
+    if (held < 0.9 || timed > 0.06 || eheld < 0.9 || etimed > 0.3) ++failures, printf("FAIL: PADS held\n");
+    eng_defaults(p);
+    eng_fresh();
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

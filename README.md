@@ -375,8 +375,9 @@ l'accord : son degré dans la gamme (une touche, un accord ; les pas, leurs lock
 au-dessus de la quinte). **VOICING** : Close (serré), Open (la deuxième voix du haut descend d'une octave), Wide (la
 quatrième aussi), Bass (et une basse sous l'accord, sa fondamentale). Chaque accord est **conduit depuis le précédent** :
 de ses renversements, celui où les voix bougent le moins, autour de la note de la piste (FREQ, OCTAVE : le registre).
-**DECAY** de 0,2 à 20 s, Hold au bout (tenu tant que la note l'est) ; **ATTACK** de 1 ms à 4 s (une montée douce, en
-S). Chaque note de l'accord est une dent de scie (polyBLEP), et **ENSEMBLE** en fait deux choses : à droite, trois dents
+**DECAY** de 0,2 à 20 s, Hold au bout (tenu tant que la note l'est ; depuis 0.15.2, joué par les pas ou Endless,
+**l'accord tient jusqu'au trig suivant de la piste**, quelle que soit la GATE : un trig par mesure, un accord par
+mesure) ; **ATTACK** de 1 ms à 4 s (une montée douce, en S). Chaque note de l'accord est une dent de scie (polyBLEP), et **ENSEMBLE** en fait deux choses : à droite, trois dents
 de scie par note, de plus en plus écartées (une string machine, ses cordes) ; à gauche **VINTAGE**, une seule par note,
 mais chaque voix un peu désaccordée et **dérivant lentement à sa façon**, comme celles d'un vieux polyphonique, de plus
 en plus vers la gauche. **TONE** : à gauche une sinusoïde sous chaque note et les scies filtrées (plus rond, plus

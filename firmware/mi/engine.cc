@@ -936,6 +936,18 @@ int fill_hit(int t, int* dn) {
   return kFills[p].hit[pos];
 }
 
+// PADS held (its DECAY at Hold, 0.15.2): a step's chord held to the track's next trig, whatever GATE, as a pad is
+// played (0.11 to 0.15.1: GATE's share of the step, then let go: a sixteenth of a chord). The next trig takes it over
+// (a gate still high: low for a frame); a trig PROB leaves out, the chord goes on
+int held_pad(int t) { return mdef(proj.algo[PG_TRACK(t, 0)]).kind == MK_PADS && E(t, TP_DECAY) > 0.98f; }
+int steps_to_next(int t, int step) {    // the steps to the lane's next trig (its whole length: none other)
+  int len = Pi(PG_STEP(t), 3);
+  if (len < 1) len = 1;
+  for (int d = 1; d < len; ++d)
+    if (eng_trig(t, (step + d) % len)) return d;
+  return len;
+}
+
 // the trigs of one block, frame by frame: fg (the gates) and fnote (the notes) for the voices; the effects' trigs
 void sequence(uint32_t n) {
   float fl = static_cast<float>(n / kFrames);
@@ -1010,7 +1022,11 @@ void sequence(uint32_t n) {
         }
         int nt = proj.endless[t][e_pos[t]];
         if (nt != ENDLESS_REST) {
-          raw_left[t] = fm_maxf(fl * 2.0f, el[t] * clampf(P(PG_ARP(t), 1), 0.05f, 1.0f) * 0.98f);
+          int rests = 0;                // (PADS held: to its next note, over the rests after it, forward)
+          if (held_pad(t) && d == 0)
+            while (rests < len - 1 && proj.endless[t][(e_pos[t] + 1 + rests) % len] == ENDLESS_REST) ++rests;
+          raw_left[t] = fm_maxf(fl * 2.0f, held_pad(t) ? el[t] * (static_cast<float>(rests) + 1.5f)
+                                                      : el[t] * clampf(P(PG_ARP(t), 1), 0.05f, 1.0f) * 0.98f);
           e_note[t] = nt;
           rise = 1;
         }
@@ -1022,7 +1038,8 @@ void sequence(uint32_t n) {
           if (rat_n[t] < fhit[t]) rat_n[t] = fhit[t];
           ++fill_trigs[t];
         }
-        raw_left[t] = fm_maxf(fl * 2.0f, sl * gate_frac(E(t, TP_LENGTH)));
+        raw_left[t] = fm_maxf(fl * 2.0f, held_pad(t) ? sl * (static_cast<float>(steps_to_next(t, cur_step[t])) + 0.5f)
+                                                      : sl * gate_frac(E(t, TP_LENGTH)));
         rat_period[t] = sl / static_cast<float>(rat_n[t]);
         tnote[t] = static_cast<float>(quantize(iround(48.0f + 12.0f * static_cast<float>(iround(E(t, TP_OCTAVE))) +
                                                       static_cast<float>(iround(E(t, TP_TRANSPOSE))) +
