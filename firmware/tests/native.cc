@@ -3717,6 +3717,80 @@ int main(int argc, char** argv) {
     eng_fresh();
   }
 
+  {                                     // 56. POLY's voices' level (0.16.5): a note ringing on under the next one, then
+    // gone: the one playing's level glides (0.6 / sqrt(those sounding)), no step; the same in PROPHET (VINTAGE Clean).
+    // Their sound made smooth (a low note held, its filter low, no envelope on it, no resonance): a step shows as a
+    // spike of the wave's bend (its second difference), against its own (0.16.4: x5000 and x4100; the glide's corners,
+    // a block each, x14 and x11)
+    project_t* p = eng_project();
+    static float l[128], r[128], wav[1400 * 128];
+    auto smooth = [&](int kind) {
+      eng_blank(p);
+      eng_fresh();
+      eng_set_model(0, eng_model_find(kind, 0));
+      const float kPoly[8] = {0.0f, 0.25f, 0.0f, 1.0f, 0.0f, 0.5f, 0.5f, 0.5f};          // (DECAY right: held)
+      const float kPro[8] = {0.5f / 13.0f, 0.25f, 0.0f, 1.0f, 0.0f, 0.5f, 0.5f, 0.5f};   // (VINTAGE Clean)
+      for (int i = 0; i < 8; ++i) {
+        int prm = PG_TRACK(0, 0) * 4 + 1 + i;
+        float u = kind == MK_POLY ? kPoly[i] : kPro[i];
+        p->val[prm] = eng_pdef(prm)->kind == K_BIP ? 2.0f * u - 1.0f : u;
+      }
+      p->algo[PG_COMP] = MB_OFF;        // (the bus off: the track alone)
+    };
+    auto bend = [&](int a, int b) {     // (the most the wave bends in samples a..b)
+      double m = 0;
+      for (int i = a; i < b; ++i) m = std::max(m, static_cast<double>(std::fabs(wav[i] - 2.0f * wav[i - 1] + wav[i - 2])));
+      return m;
+    };
+    auto worst = [&](int kind) {
+      smooth(kind);
+      int voices[1400];
+      for (int b = 0; b < 40; ++b) eng_render(l, r, 128);
+      eng_key(0, 36, 1);
+      for (int b = 0; b < 1400; ++b) {
+        if (b == 30) eng_key(0, 36, 0), eng_key(0, 31, 1);   // (the second note over the first's release)
+        eng_render(l, r, 128);
+        for (int k = 0; k < 128; ++k) wav[b * 128 + k] = l[k];
+        voices[b] = kind == MK_POLY ? poly_voices(0) : pro_voices(0);
+      }
+      eng_key(0, 31, 0);
+      int gone = -1;
+      for (int b = 60; b < 1400 && gone < 0; ++b)
+        if (voices[b] < voices[b - 1]) gone = b;
+      if (gone < 0 || gone > 1300) return -1.0;
+      double typ = std::max(bend((gone - 40) * 128, (gone - 4) * 128), bend((gone + 20) * 128, (gone + 60) * 128));
+      return bend((gone - 2) * 128, (gone + 8) * 128) / (typ + 1e-12);
+    };
+    double wp = worst(MK_POLY), wx = worst(MK_PROPHET);
+    printf("the voices' level: when a voice ringing under the next one goes, the next one bends at most x%.2f its usual "
+           "(POLY), x%.2f (PROPHET)\n", wp, wx);
+    if (wp < 0 || wp > 50.0 || wx < 0 || wx > 50.0) ++failures, printf("FAIL: the voices' level\n");
+
+    // 57. the mixer's filter taken out or in (0.16.5): from 23 Hz's high pass to flat, from flat to 16 kHz's low
+    // pass, from a low pass to a high pass at once (a lock), from flat to a high pass at once: from the one to the
+    // other over a block, no step (0.16.4: x7600, x8500, x200, x4500; now x3.3, x3.4, and x31, x28: the cutoff's glide
+    // after, its coefficients a block each, as with the knob turned)
+    auto eq_worst = [&](float from, float to) {
+      smooth(MK_POLY);
+      p->val[PG_EQ * 4] = from;
+      eng_key(0, 36, 1);
+      for (int b = 0; b < 200; ++b) {
+        if (b == 120) p->val[PG_EQ * 4] = to;
+        eng_render(l, r, 128);
+        for (int k = 0; k < 128; ++k) wav[b * 128 + k] = l[k];
+      }
+      eng_key(0, 36, 0);
+      double typ = std::max(bend(60 * 128, 118 * 128), bend(140 * 128, 198 * 128));
+      return bend(119 * 128, 132 * 128) / (typ + 1e-12);
+    };
+    double e1 = eq_worst(0.035f, 0.0f), e2 = eq_worst(0.0f, -0.0237f), e3 = eq_worst(-0.3f, 0.3f), e4 = eq_worst(0.0f, 0.4f);
+    printf("the mixer's filter: in or out, the wave bends at most x%.2f its usual (23 Hz HP to flat), x%.2f (flat to "
+           "16 kHz LP), x%.2f (LP to HP), x%.2f (flat to HP)\n", e1, e2, e3, e4);
+    if (e1 > 10.0 || e2 > 10.0 || e3 > 50.0 || e4 > 50.0) ++failures, printf("FAIL: the mixer's filter in or out\n");
+    eng_defaults(p);
+    eng_fresh();
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

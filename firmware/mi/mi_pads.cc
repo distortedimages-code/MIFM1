@@ -130,6 +130,8 @@ struct Pad {
   float bell_c, bell_m, bell_e, bell_i, bell_hz, bell_k, bell_ik;   // the bell: its phases, level, index, pitch
   float dcx, dcy;
   uint32_t rnd;
+  float gn;                             // (0.16.5) its level now: 0.55 / sqrt(the chord's notes), glided (a chord of
+                                        // another size, held over: no step)
 };
 Pad pad;
 
@@ -426,7 +428,10 @@ void pads_render(float* out, uint32_t n) {
   }
   const float dark = tone < 0.0f ? -tone : 0.0f;
   const float g_saw = (1.0f - 0.85f * dark) / static_cast<float>(nsaw), g_sin = 0.15f + 0.85f * dark;
-  const float norm = 0.55f / fm_sqrtf(static_cast<float>(v.nv > 0 ? v.nv : 1));
+  const float norm_to = 0.55f / fm_sqrtf(static_cast<float>(v.nv > 0 ? v.nv : 1));
+  if (v.gn <= 0.0f) v.gn = norm_to;
+  const float gk = 1.0f - fm_expf(-1.0f / (0.004f * kSr));   // (~4 ms a step)
+  float norm = v.gn;
   // the envelope
   const float dk = held && v.gate && !v.let_go ? 1.0f : fm_expf(-6.9078f / ((v.let_go ? 0.06f + 0.6f * A : t60_s(v.k[3])) * kSr));
   const float ainc = 1.0f / (A * kSr);
@@ -464,6 +469,7 @@ void pads_render(float* out, uint32_t n) {
     float v3 = sum[s & 31u] - v.lp2, v1 = fa1 * v.lp1 + fa2 * v3, v2 = v.lp2 + fa2 * v.lp1 + fa3 * v3;
     v.lp1 = 2.0f * v1 - v.lp1;
     v.lp2 = 2.0f * v2 - v.lp2;
+    norm += (norm_to - norm) * gk;
     float y = v2 * norm * e;
     if (v.bell_e > 1e-4f) {             // the bell: 1 : 3.5, its index falling fast, its level slowly
       v.bell_m += binc * 3.5f;
@@ -488,9 +494,11 @@ void pads_render(float* out, uint32_t n) {
     }
     out[s] = yd;
   }
+  v.gn = norm;
   if (v.att >= 1.0f && !(held && v.gate && !v.let_go) && v.env < 1e-5f && v.bell_e < 1e-4f) {
     v.alive = 0;
     v.env = 0.0f;
+    v.gn = 0.0f;                        // (from silence: its level at once)
   }
 }
 

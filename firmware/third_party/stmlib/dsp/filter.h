@@ -187,6 +187,12 @@ class Svf {
   void Reset() {
     state_1_ = state_2_ = 0.0f;
   }
+
+  // (MIFM1) at rest on a level held: the low pass already there (a filter taken in with no step)
+  void Prime(float lp) {
+    state_1_ = 0.0f;
+    state_2_ = lp;
+  }
   
   // Copy settings from another filter.
   inline void set(const Svf& f) {

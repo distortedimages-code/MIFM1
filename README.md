@@ -67,7 +67,8 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
 - un **mixer simple** (un niveau et un pan par piste, à puissance constante : une piste garde le même volume où
   qu'elle soit dans l'image ; ses gains glissent échantillon par échantillon, un pan ou un niveau aléatoire ou locké
   ne claque pas), un **EQ** par piste (un passe-bas ou un passe-haut raide sur un seul potard, pour lui faire de la
-  place), un envoi par piste vers le delay et un vers la réverbe (ses lignes de retard sur 16 bits : la
+  place ; depuis 0.16.5, passer du passe-haut au neutre, du neutre au passe-bas ou de l'un à l'autre se fait en fondu
+  de 3 ms, sans clic), un envoi par piste vers le delay et un vers la réverbe (ses lignes de retard sur 16 bits : la
   réverbe du module les stockait sur 12, d'où un grain et un souffle ; 0.5 et 0.6 les gardaient en flottants, 0.7
   donne l'autre moitié aux tranches du glitch).
 - un **duck** : T2, T3 et T4 baissent à chaque trig de T1 (sa profondeur par piste, un DECAY commun), avant leurs
@@ -428,7 +429,10 @@ sortiraient de la gamme).
 **VOICE** : à gauche **VINTAGE**, comme sur un vieux polyphonique : chaque voix sa propre justesse (quelques cents),
 une dérive lente qui lui est propre, son filtre et son enveloppe un peu à part, de plus en plus vers la gauche ; au
 milieu des voix exactes ; à droite **UNISON** : sans accord, les quatre voix sur la note, de plus en plus écartées
-(un lead épais), avec un accord, ses voix légèrement désaccordées.
+(un lead épais), avec un accord, ses voix légèrement désaccordées. Le niveau des voix suit leur nombre (0,6 / √voix
+qui sonnent) ; depuis 0.16.5 il y glisse en quelques millisecondes : quand une note qui résonnait encore sous la
+suivante s'éteignait, il sautait d'un coup, un petit clic juste après l'attaque de la nouvelle (pas en UNISON, où les
+quatre voix sonnent toujours). De même dans PROPHET et PADS.
 
 | 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -461,7 +465,7 @@ de A (une FM linéaire : avec Bell, des cloches et du métal). **VINTAGE** (0 : 
 du Prophet-5 Rev 4 (2020) : des voix exactes d'aujourd'hui aux premières révisions instables, A et B de plus en plus
 écartés (jusqu'à 14 cents), chaque voix sa justesse, sa dérive lente, sa coupure et ses enveloppes un peu à part.
 **CHORD** : les accords de POLY (à droite la mémoire d'accords, à gauche l'harmonie : PADS, ou la gamme ; Off, une voix
-par trig, les précédentes résonnant dessous).
+par trig, les précédentes résonnant dessous ; leur niveau glisse quand l'une s'éteint, depuis 0.16.5, comme dans POLY).
 
 | 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |

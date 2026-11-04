@@ -85,6 +85,7 @@ struct Pro {
   uint32_t rnd, clock;
   int dr_n;
   float dcx, dcy;
+  float gn;                             // (0.16.5) the voices' level now: 0.62 / sqrt(those sounding), glided
 };
 // (its state on a track: the engine's, shared with the other machines, one a track at a time)
 static_assert(sizeof(Pro) <= MF_STATE_BYTES, "PROPHET's state");
@@ -397,8 +398,16 @@ void pro_render(int t, float* out, uint32_t n) {
     }
     active += v.alive;
   }
-  if (!active) return;
+  if (!active && fm_fabsf(p.dcy) < 1e-6f) {   // (silent: the coupling capacitor's tail out too)
+    p.gn = 0.0f;
+    p.dcx = p.dcy = 0.0f;
+    return;
+  }
+  // the voices' level, glided over ~8 ms (0.16.5: POLY's: a voice ringing on under the next one, then gone, a click)
   const float norm = 0.62f / fm_sqrtf(static_cast<float>(active > 1 ? active : 1));
+  if (p.gn <= 0.0f) p.gn = norm;
+  const float gb = p.gn + (norm - p.gn) * clampf(static_cast<float>(n) / (0.008f * kSr), 0.0f, 1.0f);
+  const float gstep = (gb - p.gn) / static_cast<float>(n);
   for (int i = 0; i < kVoices; ++i) {
     XVoice& v = p.v[i];
     if (!v.alive) continue;
@@ -444,13 +453,15 @@ void pro_render(int t, float* out, uint32_t n) {
       const float G4 = c.G * c.G * c.G * c.G, inv = 1.0f / (1.0f + kres * G4), drive = 0.95f;
       c.cx = drive * (1.0f + 0.35f * kres - kres * G4 * inv);
       c.ks = kres * inv;
-      voice_block(v, c, o.sync, e0 * norm, (e1 - e0) * norm / static_cast<float>(m), out + s0, m);
+      const float g0 = p.gn + gstep * static_cast<float>(s0), g1 = g0 + gstep * static_cast<float>(m);
+      voice_block(v, c, o.sync, e0 * g0, (e1 * g1 - e0 * g0) / static_cast<float>(m), out + s0, m);
     }
     if (v.aatt >= 1.0f && !sustain && v.aenv < 1e-5f) {
       v.alive = 0;
       v.aenv = v.fenv = 0.0f;
     }
   }
+  p.gn = active ? gb : 0.0f;
   // the sum: the coupling capacitor, a soft knee above 0.8 (at most 1.2)
   for (uint32_t s = 0; s < n; ++s) {
     float yv = out[s], yd = yv - p.dcx + 0.9993f * p.dcy;

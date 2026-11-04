@@ -1880,25 +1880,54 @@ void mix_job(uint32_t n) {
   for (int t = 0; t < ENG_TRACKS; ++t) {   // the filter (before the duck and the sends: what a track sends is
     float v = mj.eq[t], pk = 0.0f;         // filtered with it)
     int mode = v <= -kEqDead ? 1 : v >= kEqDead ? 2 : 0;
+    const int was = eq_mode[t];
+    if (!mode && !was) continue;
     float* x = mbuf[t];
-    if (mode)
-      for (uint32_t i = 0; i < n; ++i) pk = fm_maxf(pk, fm_fabsf(x[i]));
+    for (uint32_t i = 0; i < n; ++i) pk = fm_maxf(pk, fm_fabsf(x[i]));
     stmlib::Svf* ef = eq_p[t]->f;
-    if (mode != eq_mode[t] || pk < 1e-6f) {   // (another mode, or silence: the states from zero, never down into
-      ef[0].Init();                        // the subnormals)
+    if (pk < 1e-6f) {                   // (silence: the states from zero, never down into the subnormals; the mode
+      ef[0].Init();                     // taken at once, nothing to hear)
       ef[1].Init();
       eq_mode[t] = mode;
+      continue;
     }
-    if (!mode || pk < 1e-6f) continue;
     float f = clampf(eq_hz(v) / kSr, 0.0004f, 0.41f);
-    ef[0].set_f_q<stmlib::FREQUENCY_ACCURATE>(f, 0.5412f);
-    ef[1].set_f_q<stmlib::FREQUENCY_ACCURATE>(f, 1.3066f);
-    if (mode == 1) {
-      ef[0].Process<stmlib::FILTER_MODE_LOW_PASS>(x, x, n);
-      ef[1].Process<stmlib::FILTER_MODE_LOW_PASS>(x, x, n);
-    } else {
-      ef[0].Process<stmlib::FILTER_MODE_HIGH_PASS>(x, x, n);
-      ef[1].Process<stmlib::FILTER_MODE_HIGH_PASS>(x, x, n);
+    // another mode (0.16.5: the filter taken out or in at once, a click: 23 Hz's high pass to flat, flat to 16 kHz's
+    // low pass): the one it was, its states on, into a scratch (the mix's Warps dry: read above, no more this block),
+    // the new one from rest (the low pass at the signal's level), then from the one to the other over the block
+    float* y = m_dry;
+    if (mode != was) {
+      if (was == 1) {                   // (its states on, at its cutoff: then from rest)
+        ef[0].Process<stmlib::FILTER_MODE_LOW_PASS>(x, y, n);
+        ef[1].Process<stmlib::FILTER_MODE_LOW_PASS>(y, y, n);
+      } else if (was) {
+        ef[0].Process<stmlib::FILTER_MODE_HIGH_PASS>(x, y, n);
+        ef[1].Process<stmlib::FILTER_MODE_HIGH_PASS>(y, y, n);
+      } else {
+        for (uint32_t i = 0; i < n; ++i) y[i] = x[i];
+      }
+      ef[0].Init();
+      ef[1].Init();
+      if (mode == 1) ef[0].Prime(x[0]), ef[1].Prime(x[0]);
+      eq_mode[t] = mode;
+    }
+    if (mode) {
+      ef[0].set_f_q<stmlib::FREQUENCY_ACCURATE>(f, 0.5412f);
+      ef[1].set_f_q<stmlib::FREQUENCY_ACCURATE>(f, 1.3066f);
+      if (mode == 1) {
+        ef[0].Process<stmlib::FILTER_MODE_LOW_PASS>(x, x, n);
+        ef[1].Process<stmlib::FILTER_MODE_LOW_PASS>(x, x, n);
+      } else {
+        ef[0].Process<stmlib::FILTER_MODE_HIGH_PASS>(x, x, n);
+        ef[1].Process<stmlib::FILTER_MODE_HIGH_PASS>(x, x, n);
+      }
+    }
+    if (mode != was) {
+      for (uint32_t i = 0; i < n; ++i) {   // (an S: no corner at either end)
+        float a = static_cast<float>(i + 1) * inv;
+        a = a * a * (3.0f - 2.0f * a);
+        x[i] = y[i] + (x[i] - y[i]) * a;
+      }
     }
   }
   {                                     // the duck: T1's rises (their frames), DECAY, each track's depth

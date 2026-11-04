@@ -84,6 +84,7 @@ struct Poly {
   uint32_t rnd, clock;
   int dr_n;
   float dcx, dcy;
+  float gn;                             // (0.16.5) the voices' level now: 0.6 / sqrt(those sounding), glided
 };
 // (its state on a track: the engine's, shared with the other machines, one a track at a time)
 static_assert(sizeof(Poly) <= MF_STATE_BYTES, "POLY's state");
@@ -406,9 +407,18 @@ void poly_render(int t, float* out, uint32_t n) {
     }
     active += v.alive;
   }
-  if (!active) return;
+  if (!active && fm_fabsf(p.dcy) < 1e-6f) {   // (silent: the coupling capacitor's tail out too)
+    p.gn = 0.0f;
+    p.dcx = p.dcy = 0.0f;
+    return;
+  }
   const int chord = p.n > 1, unison = !chord && uni > 0.02f;
+  // the voices' level: 0.6 / sqrt(those sounding), glided over ~8 ms (0.16.5: a voice ringing on under the next one,
+  // then gone, moved it at once, a click on the one playing); from silence at once
   const float norm = 0.6f / fm_sqrtf(static_cast<float>(active > 1 ? active : 1));
+  if (p.gn <= 0.0f) p.gn = norm;
+  const float gb = p.gn + (norm - p.gn) * clampf(static_cast<float>(n) / (0.008f * kSr), 0.0f, 1.0f);
+  const float gstep = (gb - p.gn) / static_cast<float>(n);
   for (int i = 0; i < kVoices; ++i) {
     PVoice& v = p.v[i];
     if (!v.alive) continue;
@@ -463,13 +473,15 @@ void poly_render(int t, float* out, uint32_t n) {
       const float G4 = c.G * c.G * c.G * c.G, inv = 1.0f / (1.0f + kres * G4), drive = 1.1f;
       c.cx = drive * (1.0f + 0.5f * kres - kres * G4 * inv);
       c.ks = kres * inv;               // (x b: S = b (s4 + G (s3 + G (s2 + G s1))))
-      voice_block(v, c, e0 * norm, (e1 - e0) * norm / static_cast<float>(m), y + s0, m);
+      const float g0 = p.gn + gstep * static_cast<float>(s0), g1 = g0 + gstep * static_cast<float>(m);
+      voice_block(v, c, e0 * g0, (e1 * g1 - e0 * g0) / static_cast<float>(m), y + s0, m);
     }
     if (v.att >= 1.0f && !sustain && v.env < 1e-5f) {
       v.alive = 0;
       v.env = 0.0f;
     }
   }
+  p.gn = active ? gb : 0.0f;
   // the sum: the coupling capacitor (the 25 % sub's offset), a soft knee above 0.8 (at most 1.2)
   for (uint32_t s = 0; s < n; ++s) {
     float yv = out[s], yd = yv - p.dcx + 0.9993f * p.dcy;
