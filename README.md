@@ -537,7 +537,7 @@ le cœur 1 les prend à la fin de son premier travail, sans attendre que le cœu
 lui passer (sur le stress test, cette attente faisait monter le pic de 70 à 96 %). Une voix silencieuse depuis un moment, sa note finie, se repose jusqu'à son
 trig suivant (elle ne coûte plus rien).
 
-**Le code en RAM** (0.14.3) : le FM-1 exécute son programme depuis la flash, à travers un petit cache ; du code qui
+**Le code en RAM** (0.14.4) : le FM-1 exécute son programme depuis la flash, à travers un petit cache ; du code qui
 n'y est pas encore attend la flash, une ligne de 32 octets à la fois (environ 1 µs). Sur le stress test, la première
 piste FM d'un bloc payait ainsi ~170 µs pour charger le code de la FM, la même FM sur la piste suivante presque rien
 (mesuré : T2 passée sur un autre moteur, T3 montait de 26 à 32 %) ; un compte d'instructions ne le voit jamais, d'où
