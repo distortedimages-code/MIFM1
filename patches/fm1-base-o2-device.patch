@@ -2,14 +2,50 @@ MIFM1's changes to fm1-base (base/), applied by tools/patch_base.sh before a bui
 Two things for MIFM1's code in RAM (fm1.toml): o2_device and o2_device_cflags, more flags for some o2 units in the
 firmware only (JieLi's long calls, -pi32v2-large-program, as fm1-base's radio units have them: the RAM and the flash
 are 4 MB apart, beyond a call's reach); o2_ram, functions of o2 units moved to the RAM code as compiled, their
-sections renamed (.text.F -> .c1_text.F) after the compiler (a section attribute in the source would keep the
-compiler from inlining into them anything that is not in the same section).
+sections renamed (.text.F -> .c1_text.F) in the objects after the compiler (elf_rename: JieLi's objcopy renames
+nothing; a section attribute in the source would keep the compiler from inlining into those functions anything that
+is not in the same section).
 
 diff --git a/tools/build.py b/tools/build.py
-index 2f2312d..7bd6381 100755
+index 2f2312d..58d19cb 100755
 --- a/tools/build.py
 +++ b/tools/build.py
-@@ -681,10 +681,12 @@ def build_app():
+@@ -611,6 +611,34 @@ def radio_units():
+ BOOT_PACKED = None                                # (raw, packed) bytes of the boot-packed load images, or None
+ 
+ 
++def elf_rename(path, names):
++    """(MIFM1) an ELF32 object's sections renamed (old name: new name): the new names in a string table of their
++    own at the file's end, its header moved there (the old table kept where it is, unused)"""
++    b = bytearray(Path(path).read_bytes())
++    if b[:4] != b"\x7fELF" or b[4] != 1:
++        raise SystemExit(f"build: {path}: not an ELF32 object")
++    e = "<" if b[5] == 1 else ">"
++    shoff, = struct.unpack_from(e + "I", b, 0x20)
++    shentsize, shnum, shstrndx = struct.unpack_from(e + "HHH", b, 0x2E)
++    sh = lambda i: shoff + i * shentsize
++    str_off, str_size = struct.unpack_from(e + "II", b, sh(shstrndx) + 16)
++    old = bytes(b[str_off:str_off + str_size])
++    table, done = bytearray(old), 0
++    for i in range(shnum):
++        n, = struct.unpack_from(e + "I", b, sh(i))
++        name = old[n:old.index(b"\0", n)].decode()
++        if name in names:
++            struct.pack_into(e + "I", b, sh(i), len(table))
++            table += names[name].encode() + b"\0"
++            done += 1
++    if done:
++        b += b"\0" * (-len(b) % 4)
++        struct.pack_into(e + "II", b, sh(shstrndx) + 16, len(b), len(table))
++        b += table
++        Path(path).write_bytes(bytes(b))
++    return done
++
++
+ def build_app():
+     flags = [*CFLAGS, *FPU, *inc(BSP / "chip", BSP / "boards" / "fm1", SRC / "device", SRC / "include", SRC / "lib", APP, GEN,
+                                  *(APP / d for d in CONF.get("include", []) + CONF.get("device_include", [])))]
+@@ -681,10 +709,12 @@ def build_app():
      o2_more = [*CONF.get("o2_cflags", []),
                 *[a for h in CONF.get("o2_include", []) for a in ("-include", str((APP / h).resolve().relative_to(ROOT)))]]
      o2_units = []
@@ -23,7 +59,7 @@ index 2f2312d..7bd6381 100755
              objs.append(o)
              o2_units.append((f, o))
      jieli = (BLE and not OWN) or WIFI             # JieLi's libraries linked (the shim, LTO)
-@@ -705,6 +707,15 @@ def build_app():
+@@ -705,6 +735,13 @@ def build_app():
          tc_all(("cc", *opt, "-c", OUT / "unity.pass.ll", "-o", OUT / "unity.o"),
                 *[("cc", *[f if f not in ("-Os", "-Oz") else "-O2" for f in opt], "-c", o.with_suffix(".pass.ll"), "-o", o)
                   for _, o in o2_units])
@@ -31,11 +67,9 @@ index 2f2312d..7bd6381 100755
 +    for e in CONF.get("o2_ram", []):              # code as compiled (their inlining as in the flash), their sections
 +        unit, _, fn = e.partition(":")            # renamed .text.F -> .c1_text.F (in .ram_text, calls into the flash
 +        ram.setdefault(unit, []).append(fn)       # allowed: the second core's part)
-+    ren = [("common/bin/objcopy", *[a for fn in ram[f.relative_to(APP).as_posix()]
-+                                    for a in ("--rename-section", f".text.{fn}=.c1_text.{fn}")], o)
-+           for f, o in o2_units if f.relative_to(APP).as_posix() in ram]
-+    if ren:
-+        tc_all(*ren)
++    for f, o in o2_units:                         # (JieLi's objcopy renames nothing: done here)
++        if f.relative_to(APP).as_posix() in ram:
++            elf_rename(o, {f".text.{fn}": f".c1_text.{fn}" for fn in ram[f.relative_to(APP).as_posix()]})
      elf = OUT / (NAME + ".elf")
      # unreferenced functions (each in its own section: -ffunction-sections) are dropped: the DSP keeps
      # mono reference paths for the host tests that the firmware no longer calls. The BT libraries are LTO
