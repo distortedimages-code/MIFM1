@@ -29,7 +29,7 @@ o2_cflags = ["-std=gnu++11", "-fno-exceptions", "-fno-rtti", "-fno-threadsafe-st
 # ~170 us for the FM's code, the same FM on the next track nothing: instruction counts never see it). What every
 # track runs at every block goes in the RAM the FM-1 keeps for code (32 KB, copied at boot): these functions as
 # compiled, the same instructions, their sections renamed into it (o2_ram: fm1-base patched,
-# patches/fm1-base-o2-device.patch); the RAM and the flash 4 MB apart, beyond a call's reach, their units with
+# patches/fm1-base-o2-device.patch, elf_rename); the RAM and the flash 4 MB apart, beyond a call's reach, their units with
 # JieLi's long calls (o2_device). The audio runs in its interrupt and on the second core, never while the flash is off
 o2_ram = ["mi/engine.cc:_ZN12_GLOBAL__N_18run_taskEij", "mi/engine.cc:_ZN12_GLOBAL__N_112render_voiceEij",
           "mi/engine.cc:_ZN12_GLOBAL__N_19set_voiceEi", "mi/engine.cc:_ZN12_GLOBAL__N_110set_filterEi",
