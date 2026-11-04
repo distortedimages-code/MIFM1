@@ -544,7 +544,10 @@ piste FM d'un bloc payait ainsi ~170 µs pour charger le code de la FM, la même
 une machine 20 à 40 % plus chargée que ce que l'émulateur annonçait. Ce que toutes les pistes exécutent à chaque bloc
 tourne donc depuis la RAM que le FM-1 garde pour le code (32 Ko, copiés au démarrage) : la chaîne d'une voix (son
 rendu, ses câbles, ses bits, TRAUMA), les quatre filtres et la batterie MIFM1 (`o2_ram`, `firmware/fm1.toml`). Les mêmes
-instructions, le même son, échantillon pour échantillon.
+instructions, le même son, échantillon pour échantillon. Mesuré sur la machine, le stress test : les cœurs de 95 et
+89 % à 78 et 72 %, son pic de 120 % (G3, des blocs en retard, des grésillements) à 99 % (G1), plus rien n'y grésille ;
+les effets aussi s'allègent (35 à 30 %), leur code plus souvent dans le cache. L'émulateur annonce de nouveau ce que
+la machine fait (75 % par cœur). La FM (19 Ko) reste en flash : la première piste FM d'un bloc paie encore son code.
 
 **Le garde-fou** (0.8.2) : quand un bloc dépasse 92 % de son temps, la FM des filtres s'allège pendant 0,3 s (ses
 coefficients recalculés un échantillon sur deux) ; quand un bloc arrive en retard (plus de 100 % : un clic), un sur
