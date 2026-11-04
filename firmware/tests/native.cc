@@ -4027,7 +4027,7 @@ int main(int argc, char** argv) {
         eng_render(l, r, 128);
         int g = (eng_gates() & 1u) != 0;
         if (g && !last) {
-          int six = static_cast<int>(static_cast<double>(b) / 43.066);
+          int six = static_cast<int>(static_cast<double>(b + 1) / 43.066);   // (the block the trig falls in)
           if (six < 80) {
             if (per[six] < 8) notes[six][per[six]] = eng_note(0);
             ++per[six];
@@ -4057,6 +4057,47 @@ int main(int argc, char** argv) {
            "x3 at 25 %% %d, at 60 %% %d (%d with theirs gone); at 90 %% %d rolls climbing\n", low, add, more, base3, drop,
            singles, climbs);
     if (!ok) ++failures, printf("FAIL: the dose on the ratchets\n");
+    p->dice = 0;
+    eng_defaults(p);
+    eng_fresh();
+  }
+
+  {                                     // 61. the random dose leaving trigs out (0.16.10): none below 50 %; at 70 %
+    // some sixteenths silent, never the bar's first
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    static int per[80];
+    auto run = [&](int dose) {          // 4 bars of 16 trigs on T1: the sixteenths with no rise
+      eng_blank(p);
+      eng_fresh();
+      eng_set_model(0, eng_model_find(MK_DRUM, 0));
+      p->val[PG_GLOBAL * 4 + 0] = 0.60206f;
+      for (int st = 0; st < 16; ++st) eng_trig_set(0, st, 1);
+      p->dice = static_cast<uint8_t>(dose);
+      for (int i = 0; i < 80; ++i) per[i] = 0;
+      int last = 0;
+      eng_play(1);
+      for (int b = 0; b < 4 * 689 - 4; ++b) {
+        eng_render(l, r, 128);
+        int g = (eng_gates() & 1u) != 0;
+        if (g && !last) {
+          int six = static_cast<int>(static_cast<double>(b + 1) / 43.066);   // (the block the trig falls in)
+          if (six < 80) ++per[six];
+        }
+        last = g;
+      }
+      eng_play(0);
+      int silent = 0;
+      for (int i = 0; i < 64; ++i) silent += !per[i];
+      return silent;
+    };
+    int at45 = run(45), at70 = run(70), firsts = 1;
+    for (int b = 0; b < 4; ++b) firsts &= per[b * 16] > 0;
+    int at100 = run(100);
+    for (int b = 0; b < 4; ++b) firsts &= per[b * 16] > 0;
+    printf("the dose leaving trigs out: silent sixteenths of 64 at 45 %% %d, at 70 %% %d, at 100 %% %d; the bars' first "
+           "steps %s\n", at45, at70, at100, firsts ? "all played" : "LEFT OUT");
+    if (at45 || at70 < 2 || at70 > 20 || at100 > 28 || !firsts) ++failures, printf("FAIL: the dose leaving trigs out\n");
     p->dice = 0;
     eng_defaults(p);
     eng_fresh();

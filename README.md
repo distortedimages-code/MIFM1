@@ -853,7 +853,10 @@ n'est pas touché avant 30 %, puis, de temps en temps, ils changent (un ou deux 
 75 % un pas de plus ou de moins) ou **sautent** (un seul coup), une fois sur deux chacun : jusqu'à 5 % des trigs à 50 %,
 puis la même courbe jusqu'à 50 % ; au-delà de 50 %, leur CURVE est relancé (rebond, roulement qui se pose) ; au-delà de
 75 %, de temps en temps, le roulement grimpe ou descend d'un à trois demi-tons (ou notes de la gamme) par coup, sur un
-pas sans CLIMB à lui. Comme le reste de la dose, à chaque trig un nouveau tirage. Rien de ce qui
+pas sans CLIMB à lui. **Des trigs laissés de côté** (0.16.10), à partir de 50 %, discrètement, sur la même courbe :
+8 % des trigs à 60 %, 14 % à 70 %, 17 % à 80 %, jamais plus de 20 % (à 100 %) ; deux fois moins sur les temps, jamais le premier
+pas de la mesure, pour que le groove tienne (un trig des fills joue toujours). Un trig laissé de côté ne compte pas pour
+CLIMB. Comme le reste de la dose, à chaque trig un nouveau tirage. Rien de ce qui
 tient le temps (divisions, tempo, vitesses, longueurs, pas), ni les niveaux, la gamme ou le branchement. On lâche OCT− : retour à la page, la dose reste (en bas, un trait
 de la largeur de la dose ; les potards montrent la valeur que le dernier trig a tirée, RANDOM dessous). Revenir à 0
 rend le son exact de départ dès le trig suivant, comme l'annulation d'ALL. Pendant le geste, l'octave du clavier (ou

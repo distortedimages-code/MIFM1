@@ -928,6 +928,13 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
                                                         1.0f, static_cast<float>(ENG_RATCH_MAX))),
                                &rat_span[lane]);
   rat_on[lane] = prob >= 0.999f || rand01() < prob;
+  if (rat_on[lane] && locks && proj.dice) {   // (0.16.10) the dose leaving a step's trig out now and then, from 50 %
+    float d = static_cast<float>(proj.dice > 100 ? 100 : proj.dice) * 0.01f;   // (its ratchets' curve, 20 % at most,
+    float q = 0.2f * dice_rise(d);            // Yoann's: 8 % at 60 %, 14 % at 70 %, 17 % at 80 %, 20 % at 100 %; on a
+    if (step % 16 == 0) q = 0.0f;             // beat half as often, the bar's first step never: the groove kept)
+    else if (step % 4 == 0) q *= 0.5f;
+    if (q > 0.0f && rand01() < q) rat_on[lane] = 0;
+  }
   rat_pos[lane] = 0.0f;
 }
 
