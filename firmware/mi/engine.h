@@ -142,6 +142,27 @@ void eng_pads_chord(char *b, int n);     /* its chord now, named (Am7, F, Gsus4.
 int eng_pads_pos(void);                  /* the progression's chord now (0..), -1 before its first trig */
 void eng_pads_line(char *b, int n);      /* the progression, its place, the chord: "Tintin 3/8 Am" */
 void eng_set_model(int t, int model);    /* a track's model (an FM drum new to it: its kit on those knobs) */
+/* the presets (0.15.1): a track's sound, all of what plays it but its mixing, its steps and its cables: its eight pages'
+ * knobs and choices (Plaits' three: the sound, the envelope, the pitch; the bits; the filter's three; the glitch), their
+ * knobs' randoms, a name. Saved by the screen (app.c, pat_store.h), read onto any track */
+#define SND_PAGES 8
+#define SND_MAGIC 0x31444E53u            /* "SND1" */
+#define SND_VERSION 1
+typedef struct {
+    uint32_t magic;
+    uint16_t version, size;
+    float val[SND_PAGES * 4];
+    uint8_t algo[SND_PAGES];             /* the first: the model; the fifth: the filter's */
+    int8_t rnd[SND_PAGES * 4];           /* each knob's random (0: none; the pages' knobs without one: 0) */
+    uint8_t rseed[SND_PAGES * 4];
+    char name[12];                       /* a factory sound's, or its model's */
+} eng_sound_t;
+void eng_sound_get(int t, eng_sound_t *s);
+int eng_sound_set(int t, const eng_sound_t *s);   /* 0 done; -1 not a sound; -2 PADS (once a project) on another track */
+int eng_sound_check(const eng_sound_t *s, int bytes);   /* 1: a sound this version reads */
+#define ENG_FACTORY 16                   /* the factory's sounds (bank A) */
+int eng_factory(int i, eng_sound_t *s);
+const char *eng_factory_name(int i);
 int eng_lx_knob(int param);              /* an FM drum's knob (0..7) that parameter is now, -1 none */
 float eng_lx_step(int param, float v, int detents);   /* an FM drum's knob turned: one of its values a detent (its
                                           * 128, as on the LXR-02; a wave's 6) */

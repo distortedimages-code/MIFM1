@@ -1149,16 +1149,22 @@ uint16_t harmony_mask() {               // the harmony's scale (POLY's chords): 
 }
 inline int lx_param(int t, int i) { return PG_TRACK(t, 0) * 4 + 1 + i; }
 inline float lx_u(int param, float v) { return eng_pdef(param)->kind == K_BIP ? (v + 1.0f) * 0.5f : v; }
-void lx_kit(project_t* p, int t) {      // its knobs as its kit has them (a drum's, ZERO's: their own)
-  float k[LX_KNOBS];
-  const ModelDef& d = mdef(p->algo[PG_TRACK(t, 0)]);
+MI_COLD void kit_of(int m, float* k) {          // a model's knobs as its kit has them, 0..1 (Plaits': at noon)
+  const ModelDef& d = mdef(m);
   if (d.kind == MK_ZERO) zero_defaults(k);
   else if (d.kind == MK_DRUM) drum_defaults(d.sub, k);
   else if (d.kind == MK_FM) fm4_defaults(k);
   else if (d.kind == MK_PADS) pads_defaults(k);
   else if (d.kind == MK_POLY) poly_defaults(k);
   else if (d.kind == MK_PROPHET) pro_defaults(k);
-  else lx_defaults(d.sub, k);
+  else if (d.kind == MK_LXR) lx_defaults(d.sub, k);
+  else
+    for (int i = 0; i < LX_KNOBS; ++i) k[i] = 0.5f;
+}
+MI_COLD void lx_kit(project_t* p, int t) {      // its knobs as its kit has them (a drum's, ZERO's: their own)
+  float k[LX_KNOBS];
+  const ModelDef& d = mdef(p->algo[PG_TRACK(t, 0)]);
+  kit_of(p->algo[PG_TRACK(t, 0)], k);
   for (int i = 0; i < LX_KNOBS; ++i) {
     int param = lx_param(t, i);
     p->val[param] = eng_pdef(param)->kind == K_BIP ? 2.0f * k[i] - 1.0f : k[i];
@@ -1166,6 +1172,76 @@ void lx_kit(project_t* p, int t) {      // its knobs as its kit has them (a drum
   if (d.kind == MK_DRUM || d.kind == MK_LXR)   // OCTAVE 0: C3 plays the kit's own pitch (a bass's -1 would halve a
     p->val[PG_TRACK(t, 2) * 4 + 3] = 0.0f;     // kick; ZERO, the FM play the note as Plaits does: its octave kept)
 }
+
+// the presets (0.15.1): a track's sound, its eight pages (eng_sound_t) in this order: Plaits' three (the sound, the
+// envelope, the pitch), the bits, the filter's three, the glitch
+int snd_page(int t, int i) {
+  return i < 3 ? PG_TRACK(t, i) : i == 3 ? PG_BEND(t) : i < 7 ? PG_FILT(t, i - 4) : PG_GLITCH(t);
+}
+
+// the factory's sounds (bank A): a model (its kind, its index there), its eight knobs as its kit's are written (0..1, a
+// bipolar knob from its middle; < 0: the kit's own; Plaits': HARMONICS, TIMBRE, MORPH, then the envelope's DECAY,
+// COLOUR, T.ENV, M.ENV and P.ENV), its FREQ, GATE, TRANSP and OCTAVE, its filter (its model; its twelve as the project
+// keeps them: CUTOFF, RESO, ENV, DECAY; DRIVE, PING, FM, KEY; TYPE, NOISE, COLOR, ATTACK), its bits (CLOCK, BITS, MASK,
+// SHAPE), its glitch (GLITCH, SIZE, BEND, DROP)
+#define STEP(i, n) ((static_cast<float>(i) + 0.5f) / static_cast<float>(n))
+struct FactorySound {
+  const char* name;
+  uint8_t kind, sub;
+  float k[8];
+  float freq, gate, transp, octave;
+  uint8_t filt;
+  float f[12], bits[4], glitch[4];
+};
+#define NO_FILTER MF_OFF, {0.6f, 0.3f, 0.3f, 0.35f, 0.0f, 0.0f, 0.0f, 0.0f, MF_LP, 0.0f, 0.0f, 0.0f}
+#define NO_BITS {0.0f, 0.0f, 0.0f, 0.0f}
+#define NO_GLITCH {0.0f, static_cast<float>(GL_16), 0.0f, 0.0f}
+const FactorySound kFactory[ENG_FACTORY] = {
+  // the drums: a long kick, its sweep slow, round; a hard one, driven, its click up; a snare, its noise longer, driven;
+  // a clap, driven
+  {"KICK LONG", MK_DRUM, 0, {0.0f, 0.42f, 0.70f, 0.62f, 0.05f, 0.08f, 0.58f, 0.74f}, 0.0f, 0.5f, -2.0f, 0.0f,
+   NO_FILTER, NO_BITS, NO_GLITCH},
+  {"KICK HARD", MK_DRUM, 0, {0.2f, 0.30f, 0.50f, 0.82f, 0.12f, 0.25f, 0.92f, 0.86f}, 0.0f, 0.5f, 0.0f, 0.0f,
+   NO_FILTER, NO_BITS, NO_GLITCH},
+  {"SNARE", MK_DRUM, 1, {-1.0f, -1.0f, -1.0f, 0.74f, 0.47f, 0.66f, 0.68f, -1.0f}, 0.0f, 0.5f, 0.0f, 0.0f,
+   NO_FILTER, NO_BITS, NO_GLITCH},
+  {"CLAP", MK_DRUM, 2, {-1.0f, -1.0f, -1.0f, -1.0f, 0.50f, -1.0f, 0.66f, -1.0f}, 0.0f, 0.5f, 0.0f, 0.0f,
+   NO_FILTER, NO_BITS, NO_GLITCH},
+  // the LXR-02's hi-hat closed, then open; a tom, longer, lower; metal (Plaits' modal resonator, its structure high)
+  {"HAT", MK_LXR, 3, {-1.0f, -1.0f, -1.0f, 0.06f, -1.0f, -1.0f, -1.0f, -1.0f}, 0.0f, 0.5f, 0.0f, 0.0f,
+   NO_FILTER, NO_BITS, NO_GLITCH},
+  {"OPEN HAT", MK_LXR, 3, {-1.0f, -1.0f, -1.0f, 0.36f, -1.0f, -1.0f, -1.0f, -1.0f}, 0.0f, 0.5f, 0.0f, 0.0f,
+   NO_FILTER, NO_BITS, NO_GLITCH},
+  {"TOM", MK_DRUM, 4, {-1.0f, -1.0f, 0.56f, -1.0f, -1.0f, -1.0f, -1.0f, 0.68f}, 0.0f, 0.5f, -3.0f, 0.0f,
+   NO_FILTER, NO_BITS, NO_GLITCH},
+  {"METAL", MK_PLAITS, 20, {0.82f, 0.72f, 0.42f, 0.5f, 0.6f, 0.5f, 0.5f, 0.5f}, 0.0f, 0.5f, 0.0f, 0.0f,
+   NO_FILTER, NO_BITS, NO_GLITCH},
+  // the basses: acid (POLY: a saw, its filter low, its resonance up, its envelope deep); the FM's, as the demo has it
+  // (four in a chain, a pluck, through the ladder); a reese (PROPHET: two saws drifting apart, held); then the demo's
+  // stabs (the FM: a minor seventh, a pluck, through SEM)
+  {"ACID", MK_POLY, 0, {0.0f, 0.30f, 0.82f, 0.32f, 0.0f, 0.9f, 0.5f, 0.5f}, 0.0f, 0.45f, 0.0f, -1.0f,
+   NO_FILTER, NO_BITS, NO_GLITCH},
+  {"FM BASS", MK_FM, 0, {STEP(0, 8), -1.0f, 0.5f, 0.42f, -1.0f, 9.5f / 15.0f, 0.8f, 0.5f}, 0.0f, 0.35f, 0.0f, -1.0f,
+   MF_LADDER, {0.5f, 0.55f, 0.45f, 0.28f, 0.3f, 0.0f, 0.0f, 0.5f, MF_LP, 0.0f, 0.0f, 0.0f}, NO_BITS, NO_GLITCH},
+  {"REESE", MK_PROPHET, 0, {STEP(0, 13), 0.44f, 0.18f, 1.0f, 0.75f, 0.62f, 0.5f, 0.5f}, 0.0f, 0.85f, 0.0f, -1.0f,
+   NO_FILTER, NO_BITS, NO_GLITCH},
+  {"FM STAB", MK_FM, 0, {STEP(5, 8), STEP(27, 30), 0.3f, 0.5f, 0.35f, 9.5f / 15.0f, 0.7f, 0.5f}, 0.0f, 0.35f, 0.0f,
+   0.0f, MF_SEM, {0.58f, 0.45f, 0.45f, 0.32f, 0.0f, 0.0f, 0.0f, 0.3f, MF_LP, 0.15f, -0.3f, 0.05f}, NO_BITS, NO_GLITCH},
+  // a dark pad (PADS: Lament, sevenths, wide, swelling, long: a trig of a sixteenth blooms); a pluck (Plaits' string); a lead (PROPHET: synced, its
+  // sweep); noise (Plaits': clocked, resonant, crushed to five bits with holes, glitched)
+  {"DARK PAD", MK_PADS, 0, {STEP(5, 17), STEP(1, 4), STEP(2, 4), 0.8f, 0.7f, 0.3f, 0.875f, 0.5f}, 0.0f, 0.95f, 0.0f,
+   0.0f, NO_FILTER, NO_BITS, NO_GLITCH},
+  {"PLUCK", MK_PLAITS, 19, {0.35f, 0.62f, 0.55f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f}, 0.0f, 0.5f, 0.0f, 0.0f,
+   NO_FILTER, NO_BITS, NO_GLITCH},
+  {"SYNC LEAD", MK_PROPHET, 0, {STEP(8, 13), 0.68f, 0.22f, 0.6f, 0.3f, 0.7f, 0.3f, 0.5f}, 0.0f, 0.6f, 0.0f, 1.0f,
+   NO_FILTER, NO_BITS, NO_GLITCH},
+  {"LE BRUIT", MK_PLAITS, 17, {0.7f, 0.62f, 0.75f, 0.42f, 0.6f, 0.5f, 0.5f, 0.5f}, 0.0f, 0.5f, 0.0f, 0.0f,
+   NO_FILTER, {0.35f, 0.6f, 5.0f, static_cast<float>(BS_OFF)}, {0.4f, static_cast<float>(GL_32), 0.3f, 0.35f}},
+};
+#undef STEP
+#undef NO_FILTER
+#undef NO_BITS
+#undef NO_GLITCH
 
 void set_voice(int t) {
   mclaim(t);
@@ -2223,6 +2299,89 @@ void eng_set_model(int t, int m) {
   if (eng_model_own(m) && m != was) lx_kit(&proj, t);
 }
 
+// the presets (0.15.1): a track's sound
+static void sound_name(eng_sound_t* s, const char* n) {
+  int i = 0;
+  for (; n && n[i] && i < static_cast<int>(sizeof s->name) - 1; ++i) s->name[i] = n[i];
+  for (; i < static_cast<int>(sizeof s->name); ++i) s->name[i] = 0;
+}
+static int sound_tp(int t, int i, int k) {   // the random of that page's knob k (-1: none)
+  int lane = -1, tp = eng_param_tp(snd_page(t, i) * 4 + k, &lane);
+  return lane == t && tp >= 0 && tp < ENG_NTP ? tp : -1;
+}
+MI_COLD void eng_sound_get(int t, eng_sound_t* s) {
+  if (t < 0 || t >= ENG_TRACKS) t = 0;
+  uint8_t* raw = reinterpret_cast<uint8_t*>(s);
+  for (uint32_t i = 0; i < sizeof *s; ++i) raw[i] = 0;
+  s->magic = SND_MAGIC;
+  s->version = SND_VERSION;
+  s->size = sizeof *s;
+  for (int i = 0; i < SND_PAGES; ++i) {
+    int pg = snd_page(t, i);
+    s->algo[i] = proj.algo[pg];
+    for (int k = 0; k < 4; ++k) {
+      s->val[i * 4 + k] = proj.val[pg * 4 + k];
+      int tp = sound_tp(t, i, k);
+      if (tp >= 0) s->rnd[i * 4 + k] = proj.rnd[t][tp], s->rseed[i * 4 + k] = proj.rseed[t][tp];
+    }
+  }
+  sound_name(s, mdef(proj.algo[PG_TRACK(t, 0)]).name);
+}
+int eng_sound_check(const eng_sound_t* s, int bytes) {
+  if (bytes < static_cast<int>(sizeof *s) || s->magic != SND_MAGIC || s->version != SND_VERSION || s->size != sizeof *s)
+    return 0;
+  for (int i = 0; i < SND_PAGES * 4; ++i)
+    if (!(s->val[i] > -1000.0f && s->val[i] < 1000.0f)) return 0;   // (a NaN fails both)
+  return 1;
+}
+MI_COLD int eng_sound_set(int t, const eng_sound_t* s) {
+  if (t < 0 || t >= ENG_TRACKS || !eng_sound_check(s, sizeof *s)) return -1;
+  int m = s->algo[0] < ENG_MODELS ? s->algo[0] : 0;
+  if (!eng_model_free(t, m)) return -2;   // (PADS: once a project)
+  for (int i = 0; i < SND_PAGES; ++i) {
+    int pg = snd_page(t, i);
+    for (int k = 0; k < 4; ++k) {
+      proj.val[pg * 4 + k] = s->val[i * 4 + k];
+      int tp = sound_tp(t, i, k);
+      if (tp >= 0) proj.rnd[t][tp] = s->rnd[i * 4 + k], proj.rseed[t][tp] = s->rseed[i * 4 + k];
+    }
+    if (i == 0) proj.algo[pg] = static_cast<uint8_t>(m);
+    else if (i == 4) proj.algo[pg] = static_cast<uint8_t>(s->algo[i] < MF_MODELS ? s->algo[i] : MF_OFF);
+    else proj.algo[pg] = s->algo[i];
+  }
+  return 0;
+}
+const char* eng_factory_name(int i) { return i >= 0 && i < ENG_FACTORY ? kFactory[i].name : ""; }
+MI_COLD int eng_factory(int i, eng_sound_t* s) {
+  if (i < 0 || i >= ENG_FACTORY) return -1;
+  const FactorySound& f = kFactory[i];
+  static const float kTrack[3][4] = {{0.0f, 0.5f, 0.5f, 0.5f}, {0.5f, 0.5f, 0.0f, 0.0f}, {0.0f, 0.5f, 0.0f, 0.0f}};
+  float kit[LX_KNOBS];
+  int m = eng_model_find(f.kind, f.sub);
+  uint8_t* raw = reinterpret_cast<uint8_t*>(s);
+  for (uint32_t b = 0; b < sizeof *s; ++b) raw[b] = 0;
+  s->magic = SND_MAGIC;
+  s->version = SND_VERSION;
+  s->size = sizeof *s;
+  for (int pg = 0; pg < 3; ++pg)       // (eng_blank's track)
+    for (int k = 0; k < 4; ++k) s->val[pg * 4 + k] = kTrack[pg][k];
+  s->algo[0] = static_cast<uint8_t>(m < 0 ? 0 : m);
+  kit_of(s->algo[0], kit);
+  for (int k = 0; k < LX_KNOBS; ++k) {   // (its knobs: the second of the first page on, as lx_param)
+    float u = f.k[k] < 0.0f ? kit[k] : f.k[k];
+    s->val[1 + k] = eng_pdef(lx_param(0, k))->kind == K_BIP ? 2.0f * u - 1.0f : u;
+  }
+  s->val[0] = f.freq;
+  s->val[9] = f.gate;
+  s->val[10] = f.transp;
+  s->val[11] = f.octave;
+  for (int k = 0; k < 4; ++k) s->val[12 + k] = f.bits[k], s->val[28 + k] = f.glitch[k];
+  for (int k = 0; k < 12; ++k) s->val[16 + k] = f.f[k];
+  s->algo[4] = f.filt;
+  sound_name(s, f.name);
+  return 0;
+}
+
 const eng_pdef_t* eng_pdef(int param) {   // (a table, made once: the render asks it hundreds of times a block)
   static const eng_pdef_t* table[ENG_NPARAMS];
   if (param < 0 || param >= ENG_NPARAMS) param = 0;
@@ -2271,7 +2430,7 @@ static void put_end(char* b, int n, const char* s) {   // s after what b holds
   put(b + l, n - l, s);
 }
 
-void eng_param_text(int param, float v, char* b, int n) {
+MI_COLD void eng_param_text(int param, float v, char* b, int n) {
   const eng_pdef_t* d = eng_pdef(param);
   int pt = page_type(param / 4), k = param % 4, lk = eng_lx_knob(param);
   if (lk >= 0 && zero_on(param / 12)) {   // ZERO's: as it writes them (an index, a ratio, Hz, %)
@@ -2520,7 +2679,7 @@ int eng_algo_count(int page) {
   }
 }
 
-const char* eng_algo_name(int page, int a) {
+MI_COLD const char* eng_algo_name(int page, int a) {
   int n = eng_algo_count(page);
   if (!n) return "";
   a = a < 0 ? 0 : a >= n ? n - 1 : a;
@@ -2566,7 +2725,7 @@ static void lfo_blank(project_t* p) {
   for (int pg = 12; pg < 16; ++pg) p->algo[pg] = 0;
 }
 
-void eng_blank(project_t* p) {
+MI_COLD void eng_blank(project_t* p) {
   ++lock_gen;                           // (the live project's locks, maybe: the lock map made again)
   uint8_t* raw = reinterpret_cast<uint8_t*>(p);
   for (uint32_t i = 0; i < sizeof(project_t); ++i) raw[i] = 0;
@@ -2626,7 +2785,7 @@ void eng_blank(project_t* p) {
 
 // the demo: a kick, an FM bass whose INDEX LFO 1 opens at each of its notes, an FM pluck in a looped random tune
 // thrown into the delay on two steps (its lane), a resonator (modal) in the reverb; C minor, 120 BPM
-void eng_defaults(project_t* p) {
+MI_COLD void eng_defaults(project_t* p) {
   eng_blank(p);
   const int kModel[4] = {eng_model_find(MK_DRUM, 0), eng_model_find(MK_FM, 0), eng_model_find(MK_FM, 0),
                          eng_model_find(MK_PLAITS, 20)};  // kick, the FM (a bass, a pluck), modal
@@ -2699,7 +2858,7 @@ void eng_defaults(project_t* p) {
 // the off-beats), dub stabs of minor sevenths (the FM's PAD) through SEM (S&H on their brightness, a smooth random on
 // the cutoff) thrown into a dotted-eighth ping-pong and the reverb; F minor, 124 BPM, a gentle compressor on the bus.
 // Light on purpose: about half of each of the FM-1's cores (the machine page), room left for what is added
-void eng_groove(project_t* p) {
+MI_COLD void eng_groove(project_t* p) {
   eng_blank(p);
   const int kModel[4] = {eng_model_find(MK_DRUM, 0), eng_model_find(MK_FM, 0), eng_model_find(MK_LXR, 3),
                          eng_model_find(MK_FM, 0)};   // kick, the FM (a bass), FM hi-hat, the FM (chords)
@@ -2791,7 +2950,7 @@ void eng_groove(project_t* p) {
 // machine page against, version after version: four tracks playing (a kick, the FM synced on a square, the FM in PW
 // on a square, three operators heard, a chord: the FM at its heaviest, MODAL), two of them bent, Warps (diode ring, T3 by T2), OTT, the
 // delay and the reverb fed, the duck, the filters, the three LFOs on 18 cables, randoms, locks, ratchets
-void eng_stress(project_t* p) {
+MI_COLD void eng_stress(project_t* p) {
   eng_blank(p);
   const int kModel[4] = {eng_model_find(MK_DRUM, 0), eng_model_find(MK_FM, 0), eng_model_find(MK_FM, 0),
                          eng_model_find(MK_PLAITS, 20)};  // kick, the FM twice, modal
@@ -2895,7 +3054,7 @@ void eng_stress(project_t* p) {
 // the stress test on the four FM drums (GLO, SELECT: PROJECT, the fifth): the same patch, the cables and the effects
 // as they are, the tracks on the drum, the snare, the cymbal and the hi-hat (their kits, at their own pitch): what
 // the LXR-02's voices cost against Plaits', on the machine page
-void eng_stress_fm(project_t* p) {
+MI_COLD void eng_stress_fm(project_t* p) {
   eng_stress(p);
   for (int t = 0; t < ENG_TRACKS; ++t) {
     p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(eng_model_find(MK_LXR, t));
@@ -3185,7 +3344,7 @@ void grit_gone(project_t* p) {
 void blank_v9(project_t* p);
 
 template <class P, int NP, int NTP>
-void upgrade_78(project_t* p, const P& o) {
+MI_COLD void upgrade_78(project_t* p, const P& o) {
   blank_v9(p);
   for (int i = 0; i < NP * 4; ++i) p->val[i] = o.val[i];
   for (int i = 0; i < NP; ++i) p->algo[i] = o.algo[i];
@@ -3207,7 +3366,7 @@ void upgrade_78(project_t* p, const P& o) {
   }
 }
 
-void upgrade_v6(project_t* p, const project_v6& o) {
+MI_COLD void upgrade_v6(project_t* p, const project_v6& o) {
   blank_v9(p);
   for (int i = 0; i < 37 * 4; ++i) p->val[i] = o.val[i];
   for (int i = 0; i < 37; ++i) p->algo[i] = o.algo[i];
@@ -3304,7 +3463,7 @@ int old_param(int op) {          // an old parameter's place now (-1: gone)
 }
 
 template <int NP>
-void upgrade_from(project_t* p, const project_old<NP>& o) {
+MI_COLD void upgrade_from(project_t* p, const project_old<NP>& o) {
   blank_v9(p);
   for (int i = 0; i < NP * 4; ++i) {
     int q = old_param(i);
@@ -3409,7 +3568,7 @@ int plaits_at(int i) {                  // (the eight of Plaits' left since 0.10
   static const uint8_t kSub8[8] = {7, 11, 15, 16, 17, 18, 19, 20};
   return eng_model_find(MK_PLAITS, kSub8[i < 0 ? 0 : i > 7 ? 7 : i]);
 }
-void models_renumbered(project_t* p, int from) {
+MI_COLD void models_renumbered(project_t* p, int from) {
   for (int t = 0; t < ENG_TRACKS; ++t) {
     int o = p->algo[PG_TRACK(t, 0)], m, kit = 0, algo = -1;
     if (from == 21) {                   // (0.12's: PROPHET since after POLY)
@@ -3456,7 +3615,7 @@ void shapes_from_move(project_t* p) {
 static_assert(sizeof(project_t) == PROJECT_SIZE_22 && offsetof(project_t, trauma) + 4u > PROJECT_SIZE_22,
               "TRAUMA in what was 0.13's padding: the projects the same size");
 int upgrade_before_16(project_t* p, int bytes);
-int eng_upgrade(project_t* p, int bytes) {
+MI_COLD int eng_upgrade(project_t* p, int bytes) {
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   int v = p->magic == PROJECT_MAGIC ? p->version : 0;
   if (v >= 15 && v <= 22 && bytes == static_cast<int>(PROJECT_SIZE_22) && p->size == PROJECT_SIZE_22) {
@@ -3471,7 +3630,7 @@ int eng_upgrade(project_t* p, int bytes) {
   return 1;
 }
 
-int upgrade_before_16(project_t* p, int bytes) {
+MI_COLD int upgrade_before_16(project_t* p, int bytes) {
   static union {
     project_old<33> v4;
     project_old<35> v5;
@@ -3530,7 +3689,7 @@ int upgrade_before_16(project_t* p, int bytes) {
   return 1;
 }
 
-int eng_init(void) {
+MI_COLD int eng_init(void) {
   uint32_t need = 0, a = 0;
   mf_init();                            // (the tracks' filters: their own static state)
   make_mu();                            // (the glitch's slices)

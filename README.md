@@ -497,8 +497,8 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **KNOB 1 à 4** | les 4 paramètres de la page affichée |
 | **SELECT** | les pages de ce qu'on regarde (les deux du son de la piste, les deux de son filtre, les faces d'un effet…), en glissant |
 | **ALGORITHM** | le type de ce qu'on a devant soi, là où il y a un choix (le A cerclé en haut) : sur le son de la piste, son modèle (les 20 : les batteries, les batteries FM, ZERO et la FM, Plaits) ; sur son filtre, le modèle de filtre (OFF, LADDER, MS-20, SEM, VOX) ; sur Warps, d'un repère d'ALGO au suivant ; sur le delay, SYNC (vers la gauche) ou FREE (vers la droite) |
-| **PRESETS** | la piste active, de 1 à 4 |
-| **EDIT** | les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son |
+| **PRESETS** | la piste active, de 1 à 4 (les presets eux-mêmes : EDIT tenu) |
+| **EDIT** | **tapé** : les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son ; **tenu : les presets** de la piste (touches noires : la banque, A celle d'usine ; blanches : le son, posé sur la piste et joué ; SAVE tenu : l'y garde ; REC tenu : l'efface) |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
 | **SEQ** | tapé : les pas de la piste (NOTE, PROB, RATCH, LENGTH ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns** (touches noires : la banque, blanches : le pattern, plusieurs : un enchaînement ; REC tenu : efface) |
 | **ARP** | Endless, celui de la piste (voir plus bas) |
@@ -511,7 +511,7 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **OCT− tenu + SELECT** | la **dose d'aléatoire**, sur son écran (voir plus bas) |
 | **OCT+ tenu + SELECT** | **TRAUMA**, la dose de saturation, sur son écran (voir plus bas) |
 | **SEL** | le mode MOD (voir plus bas) ; **tenu** : la matrice de la piste |
-| **SAVE tenu** | sauvegarde le pattern dans sa case (à l'arrêt) |
+| **SAVE tenu** | sauvegarde le pattern dans sa case (à l'arrêt) ; EDIT tenu, avec une touche blanche : le son de la piste dans ce preset |
 | **GLO** | TEMPO, SCALE, ROOT, SWING ; SELECT : le projet (INIT) et la machine ; GLO encore : retour |
 | **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en noir sur la couleur du thème. Les réglages restent ; pendant 4 s (cinq carrés jaunes en bas), **GLO** les remet comme avant ALL au début de la mesure suivante (GLO encore avant la mesure : ils restent) |
 | **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage (avec GLO tenu aussi : sur les 4 pistes) |
@@ -550,7 +550,9 @@ les effets aussi s'allègent (35 à 30 %), leur code plus souvent dans le cache.
 la machine fait (75 % par cœur). Depuis 0.14.5, la FM aussi : son rendu compilé pour la taille (ses réglages, ses
 enveloppes, une fois tous les 8 échantillons : 18,5 Ko déroulés, 5 Ko ainsi, 3 % d'instructions en plus, les mêmes
 échantillons), ses six boucles à part, 11,6 Ko en tout ; la zone de code en RAM passe à 42 Ko (10 Ko pris au pool,
-qui en avait de trop).
+qui en avait de trop). Depuis 0.15.1, ce qui tourne hors du son (les textes des potards à l'écran, la lecture d'un projet
+ancien, les démos) est compilé pour la taille aussi (`MI_COLD`, `firmware/mi/bridge.h`) : une quinzaine de Ko de flash
+rendus aux presets, le code du son inchangé.
 
 **Le garde-fou** (0.8.2) : quand un bloc dépasse 92 % de son temps, la FM des filtres s'allège pendant 0,3 s (ses
 coefficients recalculés un échantillon sur deux) ; quand un bloc arrive en retard (plus de 100 % : un clic), un sur
@@ -589,6 +591,21 @@ pattern (à l'arrêt). Ils sont gardés compressés dans la flash (un projet de 
 coupée laisse le pattern comme il était). Au premier démarrage, le projet sauvé devient A1. La sauvegarde de la page
 d'installation (backup) garde le pattern en cours, pas encore les autres ; dans le navigateur, ils durent le temps de
 la page.
+
+**Les presets** (0.15.1 ; **EDIT tenu**) : le **son d'une piste**, rappelable sur n'importe laquelle. Un preset
+garde tout ce qui fait le son : le modèle, les potards de son son, de son enveloppe et de sa hauteur (GATE, TRANSP,
+OCTAVE compris), ses bits, son filtre, son glitch et l'aléatoire de ces potards ; pas son niveau, ses envois, son pan,
+ses pas ni ses câbles (ils restent ceux de la piste). EDIT tenu, l'écran des presets de la piste active s'ouvre
+(PRESETS change de piste) : 11 banques sur les **touches noires**, 16 sons sur les **touches blanches**. **A, c'est
+l'usine** : KICK LONG, KICK HARD, SNARE, CLAP, HAT, OPEN HAT, TOM, METAL (le résonateur modal), ACID (POLY), FM BASS
+(celle de la démo), REESE (PROPHET, deux scies qui dérivent), FM STAB, DARK PAD (PADS), PLUCK (la corde de Plaits),
+SYNC LEAD (PROPHET) et LE BRUIT (le bruit de Plaits, cinq bits troués, glitché). **B à K sont à toi** (160 sons). Une
+touche blanche **pose le son sur la piste** et le joue (do 3, comme un pas) tant qu'elle est tenue ; **SAVE tenu et une
+touche blanche** y garde le son de la piste (il garde le nom du son d'où il vient, sinon celui du modèle) ; **REC tenu
+et une touche blanche** l'efface ; la banque A ne bouge pas. PADS ne va que sur une piste à la fois : l'écran dit
+laquelle l'a. Les presets vivent avec les patterns dans la flash (un son : une centaine d'octets compressé) ; un
+preset s'enregistre même en jouant, sauf s'il faut d'abord faire de la place (un secteur effacé, le son coupé un
+instant) : l'écran demande alors l'arrêt.
 
 **Les pas d'un effet** (SEQ sur un effet, ou sa dernière face) : **DECAY** (10 ms à 5 s), **PROB**, **DEPTH** et
 **LENGTH**. Sans aucun trig, l'effet est toujours là (mode hold : en bas, la rangée des pas est pleine, de la

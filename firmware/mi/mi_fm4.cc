@@ -715,7 +715,7 @@ static void put_ratio(char* b, int n, int* at, float r) {   // 1, .5, 3.5, 2.76
   }
 }
 
-void fm4_knob_text(int k, float u, char* b, int n) {   // u: 0..1 (a bipolar knob from its middle)
+MI_COLD void fm4_knob_text(int k, float u, char* b, int n) {   // u: 0..1 (a bipolar knob from its middle)
   if (n <= 0) return;
   int at = 0;
   b[0] = 0;

@@ -3332,6 +3332,75 @@ int main(int argc, char** argv) {
     eng_fresh();
   }
 
+  {                                     // 51. the presets (0.15.1): a track's sound read and written back, onto any
+    // track (its randoms too); PADS refused where another track holds it; each factory sound plays a note: sound, no
+    // NaN, nothing past the edge, its length and brightness as its name says
+    project_t* p = eng_project();
+    const uint32_t n = 128;
+    static float l[128], r[128], out[44100 * 2];
+    eng_sound_t a, b;
+    eng_blank(p);
+    eng_fresh();
+    eng_set_model(0, eng_model_find(MK_POLY, 0));
+    p->algo[PG_FILT(0, 0)] = MF_MS20;
+    p->val[PG_FILT(0, 0) * 4 + 1] = 0.77f;
+    p->val[PG_BEND(0) * 4 + 1] = 0.4f;
+    p->rnd[0][TP_CUTOFF] = 40;
+    p->rseed[0][TP_CUTOFF] = 9;
+    eng_sound_get(0, &a);
+    int rt = eng_sound_check(&a, sizeof a) && eng_sound_set(3, &a) == 0;
+    eng_sound_get(3, &b);
+    rt &= !memcmp(a.val, b.val, sizeof a.val) && !memcmp(a.algo, b.algo, sizeof a.algo) &&
+          !memcmp(a.rnd, b.rnd, sizeof a.rnd) && !memcmp(a.rseed, b.rseed, sizeof a.rseed);
+    rt &= p->algo[PG_TRACK(3, 0)] == eng_model_find(MK_POLY, 0) && p->algo[PG_FILT(3, 0)] == MF_MS20 &&
+          p->val[PG_FILT(3, 0) * 4 + 1] == 0.77f && p->val[PG_BEND(3) * 4 + 1] == 0.4f && p->rnd[3][TP_CUTOFF] == 40 &&
+          p->rseed[3][TP_CUTOFF] == 9 && p->val[PG_MIX * 4 + 3] == 0.75f;   // (its level, its mixing: as they were)
+    eng_set_model(1, eng_model_find(MK_PADS, 0));
+    eng_factory(12, &b);                // (DARK PAD)
+    int pads = b.algo[0] == eng_model_find(MK_PADS, 0) && eng_sound_set(2, &b) == -2 && eng_sound_set(1, &b) == 0;
+    a.magic = 0;
+    int refused = eng_sound_set(0, &a) == -1;
+    int bad = 0, names = 1;
+    for (int i = 0; i < ENG_FACTORY; ++i) {
+      eng_blank(p);
+      eng_fresh();
+      eng_play(0);
+      if (eng_factory(i, &a) != 0 || !eng_sound_check(&a, sizeof a) || eng_sound_set(0, &a) != 0) { ++bad; continue; }
+      names &= strlen(eng_factory_name(i)) > 0 && !strcmp(a.name, eng_factory_name(i));
+      for (int bl = 0; bl < 40; ++bl) eng_render(l, r, n);
+      eng_key(0, 48, 1);                // (as a step plays it: C3, its NOTE 0)
+      const int len = 44100 * 2 / 128;
+      double e = 0.0, pk = 0.0;
+      int nan = 0, zc = 0, last = -1;
+      for (int bl = 0; bl < len; ++bl) {
+        if (bl == 40) eng_key(0, 48, 0);   // (a sixteenth's at 120 BPM held, about)
+        eng_render(l, r, n);
+        for (uint32_t k = 0; k < n; ++k) out[bl * n + k] = 0.5f * (l[k] + r[k]);
+      }
+      double env = 0.0;
+      for (int k = 0; k < len * 128; ++k) {
+        float x = out[k];
+        if (!std::isfinite(x)) nan = 1;
+        pk = std::max(pk, static_cast<double>(std::fabs(x)));
+        if (k < 22050) e += static_cast<double>(x) * x, zc += (x >= 0.0f) != (out[k > 0 ? k - 1 : 0] >= 0.0f);
+      }
+      for (int k = 0; k < len * 128; ++k) {   // (the length: where the level stays under -40 dB of the peak)
+        env = std::max(static_cast<double>(std::fabs(out[k])), env * 0.9995);
+        if (env > pk * 0.01) last = k;
+      }
+      double rms = std::sqrt(e / 22050.0);
+      printf("  A%-2d %-10s %-9s rms %.3f peak %.2f, %4.0f ms, %5.0f crossings a second%s\n", i + 1, a.name,
+             eng_algo_name(PG_TRACK(0, 0), a.algo[0]), rms, pk, last * 1000.0 / 44100.0, zc * 2.0, nan ? ", NaN" : "");
+      if (nan || rms < 0.003 || pk > 1.2) ++bad;
+    }
+    printf("presets: a sound read and written onto another track %s; PADS %s; a broken one %s; %d factory sounds "
+           "play%s\n", rt ? "the same" : "WRONG", pads ? "once a project" : "WRONG", refused ? "refused" : "TAKEN",
+           ENG_FACTORY - bad, names ? "" : ", their names WRONG");
+    if (!rt || !pads || !refused || bad || !names) ++failures, printf("FAIL: presets\n");
+    eng_defaults(p);
+    eng_fresh();
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

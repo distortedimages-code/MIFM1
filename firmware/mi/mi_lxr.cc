@@ -430,7 +430,7 @@ const char* lx_knob_name(int model, int k) {
   return kKnobs[model][k].name;
 }
 
-void lx_knob_text(int model, int k, float v, char* b, int n) {
+MI_COLD void lx_knob_text(int model, int k, float v, char* b, int n) {
   if (n <= 0) return;
   b[0] = 0;
   if (model < 0 || model >= LX_MODELS || k < 0 || k >= LX_KNOBS) return;

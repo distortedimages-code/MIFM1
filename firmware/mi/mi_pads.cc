@@ -536,7 +536,7 @@ static void put_time(char* b, int n, int* at, float s) {
   }
 }
 
-void pads_knob_text(int k, float u, char* b, int n) {
+MI_COLD void pads_knob_text(int k, float u, char* b, int n) {
   if (n <= 0) return;
   int at = 0;
   b[0] = 0;

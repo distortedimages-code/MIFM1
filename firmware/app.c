@@ -13,7 +13,10 @@
  *
  *   KNOB 1..4   the page's four parameters        SELECT   the module's other face (1/3, 2/3...)
  *   ALGORITHM   the page's model or mode (the delay: SYNC or FREE)   PRESETS  the active track, 1 to 4
- *   EDIT        Plaits, the active track          LFO      the three LFOs, one after the other
+ *   EDIT        a tap: the active track's sets (its sound, its bending, its filter). Held: the presets (0.15.1), a
+ *               track's sound each, 11 banks of 16 (A the factory's): a black key a bank, a white key that sound onto
+ *               the track (heard while held); SAVE held, a white key: saved there; REC held: erased
+ *   LFO         the three LFOs, one after the other
  *   SEQ         a tap: the lane's steps (a track's: NOTE, PROB, RATCHET, LENGTH, then its RANDOM; an effect's: DECAY,
  *               PROB, DEPTH, LENGTH). Held: the patterns (0.15), 11 banks of 16, each a whole project: a black key
  *               a bank, a white key a pattern (several: an order, looped), from the playing one's end; REC held, a
@@ -35,6 +38,7 @@
  *               lane erased (with GLO, 3 s: everything as a new project has it but the four sounds, the tempo and
  *               the scale). REC and SEL held: every cable erased (the modulations)
  *   PLAY        the clock runs or stops (twice quickly: stopped, every sound cut)   SAVE  held: the pattern saved
+ *               (EDIT held, a white key: a preset)
  *   SEL         MOD mode: hold an LFO's key, turn a knob: a cable, as deep as turned (to the left: upside down).
  *               Held: the track's cables (MATRIX)
  *   keys        play the active track (MOD mode: the first three white keys are the LFOs, blinking at their rates)
@@ -148,6 +152,14 @@ static uint32_t chain_cycles;            /* eng_cycles seen */
 static int pat_bank;                     /* the bank its screen shows */
 static int pat_open;                     /* SEQ held: its screen */
 static int pat_used;                     /* a key pressed while SEQ held (its tap not SEQ's page then) */
+/* the presets (0.15.1): a track's sound each, A the factory's (engine.cc), B to K saved (pat_store.h's keys from
+ * PRE_KEY on); their section further down */
+static int pre_open;                     /* EDIT held: their screen */
+static int pre_used;                     /* a key or a knob used while EDIT held (its tap not EDIT's page then) */
+static int pre_bank;                     /* the bank shown: 0 the factory's (A), 1..10 B..K */
+static int pre_cur[ENG_TRACKS] = {-1, -1, -1, -1};   /* each track's sound read or saved last (bank x 16 + its key) */
+static int pre_key = -1, pre_track = -1; /* the white key held: its sound heard on that track */
+static eng_sound_t pre_snd, pre_tmp;
 
 static void pat_name(int slot, char *b)  /* A1 .. K16 */
 {
@@ -2809,7 +2821,10 @@ static uint32_t hold_ms(int b, char *label, uint32_t max)
         ms = 0xFFFFFFFFu;
     } else if (b == B_REC && held(B_SEQ)) {   /* (SEQ held: REC and a white key erase a pattern) */
         ms = 0xFFFFFFFFu;
-    } else if (b == B_SEQ) {             /* the patterns' screen */
+    } else if ((b == B_REC || b == B_SAVE) && held(B_EDIT)) {   /* (EDIT held: with a white key, a sound erased or
+                                          * saved) */
+        ms = 0xFFFFFFFFu;
+    } else if (b == B_SEQ || b == B_EDIT) {   /* the patterns' screen, the presets' */
         ms = 350u;
     } else if (b == B_REC && held(B_SEL)) {
         text_cat(l, "ERASE ALL CABLES", sizeof l);
@@ -3559,12 +3574,13 @@ static void pattern_seq_up(void)         /* SEQ let go: the order made, if keys 
  * playing; the room left */
 static void draw_patterns(void)
 {
-    static int32_t shown[9];
+    static int32_t shown[10];
     char line[48], n[6], v[8];
     uint32_t now = plat_ms();
     int len = eng_pattern_len(), pos = eng_pattern_pos(), next = chain_staged >= 0 ? chain[chain_staged] : -1;
-    int32_t st[9] = {pat_bank, pat_cur, chain_new_n, next, (int32_t)((now / 250u) & 1u), pos, dirty, chain_n,
-                     (int32_t)pat_seq};
+    int msg = now < ui.msg_until;
+    int32_t st[10] = {pat_bank, pat_cur, chain_new_n, next, (int32_t)((now / 250u) & 1u), pos, dirty, chain_n,
+                      (int32_t)pat_seq, msg ? (int32_t)ui.msg_until : 0};
     if (!ui.full && !memcmp(st, shown, sizeof st))
         return;                          /* (nothing moved) */
     memcpy(shown, st, sizeof st);
@@ -3625,12 +3641,18 @@ static void draw_patterns(void)
                 text_cat(line, "A KEY: A PATTERN, SEVERAL: AN ORDER", sizeof line);
             cv_text(10, 190, &FONT_XS, line, chain_new_n ? AC3 : on > 1 ? TXT : MUTED);
         }
-        line[0] = 0;
-        int_text((int32_t)(pat_room() / 1024u), v);
-        text_cat(line, "REC+KEY ERASES   ", sizeof line);
-        text_cat(line, v, sizeof line);
-        text_cat(line, " KB FREE", sizeof line);
-        cv_text(10, 214, &FONT_T, line, MUTED);
+        line[0] = 0;                     /* a message (0.15.1), or what REC does and the room left */
+        if (msg) {
+            text_cat(line, ui.msg[0], sizeof line);
+            if (ui.msg[1][0])
+                text_cat(line, "  ", sizeof line), text_cat(line, ui.msg[1], sizeof line);
+        } else {
+            int_text((int32_t)(pat_room() / 1024u), v);
+            text_cat(line, "REC+KEY ERASES   ", sizeof line);
+            text_cat(line, v, sizeof line);
+            text_cat(line, " KB FREE", sizeof line);
+        }
+        cv_text(10, 214, &FONT_T, line, msg ? AC3 : MUTED);
         cv_oy = 0;
         blit(0, (uint32_t)(80 * b));
     }
@@ -3650,6 +3672,238 @@ static void pattern_forget(void)         /* another project read in (a restore, 
     pat_unstage();
     chain_n = chain_new_n = 0;
     chain_pos = -1;
+}
+
+/* -------------------------------------------------------------- presets --- */
+/* The presets (0.15.1): a track's sound (engine.h eng_sound_t: its model, the knobs of its sound, envelope and pitch,
+ * its bits, filter and glitch, their randoms; not its level, sends, pan, steps or cables), 11 banks of 16 as the
+ * patterns are: A the factory's 16 (engine.cc kFactory), B to K the 160 saved (pat_store.h). EDIT held: their screen,
+ * for the active track (PRESETS turns it); a black key a bank, a white key that sound onto the track, heard at once
+ * (C3, as a step plays it, while the key is held). SAVE held and a white key: the track's sound saved there (B to K);
+ * REC held: one erased. While the clock runs, a save that would make room (a sector erased: the sound stopped a
+ * moment) waits for it to stop (pat_quick); a record's few bytes are written at once */
+#define PRE_NOTE 48
+
+static int pre_read(int slot, eng_sound_t *s)   /* a preset into s: 0, -1 none or not a sound */
+{
+    if (slot < 0 || slot >= PAT_BANKS * PAT_PER_BANK)
+        return -1;
+    if (slot < PAT_PER_BANK)
+        return eng_factory(slot, s);
+    int got = pat_load(PRE_KEY(slot - PAT_PER_BANK), s, sizeof *s);
+    return got == (int)sizeof *s && eng_sound_check(s, got) ? 0 : -1;
+}
+
+static int pre_full(int slot) { return slot < PAT_PER_BANK ? slot >= 0 : pat_full(PRE_KEY(slot - PAT_PER_BANK)); }
+
+static int pre_matches(int t, eng_sound_t *s)   /* the track's sound read last, still on its model: in s, 1 */
+{
+    return pre_cur[t] >= 0 && pre_read(pre_cur[t], s) == 0 && s->algo[0] == eng_project()->algo[PG_TRACK(t, 0)];
+}
+
+static void pre_hear_off(void)           /* the sound heard let go */
+{
+    if (pre_key >= 0 && pre_track >= 0)
+        eng_key(pre_track, PRE_NOTE, 0);
+    pre_key = pre_track = -1;
+}
+
+static void pre_say(const char *what, int slot, const char *b)   /* SOUND A1 ...  */
+{
+    char n[6], l1[24];
+    pat_name(slot, n);
+    l1[0] = 0;
+    text_cat(l1, what, sizeof l1);
+    text_cat(l1, n, sizeof l1);
+    app_say(l1, b);
+}
+
+static void preset_key(int k, int down)  /* EDIT held: a black key a bank, a white key a sound (SAVE: saved; REC:
+                                          * erased) */
+{
+    static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
+    int t = ui.track;
+    if (!down) {
+        if (k == pre_key)
+            pre_hear_off();
+        return;
+    }
+    pre_open = 1;
+    pre_used = 1;
+    ui.full = 1;
+    for (int i = 0; i < 11; i++)
+        if (Bk[i] == k)
+            pre_bank = i;
+    for (int i = 0; i < 16; i++) {
+        int slot = pre_bank * PAT_PER_BANK + i, e;
+        if (W[i] != k)
+            continue;
+        if (held(B_SAVE) || held(B_REC)) {   /* (their own tap or hold not taken) */
+            int sv = held(B_SAVE);
+            ui.long_done[sv ? B_SAVE : B_REC] = 1;
+            ui.used[sv ? B_SAVE : B_REC] = 1;
+            if (slot < PAT_PER_BANK) {
+                app_say("A: THE FACTORY'S", sv ? "SAVE IN B TO K" : "KEPT AS IT IS");
+                return;
+            }
+            pat_quick = eng_playing();
+            if (sv) {
+                eng_sound_get(t, &pre_snd);
+                if (pre_matches(t, &pre_tmp))   /* (a sound read, then turned: its name kept) */
+                    memcpy(pre_snd.name, pre_tmp.name, sizeof pre_snd.name);
+                e = pat_save(PRE_KEY(slot - PAT_PER_BANK), &pre_snd, sizeof pre_snd);
+            } else {
+                e = pat_erase(PRE_KEY(slot - PAT_PER_BANK));
+            }
+            pat_quick = 0;
+            if (e == 0 && sv)
+                pre_cur[t] = slot;
+            if (e == 0 && !sv)
+                for (int u = 0; u < ENG_TRACKS; u++)
+                    if (pre_cur[u] == slot)
+                        pre_cur[u] = -1;
+            pre_say("SOUND ", slot, e == 0 ? (sv ? "SAVED" : "ERASED") : e == -3 ? "STOP FIRST (ROOM TO MAKE)" :
+                                    e == -1 ? "NO ROOM LEFT" : sv ? "NOT SAVED" : "NOT ERASED");
+            return;
+        }
+        if (pre_read(slot, &pre_snd) != 0) {
+            pre_say("SOUND ", slot, "EMPTY: SAVE+KEY");
+            return;
+        }
+        e = eng_sound_set(t, &pre_snd);
+        if (e == -2) {                   /* PADS: once a project */
+            char l2[24], c[2] = {0, 0};
+            for (int u = 0; u < ENG_TRACKS; u++)
+                if (u != t && eng_model_kind(eng_project()->algo[PG_TRACK(u, 0)]) == MK_PADS)
+                    c[0] = (char)('1' + u);
+            l2[0] = 0;
+            text_cat(l2, "PADS IS ON TRACK ", sizeof l2);
+            text_cat(l2, c, sizeof l2);
+            app_say(l2, "ONCE A PROJECT");
+            return;
+        }
+        if (e != 0) {
+            pre_say("SOUND ", slot, "NOT READ");
+            return;
+        }
+        pre_cur[t] = slot;
+        dirty = 1;
+        {
+            char l1[24], c[2] = {(char)('1' + t), 0};
+            l1[0] = 0;
+            text_cat(l1, "T", sizeof l1);
+            text_cat(l1, c, sizeof l1);
+            text_cat(l1, ": ", sizeof l1);
+            text_cat(l1, pre_snd.name, sizeof l1);
+            app_say(l1, "");
+        }
+        pre_hear_off();                  /* (heard: C3, as a step plays it) */
+        eng_key(t, PRE_NOTE, 1);
+        pre_key = k;
+        pre_track = t;
+    }
+}
+
+static void preset_edit_up(void)         /* EDIT let go: the screen closed, the sound heard let go */
+{
+    pre_hear_off();
+    if (pre_open) {
+        pre_open = 0;
+        ui.full = 1;
+        ui.head_shown[0] = -1;
+        ui.foot_shown[0] = -1;
+    }
+}
+
+static void fit_text(char *b, const felucca_font_t *f, int w)   /* cut to w pixels */
+{
+    int n = (int)strlen(b);
+    while (n > 0 && text_w(f, b) > w)
+        b[--n] = 0;
+}
+
+/* EDIT held: the presets' screen, over everything, as the patterns' is. At the top the track and its sound; the banks
+ * A to K on the black keys (A the factory's, its letter in the second colour; those holding sounds brighter); the
+ * bank's 16 on the white keys, four rows of four, each its number and its name (the one the track holds in the first
+ * colour; empty: a frame); a message, or what the keys do; the room left */
+static void draw_presets(void)
+{
+    static int32_t shown[7];
+    char line[48], v[8], nm[16];
+    uint32_t now = plat_ms();
+    int t = ui.track, cur = pre_matches(t, &pre_tmp) ? pre_cur[t] : -1, msg = now < ui.msg_until;
+    int32_t st[7] = {pre_bank, t, cur, msg, (int32_t)pat_seq, (int32_t)eng_project()->algo[PG_TRACK(t, 0)],
+                     msg ? (int32_t)ui.msg_until : 0};
+    if (!ui.full && !memcmp(st, shown, sizeof st))
+        return;                          /* (nothing moved) */
+    memcpy(shown, st, sizeof st);
+    for (int b = 0; b < 3; b++) {
+        cv_begin(240, 80, BG);
+        cv_oy = -80 * b;
+        cv_y0 = 0;
+        cv_y1 = 80;
+        cv_text(10, 6, &FONT_B, "PRESETS", HI);
+        line[0] = 0;
+        text_cat(line, "TRACK ", sizeof line);
+        v[0] = (char)('1' + t), v[1] = 0;
+        text_cat(line, v, sizeof line);
+        cv_text(230 - text_w(&FONT_M, line), 2, &FONT_M, line, AC1);
+        for (int k = 0; k < PAT_BANKS; k++) {   /* the banks */
+            int any = k == 0, x = 10 + k * 20;
+            char c[2] = {(char)('A' + k), 0};
+            for (int i = 0; i < PAT_PER_BANK && !any; i++)
+                any = pre_full(k * PAT_PER_BANK + i);
+            cv_rect(x, 36, 18, 20, k == pre_bank ? AC1 : any ? RULE : BG);
+            if (k != pre_bank)
+                cv_rect(x, 36, 18, 1, any ? MUTED : RULE), cv_rect(x, 55, 18, 1, any ? MUTED : RULE),
+                    cv_rect(x, 36, 1, 20, any ? MUTED : RULE), cv_rect(x + 17, 36, 1, 20, any ? MUTED : RULE);
+            cv_text(x + 9 - text_w(&FONT_S, c) / 2, 38, &FONT_S, c,
+                    k == pre_bank ? BG : k == 0 ? AC2 : any ? HI : MUTED);
+            if (cur >= 0 && cur / PAT_PER_BANK == k)
+                cv_rect(x + 5, 58, 8, 2, AC1);
+        }
+        for (int i = 0; i < PAT_PER_BANK; i++) {   /* its 16 */
+            int slot = pre_bank * PAT_PER_BANK + i, x = 10 + (i % 4) * 56, y = 66 + (i / 4) * 30;
+            int full = pre_full(slot), on = slot == cur;
+            uint16_t fill = on ? AC1 : full ? TRACK : BG, ink = on ? BG : full ? HI : MUTED;
+            int_text(i + 1, v);
+            cv_rect(x, y, 52, 26, fill);
+            if (!on && !full)
+                cv_rect(x, y, 52, 2, RULE), cv_rect(x, y + 24, 52, 2, RULE), cv_rect(x, y, 2, 26, RULE),
+                    cv_rect(x + 50, y, 2, 26, RULE);
+            cv_text(x + 4, y + 1, &FONT_T, v, on ? BG : MUTED);
+            nm[0] = 0;
+            if (slot < PAT_PER_BANK)
+                text_cat(nm, eng_factory_name(slot), sizeof nm);
+            else if (full && pre_read(slot, &pre_snd) == 0)
+                text_cat(nm, pre_snd.name, sizeof nm);
+            fit_text(nm, &FONT_T, 46);
+            cv_text(x + 4, y + 12, &FONT_T, nm, ink);
+        }
+        line[0] = 0;                     /* a message, or the track's sound */
+        if (msg) {
+            text_cat(line, ui.msg[0], sizeof line);
+            if (ui.msg[1][0])
+                text_cat(line, "  ", sizeof line), text_cat(line, ui.msg[1], sizeof line);
+        } else {
+            text_cat(line, eng_algo_name(PG_TRACK(t, 0), eng_project()->algo[PG_TRACK(t, 0)]), sizeof line);
+            if (cur >= 0) {
+                pat_name(cur, v);
+                text_cat(line, "   ", sizeof line), text_cat(line, v, sizeof line);
+                text_cat(line, " ", sizeof line), text_cat(line, pre_tmp.name, sizeof line);
+            }
+        }
+        fit_text(line, &FONT_XS, 220);
+        cv_text(10, 190, &FONT_XS, line, msg ? AC3 : TXT);
+        line[0] = 0;
+        int_text((int32_t)(pat_room() / 1024u), v);
+        text_cat(line, pre_bank ? "SAVE+KEY SAVES  REC+KEY ERASES  " : "THE FACTORY'S 16   ", sizeof line);
+        text_cat(line, v, sizeof line);
+        text_cat(line, " KB FREE", sizeof line);
+        cv_text(10, 214, &FONT_T, line, MUTED);
+        cv_oy = 0;
+        blit(0, (uint32_t)(80 * b));
+    }
 }
 
 /* --------------------------------------------------------------- trauma --- */
@@ -3856,6 +4110,13 @@ static void draw(void)
     }
     if (pat_open && data_ok && engine_ok) {   /* SEQ held: the patterns' screen, over everything */
         draw_patterns();
+        poll_keys();
+        ui.full = 0;
+        ui.body_panel = ui.body_knobs = 0;
+        return;
+    }
+    if (pre_open && data_ok && engine_ok) {   /* EDIT held: the presets' screen, over everything */
+        draw_presets();
         poll_keys();
         ui.full = 0;
         ui.body_panel = ui.body_knobs = 0;
@@ -4221,6 +4482,9 @@ static void button_down(int b)
         pat_used = 0;
         chain_new_n = 0;
         break;
+    case B_EDIT:                         /* a tap: the track's sets (let go); held: the presets (0.15.1) */
+        pre_used = 0;
+        break;
     default:
         module_button(b);
         break;
@@ -4280,7 +4544,12 @@ static void button_long(int b)
         ui.full = 1;
         return;
     }
-    if (b == B_REC && held(B_SEQ))
+    if (b == B_EDIT) {                   /* the presets' screen, as long as EDIT is held */
+        pre_open = 1;
+        ui.full = 1;
+        return;
+    }
+    if ((b == B_REC && held(B_SEQ)) || ((b == B_REC || b == B_SAVE) && held(B_EDIT)))
         return;
     if (b == B_REC && held(B_SEL)) {     /* REC and SEL: every cable, the tracks' and the global ones */
         for (int g = 0; g <= ENG_TRACKS; g++)
@@ -4362,6 +4631,11 @@ static void button_up(int b)
         if (!pat_used && !ui.long_done[b])
             module_button(B_SEQ);
         pattern_seq_up();
+        break;
+    case B_EDIT:                         /* a tap: the track's sets; held: the screen closed */
+        if (!pre_used && !ui.long_done[b])
+            module_button(B_EDIT);
+        preset_edit_up();
         break;
     case B_SEL:
         if (ui.combo && !held(B_REC))
@@ -4574,6 +4848,13 @@ static void poll_keys(void)
                 eng_key(ui.track, note, 0);
             continue;
         }
+        if (held(B_EDIT)) {              /* the presets' (the same) */
+            int heard = up && (int)k == pre_key;
+            preset_key((int)k, down);
+            if (up && !heard && !ui.grid && !ui.mod && ui.erec < 0)
+                eng_key(ui.track, note, 0);
+            continue;
+        }
         if (ui.mod)                      /* MOD: the keys are the sources (held_source) */
             continue;
         if (ui.grid) {
@@ -4619,6 +4900,11 @@ static void input(void)
     poll_keys();
     /* encoders */
     e = plat_enc(EN_PRESET);
+    if (e && held(B_EDIT)) {             /* (the presets' screen: another track's; EDIT's tap not taken) */
+        pre_used = 1;
+        pre_hear_off();
+        ui.full = 1;
+    }
     if (e) {
         int t = clamp(ui.track + e, 0, ENG_TRACKS - 1);
         if (t != ui.track) {
@@ -4632,6 +4918,8 @@ static void input(void)
         }
     }
     e = plat_enc(EN_SELECT);
+    if (e && held(B_EDIT))
+        pre_used = 1;
     if (e && !ui.dice && held(B_OCTDN)) {   /* OCT- held, SELECT turned: the random dose's screen (the octave, or
                                           * the steps' page, OCT- moved put back) */
         ui.octave = ui.oct_was;
@@ -4661,6 +4949,8 @@ static void input(void)
     } else if (e && !ui.matrix && page_count(ui.page) > 1)
         go_page_dir(page_at(ui.page, page_face(ui.page) + (e > 0 ? 1 : -1)), e > 0 ? 1 : -1);
     e = plat_enc(EN_ALGO);
+    if (e && held(B_EDIT))
+        pre_used = 1;
     if (e && !ui.matrix && (ptype(ui.page) == PT_WARPS1 || ptype(ui.page) == PT_WARPS2)) {
         /* Warps: ALGORITHM from mark to mark (its six cross-modulations, a fifth of the knob apart) */
         float *v = &eng_project()->val[PG_WARPS(0) * 4 + 2];
@@ -4725,6 +5015,8 @@ static void input(void)
         e = plat_enc(EN_K1 + i);
         if (!e || !data_ok)
             continue;
+        if (held(B_EDIT))                /* (EDIT's tap not taken: a knob turned while it was held) */
+            pre_used = 1;
         if (ui.page == VP_SYS) {         /* K1 the project REC held loads, K2 the output, K3 Warps' quality, K4 the
                                           * colours */
             project_t *p = eng_project();

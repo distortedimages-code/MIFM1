@@ -3,7 +3,10 @@
 /* The patterns (0.15): 11 banks of 16, each a whole project (its sounds too), kept in the flash's two windows for an
  * app's big data (plat.h: PLAT_XDATA1, 23 sectors, then PLAT_XDATA0, 4), outside the store (its objects take a sector
  * pair each: 176 would not fit). Each one packed (LZSS, lz_pack: a project's 3776 bytes in 650 to 1000 or so), so
- * some 100 fit where 27 whole ones would.
+ * some 100 fit where 27 whole ones would. And the presets (0.15.1): a track's sound each (engine.h eng_sound_t), 10
+ * banks of 16 (B to K; A is the firmware's own), in the same records: the keys from PAT_SLOTS on (PRE_KEY). On the
+ * flash a preset's slot byte is 176 or more, its high part in the pad byte (pat_key): 0.15.0 reads those as no
+ * pattern of its own, skipped (its room-making drops them, its patterns as they were).
  *
  * A sector: a header (its magic), then records one after the other, never across sectors, in its first 0xF00 bytes
  * (plat.h: the update loader reads a record of its own at 0xF00..0xF07 of a sector there: those stay erased). A
@@ -21,7 +24,11 @@
  * tests/pat_store_test.c (a simulated flash, power cuts anywhere) */
 #define PAT_BANKS 11
 #define PAT_PER_BANK 16
-#define PAT_SLOTS (PAT_BANKS * PAT_PER_BANK)
+#define PAT_SLOTS (PAT_BANKS * PAT_PER_BANK)   /* the patterns' keys: 0 .. 175 */
+#define PRE_BANKS 10                     /* the presets': B .. K */
+#define PRE_SLOTS (PRE_BANKS * PAT_PER_BANK)
+#define PRE_KEY(n) (PAT_SLOTS + (n))     /* preset n (0: B1) */
+#define PAT_KEYS (PAT_SLOTS + PRE_SLOTS)
 #define PAT_NSEC 27u                     /* PLAT_XDATA1's 23 sectors, then PLAT_XDATA0's 4 */
 #define PAT_USE 0xF00u                   /* the bytes of a sector used (0xF00..0xF07: the update loader's) */
 #define PAT_SEC_MAGIC 0x3150494Du        /* "MIP1" */
@@ -41,15 +48,29 @@ typedef struct {
     uint32_t seq;
     uint16_t len, crc;                   /* its bytes, their CRC-16 */
     uint16_t hcrc;                       /* the 12 bytes before */
-    uint8_t pad, commit;                 /* commit: 0xFF while written, 0 done */
+    uint8_t pad, commit;                 /* pad: a preset's key's high part (a pattern's: 0xFF); commit: 0xFF while
+                                          * written, 0 done */
 } pat_rec_t;
 _Static_assert(sizeof(pat_sec_t) == 16 && sizeof(pat_rec_t) == 16, "the flash's layout");
+_Static_assert(PAT_SLOTS == 176 && PRE_SLOTS <= 2 * 80, "a preset's key: its slot byte 176..255, its pad 0 or 1");
 
-static uint32_t pat_at[PAT_SLOTS];       /* each slot's record (its flash offset), 0 none */
+static uint32_t pat_key(const pat_rec_t *r)   /* the record's key (PAT_KEYS: none) */
+{
+    if (r->slot < PAT_SLOTS)
+        return r->slot;
+    if (r->pad > 1u)
+        return PAT_KEYS;
+    uint32_t k = PAT_SLOTS + r->pad * 80u + (r->slot - PAT_SLOTS);
+    return k < PAT_KEYS ? k : PAT_KEYS;
+}
+
+static uint32_t pat_at[PAT_KEYS];        /* each key's record (its flash offset), 0 none */
 static uint16_t pat_end[PAT_NSEC];       /* each sector's first free byte (PAT_USE: full or unusable) */
 static uint32_t pat_seq = 1;             /* the next record's */
-static int pat_last = -1;                /* the slot saved last (a pattern in it), -1 none */
+static int pat_last = -1;                /* the pattern saved last (a pattern in it), -1 none */
 static int pat_ok;                       /* the windows there (an FM-1, the host, the page) */
+static int pat_quick;                    /* 1: a save that would make room (a sector erased: the sound stopped a
+                                          * moment) refused, -3 (a preset saved while playing) */
 static uint32_t pat_gcseq = 1;           /* the next move's */
 
 static uint32_t pat_sec(uint32_t i) { return i < 23u ? PLAT_XDATA1_LO + i * 0x1000u : PLAT_XDATA0_LO + (i - 23u) * 0x1000u; }
@@ -159,7 +180,7 @@ static int pat_rec_at(uint32_t at, pat_rec_t *r)   /* 1: a committed record whos
         return 0;
     memcpy(r, f, sizeof *r);
     return r->magic == PAT_REC_MAGIC && pat_crc((const uint8_t *)r, 12) == r->hcrc && r->commit == 0 &&
-           r->slot < PAT_SLOTS && pat_crc(f + sizeof *r, r->len) == r->crc;
+           pat_key(r) < PAT_KEYS && pat_crc(f + sizeof *r, r->len) == r->crc;
 }
 
 static int pat_format(uint32_t i)        /* erased, and MIFM1's: its header */
@@ -190,7 +211,7 @@ static uint32_t pat_walk(uint32_t i, pat_visit_t fn, void *arg)
         if (r.magic != PAT_REC_MAGIC || pat_crc((const uint8_t *)&r, 12) != r.hcrc ||
             off + sizeof r + r.len > PAT_USE)
             return PAT_USE;              /* (a header torn: nothing after it) */
-        fn(pat_sec(i) + off, &r, r.commit == 0 && r.slot < PAT_SLOTS &&
+        fn(pat_sec(i) + off, &r, r.commit == 0 && pat_key(&r) < PAT_KEYS &&
                                  pat_crc(s + off + sizeof r, r.len) == r.crc, arg);
         off += (uint32_t)sizeof r + ((r.len + 3u) & ~3u);
     }
@@ -201,16 +222,15 @@ static uint32_t *pat_best, *pat_rank;    /* (pat_init: each slot's sequence numb
 static uint32_t pat_newest_seq;
 static void pat_visit_init(uint32_t at, const pat_rec_t *r, int ok, void *arg)
 {
-    uint32_t rank = *(const uint32_t *)arg;
+    uint32_t rank = *(const uint32_t *)arg, k = pat_key(r);
     if (!ok)
         return;
     if (r->seq >= pat_seq)
         pat_seq = r->seq + 1u;
-    if (!pat_at[r->slot] || r->seq > pat_best[r->slot] ||
-        (r->seq == pat_best[r->slot] && rank > pat_rank[r->slot])) {
-        pat_best[r->slot] = r->seq;
-        pat_rank[r->slot] = rank;
-        pat_at[r->slot] = at;
+    if (!pat_at[k] || r->seq > pat_best[k] || (r->seq == pat_best[k] && rank > pat_rank[k])) {
+        pat_best[k] = r->seq;
+        pat_rank[k] = rank;
+        pat_at[k] = at;
     }
 }
 static uint32_t pat_sector_of(uint32_t at)
@@ -221,10 +241,10 @@ static uint32_t pat_sector_of(uint32_t at)
     return PAT_NSEC;
 }
 
-static int pat_full(int slot)            /* 1: a pattern there */
+static int pat_full(int slot)            /* 1: a pattern there (a preset: its key) */
 {
     pat_rec_t r;
-    if (slot < 0 || slot >= PAT_SLOTS || !pat_at[slot])
+    if (slot < 0 || slot >= PAT_KEYS || !pat_at[slot])
         return 0;
     memcpy(&r, plat_data(pat_at[slot]), sizeof r);
     return r.kind != 0;
@@ -232,7 +252,7 @@ static int pat_full(int slot)            /* 1: a pattern there */
 
 static int pat_init(void)                /* at boot: each slot's record; the sectors not MIFM1's erased and made its */
 {
-    uint32_t best[PAT_SLOTS], rank[PAT_SLOTS], live[PAT_NSEC];
+    uint32_t best[PAT_KEYS], rank[PAT_KEYS], live[PAT_NSEC];
     pat_ok = plat_data(pat_sec(0)) && plat_data(pat_sec(PAT_NSEC - 1u));
     if (!pat_ok)
         return -1;
@@ -257,7 +277,7 @@ static int pat_init(void)                /* at boot: each slot's record; the sec
             pat_gcseq = r + 1u;
         pat_end[i] = (uint16_t)pat_walk(i, pat_visit_init, &r);
     }
-    for (int s = 0; s < PAT_SLOTS; s++)  /* (each sector's live records: none left, it is erased) */
+    for (int s = 0; s < PAT_KEYS; s++)   /* (each sector's live records: none left, it is erased) */
         if (pat_at[s] && pat_sector_of(pat_at[s]) < PAT_NSEC)
             live[pat_sector_of(pat_at[s])]++;
     for (uint32_t i = 0; i < PAT_NSEC; i++)
@@ -265,7 +285,7 @@ static int pat_init(void)                /* at boot: each slot's record; the sec
             pat_format(i);
     pat_last = -1;
     pat_newest_seq = 0;
-    for (int s = 0; s < PAT_SLOTS; s++)
+    for (int s = 0; s < PAT_SLOTS; s++)  /* (the patterns': a preset is not one) */
         if (pat_full(s) && best[s] >= pat_newest_seq)
             pat_newest_seq = best[s], pat_last = s;
     pat_best = pat_rank = 0;
@@ -279,7 +299,7 @@ typedef struct {
 } pat_live_t;
 static void pat_visit_live(uint32_t at, const pat_rec_t *r, int ok, void *arg)
 {
-    if (ok && pat_at[r->slot] == at)
+    if (ok && pat_at[pat_key(r)] == at)
         ((pat_live_t *)arg)->live += pat_rec_size(r);
 }
 
@@ -291,8 +311,8 @@ static void pat_visit_move(uint32_t at, const pat_rec_t *r, int ok, void *arg)  
 {
     pat_move_t *m = (pat_move_t *)arg;
     uint8_t buf[256];
-    uint32_t n = pat_rec_size(r), done = 0;
-    if (!ok || pat_at[r->slot] != at || m->err)
+    uint32_t n = pat_rec_size(r), done = 0, k = pat_key(r);
+    if (!ok || pat_at[k] != at || m->err)
         return;
     while (done < n) {
         uint32_t k = n - done < sizeof buf ? n - done : (uint32_t)sizeof buf;
@@ -303,7 +323,7 @@ static void pat_visit_move(uint32_t at, const pat_rec_t *r, int ok, void *arg)  
         }
         done += k;
     }
-    pat_at[r->slot] = m->to;
+    pat_at[k] = m->to;
     m->to += n;
 }
 
@@ -359,23 +379,26 @@ static int pat_place(uint32_t need)      /* a sector with room for need bytes (t
     return empty >= 2 ? first_empty : -1;
 }
 
-static int pat_append(int slot, uint32_t kind, const uint8_t *p, uint32_t n)   /* 0 done, -1 no room, -2 flash */
+/* 0 done, -1 no room, -2 flash, -3 room to make (pat_quick) */
+static int pat_append(int slot, uint32_t kind, const uint8_t *p, uint32_t n)
 {
     pat_rec_t r;
     uint32_t need = (uint32_t)sizeof r + ((n + 3u) & ~3u), at;
     int i, tries = 0;
     while ((i = pat_place(need)) < 0)
-        if (++tries > (int)PAT_NSEC || pat_gc() != 0)
+        if (pat_quick)
+            return -3;
+        else if (++tries > (int)PAT_NSEC || pat_gc() != 0)
             return -1;
     at = pat_sec((uint32_t)i) + pat_end[i];
     r.magic = PAT_REC_MAGIC;
-    r.slot = (uint8_t)slot;
+    r.slot = (uint8_t)(slot < PAT_SLOTS ? slot : PAT_SLOTS + (slot - PAT_SLOTS) % 80);
     r.kind = (uint8_t)kind;
     r.seq = pat_seq;
     r.len = (uint16_t)n;
     r.crc = pat_crc(p, n);
+    r.pad = (uint8_t)(slot < PAT_SLOTS ? 0xFFu : (uint32_t)(slot - PAT_SLOTS) / 80u);
     r.hcrc = pat_crc((const uint8_t *)&r, 12);
-    r.pad = 0xFFu;
     r.commit = 0xFFu;
     pat_end[i] = PAT_USE;                /* (a failure from here: nothing more written in it) */
     if (pat_write(at, (const uint8_t *)&r, sizeof r) || (n && pat_write(at + sizeof r, p, n)))
@@ -389,24 +412,24 @@ static int pat_append(int slot, uint32_t kind, const uint8_t *p, uint32_t n)   /
     return 0;
 }
 
-static int pat_save(int slot, const void *src, uint32_t n)   /* 0 done, -1 no room, -2 flash */
+static int pat_save(int slot, const void *src, uint32_t n)   /* 0 done, -1 no room, -2 flash, -3 (pat_quick) */
 {
     uint8_t buf[PAT_USE - 32u];
     uint32_t k;
     int e;
-    if (!pat_ok || slot < 0 || slot >= PAT_SLOTS || n > sizeof buf)
+    if (!pat_ok || slot < 0 || slot >= PAT_KEYS || n > sizeof buf)
         return -2;
     k = lz_pack((const uint8_t *)src, n, buf, sizeof buf);
     if (k && k < n)
         e = pat_append(slot, PAT_LZ, buf, k);
     else
         e = pat_append(slot, PAT_RAW, (const uint8_t *)src, n);
-    if (e == 0)
+    if (e == 0 && slot < PAT_SLOTS)
         pat_last = slot;
     return e;
 }
 
-static int pat_erase(int slot)           /* 0 done (or nothing there), -1 no room, -2 flash */
+static int pat_erase(int slot)           /* 0 done (or nothing there), -1 no room, -2 flash, -3 (pat_quick) */
 {
     int e;
     if (!pat_full(slot))
@@ -433,10 +456,11 @@ static int pat_load(int slot, void *dst, uint32_t max)   /* its bytes into dst: 
     return lz_unpack(f, r.len, (uint8_t *)dst, max);
 }
 
-static uint32_t pat_room(void)           /* the bytes free for patterns, the dead ones counted (a save frees them) */
+static uint32_t pat_room(void)           /* the bytes free for patterns and presets, the dead ones counted (a save frees
+                                          * them) */
 {
     uint32_t live = 0, total = (PAT_NSEC - 1u) * (PAT_USE - (uint32_t)sizeof(pat_sec_t));   /* (one kept empty) */
-    for (int s = 0; s < PAT_SLOTS; s++) {
+    for (int s = 0; s < PAT_KEYS; s++) {
         pat_rec_t r;
         if (pat_at[s]) {
             memcpy(&r, plat_data(pat_at[s]), sizeof r);

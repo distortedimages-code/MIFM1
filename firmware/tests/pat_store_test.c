@@ -8,6 +8,9 @@
  *   - a power cut at every flash operation of a save and of a room-making: the slot as it was or as saved, never
  *     neither, every other slot as it was
  *   - the room: how many patterns of a project's kind fit
+ *   - the presets (0.15.1): saved and loaded beside the patterns, through all the above; their records' slot byte 176
+ *     or more (0.15.0 skips them); the pattern saved last never a preset; a save refused rather than making room
+ *     (pat_quick), nothing changed
  *   make test (cc -std=c11 firmware/tests/pat_store_test.c) */
 #include <stdint.h>
 #include <stdio.h>
@@ -53,6 +56,8 @@ int plat_data_write(uint32_t off, const void *src, uint32_t n)
 #include "../pat_store.h"
 
 #define PSIZE 3776u                      /* a project's bytes (engine.h project_t) */
+#define SSIZE 212u                       /* a preset's (engine.h eng_sound_t) */
+static uint32_t ksize(int s) { return s < PAT_SLOTS ? PSIZE : SSIZE; }
 static int bad;
 static void check(const char *what, int ok)
 {
@@ -94,19 +99,44 @@ static void project(uint8_t *p, uint32_t seed, int locks)
         p[o] = (uint8_t)(rnd() % 12u ? 0 : rnd() % 128u);
 }
 
-static uint8_t model[PAT_SLOTS][PSIZE];  /* what each slot must load */
-static uint8_t full[PAT_SLOTS];
+static uint8_t model[PAT_KEYS][PSIZE];   /* what each slot must load */
+static uint8_t full[PAT_KEYS];
 static int matches(int s)                /* the slot loads as the model has it */
 {
     static uint8_t got[PSIZE];
     int n = pat_load(s, got, sizeof got);
     if (!full[s])
         return n < 0 && !pat_full(s);
-    return n == (int)PSIZE && !memcmp(got, model[s], PSIZE);
+    return n == (int)ksize(s) && !memcmp(got, model[s], ksize(s));
+}
+static void sound(uint8_t *p, uint32_t seed)   /* a preset of a kind: its 32 knobs from a few values, its models,
+                                                * a random or two */
+{
+    static const float vals[] = {0.0f, 0.5f, 0.25f, 0.75f, 1.0f, 0.3f, 0.6f, -0.5f};
+    memset(p, 0, SSIZE);
+    rs = seed * 2246822519u + 3u;
+    memcpy(p, "SND1", 4);
+    for (int i = 0; i < 32; i++) {
+        float v = rnd() % 3u ? vals[rnd() % 8u] : (float)(rnd() % 1000u) / 1000.0f;
+        memcpy(p + 8 + 4 * i, &v, 4);
+    }
+    for (int i = 0; i < 8; i++)
+        p[136 + i] = (uint8_t)(rnd() % 23u);
+    for (int i = 0; i < 32; i++)
+        if (rnd() % 8u == 0)
+            p[144 + i] = (uint8_t)(rnd() % 100u), p[176 + i] = (uint8_t)rnd();
+    memcpy(p + 200, "PRESET", 6);
+}
+static void one(int s, uint32_t seed, int locks)   /* the slot's model: a pattern or a preset */
+{
+    if (s < PAT_SLOTS)
+        project(model[s], seed, locks);
+    else
+        sound(model[s], seed);
 }
 static int all_match(void)
 {
-    for (int s = 0; s < PAT_SLOTS; s++)
+    for (int s = 0; s < PAT_KEYS; s++)
         if (!matches(s))
             return 0;
     return 1;
@@ -172,13 +202,15 @@ int main(void)
     {
         int ok = 1, gcs = 0;
         for (int k = 0; k < 3000 && ok; k++) {
-            int s = (int)(rnd() % 60u);
+            int s = (int)(rnd() % 100u);
+            s = s < 60 ? s : PRE_KEY(s - 60 + (s % 2 ? 80 : 0));   /* (presets in both halves of their keys) */
             if (rnd() % 10u == 0) {
                 ok &= pat_erase(s) == 0;
                 full[s] = 0;
             } else {
-                project(model[s], 5000u + (uint32_t)k, (int)(rnd() % 100u));
-                int e = pat_save(s, model[s], PSIZE);
+                uint32_t r = rnd();
+                one(s, 5000u + (uint32_t)k, (int)(r % 100u));
+                int e = pat_save(s, model[s], ksize(s));
                 ok &= e == 0;
                 full[s] = 1;
             }
@@ -189,48 +221,55 @@ int main(void)
             }
         }
         pat_init();
-        snprintf(what, sizeof what, "3000 saves and erases over 60 slots (%d reboots): each slot as the model says", gcs);
+        snprintf(what, sizeof what, "3000 saves, erases over 60 patterns, 40 presets (%d reboots): each as the model says", gcs);
         check(what, ok && all_match());
     }
 
     /* a power cut at every flash operation of a save (and of the room it makes) */
     {
         int ok = 1, tried = 0, in_gc = 0;
-        static uint8_t snap[sizeof flash], before[PAT_SLOTS][PSIZE], fb[PAT_SLOTS];
+        static uint8_t snap[sizeof flash], before[PAT_KEYS][PSIZE], fb[PAT_KEYS];
         for (int s = 50; s < 58; s++) {      /* (the store well filled: room made at many saves) */
             project(model[s], 3000u + (uint32_t)s, 40);
             full[s] = pat_save(s, model[s], PSIZE) == 0 || full[s];
         }
         for (long n = 0; n < 900 && ok; n++) {
-            int s = (int)(rnd() % 58u);
+            int s = (int)(rnd() % 70u);
+            s = s < 58 ? s : PRE_KEY((s - 58) * 13);
             memcpy(snap, flash, sizeof flash);
             memcpy(before, model, sizeof model);
             memcpy(fb, full, sizeof full);
-            project(p, 90000u + (uint32_t)n, (int)(rnd() % 120u));
+            {
+                uint32_t r = rnd();
+                if (s < PAT_SLOTS)
+                    project(p, 90000u + (uint32_t)n, (int)(r % 120u));
+                else
+                    sound(p, 90000u + (uint32_t)n);
+            }
             ops = 0;                         /* (how many it takes uncut: more than a record's, room was made) */
             {
                 static uint8_t f2[sizeof flash];
                 memcpy(f2, flash, sizeof flash);
-                pat_save(s, p, PSIZE);
+                pat_save(s, p, ksize(s));
                 in_gc += ops > 12 && (long)(n % 150) < ops && (long)(n % 150) >= 6;
                 memcpy(flash, f2, sizeof flash);
                 pat_init();
             }
             ops = 0;
             cut_after = n % 150;             /* (the cut somewhere in it: the record, a room-making's copies or erase) */
-            int e = pat_save(s, p, PSIZE);
+            int e = pat_save(s, p, ksize(s));
             cut_after = -1;
             pat_init();                      /* (the power back) */
             static uint8_t got[PSIZE];
             int m = pat_load(s, got, sizeof got);
-            int as_was = fb[s] ? m == (int)PSIZE && !memcmp(got, before[s], PSIZE) : m < 0;
-            int as_saved = m == (int)PSIZE && !memcmp(got, p, PSIZE);
+            int as_was = fb[s] ? m == (int)ksize(s) && !memcmp(got, before[s], ksize(s)) : m < 0;
+            int as_saved = m == (int)ksize(s) && !memcmp(got, p, ksize(s));
             ok &= as_was || as_saved;
             if (e == 0 && ops <= n % 150)
                 ok &= as_saved;              /* (it went through before the cut) */
             memcpy(model[s], as_saved ? p : before[s], PSIZE);
             full[s] = (uint8_t)(as_saved || fb[s]);
-            for (int o = 0; o < PAT_SLOTS && ok; o++)
+            for (int o = 0; o < PAT_KEYS && ok; o++)
                 if (o != s)
                     ok &= matches(o);
             tried++;
@@ -243,12 +282,44 @@ int main(void)
         check(what, ok);
     }
 
+    /* the presets: their records as 0.15.0 skips them, the pattern saved last, pat_quick */
+    {
+        int skipped = 1, last = 1;
+        for (uint32_t i = 0; i < PAT_NSEC; i++) {   /* (0.15.0's reading: a slot byte under 176, a pattern) */
+            const uint8_t *f = plat_data(pat_sec(i));
+            for (uint32_t off = 16; off + 16 <= PAT_USE;) {
+                pat_rec_t r;
+                memcpy(&r, f + off, sizeof r);
+                if (r.magic != PAT_REC_MAGIC)
+                    break;
+                if (pat_key(&r) >= PAT_SLOTS)
+                    skipped &= r.slot >= 176u && r.pad <= 1u;
+                else
+                    skipped &= r.pad == 0xFFu;
+                off += pat_rec_size(&r);
+            }
+        }
+        check("every preset's record: its slot byte 176 or more (0.15.0 skips it), a pattern's pad 0xFF", skipped);
+        project(model[3], 777u, 10);
+        full[3] = pat_save(3, model[3], PSIZE) == 0;
+        sound(model[PRE_KEY(5)], 4242u);
+        full[PRE_KEY(5)] = pat_save(PRE_KEY(5), model[PRE_KEY(5)], SSIZE) == 0 || full[PRE_KEY(5)];
+        last &= pat_last == 3;
+        pat_init();
+        last &= pat_last == 3 && all_match();
+        check("a preset saved after a pattern: the pattern saved last still the pattern, after a reboot too", last);
+    }
+
     /* the room */
     {
         int n = 0;
         memset(flash, 0xFF, sizeof flash);
         pat_init();
         memset(full, 0, sizeof full);
+        for (int s = 0; s < PRE_SLOTS; s += 3) {   /* (a few presets first, then the patterns) */
+            sound(model[PRE_KEY(s)], 60000u + (uint32_t)s);
+            full[PRE_KEY(s)] = pat_save(PRE_KEY(s), model[PRE_KEY(s)], SSIZE) == 0;
+        }
         for (int s = 0; s < PAT_SLOTS; s++) {
             project(model[s], 70000u + (uint32_t)s, 30);
             if (pat_save(s, model[s], PSIZE) != 0)
@@ -256,9 +327,40 @@ int main(void)
             full[s] = 1;
             n++;
         }
-        snprintf(what, sizeof what, "the room: %d patterns of 30 locks each fit, all of them loading", n);
-        check(what, n >= 70 && all_match());
+        snprintf(what, sizeof what, "the room: %d patterns of 30 locks each fit beside 54 presets, all of them loading", n);
+        check(what, n >= 65 && all_match());
         check("full: a save refused (no room), nothing lost", n == PAT_SLOTS || (pat_save(n, model[0], PSIZE) == -1 && all_match()));
+    }
+
+    /* pat_quick: a save that would make room refused, nothing changed */
+    {
+        int ok = 1, quick = 0, saved = 0;
+        static uint8_t snap[sizeof flash];
+        memset(flash, 0xFF, sizeof flash);
+        pat_init();
+        memset(full, 0, sizeof full);
+        for (int k = 0; k < 4000 && ok && !quick; k++) {
+            int s = PRE_KEY(k % 7);
+            sound(p, 30000u + (uint32_t)k);
+            memcpy(snap, flash, sizeof flash);
+            pat_quick = 1;
+            int e = pat_save(s, p, SSIZE);
+            pat_quick = 0;
+            if (e == -3) {
+                quick = 1;
+                ok &= !memcmp(snap, flash, sizeof flash) && all_match();
+            } else {
+                ok &= e == 0;
+                memcpy(model[s], p, SSIZE);
+                full[s] = 1;
+                saved++;
+            }
+        }
+        ok &= quick && pat_save(PRE_KEY(0), p, SSIZE) == 0;   /* (and without it: room made, saved) */
+        memcpy(model[PRE_KEY(0)], p, SSIZE);
+        pat_init();
+        snprintf(what, sizeof what, "pat_quick: %d presets saved over 7 keys, then a save refused, the flash untouched", saved);
+        check(what, ok && all_match());
     }
     printf(bad ? "pat_store: %d FAILED\n" : "pat_store: all good\n", bad);
     return bad != 0;

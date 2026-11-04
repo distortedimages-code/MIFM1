@@ -343,7 +343,7 @@ static void put_i(char* b, int n, int* at, int x) {   // x >= 0
   b[*at] = 0;
 }
 
-void zero_knob_text(int k, float u, char* b, int n) {   // u: 0..1 (a bipolar knob from its middle)
+MI_COLD void zero_knob_text(int k, float u, char* b, int n) {   // u: 0..1 (a bipolar knob from its middle)
   if (n <= 0) return;
   int at = 0;
   b[0] = 0;

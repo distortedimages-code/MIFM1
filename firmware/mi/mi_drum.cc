@@ -329,7 +329,7 @@ static void put_hz(char* b, int n, int* at, float hz) {   // 0.5Hz, 85Hz, 2.4k
   }
 }
 
-void drum_knob_text(int model, int k, float u, char* b, int n) {   // u: 0..1 (a bipolar knob from its middle)
+MI_COLD void drum_knob_text(int model, int k, float u, char* b, int n) {   // u: 0..1 (a bipolar knob from its middle)
   if (n <= 0) return;
   int at = 0;
   b[0] = 0;
