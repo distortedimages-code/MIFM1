@@ -15,7 +15,7 @@
 //                                        or its algorithm's mark 0..5 (T2 by T1, T2 playing too), HQ 0/1; EXTRA
 //                                        (bits) T1's EQ, the duck, the delay's filter and drive; the FM's square, PW,
 //                                        SYNC; PADS' MANUAL triad, six notes, one saw a note, its bell; POLY's voice, four;
-//                                        SQ-1's three layers and SPACE, its voices ringing on or one
+//                                        SQ-1's three layers and SPACE, its voices ringing on or one; T1's SPREAD
 //   calib blank SECONDS                  nothing playing (the preparation's floor, a resting voice)
 #include <cstdio>
 #include <cstdlib>
@@ -82,6 +82,7 @@ int main(int argc, char** argv) {
     if (extra & 2)
       for (int t = 1; t < ENG_TRACKS; ++t) p->val[PG_DUCK * 4 + t] = 0.3f;
     if (extra & 4) p->val[PG_DELAY(0) * 4 + 2] = -0.15f, p->val[PG_DELAY(0) * 4 + 3] = 0.3f;
+    if (extra & 262144) p->val[PG_SPREAD_PARAM(0)] = 1.0f;   // (0.16.19) T1's SPREAD
     if (extra & 8) p->val[PG_TRACK(0, 1) * 4 + 3] = -0.6f;   // 8 the FM's square (FEEDBACK), 16 its PW, 32 its SYNC
     if (extra & 16) p->val[PG_TRACK(0, 2) * 4 + 0] = -0.5f;  // (MUTATE), on its sixth algorithm (three operators
     if (extra & 32) p->val[PG_TRACK(0, 2) * 4 + 0] = 0.5f;   // heard)

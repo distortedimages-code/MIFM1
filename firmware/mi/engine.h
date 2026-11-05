@@ -67,8 +67,10 @@ extern "C" {
                                           * as they go over the lane's LENGTH, ROTATE; turning them writes its trigs
                                           * (the screen: its third and fourth knobs are the lane's LENGTH and PROB);
                                           * then (0.16.7, a track's, in what was unused) CLIMB, the semitones (SCALE
-                                          * on: its notes) a step's trig climbs each time it plays, -12..12; the
-                                          * fourth unused */
+                                          * on: its notes) a step's trig climbs each time it plays, -12..12; then
+                                          * (0.16.19, a track's, in what was unused: 0 in every project since
+                                          * 0.16.7, climb_off_all) its SPREAD, the mixer's (engine.cc: spread_track) */
+#define PG_SPREAD_PARAM(t) (PG_EUC(t) * 4 + 3)   /* a track's SPREAD: 0 the track as it is, 1 its widest */
 #define PG_FILT(t, f) (52 + (t) * 3 + (f))   /* a track's filter (mi_filter.cc), three pages of four (the screen shows
                                           * them otherwise: app.c): CUTOFF, RESO, ENV, DECAY; DRIVE, PING, FM, KEY;
                                           * TYPE (LP, BP, HP; VOX: low, mid, high voices), NOISE, COLOR, ATTACK. The
@@ -438,6 +440,8 @@ uint32_t eng_task_load(int task);        /* a voice's (0..3, while it plays), Wa
 float eng_meter(int t);                  /* track t's output (4: the reverb's return, 5: the delay's), its peak,
                                           * falling slowly */
 float eng_duck(void);                    /* the duck now, 0..1 (1: T1's trig, as deep as each track's knob) */
+float eng_spread_width(int t);           /* (0.16.19) SPREAD: track t's width now, the side's gain over the middle's
+                                          * (0: as it is; 0.8 the widest, in the middle) */
 float eng_gr(int band);                  /* the master bus's gain now, dB (- reduced, + raised): the compressor's
                                           * (band 0), or OTT's low, mid and high bands (0, 1, 2) */
 #define ENG_HIST 120                     /* the sources' recent past: one value every 4 blocks (1.4 s) */

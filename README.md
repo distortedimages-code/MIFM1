@@ -78,7 +78,9 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   place ; depuis 0.16.5, passer du passe-haut au neutre, du neutre au passe-bas ou de l'un à l'autre se fait en fondu
   de 3 ms, sans clic), un envoi par piste vers le delay et un vers la réverbe (ses lignes de retard sur 16 bits : la
   réverbe du module les stockait sur 12, d'où un grain et un souffle ; 0.5 et 0.6 les gardaient en flottants, 0.7
-  donne l'autre moitié aux tranches du glitch).
+  donne l'autre moitié aux tranches du glitch) ;
+- un **SPREAD** par piste (0.16.19) : la piste s'ouvre en largeur autour de son pan, ses graves restent au milieu, et
+  sa somme en mono reste exactement la piste (voir plus bas) ;
 - un **duck** : T2, T3 et T4 baissent à chaque trig de T1 (sa profondeur par piste, un DECAY commun), avant leurs
   envois : ce qu'elles envoient au delay et à la réverbe baisse avec elles ;
 - un **bus master** : un compresseur (seuil, ratio, release, gain) ou un mode **OTT** (trois bandes compressées vers
@@ -150,7 +152,7 @@ effets.
 | 7-8 | T4 |
 | 9-10 | le retour des effets : delay et réverbe |
 
-Chaque piste sort après son niveau, son pan, son EQ et le duck, avec son circuit bending et Warps (quand Warps prend la place
+Chaque piste sort après son niveau, son pan, son EQ, le duck et son SPREAD, avec son circuit bending et Warps (quand Warps prend la place
 d'une piste, c'est lui qu'on entend sur elle), mais sans delay ni réverbe : ce sont des bus partagés, leur retour
 arrive sur 9-10. **La somme des 10 entrées, c'est le master avant son bus** (compresseur ou OTT, limiteur), à refaire
 dans le DAW si on le veut ; le master avec son bus n'est pas sur l'USB (la sortie casque l'a).
@@ -598,7 +600,7 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
 | **SEQ** | tapé : les pas de la piste (NOTE, PROB, SPEED, LENGTH ; puis RATCHETS : RATCH, SPAN, CURVE, DIR ; puis CLIMB : CLIMB, NOTES, ON, SHAPE ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns** (touches noires : la banque, blanches : le pattern, plusieurs : un enchaînement ; REC tenu : efface) |
 | **ARP** | Endless, celui de la piste (voir plus bas) ; à nouveau : ses options (STRIDE, REST, HOLES, LEAP) |
-| **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leurs filtres (EQ), le DUCK, puis le bus master (COMP, OTT) ; ALGORITHM sur COMP ou OTT : le mode du bus (OFF, COMP, OTT) |
+| **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leur SPREAD, leurs filtres (EQ), le DUCK, puis le bus master (COMP, OTT) ; ALGORITHM sur COMP ou OTT : le mode du bus (OFF, COMP, OTT) |
 | **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps ; SELECT parcourt leurs faces (leurs potards, les envois des pistes, leurs pas) |
 | **ENV** | tout ce qui est enveloppe sur la piste active : l'enveloppe de Plaits (DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV) ; ENV encore (ou SELECT) : P.ENV et l'enveloppe du filtre (F.ATK, F.DECAY, PING) |
 | **PLAY** | le séquenceur tourne ou s'arrête ; **deux fois de suite** (STOP STOP, en moins de 0,4 s) : arrêté, et tout le son coupé, les queues du delay et de la réverbe comprises |
@@ -771,7 +773,26 @@ puis **RESONANCE**, **MODE** (Mono ou Ping-pong : gauche au temps, droite au dou
 puis arrondie, et son gain ne s'ajoute pas au feedback (elle colore, elle ne pousse pas), dans une ligne
 de 1,2 s. Quand le temps change, la lecture glisse jusqu'au nouveau, comme une bande.
 
-**L'EQ** (HOME, troisième face) : un potard par piste pour lui faire de la place dans le mix. Au milieu, rien
+**Le SPREAD** (HOME, troisième face, 0.16.19) : un potard par piste pour l'ouvrir en largeur. À 0 (Off), la piste
+est un point, là où son pan la met ; en tournant, elle s'étale de part et d'autre. Le principe est celui du
+pseudo-stéréo à peignes complémentaires (Lauridsen, 1954) : on fabrique une « différence » à partir de la piste
+elle-même, qu'on **ajoute d'un côté et qu'on retire de l'autre**. Cette différence, ce sont les aigus de la piste
+(au-dessus de 150 Hz, un passe-haut à 24 dB/octave), retardés de 8 à 13 ms puis diffusés par deux filtres passe-tout
+de Schroeder (quelques millisecondes chacun : une petite traînée d'échos serrés plutôt qu'un seul écho, comme le font
+Orban ou Wider de Polyverse), avec des retards différents sur chaque piste (deux pistes ouvertes ne creusent jamais
+les mêmes fréquences). Gauche plus droite redonne donc exactement la piste : **en mono** (une sono de club, un
+téléphone, une enceinte Bluetooth), rien ne s'annule, rien ne fait de peigne, et **les graves restent au milieu**,
+identiques des deux côtés, sans problème de phase. Chaque côté pris seul a ses aigus un peu plus forts (+2 dB au bout
+de la course) et, de quelques dizaines de Hz en quelques dizaines de Hz, les fréquences partent tantôt à gauche, tantôt à droite : à
+l'oreille, de la largeur, sans le timbre « flanger » d'un peigne régulier. Au bout, les deux côtés ne sont plus
+corrélés qu'à 0,22 ; la première moitié de la course fait déjà l'essentiel. Une piste tirée à fond d'un côté reste un
+point (il n'y a pas de place au-delà), et la largeur se resserre à mesure qu'on s'écarte du centre. Le SPREAD vient
+après l'EQ et le duck ; les envois au delay et à la réverbe n'en dépendent pas. Il ne se locke pas, mais un LFO peut
+le moduler (une piste qui respire en largeur). Sur l'USB, la paire de la piste est ouverte de la même façon. L'écran
+montre chaque piste comme une barre dans l'image stéréo, à sa place et à sa largeur du moment. Ses lignes tiennent
+dans 8,8 Ko de mémoire, et il ne calcule que pour les pistes ouvertes (environ 2,5 % du processeur par piste).
+
+**L'EQ** (HOME, quatrième face) : un potard par piste pour lui faire de la place dans le mix. Au milieu, rien
 (Flat) ; à gauche, un passe-bas qui descend de 18 kHz à 125 Hz (on enlève les aigus) ; à droite, un passe-haut qui
 monte de 20 Hz à 8 kHz (on enlève les graves), en 24 dB/octave (deux SVF de stmlib, Butterworth), une octave par
 pas de potard sur toute la course : un peu de potard enlève un peu, au bout c'est un mur. Le filtre est avant le
@@ -779,18 +800,18 @@ duck et les envois (ce qui part au delay et à la réverbe est filtré aussi) ; 
 aléatoire (ENV) et un LFO peut le moduler. L'écran trace les quatre courbes, chacune dans la couleur de sa piste, la
 piste active par-dessus.
 
-**Le duck** (HOME, quatrième face) : DECAY (20 ms à 2,6 s), puis la profondeur de T2, T3 et T4. À chaque trig de
+**Le duck** (HOME, cinquième face) : DECAY (20 ms à 2,6 s), puis la profondeur de T2, T3 et T4. À chaque trig de
 T1 (un pas, un ratchet, une touche), ces pistes baissent d'autant et remontent avec DECAY. Le duck agit sur la piste
 avant ses envois : ses échos et sa réverbe partent baissés avec elle (les queues déjà dans les effets continuent).
 Sa profondeur se locke pas par pas, comme le reste de la piste.
 
-**Le bus master** (HOME, cinquième et sixième faces) : ALGORITHM choisit le mode, OFF, **COMP** ou **OTT** ; les
+**Le bus master** (HOME, sixième et septième faces) : ALGORITHM choisit le mode, OFF, **COMP** ou **OTT** ; les
 potards de la face qui ne joue pas sont grisés. COMP : THRESH (0 à −36 dB), RATIO (1:1 à 20:1), RELEASE (20 ms à 1,3 s),
 GAIN (±12 dB) ; à droite, la réduction de gain. OTT : DEPTH (le mélange avec le son direct), TIME (les temps d'attaque
 et de release, ×1 au milieu, de ×1/4 à ×4), DRIVE (l'entrée) et LEVEL (la sortie) ; à droite, ses trois bandes,
 montées (rose) ou écrasées (bleu). Après les deux, toujours, le limiteur de stmlib.
 
-Sur les pages des quatre pistes (niveaux, pans, EQ, envois, duck), le nom de la piste active est en défonce. Et en
+Sur les pages des quatre pistes (niveaux, pans, SPREAD, EQ, envois, duck), le nom de la piste active est en défonce. Et en
 haut à droite, toujours au même endroit, quatre carrés numérotés : celui de la piste que joue le clavier est rempli
 de sa couleur (en mode STEP, la piste de pas éditée ; sur une piste d'effet, son nom à la place des carrés).
 
@@ -1077,7 +1098,11 @@ Chaque moteur de MIFM1 doit quelque chose à une machine, et le site le raconte,
   **Biscuit** d'OTO et le **Data Bender** de Qu-Bit ; le delay : les potards du **Zen Delay** ; la réverbe et Warps :
   **Clouds** et **Warps** de Mutable Instruments ;
 - le séquenceur : les P-locks d'**Elektron**, Endless de l'**OP-1**, les chaînes des **Pocket Operators**, les rythmes
-  euclidiens de Toussaint et Bjorklund.
+  euclidiens de Toussaint et Bjorklund ;
+- le SPREAD : le pseudo-stéréo de **H. Lauridsen** (radio danoise, 1954) et de **Robert Orban** (son Stereo
+  Synthesizer, breveté en 1970 : une différence passée par des passe-tout, ajoutée d'un côté et retirée de l'autre, les
+  graves gardés au centre), et **Wider** de Polyverse et Infected Mushroom (2018), des peignes et des passe-tout qui
+  s'annulent en mono.
 
 **Le bruit avant nous** (0.16.16, sur le site) : la lignée d'où vient Audiotrauma, et les machines qu'elle avait en
 main. **Cabaret Voltaire** (Sheffield, 1973 : des boucles de bande, puis des oscillateurs en kit) ; **Throbbing
@@ -1103,7 +1128,10 @@ Sources : [Pretty Hate Machine](https://en.wikipedia.org/wiki/Pretty_Hate_Machin
 [Music Has the Right to Children](https://en.wikipedia.org/wiki/Music_Has_the_Right_to_Children),
 [MusicRadar sur The Campfire Headphase](https://www.musicradar.com/artists/its-our-take-on-a-pop-record-pop-music-that-has-been-melted-on-a-hot-dashboard-in-the-sun-how-boards-of-canada-brewed-a-serene-genre-blurring-classic),
 [Ensoniq Mirage](https://en.wikipedia.org/wiki/Ensoniq_Mirage), [ESQ-1](https://en.wikipedia.org/wiki/Ensoniq_ESQ-1),
-[VFX](https://en.wikipedia.org/wiki/Ensoniq_VFX) ; les autres sur le site.
+[VFX](https://en.wikipedia.org/wiki/Ensoniq_VFX),
+[le pseudo-stéréo, de Lauridsen à Kendall](https://csoundjournal.com/issue14/PseudoStereo.html),
+[le brevet d'Orban](https://patents.google.com/patent/US3670106A/en),
+[le manuel de Wider](https://polyversemusic.com/downloads/manuals/Wider%20Manual.pdf) ; les autres sur le site.
 
 ## Le dépôt
 

@@ -109,7 +109,7 @@ def main():
     jobs["trauma"] = ("one", VA, 0, 0, 0, 0, 0, -1, 0, SECS, 32768)   # (TRAUMA's drive on the track)
     for b in range(3):
         jobs[f"bus{b}"] = ("one", VA, 0, 0, 0, 0, b, -1, 0, SECS)
-    for e in (1, 2, 4):
+    for e in (1, 2, 4, 262144):                          # (262144: T1's SPREAD)
         jobs[f"fx{e}"] = ("one", VA, 0, 0, 0, 0, 0, -1, 0, SECS, e)
     for hq in range(2):
         for a in range(6):
@@ -129,7 +129,7 @@ def main():
     fx_s = k(st["tasks"] - st["voice"] - st["warps"], K_FX)   # do that these runs do not: the rest of its figure)
     fx_w = None
     fxe = [k(res[f"fx{e}"]["tasks"] - res[f"fx{e}"]["voice"] - (res["bus0"]["tasks"] - res["bus0"]["voice"]), K_FX)
-           for e in (1, 2, 4)]
+           for e in (1, 2, 4, 262144)]
     fx_w = max(fx_s - (fx[2] + 2 * fxe[0] + fxe[1] + fxe[2]), 0.0)   # (OTT, T3 and T4's EQ, the duck on 3, the delay's)
     warps = [[k(res[f"warps{hq}.{a}"]["warps"], K_WARPS) for a in range(6)] for hq in range(2)]
     fmx = [max(k(res[f"fm{x}"]["voice"] - 3 * rest, K_VOICE) - model[PAD], 0.0) for x in ("sq", "pw", "sync")]
@@ -194,6 +194,7 @@ def main():
           f"static const float kWebFxEq = {f1(fxe[0])}, kWebFxDuck = {f1(fxe[1] / 3.0)}, kWebFxDelay = {f1(fxe[2])};   /* "
           "a track's EQ (playing), the duck on a track, the delay's filter and drive */",
           f"static const float kWebFxWarps = {f1(fx_w)};   /* Warps in the mix (the rest of the stress test's effects) */",
+          f"static const float kWebFxSpread = {f1(max(fxe[3], 0.0))};   /* (0.16.19) a track's SPREAD */",
           f"static const float kWebPrep = {f1(prep0)}, kWebPrepTrack = {f1(track)}, kWebPrepCable = {f1(cable)};   /* the "
           "preparation: its floor, a track playing, a cable */",
           ""]

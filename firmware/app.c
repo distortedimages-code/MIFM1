@@ -190,7 +190,9 @@ static void pat_name(int slot, char *b)  /* A1 .. K16 */
 #define VP_ARP2(t) (ENG_NPAGES + 28 + (t))   /* (0.16.2) Endless' second face: STRIDE, REST, HOLES, LEAP */
 #define VP_CLIMB(t) (ENG_NPAGES + 32 + (t))  /* (0.16.7) a track's steps' third face: CLIMB, NOTES, ON, SHAPE */
 #define VP_ARP3(t) (ENG_NPAGES + 36 + (t))   /* (0.16.13) Endless' third face, ARP: MODE, OCTAVES, LATCH, ORDER */
-enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS, PT_PLAY, PT_ARP2, PT_CLIMB, PT_ARP3 };
+#define VP_SPREAD (ENG_NPAGES + 40)      /* (0.16.19) the mixer's third face, SPREAD: a knob a track (the Euclidean
+                                          * pages' fourth place, PG_SPREAD_PARAM) */
+enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS, PT_PLAY, PT_ARP2, PT_CLIMB, PT_ARP3, PT_SPREAD };
 /* a track's pages in four sets: EDIT goes from one to the next of the first three (its sound, its bending: the bits
  * and the glitch, its filter),
  * ENV to the envelopes; SELECT through a set's pages; ALGO changes what the page shows (the sound's model, the
@@ -248,11 +250,13 @@ static struct {
 /* ------------------------------------------------------------ the pages --- */
 static int ptype(int page)
 {
-    return page >= VP_ARP3(0) ? PT_ARP3 : page >= VP_CLIMB(0) ? PT_CLIMB : page >= VP_ARP2(0) ? PT_ARP2 : page >= VP_PLAY(0) ? PT_PLAY : page >= VP_SYS ? PT_SYS : page >= ENG_NPAGES ? PT_RND + (page - ENG_NPAGES) / 4
+    return page >= VP_SPREAD ? PT_SPREAD : page >= VP_ARP3(0) ? PT_ARP3 : page >= VP_CLIMB(0) ? PT_CLIMB : page >= VP_ARP2(0) ? PT_ARP2 : page >= VP_PLAY(0) ? PT_PLAY : page >= VP_SYS ? PT_SYS : page >= ENG_NPAGES ? PT_RND + (page - ENG_NPAGES) / 4
                                                                                         : eng_page_type(page);
 }
 static int ptrack(int page)              /* the track a page belongs to, -1: none */
 {
+    if (page >= VP_SPREAD)
+        return -1;
     if (page >= VP_ARP3(0))
         return page - VP_ARP3(0);
     if (page >= VP_CLIMB(0))
@@ -265,6 +269,8 @@ static int ptrack(int page)              /* the track a page belongs to, -1: non
 }
 static int plane(int page)               /* a lane's page (its steps', its effect's), the lane: -1 none */
 {
+    if (page >= VP_SPREAD)
+        return -1;
     if (page >= VP_ARP3(0))
         return -1;
     if (page >= VP_CLIMB(0))
@@ -327,7 +333,7 @@ static int shown_page(int page)          /* the page the screen shows for one it
     }
 }
 
-#define MAXFACES 6
+#define MAXFACES 7
 static int module_pages(int page, int *f)   /* its module's pages (its faces), in order; how many */
 {
     int t = ptrack(page);
@@ -338,11 +344,11 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
     case PT_LFO:                         /* the three LFOs */
         f[0] = PG_LFO(0), f[1] = PG_LFO(1), f[2] = PG_LFO(2);
         return 3;
-    case PT_MIX: case PT_PAN: case PT_EQ: case PT_DUCK: case PT_COMP: case PT_OTT:   /* the mixer: the levels, the
-                                                                          * pans, the filters, the duck, the master bus
-                                                                          * (its two modes) */
-        f[0] = PG_MIX, f[1] = PG_PAN, f[2] = PG_EQ, f[3] = PG_DUCK, f[4] = PG_COMP, f[5] = PG_OTT;
-        return 6;
+    case PT_MIX: case PT_PAN: case PT_SPREAD: case PT_EQ: case PT_DUCK: case PT_COMP: case PT_OTT:   /* the mixer:
+                                          * the levels, the pans, the spreads (0.16.19), the filters, the duck, the
+                                          * master bus (its two modes) */
+        f[0] = PG_MIX, f[1] = PG_PAN, f[2] = VP_SPREAD, f[3] = PG_EQ, f[4] = PG_DUCK, f[5] = PG_COMP, f[6] = PG_OTT;
+        return 7;
     case PT_STEP: case PT_RND: case PT_EUC: case PT_PLAY: case PT_CLIMB:
         if (t < 0) {                     /* an effect's Euclidean or PLAY face: its module's */
             int l = plane(page);
@@ -484,6 +490,8 @@ static int knob_param(int page, int k)
     if (ptype(page) == PT_ARP2 || ptype(page) == PT_ARP3)   /* (Endless' options, its ARP's: the project's bytes,
                                           * byte_knob; its page's knobs stand for them here) */
         return PG_ARP(ptrack(page)) * 4 + k;
+    if (ptype(page) == PT_SPREAD)        /* (0.16.19) SPREAD: each track's, in its Euclidean page's fourth place */
+        return PG_SPREAD_PARAM(k);
     if (ptype(page) == PT_CLIMB)         /* (0.16.7) CLIMB, its parameter (in the Euclidean page's third place); the
                                           * others the project's bytes (byte_knob): it stands for them */
         return PG_EUC(ptrack(page)) * 4 + 2;
@@ -536,7 +544,7 @@ static const char *module_name(int page)
         static const char *const N[3] = {"LFO 1", "LFO 2", "LFO 3"};
         return N[clamp(page - PG_LFO(0), 0, 2)];
     }
-    case PT_MIX: case PT_PAN: case PT_EQ: case PT_DUCK: case PT_COMP: case PT_OTT: return "Mixer";
+    case PT_MIX: case PT_PAN: case PT_SPREAD: case PT_EQ: case PT_DUCK: case PT_COMP: case PT_OTT: return "Mixer";
     case PT_STEP: case PT_RND: return "Steps";
     case PT_EUC: {
         int l = eng_page_lane(page);
@@ -586,7 +594,7 @@ static uint16_t page_accent(int page)
     project_t *p = eng_project();
     switch (ptype(page)) {
     case PT_STEP: case PT_RND: case PT_ARP: case PT_ARP2: case PT_ARP3: case PT_CLIMB: return track_accent(ptrack(page));
-    case PT_PAN: case PT_GLOBAL: case PT_SYS: case PT_MIX: case PT_EQ: return AC1;
+    case PT_PAN: case PT_SPREAD: case PT_GLOBAL: case PT_SYS: case PT_MIX: case PT_EQ: return AC1;
     case PT_DUCK: return track_accent(0);    /* T1's: it ducks the others */
     case PT_COMP: return AC2;
     case PT_OTT: return AC3;
@@ -1015,7 +1023,7 @@ typedef struct {
 } vop_t;
 enum { IC_MODEL = 0, IC_ALG = ENG_MODELS, IC_WAVE = IC_ALG + 8, IC_MIX = IC_WAVE + LW_N, IC_REV, IC_GLO, IC_NEW, IC_DEMO, IC_SAVED, IC_STRESS,
        IC_STEPS, IC_DICE,
-       IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, IC_EQ, IC_BEND, IC_EUC, NICON };
+       IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, IC_EQ, IC_BEND, IC_EUC, IC_SPREAD, NICON };
 #define IOPS 10
 static const vop_t ICONS[NICON][IOPS] = {
     {{'C', 16, 16, 9, 0}, {'D', 16, 16, 3, 0}},                                                     /* KICK */
@@ -1126,6 +1134,10 @@ static const vop_t ICONS[NICON][IOPS] = {
      {'R', 4, 18, 6, 7}, {'R', 13, 18, 6, 7}, {'D', 25, 21, 2, 0}},                                  /* the bending: a
                                                                                                      * bent line, bits */
     {{'C', 16, 16, 10, 0}, {'D', 16, 6, 3, 0}, {'D', 25, 21, 3, 0}, {'D', 7, 21, 3, 0}},           /* Euclid */
+    {{'L', 16, 9, 16, 23}, {'L', 4, 16, 11, 16}, {'L', 4, 16, 8, 12}, {'L', 4, 16, 8, 20}, {'L', 21, 16, 28, 16},
+     {'L', 28, 16, 24, 12}, {'L', 28, 16, 24, 20}},                                                  /* SPREAD: the
+                                                                                                     * middle, out to
+                                                                                                     * both sides */
 };
 
 static void vicon(float cx, float cy, float s, float w, uint16_t c, int which, int glow)
@@ -1644,6 +1656,27 @@ static void panel_duck(void)             /* the duck: T1's trigs, its decay */
     eng_param_text(PG_DUCK * 4, eng_final(PG_DUCK * 4), v, sizeof v);
     text_cat(s, v, sizeof s);
     hero_line(y, s);
+}
+
+/* (0.16.19) SPREAD: a knob a track, its highs apart on both sides, its lows in the middle. Each track's image, a row
+ * each: where its pan sets it, as wide as it is now (a cable, the pan: hard to one side, a point), in its colour */
+static void panel_spread(void)
+{
+    hero_icon(IC_SPREAD, AC1);
+    hero_line(hero_title("SPREAD"), "LOWS MONO");
+    const int x0 = 190, w = 44;
+    for (int t = 0; t < ENG_TRACKS; t++) {
+        int y = 12 + t * 13;
+        float pan = fm_clampf(eng_now(PG_PAN * 4 + t), -1.0f, 1.0f), wd = fm_clampf(eng_spread_width(t) / 0.8f, 0.0f, 1.0f);
+        float cx = (float)x0 + (float)w * 0.5f * (1.0f + pan), hw = 2.0f + wd * ((float)w * 0.5f - 2.0f);
+        int a = (int)(cx - hw + 0.5f), b = (int)(cx + hw + 0.5f);
+        uint16_t c = t == ui.track ? track_accent(t) : tint(track_accent(t), BG, 5);
+        a = a < x0 ? x0 : a;
+        b = b > x0 + w ? x0 + w : b;
+        cv_rect(x0, y + 2, w + 1, 1, RULE);
+        cv_rect(x0 + w / 2, y - 1, 1, 7, RULE);
+        cv_rect(a, y, b - a + 1, 5, c);
+    }
 }
 
 /* the filters: a knob a track, a low pass to the left, a high pass to the right. Their four responses drawn over
@@ -2354,6 +2387,12 @@ static void draw_panel(void)
             s[2] = s[2] * 131 + (int)(eng_final(PG_EQ * 4 + t) * 200.0f) + (int)track_accent(t);
         s[2] = s[2] * 7 + ui.track;
         break;
+    case PT_SPREAD:                      /* (each track's width now, where it sits, its colour) */
+        for (int t = 0; t < ENG_TRACKS; t++)
+            s[2] = s[2] * 131 + (int)(eng_spread_width(t) * 60.0f) * 97 + (int)(eng_now(PG_PAN * 4 + t) * 60.0f) +
+                   (int)track_accent(t);
+        s[2] = s[2] * 7 + ui.track;
+        break;
     case PT_MIX: case PT_PAN:
         for (int t = 0; t < ENG_TRACKS; t++)
             s[2] |= meter_lit(t) << (t * 3) | eng_model_bank(p->algo[PG_TRACK(t, 0)]) << (12 + t * 3);
@@ -2391,6 +2430,7 @@ static void draw_panel(void)
     case PT_ENV2: panel_env2(tr, page_accent(ui.page)); break;
     case PT_LFO: panel_lfo(ui.page - PG_LFO(0)); break;
     case PT_MIX: case PT_PAN: panel_mixer(pt == PT_PAN); break;
+    case PT_SPREAD: panel_spread(); break;
     case PT_EQ: panel_eq(); break;
     case PT_BEND: panel_bend(tr); break;
     case PT_GLITCH: panel_glitch(tr); break;
@@ -2557,7 +2597,8 @@ static const char *ring_short(const char *s)
 static int track_knobs(int page)
 {
     int pt = ptype(page);
-    return pt == PT_MIX || pt == PT_PAN || pt == PT_RSEND || pt == PT_DSEND || pt == PT_DUCK || pt == PT_EQ;
+    return pt == PT_MIX || pt == PT_PAN || pt == PT_SPREAD || pt == PT_RSEND || pt == PT_DSEND || pt == PT_DUCK ||
+           pt == PT_EQ;
 }
 
 /* (0.16) the knobs on the project's bytes, not parameters (no lock, no random, no cable): a lane's SPEED and DIRECTION
@@ -4966,8 +5007,8 @@ static void module_button(int b)
         go_page(here && (pt == PT_ARP || pt == PT_ARP2 || pt == PT_ARP3) ? next : PG_ARP(ui.track));
         break;
     case B_HOME:
-        go_page(here && (pt == PT_MIX || pt == PT_PAN || pt == PT_EQ || pt == PT_DUCK || pt == PT_COMP || pt == PT_OTT)
-                ? next : PG_MIX);
+        go_page(here && (pt == PT_MIX || pt == PT_PAN || pt == PT_SPREAD || pt == PT_EQ || pt == PT_DUCK ||
+                         pt == PT_COMP || pt == PT_OTT) ? next : PG_MIX);
         break;
     case B_FX: {                         /* the effect shown last; on an effect: the next one (delay, reverb, Warps) */
         int l = plane(ui.page);
@@ -5874,7 +5915,7 @@ static void input(void)
      * TRAUMA;
      * the keys: the steps (the one playing blinks), or held; MOD mode: the LFOs' keys blinking at their rates */
     {
-        static const uint8_t PAGE_BTN[PT_ARP3 + 1] = {
+        static const uint8_t PAGE_BTN[PT_SPREAD + 1] = {
             [PT_PLAITS1] = B_EDIT, [PT_PLAITS2] = B_ENV, [PT_PLAITS3] = B_EDIT, [PT_LFO] = B_LFO,
             [PT_MIX] = B_HOME, [PT_PAN] = B_HOME, [PT_REVERB] = B_FX, [PT_RSEND] = B_FX, [PT_DELAY1] = B_FX,
             [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
@@ -5882,7 +5923,7 @@ static void input(void)
             [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_BEND] = B_EDIT, [PT_GLITCH] = B_EDIT, [PT_EUC] = B_SEQ, [PT_RND] = B_SEQ,
             [PT_FILT1] = B_EDIT, [PT_FILT2] = B_EDIT, [PT_FILT3] = B_EDIT, [PT_SON2] = B_EDIT, [PT_VFLT1] = B_EDIT,
             [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO, [PT_PLAY] = B_SEQ, [PT_ARP2] = B_ARP,
-            [PT_CLIMB] = B_SEQ, [PT_ARP3] = B_ARP};
+            [PT_CLIMB] = B_SEQ, [PT_ARP3] = B_ARP, [PT_SPREAD] = B_HOME};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
         uint32_t bb = ui.dice ? 1u << B_OCTDN : ui.trauma ? 1u << B_OCTUP : 0, kk = ui.keys;
         int pt = ptype(ui.page);

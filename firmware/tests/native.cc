@@ -4840,6 +4840,124 @@ int main(int argc, char** argv) {
     if (!proj_ok || !snd_ok) ++failures, printf("FAIL: 0.16.17's\n");
   }
 
+  {                                     // 70. SPREAD (0.16.19): T1's highs a little later on one side, taken from the
+    // other, on POLY's saw held (A1). Its sum to mono the track as it was (the same run with SPREAD at 0: to the
+    // float's last bits); its lows (55 Hz) the same on both sides; its highs (the mixer's filter: a high pass at 1 kHz)
+    // apart, the side at 0.8 the middle, the sides correlated (1 - 0.8^2) / (1 + 0.8^2) = 0.22; hard to one side:
+    // nothing on the other; back to 0: both sides the same again; the USB input's T1 pair with its side
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    const int kB = 240, kFrom = 60 * 128, kEnd = kB * 128;
+    static float L[5][kB * 128], R[5][kB * 128], ML[2][kB * 128], MR[2][kB * 128];
+    extern float eng_test_prebus[2][128];   // (the master before its bus and its soft limit: that one, on each side
+    float width[5] = {0, 0, 0, 0, 0};       // alone, bends a little what L + R sums to)
+    const float kUsb = 8300000.0f / 256.0f;
+    float usb_err = 0.0f, usb_side = 0.0f, tail = 0.0f;
+    int tail_sub = 0;
+    auto run = [&](int which, float spread, float pan, float eq, int off_at) {
+      eng_blank(p);
+      eng_fresh();
+      eng_set_model(0, eng_model_find(MK_POLY, 0));   // (a saw held, open: WAVE, CUTOFF, RESO, DECAY, SUB, ENV, MODE,
+      const float kSaw[8] = {0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.5f, 0.5f, 0.5f};   // VOICE: neither vintage nor unison)
+      for (int i = 0; i < 8; ++i) {
+        const int prm = PG_TRACK(0, 0) * 4 + 1 + i;
+        p->val[prm] = eng_pdef(prm)->kind == K_BIP ? 2.0f * kSaw[i] - 1.0f : kSaw[i];
+      }
+      p->algo[PG_COMP] = MB_OFF;          // (the bus off: the track alone)
+      p->val[PG_PAN * 4 + 0] = pan;
+      p->val[PG_EQ * 4 + 0] = eq;
+      p->val[PG_SPREAD_PARAM(0)] = spread;
+      eng_cut();
+      for (int b = 0; b < 8; ++b) eng_render(l, r, 128);
+      poly_init();                        // (its voices from the same start each run)
+      eng_key(0, 33, 1);
+      for (int b = 0; b < kB; ++b) {
+        if (b == off_at) p->val[PG_SPREAD_PARAM(0)] = 0.0f;
+        eng_render(l, r, 128);
+        if (b == 50) width[which] = eng_spread_width(0);
+        for (int k = 0; k < 128; ++k) L[which][b * 128 + k] = l[k], R[which][b * 128 + k] = r[k];
+        if (which < 2)
+          for (int k = 0; k < 128; ++k) ML[which][b * 128 + k] = eng_test_prebus[0][k], MR[which][b * 128 + k] = eng_test_prebus[1][k];
+        if (which == 1) {                 // (the USB input's channels: T1's pair with its side, their sum the master)
+          const int16_t* u = eng_usb_frames(128, 1);
+          for (int k = 0; b >= 2 && k < 128; ++k) {
+            float sl = 0.0f, sr = 0.0f;
+            for (int c = 0; c < ENG_USB_CH; c += 2)
+              sl += static_cast<float>(u[k * ENG_USB_CH + c]), sr += static_cast<float>(u[k * ENG_USB_CH + c + 1]);
+            usb_err = std::max(usb_err, std::max(std::fabs(sl / kUsb - eng_test_prebus[0][k]),
+                                                 std::fabs(sr / kUsb - eng_test_prebus[1][k])));
+            usb_side = std::max(usb_side, std::fabs(static_cast<float>(u[k * ENG_USB_CH] - u[k * ENG_USB_CH + 1])) / kUsb);
+          }
+        }
+      }
+      eng_key(0, 33, 0);
+      if (which == 1)                     // (let go: its echoes die away, then nothing, never the subnormals)
+        for (int b = 0; b < 700; ++b) {
+          eng_render(l, r, 128);
+          for (int k = 0; b >= 650 && k < 128; ++k) {
+            const float d = std::fabs(l[k] - r[k]);
+            tail = std::max(tail, d);
+            if (d != 0.0f && d < 1.2e-38f) tail_sub = 1;
+          }
+        }
+    };
+    const float hp1k = std::log2(1000.0f / 20.0f) / 8.64f;   // (engine.cc's eq_hz)
+    run(0, 0.0f, 0.0f, 0.0f, -1);
+    run(1, 1.0f, 0.0f, 0.0f, -1);
+    run(2, 1.0f, 0.0f, hp1k, -1);
+    run(3, 1.0f, 1.0f, 0.0f, -1);
+    run(4, 1.0f, 0.0f, 0.0f, 100);
+    double sum_err = 0.0, sum_pk = 0.0, same0 = 0.0, same4 = 0.0, pk4 = 0.0;
+    for (int i = kFrom; i < kEnd; ++i) {
+      sum_err = std::max(sum_err, static_cast<double>(std::fabs((ML[0][i] + MR[0][i]) - (ML[1][i] + MR[1][i]))));
+      sum_pk = std::max(sum_pk, static_cast<double>(std::fabs(ML[0][i] + MR[0][i])));
+      same0 = std::max(same0, static_cast<double>(std::fabs(L[0][i] - R[0][i])));
+      if (i >= 140 * 128) same4 = std::max(same4, static_cast<double>(std::fabs(L[4][i] - R[4][i])));
+      pk4 = std::max(pk4, static_cast<double>(std::fabs(L[4][i])));
+    }
+    auto at_hz = [&](int w, double hz, double* side) {   // (the middle's and the side's at hz: Goertzel's)
+      double cm = 0, sm = 0, cs = 0, ss = 0;
+      for (int i = kFrom; i < kEnd; ++i) {
+        const double ph = 2.0 * M_PI * hz * i / 44100.0, m = 0.5 * (L[w][i] + R[w][i]), d = 0.5 * (L[w][i] - R[w][i]);
+        cm += m * std::cos(ph), sm += m * std::sin(ph), cs += d * std::cos(ph), ss += d * std::sin(ph);
+      }
+      *side = std::sqrt(cs * cs + ss * ss);
+      return std::sqrt(cm * cm + sm * sm);
+    };
+    double s55 = 0.0, m55 = at_hz(1, 55.0, &s55);
+    double em = 0, es = 0, ell = 0, err = 0, elr = 0;
+    for (int i = kFrom; i < kEnd; ++i) {
+      const double m = 0.5 * (L[2][i] + R[2][i]), d = 0.5 * (L[2][i] - R[2][i]);
+      em += m * m, es += d * d, ell += L[2][i] * L[2][i], err += R[2][i] * R[2][i], elr += L[2][i] * R[2][i];
+    }
+    const double side_hi = std::sqrt(es / (em + 1e-30)), corr_hi = elr / std::sqrt(ell * err + 1e-30);
+    double el3 = 0, er3 = 0;
+    for (int i = kFrom; i < kEnd; ++i) el3 += L[3][i] * L[3][i], er3 += R[3][i] * R[3][i];
+    const double hard = std::sqrt(el3 / (er3 + 1e-30));
+    char txt[3][16];
+    eng_param_text(PG_SPREAD_PARAM(0), 0.0f, txt[0], 16);
+    eng_param_text(PG_SPREAD_PARAM(0), 0.5f, txt[1], 16);
+    eng_param_text(PG_SPREAD_PARAM(0), 1.0f, txt[2], 16);
+    const int mono = sum_pk > 0.05 && sum_err < 1e-5 * sum_pk, lows = m55 > 0.0 && s55 < 0.03 * m55;
+    const int highs = side_hi > 0.7 && side_hi < 0.85 && corr_hi > 0.12 && corr_hi < 0.32;
+    const int sides = same0 < 1e-6 * sum_pk && hard < 1e-4 && pk4 > 0.01 && same4 < 1e-6 * sum_pk;
+    const int usb = usb_err < 6.0f / kUsb && usb_side > 0.01f;
+    const int rest = tail < 1e-9f && !tail_sub;
+    const int knob = !strcmp(txt[0], "Off") && !strcmp(txt[1], "50") && !strcmp(txt[2], "100") &&
+                     !strcmp(eng_param_name(PG_SPREAD_PARAM(0)), "Spread") && std::fabs(width[1] - 0.8f) < 0.01f &&
+                     width[3] < 1e-4f && width[0] == 0.0f;
+    printf("SPREAD: the sum to mono as it was (%.1e of its peak) %s; its lows at 55 Hz apart %.4f %s; its highs: the "
+           "side %.2f of the middle, the sides correlated %.2f %s; at 0 the same, hard right %.1e on the left, back to 0 "
+           "the same %s; the knob %s %s %s, width %.2f %s; USB: T1's sides apart, the sum %.1f steps off %s\n",
+           sum_err / (sum_pk + 1e-30), mono ? "ok" : "WRONG", s55 / (m55 + 1e-30), lows ? "ok" : "WRONG", side_hi,
+           corr_hi, highs ? "ok" : "WRONG", hard, sides ? "ok" : "WRONG", txt[0], txt[1], txt[2], width[1],
+           knob ? "ok" : "WRONG", usb_err * kUsb, usb ? "ok" : "WRONG");
+    printf("SPREAD let go: 2 s later its sides apart %.1e %s\n", tail, rest ? "ok" : "WRONG");
+    if (!mono || !lows || !highs || !sides || !knob || !usb || !rest) ++failures, printf("FAIL: SPREAD\n");
+    eng_defaults(p);
+    eng_fresh();
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

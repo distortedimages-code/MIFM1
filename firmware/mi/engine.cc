@@ -145,7 +145,7 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}},
   {{"Clock", K_UNI, 0, 0, 0}, {"Bits", K_UNI, 0, 0, 0}, {"Mask", K_ENUM, 0, BM_N - 1, kBendMasks},
    {"Shape", K_ENUM, 0, BS_N - 1, kBendShapes}},
-  {{"Fills", K_INT, 0, 64, 0}, {"Rotate", K_INT, 0, 63, 0}, {"Climb", K_INT, -12, 12, 0}, {"Prob", K_UNI, 0, 0, 0}},
+  {{"Fills", K_INT, 0, 64, 0}, {"Rotate", K_INT, 0, 63, 0}, {"Climb", K_INT, -12, 12, 0}, {"Spread", K_UNI, 0, 0, 0}},
   {{"Cutoff", K_UNI, 0, 0, 0}, {"Reso", K_UNI, 0, 0, 0}, {"Env", K_BIP, 0, 0, 0}, {"Decay", K_UNI, 0, 0, 0}},
   {{"Drive", K_UNI, 0, 0, 0}, {"Ping", K_UNI, 0, 0, 0}, {"FM", K_BIP, 0, 0, 0}, {"Key", K_UNI, 0, 0, 0}},
   {{"Type", K_ENUM, 0, 2, kFiltTypes}, {"Noise", K_UNI, 0, 0, 0}, {"Color", K_BIP, 0, 0, 0}, {"Attack", K_UNI, 0, 0, 0}},
@@ -2163,6 +2163,7 @@ struct MixJob {
   float gain[ENG_TRACKS];                // the level (the meters')
   float duck0[ENG_TRACKS], duck1[ENG_TRACKS], duck_rel;   // the duck: each track's depth from, to; DECAY a sample
   float eq[ENG_TRACKS];                  // the filter's knob (glided)
+  float sp0[ENG_TRACKS], sp1[ENG_TRACKS];   // (0.16.19) SPREAD: the side's gain from, to (0: none)
   uint8_t hit[kFrames];                  // T1's rises, frame by frame
   float pk[ENG_TRACKS];                  // (out: each track's peak, the meters')
 };
@@ -2177,6 +2178,121 @@ alignas(8) uint8_t eq_mem[ENG_TRACKS][sizeof(EqPair)];
 EqPair* eq_p[ENG_TRACKS];
 int eq_mode[ENG_TRACKS];
 float eq_s[ENG_TRACKS];
+// (0.16.19) SPREAD (the mixer's, a knob a track): a side made from the track itself, added to the left and taken from
+// the right (complementary combs: Lauridsen's pseudo-stereo, 1954; a side diffused through all-pass filters, as
+// Orban's and Polyverse's Wider do). The track's highs (above 150 Hz: two of stmlib's state variable filters, a
+// 24 dB/oct high pass), delayed 8 to 13 ms, then through two of Schroeder's all-pass filters (a few ms each: the side
+// a short, dense run of echoes, its combs irregular, never a flanger's teeth), each track its own delays (two tracks
+// spread never comb alike). Left plus right is the track as it was, its lows the same on both sides: summed to mono (a
+// club's bass, a phone) nothing cancels, nothing combs. Each side alone: the highs a little louder (1 + the side's
+// gain squared: +2.1 dB at the widest), apart from the other side by a few tens of Hz at a time (heard as width; over
+// a third of an octave, within a fifth of a dB). The delay in 16-bit words (its rounding some -95 dB under the track),
+// the all-passes in floats, in the pool (8.8 KB)
+const int kSpreadLen[ENG_TRACKS] = {353, 419, 487, 557};   // the delay, samples (8.0, 9.5, 11.0, 12.6 ms)
+const int kSpreadAp[ENG_TRACKS][2] = {{113, 181}, {127, 199}, {139, 211}, {151, 223}};   // the all-passes' (2.6..5.1 ms)
+const int kSpreadTotal = 353 + 419 + 487 + 557;
+const int kSpreadApTotal = 113 + 181 + 127 + 199 + 139 + 211 + 151 + 223;
+const float kSpreadMax = 0.8f;          // the side's gain over the middle's at the widest (L and R correlated 0.22)
+const float kSpreadHz = 150.0f;         // under it: the same on both sides
+const float kSpreadG = 0.6f;            // the all-passes' gain
+int16_t spread_line[kSpreadTotal] PLAT_POOL;
+float spread_ap[kSpreadApTotal] PLAT_POOL;
+alignas(8) uint8_t sp_mem[ENG_TRACKS][sizeof(EqPair)];
+EqPair* sp_p[ENG_TRACKS];
+int sp_at[ENG_TRACKS][3], sp_run[ENG_TRACKS];   // the lines' places (the delay, the all-passes); running (its lines
+float sp_s[ENG_TRACKS], mix_sp[ENG_TRACKS];     // hold the track's past); the knob, glided; the side's gain (the last
+float sp_w[ENG_TRACKS];                 // block's); (the screen's: the side's gain over the middle's)
+// its side into y (the scratch), added to the dry mix's sides: through its delay and its all-passes
+void spread_side(int t, const float* x, float* y, uint32_t n, float pk, int16_t* ln, float* ap1, float* ap2, int len,
+                 int m1, int m2) {
+  stmlib::Svf* f = sp_p[t]->f;
+  if (!sp_run[t]) {                     // (from rest: its lines silent, no past of another time)
+    for (int i = 0; i < len; ++i) ln[i] = 0;
+    for (int i = 0; i < m1 + m2; ++i) ap1[i] = 0.0f;
+    f[0].Init();
+    f[1].Init();
+    sp_at[t][0] = sp_at[t][1] = sp_at[t][2] = 0;
+    sp_run[t] = 1;
+  }
+  if (pk < 1e-6f) {                     // (silence: the filters from zero, never down into the subnormals)
+    f[0].Init();
+    f[1].Init();
+    for (uint32_t i = 0; i < n; ++i) y[i] = 0.0f;
+  } else {
+    const float fc = kSpreadHz / kSr;
+    f[0].set_f_q<stmlib::FREQUENCY_ACCURATE>(fc, 0.7071f);   // (Linkwitz-Riley's: two Butterworths, -6 dB at 150)
+    f[1].set_f_q<stmlib::FREQUENCY_ACCURATE>(fc, 0.7071f);
+    f[0].Process<stmlib::FILTER_MODE_HIGH_PASS>(x, y, n);
+    f[1].Process<stmlib::FILTER_MODE_HIGH_PASS>(y, y, n);
+  }
+  float g = mj.sp0[t], dg = (mj.sp1[t] - g) / static_cast<float>(n);
+  int at = sp_at[t][0], i1 = sp_at[t][1], i2 = sp_at[t][2];
+  for (uint32_t i = 0; i < n;) {        // (in runs where none of the three lines wraps around)
+    uint32_t r = n - i, a = static_cast<uint32_t>(len - at), b = static_cast<uint32_t>(m1 - i1);
+    const uint32_t c = static_cast<uint32_t>(m2 - i2);
+    r = r < a ? r : a;
+    r = r < b ? r : b;
+    r = r < c ? r : c;
+    int16_t* lp = ln + at;
+    float *a1 = ap1 + i1, *a2 = ap2 + i2;
+    for (uint32_t k = 0; k < r; ++k, ++i) {
+      float d = static_cast<float>(lp[k]) * (1.0f / 16384.0f);   // (written len samples ago)
+      float v = y[i] * 16384.0f;
+      v = v > 32767.0f ? 32767.0f : v < -32767.0f ? -32767.0f : v;
+      lp[k] = static_cast<int16_t>(v + (v < 0.0f ? -0.5f : 0.5f));
+      float w = d + kSpreadG * a1[k];   // Schroeder's: w = in + g w(m ago), out = w(m ago) - g w
+      d = a1[k] - kSpreadG * w;
+      a1[k] = w;
+      w = d + kSpreadG * a2[k];
+      d = a2[k] - kSpreadG * w;
+      a2[k] = w;
+      g += dg;
+      d *= g;
+      y[i] = d;                         // (the side, in the scratch)
+      fx_dry_l[i] += d;
+      fx_dry_r[i] -= d;
+    }
+    at += static_cast<int>(r);
+    i1 += static_cast<int>(r);
+    i2 += static_cast<int>(r);
+    if (at == len) at = 0;
+    if (i1 == m1) i1 = 0;
+    if (i2 == m2) i2 = 0;
+  }
+  sp_at[t][0] = at;
+  sp_at[t][1] = i1;
+  sp_at[t][2] = i2;
+  if (pk < 1e-6f) {                     // (silent: its echoes gone, its lines cleared before they would sink into
+    float m = 0.0f;                     // the subnormals, at the next sound)
+    for (int k = 0; k < m1 + m2; ++k) m = fm_maxf(m, fm_fabsf(ap1[k]));
+    if (m < 1e-7f) sp_run[t] = 0;
+  }
+}
+// a track's side, added to fx_dry_l and taken from fx_dry_r (and its USB pair's): its highs from x (m_dry: the
+// scratch), into its delay, out of it into the all-passes, at the side's gain (sp0 to sp1 over the block)
+void spread_track(int t, const float* x, uint32_t n, float a, float b) {
+  float* y = m_dry;
+  float pk = 0.0f;
+  for (uint32_t i = 0; i < n; ++i) pk = fm_maxf(pk, fm_fabsf(x[i]));
+  int off = 0, aoff = 0;
+  for (int i = 0; i < t; ++i) off += kSpreadLen[i], aoff += kSpreadAp[i][0] + kSpreadAp[i][1];
+  int16_t* ln = spread_line + off;
+  float* ap1 = spread_ap + aoff;
+  const int len = kSpreadLen[t], m1 = kSpreadAp[t][0], m2 = kSpreadAp[t][1];
+  if (!sp_run[t] && pk < 1e-6f) {        // (at rest, silent: nothing to add)
+    for (uint32_t i = 0; i < n; ++i) y[i] = 0.0f;
+  } else {
+    spread_side(t, x, y, n, pk, ln, ap1, ap1 + m1, len, m1, m2);
+  }
+  if (!usb_now) return;
+  int16_t* u = usb_ch + 2 * t;           // the USB input's pair: the same
+  for (uint32_t i = 0; i < n; ++i, u += ENG_USB_CH) {
+    a += mj.dgl[t];
+    b += mj.dgr[t];
+    u[0] = usb16(a * x[i] + y[i]);
+    u[1] = usb16(b * x[i] - y[i]);
+  }
+}
 
 void mix_job(uint32_t n) {
   float inv = 1.0f / static_cast<float>(n);
@@ -2294,8 +2410,18 @@ void mix_job(uint32_t n) {
     fx_dry_r[i] = dr;
   }
   for (int t = 0; t < ENG_TRACKS; ++t) mj.pk[t] = pk[t];
+  int spread = 0;
+  for (int t = 0; t < ENG_TRACKS; ++t) {  // (0.16.19) SPREAD: the tracks spread, their sides
+    if (mj.sp0[t] <= 0.0f && mj.sp1[t] <= 0.0f) {
+      sp_run[t] = 0;                     // (at rest: its line out of mind, silent again when it comes back)
+      continue;
+    }
+    spread_track(t, mbuf[t], n, mj.gl[t], mj.gr[t]);
+    spread |= 1 << t;
+  }
   if (!usb_now) return;
   for (int t = 0; t < ENG_TRACKS; ++t) {  // the USB input's tracks: the same gains, sample by sample
+    if ((spread >> t) & 1) continue;     // (a track spread: its pair written with its side)
     float a = mj.gl[t], b = mj.gr[t];
     const float* x = mbuf[t];
     int16_t* u = usb_ch + 2 * t;
@@ -2316,6 +2442,7 @@ void fx_job(uint32_t n) {
     for (int t = 0; t < ENG_TRACKS; ++t) {
       if ((mj.eq[t] <= -kEqDead || mj.eq[t] >= kEqDead) && quiet[t] < kQuiet) us += kWebFxEq;
       if (t && (mj.duck0[t] > 0.0f || mj.duck1[t] > 0.0f)) us += kWebFxDuck;
+      if (mj.sp0[t] > 0.0f || mj.sp1[t] > 0.0f) us += kWebFxSpread;
     }
     if (fm_fabsf(E(LANE_DELAY, 2)) > 0.01f) us += kWebFxDelay;
     if (mj.dst >= 0 && !mj.idle) us += kWebFxWarps;
@@ -3138,6 +3265,10 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
     }
   } else if (d->kind == K_INT) {
     put_num(b, n, static_cast<int32_t>(v + (v < 0 ? -0.5f : 0.5f)), 0, d->lo < 0);
+  } else if (pt == PT_EUC && k == 3) {   // SPREAD (0.16.19): Off, then how wide
+    int32_t q = static_cast<int32_t>(v * 100.0f + 0.5f);
+    if (q <= 0) put(b, n, "Off");
+    else put_num(b, n, q, 0, 0);
   } else if (pt == PT_PAN) {
     int32_t q = static_cast<int32_t>(v * 100.0f + (v < 0 ? -0.5f : 0.5f));
     if (!q) {
@@ -4613,6 +4744,9 @@ MI_COLD int eng_init(void) {
     eq_p[t]->f[0].Init();
     eq_p[t]->f[1].Init();
     eq_mode[t] = 0;
+    sp_p[t] = new (sp_mem[t]) EqPair();
+    sp_run[t] = 0;
+    sp_s[t] = mix_sp[t] = sp_w[t] = 0.0f;
   }
   if (!eng_check(&proj)) eng_defaults(&proj);
   apply_cables();
@@ -4639,6 +4773,7 @@ void cut_now() {
   pads_silence();
   for (int t = 0; t < ENG_TRACKS; ++t) mf_reset(t);   // (the filters' rings)
   for (int t = 0; t < ENG_TRACKS; ++t) {
+    sp_run[t] = 0;                      // (SPREAD's lines: silent again)
     if (!vlent[t]) mp_init(voice[t]);   // (SQ-1's Transwaves kept)
     vgate[t] = 0;                       // (a key still held: a new trig)
     quiet[t] = kQuiet;                  // (resting until then)
@@ -5025,6 +5160,16 @@ void eng_render(float* l, float* r, uint32_t n) {
     mj.duck1[t] = duck_depth[t] = t ? E(t, TP_DUCK) : 0.0f;
     eq_s[t] += (E(t, TP_EQ) - eq_s[t]) * 0.5f;
     mj.eq[t] = eq_s[t];
+    // SPREAD: the side at the middle's gain on its quieter side (none hard to one side: a point stays a point), the
+    // knob eased (its first half the most of the width)
+    float w = fin[PG_SPREAD_PARAM(t)];
+    sp_s[t] += (w - sp_s[t]) * 0.5f;
+    if (sp_s[t] < 1e-4f && w <= 0.0f) sp_s[t] = 0.0f;
+    float ws = clampf(sp_s[t], 0.0f, 1.0f), side = kSpreadMax * ws * (2.0f - ws);
+    float tsp = side * fm_minf(tl, tr);
+    sp_w[t] = level > 0.0f ? tsp * 1.41421f / (level * 0.85f) : 0.0f;   // (the middle's gain in the middle)
+    mj.sp0[t] = mix_sp[t];
+    mj.sp1[t] = mix_sp[t] = tsp;
   }
   for (int f = 0; f < kFx; ++f) fx_open[f] = open[f];
   mj.duck_rel = fm_exp2f(-1.442695f / (kSr * duck_tau(P(PG_DUCK, 0))));
@@ -5158,6 +5303,7 @@ void eng_guard_test(int on, int level) {   // (the tests: the guard on, or held 
 }
 float eng_meter(int t) { return t >= 0 && t < ENG_TRACKS + 2 ? meter[t] : 0.0f; }
 float eng_duck(void) { return duck_s; }
+float eng_spread_width(int t) { return t >= 0 && t < ENG_TRACKS ? sp_w[t] : 0.0f; }
 float eng_gr(int band) { return ready ? mms_gain(master, band) : 0.0f; }
 int eng_hist(int s, int i) {
   if (s <= SRC_NONE || s >= NSRC || i < 0 || i >= ENG_HIST) return 0;

@@ -175,13 +175,23 @@ wait 300
 shot 11_mixer.png
 turn SELECT 2
 wait 400
+turn K2 12
+turn K3 30
+turn K4 60
+wait 600
+shot 11a0_spread.png
+turn K2 -12
+turn K3 -30
+turn K4 -60
+turn SELECT 1
+wait 400
 turn K2 -20
 turn K4 15
 wait 400
 shot 11a_eq.png
 turn K2 20
 turn K4 -15
-turn SELECT -2
+turn SELECT -3
 wait 300
 tap FX
 wait 300
@@ -427,10 +437,10 @@ shot 16t_all_erased.png
 tap HOME
 wait 300
 shot 16t2_mix_erased.png
-turn SELECT 2
+turn SELECT 3
 wait 400
 shot 16t3_eq_erased.png
-turn SELECT -2
+turn SELECT -3
 wait 300
 tap ARP
 wait 300
