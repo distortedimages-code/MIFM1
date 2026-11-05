@@ -4926,7 +4926,9 @@ static float step_value(int param, float v, int32_t e)
 static void edit_param(int param, int32_t e)
 {
     project_t *p = eng_project();
-    p->val[param] = step_value(param, p->val[param], e);
+    const float was = p->val[param];
+    p->val[param] = step_value(param, was, e);
+    eng_static_mode(param, was);         /* (STATIC's MODE: the new generator's knobs) */
     dirty = 1;
 }
 

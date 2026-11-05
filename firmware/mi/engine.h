@@ -167,6 +167,8 @@ int eng_pads_track(void);                /* the track PADS is on, -1 none */
 void eng_pads_chord(char *b, int n);     /* its chord now, named (Am7, F, Gsus4...); its place: eng_pads_pos */
 int eng_pads_pos(void);                  /* the progression's chord now (0..), -1 before its first trig */
 void eng_pads_line(char *b, int n);      /* the progression, its place, the chord: "Tintin 3/8 Am" */
+void eng_static_mode(int param, float before);   /* (0.16.27) a knob turned from before: STATIC's MODE to another
+                                         * generator, its other knobs that one's */
 void eng_set_model(int t, int model);    /* a track's model (an FM drum new to it: its kit on those knobs) */
 /* the presets (0.15.1): a track's sound, all of what plays it but its mixing, its steps and its cables: its eight pages'
  * knobs and choices (Plaits' three: the sound, the envelope, the pitch; the bits; the filter's three; the glitch), their

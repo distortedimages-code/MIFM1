@@ -1676,6 +1676,7 @@ uint16_t harmony_mask() {               // the harmony's scale (POLY's chords): 
 }
 inline int lx_param(int t, int i) { return PG_TRACK(t, 0) * 4 + 1 + i; }
 inline float lx_u(int param, float v) { return eng_pdef(param)->kind == K_BIP ? (v + 1.0f) * 0.5f : v; }
+inline float static_mode_u(int t) { return lx_u(lx_param(t, 0), proj.val[lx_param(t, 0)]); }   // (STATIC's MODE)
 int kb_poly(int t) {                    // (0.16.15) POLY in MODE Poly, PROPHET with CHORD Off, SQ-1
   const int k = track_kind(t);
   if (k == MK_SQ1 || k == MK_VOCODER) return 1;
@@ -2215,6 +2216,7 @@ void render_voice(int t, uint32_t n) {
     if (track_kind(t) == MK_POLY) own = kWebPoly[0] + static_cast<float>(poly_voices(t)) * kWebPoly[1];   // (its voices)
     if (track_kind(t) == MK_PROPHET) own = kWebPro[0] + static_cast<float>(pro_voices(t)) * kWebPro[1];
     if (track_kind(t) == MK_SQ1) own = kWebSq[0] + static_cast<float>(sq_voices(t)) * kWebSq[1];
+    if (track_kind(t) == MK_STATIC) own = kWebStatic[static_mode(lx_u(lx_param(t, 0), E(t, 1)))];   // (0.16.27: its generator's)
     if (track_kind(t) == MK_VOCODER)     // (its voices; its bands, MOD on)
       own = kWebVoc[0] + static_cast<float>(voc_voices(t)) * kWebVoc[1] +
             (voc_mod_track(lx_u(lx_param(t, 0), E(t, 1))) >= 0 ? kWebVoc[2] : 0.0f);
@@ -3013,7 +3015,7 @@ const char* eng_param_name(int param) {
                                            : track_kind(t) == MK_SQ1 ? sq_knob_name(lk)
                                            : track_kind(t) == MK_TAURUS ? taurus_knob_name(lk)
                                            : track_kind(t) == MK_VOCODER ? voc_knob_name(lk)
-                                           : track_kind(t) == MK_STATIC ? static_knob_name(lk)
+                                           : track_kind(t) == MK_STATIC ? static_knob_name(lk, static_mode_u(t))
                                                                      : lx_knob_name(lx_model(t), lk);
   }
   if (param >= PG_LFO(0) * 4 && param < PG_LFO(3) * 4 && param % 4 && Pi(param / 4, 0) == LW_FOLLOW) {
@@ -3211,7 +3213,7 @@ float eng_lx_step(int param, float v, int detents) {
                                             : track_kind(t) == MK_SQ1 ? sq_knob_steps(lk)
                                             : track_kind(t) == MK_TAURUS ? taurus_knob_steps(lk)
                                             : track_kind(t) == MK_VOCODER ? voc_knob_steps(lk)
-                                            : track_kind(t) == MK_STATIC ? static_knob_steps(lk)
+                                            : track_kind(t) == MK_STATIC ? static_knob_steps(lk, static_mode_u(t))
                                                                       : lx_knob_steps(lx_model(t), lk);
   float u = bip ? (v + 1.0f) * 0.5f : v;
   int i;
@@ -3226,6 +3228,20 @@ float eng_lx_step(int param, float v, int detents) {
     u = (static_cast<float>(i) + 0.5f) / static_cast<float>(n);
   }
   return bip ? 2.0f * u - 1.0f : u;
+}
+
+// (0.16.27) STATIC's MODE turned to another generator: its other seven knobs that generator's (ARC/01's presets)
+MI_COLD void eng_static_mode(int param, float before) {
+  const int t = param / 12;
+  if (param < 0 || t >= ENG_TRACKS || track_kind(t) != MK_STATIC || param != lx_param(t, 0)) return;
+  const int m = static_mode(static_mode_u(t));
+  if (m == static_mode(lx_u(param, before))) return;
+  float k[LX_KNOBS];
+  static_mode_defaults(m, k);
+  for (int i = 1; i < LX_KNOBS; ++i) {
+    const int q = lx_param(t, i);
+    proj.val[q] = eng_pdef(q)->kind == K_BIP ? 2.0f * k[i] - 1.0f : k[i];
+  }
 }
 
 void eng_set_model(int t, int m) {
@@ -3403,8 +3419,8 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
     taurus_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0 && track_kind(param / 12) == MK_VOCODER) {   // VOCODER's (a track, a tone, times, bands)
     voc_knob_text(lk, lx_u(param, v), b, n);
-  } else if (lk >= 0 && track_kind(param / 12) == MK_STATIC) {   // STATIC's (a mix, a ratio, times, %)
-    static_knob_text(lk, lx_u(param, v), b, n);
+  } else if (lk >= 0 && track_kind(param / 12) == MK_STATIC) {   // STATIC's (its mode's: Hz, ms, rad, %)
+    static_knob_text(lk, lx_u(param, v), static_mode_u(param / 12), b, n);
   } else if (lk >= 0) {                   // an FM drum's: as the LXR-02 shows it (0..127, a wave)
     lx_knob_text(lx_model(param / 12), lk, lx_u(param, v), b, n);
   } else if (pt == PT_WARPS1 && k == 0 && i_of(v) >= WC_OSC1) {   // the oscillator's shape, as the algorithm uses it
@@ -5459,8 +5475,6 @@ void eng_render(float* l, float* r, uint32_t n) {
     float tl = level * 0.85f * fm_cosf(a), tr = level * 0.85f * fm_sinf(a);
     // the sends: post-fader, before the pan (both effects are stereo themselves), each through its lane's opening
     float ts = snd_s[t] * gain * open[fr], td = dsnd_s[t] * gain * open[fd];
-    if (track_kind(t) == MK_STATIC)      // (0.16.24) STATIC's SPACE: its send raised with its height (its last block's)
-      ts = fm_minf(snd_s[t] + static_space(t), 1.0f) * gain * open[fr];
     mj.gain[t] = gain;
     mj.gl[t] = mix_gl[t];
     mj.gr[t] = mix_gr[t];

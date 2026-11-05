@@ -37,10 +37,11 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   la voix est une piste au choix (MOD), la porteuse quatre voix de **scies** grasses qui deviennent des **cordes** puis
   un **chœur** (TONE), un **ensemble** pour l'épaissir, SHIFT pour déplacer les formants, AIR pour laisser passer les
   sifflantes ; sans voix, une machine à cordes (voir plus bas) ;
-- **STATIC** (0.16.24) : une machine de bruit pour des séquences très contrastées, d'après les sinus et le bruit blanc de
-  **Ryoji Ikeda** et de **Pan Sonic**, et le sample and hold qui ralentit le bruit de l'**ECHON 6** de Morphor : du sinus
-  pur au bruit blanc, du crépitement au souffle, digital ou analogique, le même bruit à chaque trig ou un autre ; plus
-  il est aigu, plus il part dans la réverbe, le sub reste sec (voir plus bas) ;
+- **STATIC** (0.16.24, refaite en 0.16.27 d'après **ARC/01**, le cahier des charges de Yoann) : une machine
+  d'**événements électriques** pour des séquences minimales, percussives et instables, d'après **Pan Sonic** et **Ryoji
+  Ikeda** ; trois générateurs, un par piste ou un par pas : **BODY** (un sinus sub, sa hauteur qui tombe, pur ou
+  saturé), **ARC** (une porteuse modulée en phase par un modulateur libre en Hz, son feedback, un modulateur en anneau),
+  **SPARK** (des salves de bruit, de bruit tenu ou d'impulsions dans un passe-haut ou un passe-bande) (voir plus bas) ;
 - **Plaits** sur chaque piste, 6 de ses modèles (ses trois batteries, treize de ses oscillateurs, sa puce 8 bits et ses
   formants ont laissé la place aux moteurs de MIFM1), et un **circuit bending** par piste (0.7, à la place du
   grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
@@ -133,8 +134,8 @@ compilé, dans son propre worklet audio, jamais démarrée comme machine (`firmw
 Le son dépend de ce qu'on montre :
 - **une forme d'onde pour les filtres** : une dent de scie bien grave (La 1, 55 Hz, sans repliement) passe seule dans le
   module de filtre du moteur, LADDER, MS-20, SEM ou VOX (CUTOFF, RESO, DRIVE ou TYPE), sans séquence ni enveloppe ;
-- **une boucle là où il faut un rythme** : TAURUS sur le riff de la démo (CUTOFF, EMPH, CONTOUR), STATIC en coups de sub
-  et coups aigus (TONE, RATE, DENSITY, SPACE), le KICK seul (WAVE, SWEEP, DECAY), TRAUMA et la dose d'aléatoire sur la
+- **une boucle là où il faut un rythme** : TAURUS sur le riff de la démo (CUTOFF, EMPH, CONTOUR), STATIC sur trois
+  pistes, les trois lanes d'ARC/01 (INDEX et FEEDBACK d'ARC, DENSITY de SPARK, PITCH de BODY), le KICK seul (WAVE, SWEEP, DECAY), TRAUMA et la dose d'aléatoire sur la
   démo, Warps entre les accords et la basse (ALGO, TIMBRE, MIX, MODE), les ratchets sur les charlestons à contretemps
   (RATCH, CURVE, CLIMB).
 
@@ -667,34 +668,55 @@ Choisir VOCODER met ses réglages aux siens : MOD sur Off (à tourner vers la pi
 vocodées : environ 19 %, autant qu'OTIS). Les projets et les sons enregistrés avec la 0.16.20 se relisent : VOCODER
 prend la place 17, SPEECH et les autres modèles de Plaits passent un cran plus loin.
 
-**STATIC** (0.16.24 ; ALGORITHM après VOCODER, la banque MIFM1) : une **machine de bruit**, une voix par piste, pour des
-séquences très contrastées mais musicales. Ses deux sources sont celles de **Ryoji Ikeda** (son album *+/−*, 1996, ne
-fait que du sinus et du bruit blanc : la raison et le chaos) et de **Pan Sonic** : un **sinus** à la note et un
-**bruit** tenu par un sample and hold dont l'horloge suit la note, comme celui que l'**ECHON 6** de Morphor (2025) met
-sur son bruit blanc pour le casser en crépitements.
+**STATIC** (0.16.24 ; refaite en 0.16.27 ; ALGORITHM après VOCODER, la banque MIFM1) : une machine d'**événements
+électriques**, une voix par piste, pour des séquences minimales, percussives et instables. Son plan est **ARC/01**, le
+cahier des charges DSP que Yoann a écrit en novembre 2026 pour un instrument de phénomènes électriques (fréquences pures,
+modulation croisée, instabilité contrôlée, événements percussifs), d'après **Pan Sonic** et **Ryoji Ikeda**. Sa règle
+centrale : le contraste entre le son pur et le son détruit compte plus que la quantité de destruction. Ses fréquences sont
+en Hz, ses temps en ms, son index en radians ; le silence compte autant que le timbre. ARC/01 a trois générateurs ;
+STATIC en joue **un par voix**, choisi par **MODE** (le deuxième potard de la première page), qu'un pas peut locker :
+trois pistes de STATIC sont les trois lanes d'ARC/01, une seule piste peut passer de l'un à l'autre à chaque pas. Les
+routes d'ARC/01 entre eux passent par le **LFO FOLLOW** (0.16.23 : l'enveloppe d'une piste) et les **câbles** : la
+salve de SPARK qui ouvre l'INDEX d'ARC, un S&H de LFO qui fait sauter son MOD.
 
-- **Le bruit** : à chaque coup d'horloge, une nouvelle valeur au hasard, tenue jusqu'au suivant. Lente, l'horloge fait
-  des paliers ; rapide, le bruit blanc. **ANALOG** arrondit les paliers et les assombrit (de 20 kHz à 1,5 kHz) ; à 0,
-  digital, ils restent nets, leur repliement compris. **DENSITY** les éclaircit : sous 1, la plupart des coups
-  d'horloge ne donnent rien et les autres s'éteignent dans leur pas, en un clic : de la poussière, un crépitement ; à
-  1, le sample and hold entier.
-- **VARY** : à 0, chaque trig rejoue exactement le même bruit (la même graine, du même point : un motif sur lequel
-  compter) ; à fond, chaque trig a le sien ; entre les deux, la chance d'en changer.
-- **DECAY** : de 3 ms (un clic) à 4,4 s, puis **Hold** : le son tenu tant que la gate est ouverte (LENGTH du pas,
-  jusqu'au bruit continu).
-- **SPACE** : la part envoyée à la réverbe, selon la hauteur (celle de la note, celle de l'horloge pour la part de
-  bruit), sur une courbe de 80 Hz à 5 kHz : le sub rien, 200 Hz un dixième, 1 kHz les deux tiers, les aigus tout. Un
-  sinus aigu et court part dans l'espace, le sub reste propre et sec. Elle s'ajoute à l'envoi de la piste vers la
-  réverbe du mixer.
+- **BODY** (la masse) : un sinus en phase continue, une octave sous la note (le sub : 65 Hz pour un Do 3), dont la
+  hauteur part de **PITCH** demi-tons au-dessus (jusqu'à +48) et tombe vers la note en **SWEEP** (2 à 120 ms). Deux
+  chemins mélangés par **MIX** : **PURE**, auquel rien n'est fait (sa fondamentale gardée, ses harmoniques sous −100 dB
+  au test), et **DRIVE** (une saturation douce, de x1 à x20, au même niveau de crête). **CLICK** ajoute un clic de 3 ms
+  (les aigus d'un bruit) ; **ATTACK** de 0,2 à 10 ms ; **DECAY** de 20 ms à 2 s, puis **Hold**.
+- **ARC** (le cœur timbral) : une porteuse à la note **modulée en phase** par un modulateur à sa propre fréquence,
+  **MOD**, de 0,1 Hz à 8 kHz, jamais un rapport de la porteuse : sortie = sin(2π φC + INDEX · m + FEEDBACK · lp(sortie
+  précédente)). **INDEX** de 0 à 15 radians (à 0, un sinus pur ; à 3, un métal clair) ; **FEEDBACK** de 0 à 2, la
+  sortie précédente passée dans un passe-bas à 3 kHz et bornée (la boucle peut être brutale pour le timbre, jamais pour
+  l'amplitude) ; **RING**, le produit porteuse × modulateur mélangé ; **DRIFT**, une dérive lente des deux fréquences
+  jusqu'à 30 cents, puis des sauts du modulateur au hasard (jusqu'à ±7 demi-tons, 4 par seconde) ; **DRIVE**, une
+  saturation asymétrique (son continu retiré après) ; **DECAY** de 20 ms à 4 s, puis Hold. Les changements d'INDEX, de
+  FEEDBACK et de RING glissent sur un bloc (pas d'escalier).
+- **SPARK** (les événements électriques) : pas un bruit continu, des **événements**. Chaque trig lance une salve de
+  **CLUSTER** coups (1 à 9) à intervalles irréguliers (3 à 30 ms) ; tant que la gate est ouverte (LENGTH du pas, qu'on
+  peut étirer sur plusieurs pas), **DENSITY** en ajoute au hasard, jusqu'à 30 par seconde. Chaque coup est une
+  enveloppe courte (**DECAY** de 1 à 400 ms, puis Hold : un bruit continu tant que la gate est ouverte) sur une
+  **SOURCE** : **White** (un bruit blanc, que HOLD colore), **S/H** (un bruit tenu par un sample and hold à **HOLD**,
+  de 20 Hz à 18 kHz : du crépitement lent, comme l'ECHON 6 de Morphor, au souffle), **Impulse** (une impulsion, HOLD sa
+  largeur) ou **Train** (des impulsions à HOLD). Puis un filtre, **FILTER** de 100 Hz à 16 kHz, que la note déplace
+  (Do 3 : la valeur affichée), et **Q** : à gauche un **passe-haut** (Q jusqu'à 8), à droite un **passe-bande** (jusqu'à
+  12), leurs niveaux rattrapés (un passe-bande étroit garde peu d'un bruit, une impulsion le fait sonner).
 
-| TONE | RATE | ANALOG | DENSITY | VARY | DECAY | SPACE | DRIVE |
+| MODE | 1 | 2 | 3 | 4 | 5 | 6 | DECAY |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **Sine** à **Noise** (à puissance égale) | l'horloge du bruit, de la note /64 à x256 | **Digital** à **Analog** | la part des coups d'horloge qui sonnent (sous 1 : des clics) | **Same** à **New** | 3 ms à 4,4 s, puis **Hold** | la réverbe selon la hauteur | une saturation douce |
+| **Body** | PITCH +0 à +48 st | SWEEP 2 à 120 ms | MIX Pure à Drive | DRIVE x1 à x20 | CLICK | ATTACK 0,2 à 10 ms | 20 ms à 2 s, Hold |
+| **Arc** | MOD 0,1 Hz à 8 kHz | INDEX 0 à 15 rad | FEEDBACK 0 à 2 | RING | DRIFT (30 cents, puis des sauts) | DRIVE | 20 ms à 4 s, Hold |
+| **Spark** | SOURCE (White, S/H, Impulse, Train) | HOLD 20 Hz à 18 kHz | FILTER 100 Hz à 16 kHz | Q (HP à gauche, BP à droite) | DENSITY 0 à 30/s | CLUSTER x1 à x9 | 1 à 400 ms, Hold |
 
-Choisir STATIC met ses réglages aux siens : moitié sinus, moitié bruit, l'horloge à quatre fois la note, un peu
-d'analogique, tout le bruit, un nouveau bruit à chaque trig, court, SPACE à 60, un peu de drive. Une voix coûte au
-FM-1 environ 3 % d'un bloc. Les projets enregistrés avec la 0.16.23 et les sons des 0.16.21 à 0.16.23 se
-relisent : STATIC prend la place 18, SPEECH et les autres modèles de Plaits passent un cran plus loin.
+Tourner **MODE** met les sept autres potards au **point de départ** de ce générateur, les trois presets de test
+d'ARC/01 : BODY, *PURE IMPACT* (+18 demi-tons en 28 ms, 15 % de drive, un clic léger, 240 ms) ; ARC, *COPPER ARC* (MOD
+247 Hz, INDEX 3 rad, FEEDBACK 0,18, un drive moyen, 450 ms) ; SPARK, *RELAY ROOM* (S/H à 1,6 kHz, un passe-bande à 2,8
+kHz, Q 4, un coup par trig, 12 ms). Un lock de MODE sur un pas ne touche pas aux potards. Choisir STATIC le met en BODY.
+Son hasard est une graine fixe : le même projet joué de la même façon rejoue les mêmes événements. Une voix coûte au
+FM-1 environ 4,2 % d'un bloc en BODY, 4,3 % en ARC, 3,7 % en SPARK (tenue). SPACE (0.16.24) n'existe plus : l'envoi
+de la piste vers la réverbe reste sur la page du mixer. Les projets enregistrés avec la 0.16.23 et les sons des
+0.16.21 à 0.16.23 se relisent : STATIC prend la place 18, SPEECH et les autres modèles de Plaits passent un cran plus
+loin ; un projet qui jouait l'ancienne STATIC garde ses valeurs, qui veulent dire autre chose.
 
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
 icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis
@@ -1260,9 +1282,9 @@ Chaque moteur de MIFM1 doit quelque chose à une machine, et le site le raconte,
   U2) et le **Minimoog** (1970) ;
 - VOCODER : le **Vocoder Plus VP-330** de Roland (1979-1980 ; sous Vangelis, Yellow Magic Orchestra, Laurie Anderson,
   Underworld), et avant lui le vocodeur de **Homer Dudley** (Bell Labs, 1937) ;
-- STATIC : **Ryoji Ikeda** (*+/−*, 1996 : des sinus et du bruit blanc, rien d'autre), **Pan Sonic** (Mika Vainio et
-  Ilpo Väisänen, Turku, 1992 : un minimalisme dur et fort, sur des machines construites pour eux), et le sample and
-  hold de l'**ECHON 6** de Morphor (2025) ;
+- STATIC : **ARC/01**, le cahier des charges DSP de Yoann (novembre 2026) ; **Ryoji Ikeda** (*+/−*, 1996 : des
+  sinus et du bruit blanc, rien d'autre), **Pan Sonic** (Mika Vainio et Ilpo Väisänen, Turku, 1992 : un minimalisme
+  dur et fort, sur des machines construites pour eux), et le sample and hold de l'**ECHON 6** de Morphor (2025) ;
 - les filtres : l'échelle de **Moog**, le Korg 35 du **MS-20**, le **SEM** d'Oberheim ; le circuit bending : le
   **Biscuit** d'OTO et le **Data Bender** de Qu-Bit ; le delay : les potards du **Zen Delay** ; la réverbe et Warps :
   **Clouds** et **Warps** de Mutable Instruments ;

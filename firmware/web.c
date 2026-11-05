@@ -102,21 +102,43 @@ __attribute__((used, visibility("default"))) uint32_t lab_setup(uint32_t id)
         lab_only(p, 1, 0.5f);
         lab_lane = 1;
         lab_k(3, lab_mparam(1, 3), lab_mparam(1, 4), lab_mparam(1, 5), 0);
-    } else if (id == LAB_STATIC) {       /* STATIC: sub hits and high ones, an octave up, its SPACE into the reverb */
-        eng_set_model(1, eng_model_find(MK_STATIC, 0));
-        p->algo[PG_FILT(1, 0)] = MF_OFF;
-        lab_only(p, 1, 0.0f);
-        p->val[PG_TRACK(1, 2) * 4 + 3] = 1.0f;
-        eng_steps_clear(1);
-        static const int8_t S[16] = {-24, 0, 0, 24, 0, 0, 19, 0, -24, 0, 0, 24, 0, 27, -24, 0};
-        for (int s = 0; s < 16; s++)
-            if (S[s]) {
-                eng_trig_set(1, s, 1);
-                eng_lock_set(1, s, TP_NOTE, (float)S[s]);
+    } else if (id == LAB_STATIC) {       /* STATIC on three tracks, ARC/01's three lanes (after its RELAY ROOM): BODY's
+                                          * rare sub hits (43 Hz), ARC's copper ring (830 Hz by a modulator at 113 Hz),
+                                          * SPARK's sparks (S/H, a band pass at 2.8 kHz), each at 35 % */
+        static const int8_t B[16] = {-7, 0, 0, 0, 0, 0, 0, 0, 0, 0, -5, 0, 0, 0, 0, 0},
+                            A[16] = {0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 27, 0, 0},
+                            S[16] = {0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1};
+        const int8_t *seq[3] = {B, A, S};
+        for (int t = 1; t < ENG_TRACKS; t++) {
+            float k[8];
+            eng_set_model(t, eng_model_find(MK_STATIC, 0));
+            static_mode_defaults(t - 1, k);
+            if (t == 1)
+                k[7] = 0.716f;           /* (BODY: 600 ms) */
+            if (t == 2)
+                k[1] = 0.6227f, k[2] = 0.365f;   /* (ARC: 113 Hz, 2 rad) */
+            for (int i = 0; i < 8; i++) {
+                const int q = lab_mparam(t, i);
+                p->val[q] = eng_pdef(q)->kind == K_BIP ? 2.0f * k[i] - 1.0f : k[i];
             }
-        p->val[lab_mparam(1, 5)] = 0.45f;   /* (its DECAY: 80 ms, the pings heard) */
-        lab_lane = 1;
-        lab_k(4, lab_mparam(1, 0), lab_mparam(1, 1), lab_mparam(1, 3), lab_mparam(1, 6));
+            p->algo[PG_FILT(t, 0)] = MF_OFF;
+            p->val[PG_TRACK(t, 2) * 4 + 3] = 0.0f;   /* (OCTAVE 0) */
+            p->val[eng_track_param(t, TP_SEND)] = p->val[eng_track_param(t, TP_DSEND)] = 0.0f;   /* (dry: no space) */
+            eng_steps_clear(t);
+            for (int st = 0; st < 16; st++)
+                if (seq[t - 1][st]) {
+                    eng_trig_set(t, st, 1);
+                    if (t < 3)
+                        eng_lock_set(t, st, TP_NOTE, (float)seq[t - 1][st]);
+                    else if (st != 6)    /* (step 6 always: its long gate, DENSITY's room) */
+                        eng_lock_set(t, st, TP_PROB, 0.35f);
+                }
+        }
+        eng_step_tie_set(3, 6, 2);       /* (a spark's gate over three steps: DENSITY's room) */
+        lab_only(p, 1, 0.0f);
+        p->val[PG_MIX * 4 + 2] = 0.5f, p->val[PG_MIX * 4 + 3] = 0.8f;
+        lab_lane = 3;
+        lab_k(4, lab_mparam(2, 2), lab_mparam(2, 3), lab_mparam(3, 5), lab_mparam(1, 1));
     } else if (id == LAB_KICK) {         /* the kick alone, a beat and a push */
         lab_only(p, 0, 0.9f);
         eng_trig_set(0, 14, 1);

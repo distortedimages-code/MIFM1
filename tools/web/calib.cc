@@ -91,6 +91,15 @@ int main(int argc, char** argv) {
       vk(4, extra & 524288 ? 0.95f : 0.0f);
       vk(0, extra & 1048576 ? 0.5f : 0.05f);
     }
+    if (eng_model_kind(model) == MK_STATIC) {   // (0.16.27) STATIC: its mode's own knobs, BODY, 2097152 ARC, 4194304
+      float sk[8];                       // SPARK; held (DECAY at Hold: the voice never resting)
+      static_mode_defaults(extra & 2097152 ? 1 : extra & 4194304 ? 2 : 0, sk);
+      sk[7] = 1.0f;
+      for (int i = 0; i < 8; ++i) {
+        int param = PG_TRACK(0, 0) * 4 + 1 + i;
+        p->val[param] = eng_pdef(param)->kind == K_BIP ? 2.0f * sk[i] - 1.0f : sk[i];
+      }
+    }
     if (extra & 8) p->val[PG_TRACK(0, 1) * 4 + 3] = -0.6f;   // 8 the FM's square (FEEDBACK), 16 its PW, 32 its SYNC
     if (extra & 16) p->val[PG_TRACK(0, 2) * 4 + 0] = -0.5f;  // (MUTATE), on its sixth algorithm (three operators
     if (extra & 32) p->val[PG_TRACK(0, 2) * 4 + 0] = 0.5f;   // heard)
