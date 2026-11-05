@@ -2959,8 +2959,8 @@ MI_COLD void eng_sound_get(int t, eng_sound_t* s) {
   sound_name(s, mdef(proj.algo[PG_TRACK(t, 0)]).name);
 }
 int eng_sound_check(const eng_sound_t* s, int bytes) {
-  if (bytes < static_cast<int>(sizeof *s) || s->magic != SND_MAGIC || (s->version != SND_VERSION && s->version != 1) ||
-      s->size != sizeof *s)             // (1: before 0.16.14, read as this one)
+  if (bytes < static_cast<int>(sizeof *s) || s->magic != SND_MAGIC || s->version < 1 || s->version > SND_VERSION ||
+      s->size != sizeof *s)             // (1, 2, 3: before 0.16.14, 0.16.14 to 0.16.16, 0.16.17: read as this one)
     return 0;
   for (int i = 0; i < SND_PAGES * 4; ++i)
     if (!(s->val[i] > -1000.0f && s->val[i] < 1000.0f)) return 0;   // (a NaN fails both)
@@ -2972,6 +2972,8 @@ MI_COLD int eng_sound_set(int t, const eng_sound_t* s) {
   if (s->version == 1 && m >= 15) {     // (before 0.16.14: CHIPTUNE 15, FORMANT 16 now SQ-1 from its kit; the others one
     was_plaits = m <= 16;               // lower)
     m = was_plaits ? eng_model_find(MK_SQ1, 0) : m - 1;
+  } else if (s->version == 3 && m == 16) {   // (0.16.17's ROBOVOX, withdrawn: SPEECH again, at noon)
+    was_plaits = 1;
   }
   m = m >= 0 && m < ENG_MODELS ? m : 0;
   if (!eng_model_free(t, m)) return -2;   // (PADS: once a project)
@@ -2986,7 +2988,7 @@ MI_COLD int eng_sound_set(int t, const eng_sound_t* s) {
     else if (i == 4) proj.algo[pg] = static_cast<uint8_t>(s->algo[i] < MF_MODELS ? s->algo[i] : MF_OFF);
     else proj.algo[pg] = s->algo[i];
   }
-  if (was_plaits) {                     // (its knobs SQ-1's kit, their randoms none)
+  if (was_plaits) {                     // (its knobs its kit's, SQ-1's or SPEECH's noon; their randoms none)
     lx_kit(&proj, t);
     for (int k = 0; k < LX_KNOBS; ++k) proj.rnd[t][1 + k] = 0;
   }
@@ -4455,9 +4457,12 @@ int upgrade_any(project_t* p, int bytes);
 MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them, sizeof(project_t) >= the largest)
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   const int v = p->magic == PROJECT_MAGIC ? static_cast<int>(p->version) : 0;
-  if (v == 27 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
-    p->version = PROJECT_VERSION;       // (0.16.7 to 0.16.13: their layout this one, their models one more)
-    models_v27(p);
+  if (v >= 27 && v <= 29 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+    p->version = PROJECT_VERSION;       // (0.16.7 to 0.16.17: their layout this one; 0.16.13's models one more; 0.16.17's
+    if (v == 27) models_v27(p);         // ROBOVOX, withdrawn, SPEECH again in its place, at noon)
+    if (v == 29)
+      for (int t = 0; t < ENG_TRACKS; ++t)
+        if (p->algo[PG_TRACK(t, 0)] == 16) sq_from_plaits(p, t);
     return 1;
   }
   if (!upgrade_any(p, bytes)) return 0;

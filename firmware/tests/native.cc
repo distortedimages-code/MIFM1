@@ -4814,6 +4814,32 @@ int main(int argc, char** argv) {
     pads_init();
   }
 
+  {                                     // 69. 0.16.17's projects and sounds (ROBOVOX's, withdrawn in 0.16.18):
+    // read, SPEECH again on its track, at noon, the locks on its knobs gone
+    static project_t q;
+    eng_defaults(&q);
+    q.version = 29;
+    q.algo[PG_TRACK(2, 0)] = 16;
+    for (int i = 0; i < ENG_PLOCKS; ++i) q.lock[i].lane = 0xFF;
+    q.lock[0] = plock_t{2, 3, 2, 200};   // (a lock on its second knob)
+    q.lock[1] = plock_t{2, 4, TP_NOTE, 90};
+    q.val[PG_TRACK(2, 0) * 4 + 1] = 0.9f;
+    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.version == PROJECT_VERSION &&
+                        q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 15) && q.lock[0].lane == 0xFF &&
+                        q.lock[1].lane == 2 && std::fabs(q.val[PG_TRACK(2, 0) * 4 + 1] - 0.5f) < 1e-6f;
+    eng_defaults(p);
+    eng_set_model(1, eng_model_find(MK_PLAITS, 15));
+    static eng_sound_t snd;
+    eng_sound_get(1, &snd);
+    snd.version = 3;
+    snd.val[1] = 0.9f;                   // (its first page's HARMONICS)
+    const int set = eng_sound_set(1, &snd);
+    const int snd_ok = set == 0 && p->algo[PG_TRACK(1, 0)] == eng_model_find(MK_PLAITS, 15) &&
+                       std::fabs(p->val[PG_TRACK(1, 0) * 4 + 1] - 0.5f) < 1e-6f;
+    printf("0.16.17's project read, SPEECH at noon %s; its sound %s\n", proj_ok ? "ok" : "WRONG", snd_ok ? "ok" : "WRONG");
+    if (!proj_ok || !snd_ok) ++failures, printf("FAIL: 0.16.17's\n");
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

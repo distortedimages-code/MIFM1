@@ -1044,6 +1044,10 @@ joue la **dernière** touche appuyée, et quand on la lâche alors qu'une autre 
 celle-ci** (un nouveau trig) ; Endless fait de même avec sa transposition. POLY en Poly, REV3 sans accord et OTIS
 jouent toutes les touches tenues, une voix chacune : des accords à la main.
 
+La 0.16.17 avait mis **ROBOVOX** (une puce de parole qui chante, d'après le Robovox de Kraftwerk) à la place de
+SPEECH ; retiré en 0.16.18, SPEECH est revenu : un projet ou un son de la 0.16.17 se relit, SPEECH sur la piste qui
+jouait ROBOVOX, ses potards au milieu.
+
 Un projet sauvegardé avec les 0.1.4 à 0.2.6 se recharge : ses réglages, ses modèles, ses câbles (sauf ceux qui
 partaient de Marbles), ses pas, ses locks et Endless ; le tempo de Marbles devient le tempo, et les effets nouveaux
 démarrent neutres (rien vers le delay, aucune piste de pas d'effet). Ceux des 0.3 aussi (l'EQ y est à plat, le grit

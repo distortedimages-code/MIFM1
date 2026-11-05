@@ -159,7 +159,8 @@ void eng_set_model(int t, int model);    /* a track's model (an FM drum new to i
  * knobs' randoms, a name. Saved by the screen (app.c, pat_store.h), read onto any track */
 #define SND_PAGES 8
 #define SND_MAGIC 0x31444E53u            /* "SND1" */
-#define SND_VERSION 2                    /* (1: before 0.16.14: CHIPTUNE, FORMANT read as SQ-1) */
+#define SND_VERSION 4                    /* (3: 0.16.17's, ROBOVOX (16) read as SPEECH from noon; 2: 0.16.14 to 0.16.16's,
+                                          * this one; 1: before 0.16.14: CHIPTUNE, FORMANT read as SQ-1) */
 typedef struct {
     uint32_t magic;
     uint16_t version, size;
@@ -200,7 +201,9 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 28u              /* (27: 0.16.7's to 0.16.13's, CHIPTUNE (15) and FORMANT (16) there: read,
+#define PROJECT_VERSION 30u              /* (29: 0.16.17's, ROBOVOX (16, withdrawn) there: read, SPEECH back from noon
+                                          * (its locks on its knobs gone); 28: 0.16.14's to 0.16.16's: this one;
+                                          * 27: 0.16.7's to 0.16.13's, CHIPTUNE (15) and FORMANT (16) there: read,
                                           * both SQ-1 (its kit, their locks on its knobs gone), the others one lower;
                                           * 26: 0.16.4's to 0.16.6's, without CLIMB (42 parameters a lane, 384 locks,
                                           * 3820 bytes): read, CLIMB off, its locks the first 380;
