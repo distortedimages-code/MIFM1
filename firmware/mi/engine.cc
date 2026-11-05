@@ -2269,8 +2269,9 @@ void spread_side(int t, const float* x, float* y, uint32_t n, float pk, int16_t*
   }
 }
 // a track's side, added to fx_dry_l and taken from fx_dry_r (and its USB pair's): its highs from x (m_dry: the
-// scratch), into its delay, out of it into the all-passes, at the side's gain (sp0 to sp1 over the block)
-void spread_track(int t, const float* x, uint32_t n, float a, float b) {
+// scratch), into its delay, out of it into the all-passes, at the side's gain (sp0 to sp1 over the block). Out of
+// line, in the flash: the mix (run_task's) runs from the RAM, whose room is counted (fm1.toml's o2_ram)
+__attribute__((noinline)) void spread_track(int t, const float* x, uint32_t n, float a, float b) {
   float* y = m_dry;
   float pk = 0.0f;
   for (uint32_t i = 0; i < n; ++i) pk = fm_maxf(pk, fm_fabsf(x[i]));
