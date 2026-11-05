@@ -2231,8 +2231,8 @@ static void draw_panel(void)
             s[2] = s[2] * 31 + (p->endless[tr][i] == ENDLESS_REST);
         break;
     case PT_GLOBAL:
-        s[2] = (int)p->val[PG_GLOBAL * 4 + 1] | (int)p->val[PG_GLOBAL * 4 + 2] << 4 |
-               (int)(p->val[PG_GLOBAL * 4 + 3] * 100.0f) << 8 | (int)(p->val[PG_GLOBAL * 4] * 1000.0f) << 16;
+        s[2] = (int)p->val[PG_GLOBAL * 4 + 1] | (int)p->val[PG_GLOBAL * 4 + 2] << 5 |   /* (0.16.12: 18 scales) */
+               (int)(p->val[PG_GLOBAL * 4 + 3] * 100.0f) << 9 | (int)(p->val[PG_GLOBAL * 4] * 1000.0f) << 16;
         break;
     case PT_BEND:
         for (int k = 0; k < 4; k++)

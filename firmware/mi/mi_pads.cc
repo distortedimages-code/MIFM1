@@ -44,60 +44,89 @@ inline uint32_t xs(uint32_t& s) {
 inline float bip(uint32_t& s) { return static_cast<float>(xs(s) >> 8) * (2.0f / 16777216.0f) - 1.0f; }
 
 // ---- the progressions ----
-enum { Q_DIA, Q_MAJ, Q_MIN };
-enum { M_MAJOR = 1, M_MINOR = 2, M_DORIAN = 3, M_PHRYGIAN = 4, M_LYDIAN = 5 };   // (the engine's scales)
+enum { Q_DIA, Q_MAJ, Q_MIN, Q_SUS2, Q_SUS4 };   // (0.16.12: suspended, the third left for the second or the fourth)
+enum { M_MAJOR = 1, M_MINOR = 2, M_DORIAN = 3, M_PHRYGIAN = 4, M_LYDIAN = 5, M_PHRYGDOM = 16 };   // (the engine's
+                                        // scales)
 struct Chord {
   int8_t deg, q, add0, add1;            // its degree (0: the tonic), its quality, two added degrees over it (-1 none)
+  int8_t chr, extra;                    // (0.16.12) a root off the scale, semitones over the tonic (0: the degree's;
+                                        // its quality major unless minor); a note off the scale, semitones over
+                                        // the chord's root (-1 none: a line moving inside the chord)
 };
 struct Prog {
   const char* name;
   uint8_t mode, n;
   Chord c[8];
 };
-const int kProgs = 16;
+#define C1(d) {d, 0, -1, -1, 0, -1}
+#define CQ(d, q) {d, q, -1, -1, 0, -1}
+#define CA(d, a) {d, 0, a, -1, 0, -1}
+#define CX(d, x) {d, 0, -1, -1, 0, x}
+#define CR(semi, q) {0, q, -1, -1, semi, -1}
+// 0.11's sixteen where a project of then finds them (PROG's travel in 27 now: its share's middle, (i + 0.5) / 17,
+// lands on the same one), 0.16.12's ten between them: darker, suspended, off the scale (after the way Trent Reznor
+// and Atticus Ross's records and scores move: a line falling inside a minor chord, the flat second, the tritone, the
+// major fourth in a minor key, chromatic mediants, a pedal under moving chords)
+const int kProgs = 26;
 const Prog kProg[kProgs] = {
+    // (0.16.12) the line cliché: a minor chord, a voice inside it falling by half steps: i, i(maj7), i7, i6
+    {"Descent", M_MINOR, 4, {C1(0), CX(0, 11), CX(0, 10), CX(0, 9)}},
     // after Arvo Part: the tonic triad held, a voice over it going down by steps and back (tintinnabuli)
-    {"Tintin", M_MINOR, 8, {{0, 0, 7, -1}, {0, 0, 6, -1}, {0, 0, 5, -1}, {0, 0, 3, -1}, {0, 0, 1, -1}, {0, 0, 3, -1},
-                            {0, 0, 5, -1}, {0, 0, 6, -1}}},
+    {"Tintin", M_MINOR, 8, {CA(0, 7), CA(0, 6), CA(0, 5), CA(0, 3), CA(0, 1), CA(0, 3), CA(0, 5), CA(0, 6)}},
     // the same in a major key, the tonic and its fourth degree (a mirror)
-    {"Mirror", M_MAJOR, 8, {{0, 0, 1, -1}, {0, 0, -1, -1}, {3, 0, 1, -1}, {0, 0, 5, -1}, {4, 0, 3, -1}, {0, 0, -1, -1},
-                            {3, 0, 6, -1}, {4, 0, -1, -1}}},
+    {"Mirror", M_MAJOR, 8, {CA(0, 1), C1(0), CA(3, 1), CA(0, 5), CA(4, 3), C1(0), CA(3, 6), C1(4)}},
+    // (0.16.12) the flat second (the Neapolitan, a half step over the tonic): i bII bVII i
+    {"Flat II", M_MINOR, 4, {C1(0), CR(1, Q_MAJ), C1(6), C1(0)}},
     // Pachelbel's canon: I V vi iii IV I IV V
-    {"Pachelbel", M_MAJOR, 8, {{0, 0, -1, -1}, {4, 0, -1, -1}, {5, 0, -1, -1}, {2, 0, -1, -1}, {3, 0, -1, -1},
-                               {0, 0, -1, -1}, {3, 0, -1, -1}, {4, 0, -1, -1}}},
+    {"Pachelbel", M_MAJOR, 8, {C1(0), C1(4), C1(5), C1(2), C1(3), C1(0), C1(3), C1(4)}},
+    // (0.16.12) the tritone away: i bV i bVI
+    {"Tritone", M_MINOR, 4, {C1(0), CR(6, Q_MAJ), C1(0), C1(5)}},
     // la Folia: i V i VII III VII i V (its dominant major)
-    {"Folia", M_MINOR, 8, {{0, 0, -1, -1}, {4, Q_MAJ, -1, -1}, {0, 0, -1, -1}, {6, 0, -1, -1}, {2, 0, -1, -1},
-                           {6, 0, -1, -1}, {0, 0, -1, -1}, {4, Q_MAJ, -1, -1}}},
+    {"Folia", M_MINOR, 8, {C1(0), CQ(4, Q_MAJ), C1(0), C1(6), C1(2), C1(6), C1(0), CQ(4, Q_MAJ)}},
     // the lament (a descending tetrachord, Purcell's ground, the Andalusian cadence): i VII VI V
-    {"Lament", M_MINOR, 4, {{0, 0, -1, -1}, {6, 0, -1, -1}, {5, 0, -1, -1}, {4, Q_MAJ, -1, -1}}},
+    {"Lament", M_MINOR, 4, {C1(0), C1(6), C1(5), CQ(4, Q_MAJ)}},
+    // (0.16.12) the major fourth in a minor key (the dorian's, lifting): i III IV i
+    {"Rise", M_MINOR, 4, {C1(0), C1(2), CQ(3, Q_MAJ), C1(0)}},
     // the circle of fifths (the baroque sequence): vi ii V I IV vii iii vi
-    {"Fifths", M_MAJOR, 8, {{5, 0, -1, -1}, {1, 0, -1, -1}, {4, 0, -1, -1}, {0, 0, -1, -1}, {3, 0, -1, -1},
-                            {6, 0, -1, -1}, {2, 0, -1, -1}, {5, 0, -1, -1}}},
+    {"Fifths", M_MAJOR, 8, {C1(5), C1(1), C1(4), C1(0), C1(3), C1(6), C1(2), C1(5)}},
     // Satie's first Gymnopedie: IVmaj7 Imaj7
-    {"Gymnopedie", M_MAJOR, 2, {{3, 0, 6, -1}, {0, 0, 6, -1}}},
+    {"Gymnopedie", M_MAJOR, 2, {CA(3, 6), CA(0, 6)}},
+    // (0.16.12) suspended, nothing resolving: i(sus2) bVI(sus2) bIII bVII(sus4)
+    {"Hover", M_MINOR, 4, {CQ(0, Q_SUS2), CQ(5, Q_SUS2), C1(2), CQ(6, Q_SUS4)}},
     // Bach's first prelude (the Well-Tempered Clavier), its opening: I ii7 V7 I vi ii V7 I
-    {"Prelude", M_MAJOR, 8, {{0, 0, -1, -1}, {1, 0, 6, -1}, {4, 0, 6, -1}, {0, 0, -1, -1}, {5, 0, -1, -1},
-                             {1, 0, -1, -1}, {4, 0, 6, -1}, {0, 0, -1, -1}}},
+    {"Prelude", M_MAJOR, 8, {C1(0), CA(1, 6), CA(4, 6), C1(0), C1(5), C1(1), CA(4, 6), C1(0)}},
+    // (0.16.12) the major and the minor on one tonic: I i bVI bVII
+    {"Shift", M_MINOR, 4, {CQ(0, Q_MAJ), CQ(0, Q_MIN), C1(5), C1(6)}},
     // the plagal (the amen): I IV I IV vi IV I I
-    {"Plagal", M_MAJOR, 8, {{0, 0, -1, -1}, {3, 0, -1, -1}, {0, 0, -1, -1}, {3, 0, -1, -1}, {5, 0, -1, -1},
-                            {3, 0, -1, -1}, {0, 0, -1, -1}, {0, 0, -1, -1}}},
+    {"Plagal", M_MAJOR, 8, {C1(0), C1(3), C1(0), C1(3), C1(5), C1(3), C1(0), C1(0)}},
     // the dorian vamp: i7 IV7
-    {"Dorian", M_DORIAN, 2, {{0, 0, 6, -1}, {3, 0, 6, -1}}},
+    {"Dorian", M_DORIAN, 2, {CA(0, 6), CA(3, 6)}},
+    // (0.16.12) chromatic mediants (a film's): i bVI i III (major, off the scale)
+    {"Mediant", M_MINOR, 4, {C1(0), C1(5), C1(0), CR(4, Q_MAJ)}},
     // dub: i7 iv7 i7 VII
-    {"Dub", M_MINOR, 4, {{0, 0, 6, -1}, {3, 0, 6, -1}, {0, 0, 6, -1}, {6, 0, -1, -1}}},
+    {"Dub", M_MINOR, 4, {CA(0, 6), CA(3, 6), CA(0, 6), C1(6)}},
     // a chorale's: I vi IV V I IV V I
-    {"Hymn", M_MAJOR, 8, {{0, 0, -1, -1}, {5, 0, -1, -1}, {3, 0, -1, -1}, {4, 0, -1, -1}, {0, 0, -1, -1},
-                          {3, 0, -1, -1}, {4, 0, -1, -1}, {0, 0, -1, -1}}},
+    {"Hymn", M_MAJOR, 8, {C1(0), C1(5), C1(3), C1(4), C1(0), C1(3), C1(4), C1(0)}},
+    // (0.16.12) chords moving over the tonic held: i, then bVII, v, bVII with the tonic in them
+    {"Pedal", M_MINOR, 4, {C1(0), CA(6, 1), CA(4, 3), CA(6, 1)}},
     // the phrygian: i II i VII VI VII II i
-    {"Phrygian", M_PHRYGIAN, 8, {{0, 0, -1, -1}, {1, 0, -1, -1}, {0, 0, -1, -1}, {6, 0, -1, -1}, {5, 0, -1, -1},
-                                 {6, 0, -1, -1}, {1, 0, -1, -1}, {0, 0, -1, -1}}},
+    {"Phrygian", M_PHRYGIAN, 8, {C1(0), C1(1), C1(0), C1(6), C1(5), C1(6), C1(1), C1(0)}},
+    // (0.16.12) the phrygian dominant's: I bII bvii bII
+    {"Dominant", M_PHRYGDOM, 4, {C1(0), C1(1), C1(6), C1(1)}},
     // the epic (aeolian): i VI III VII
-    {"Epic", M_MINOR, 4, {{0, 0, -1, -1}, {5, 0, -1, -1}, {2, 0, -1, -1}, {6, 0, -1, -1}}},
+    {"Epic", M_MINOR, 4, {C1(0), C1(5), C1(2), C1(6)}},
     // a slow minor (lento): i(add9) VI i(add9) iv
-    {"Lento", M_MINOR, 4, {{0, 0, 1, -1}, {5, 0, -1, -1}, {0, 0, 1, -1}, {3, 0, -1, -1}}},
+    {"Lento", M_MINOR, 4, {CA(0, 1), C1(5), CA(0, 1), C1(3)}},
+    // (0.16.12) slow, wide: i(add9) bVI(maj7) iv(add9) bVI
+    {"Haze", M_MINOR, 4, {CA(0, 8), CA(5, 6), CA(3, 8), C1(5)}},
     // the tonic alone (a drone: with SCALE Prog, everything on its chord)
-    {"Static", M_MAJOR, 1, {{0, 0, -1, -1}}},
+    {"Static", M_MAJOR, 1, {C1(0)}},
 };
+#undef C1
+#undef CQ
+#undef CA
+#undef CX
+#undef CR
 
 // the scale's notes (semitones over its root, 0..11) from its mask, how many
 int scale_notes(uint16_t mask, int* s) {
@@ -141,9 +170,12 @@ inline int prog_of(float u) {
   int p = static_cast<int>(u * static_cast<float>(kProgs + 1));
   return p < 0 ? 0 : p > kProgs ? kProgs : p;
 }
+// COLOR (0.16.12: nine, 0.11's four where a project of then finds them: its share's middle, (i + 0.5) / 4, on 1 3 5 7)
+enum { CO_POWER, CO_TRIAD, CO_SUS2, CO_7TH, CO_SUS4, CO_9TH, CO_ADD9, CO_11TH, CO_ADD6, CO_N };
+const char* const kColorName[CO_N] = {"Power", "Triad", "Sus2", "7th", "Sus4", "9th", "Add9", "11th", "Add6"};
 inline int color_of(float u) {
-  int c = static_cast<int>(u * 4.0f);
-  return c < 0 ? 0 : c > 3 ? 3 : c;
+  int c = static_cast<int>(u * static_cast<float>(CO_N));
+  return c < 0 ? 0 : c > CO_N - 1 ? CO_N - 1 : c;
 }
 inline int voicing_of(float u) {
   int c = static_cast<int>(u * 4.0f);
@@ -217,28 +249,52 @@ int pads_prog_mode(int prog) { return prog >= 1 && prog <= kProgs ? kProg[prog -
 
 int pads_chord(int prog, int pos, int degree, uint16_t mask, float color_u, int* out, int* raised) {
   int s[12], n = scale_notes(mask, s), color = color_of(color_u);
-  Chord c = {static_cast<int8_t>(degree), Q_DIA, -1, -1};
+  Chord c = {static_cast<int8_t>(degree), Q_DIA, -1, -1, 0, -1};
   if (prog >= 1 && prog <= kProgs) {
     const Prog& pr = kProg[prog - 1];
     c = pr.c[(pos % pr.n + pr.n) % pr.n];
   }
-  int k = 0, d = c.deg;
-  out[k++] = tone(s, n, d);
-  int third = tone(s, n, d + 2), fifth = tone(s, n, d + 4);
+  int k = 0, d = c.deg, r, third, fifth, second, fourth, sixth, seventh, ninth, eleventh;
   *raised = -1;
-  if (c.q == Q_MAJ || c.q == Q_MIN) {   // (a quality the scale lacks: its third, its fifth set)
-    int want = out[0] + (c.q == Q_MAJ ? 4 : 3);
-    if (third != want) *raised = (want % 12 + 12) % 12;
-    third = want;
-    fifth = out[0] + 7;
+  if (c.chr) {                          // (0.16.12) a root off the scale: its intervals its own, major unless minor
+    r = c.chr;
+    third = r + (c.q == Q_MIN ? 3 : 4), fifth = r + 7, second = r + 2, fourth = r + 5, sixth = r + 9;
+    seventh = r + (c.q == Q_MIN ? 10 : 11), ninth = r + 14, eleventh = r + 17;
+  } else {
+    r = tone(s, n, d);
+    third = tone(s, n, d + 2), fifth = tone(s, n, d + 4), second = tone(s, n, d + 1), fourth = tone(s, n, d + 3);
+    sixth = tone(s, n, d + 5), seventh = tone(s, n, d + 6), ninth = tone(s, n, d + 8), eleventh = tone(s, n, d + 10);
+    if (c.q == Q_MAJ || c.q == Q_MIN) { // (a quality the scale lacks: its third, its fifth set)
+      int want = r + (c.q == Q_MAJ ? 4 : 3);
+      if (third != want) *raised = (want % 12 + 12) % 12;
+      third = want;
+      fifth = r + 7;
+    }
   }
-  out[k++] = third;
-  out[k++] = fifth;
-  for (int i = 1; i <= color && k < kMaxV - 1; ++i) out[k++] = tone(s, n, d + 4 + 2 * i);   // 7th, 9th, 11th
+  // its third: suspended by the progression (its second, its fourth) or by COLOR; POWER: none, the octave instead
+  if (c.q == Q_SUS2 || color == CO_SUS2) third = second;
+  else if (c.q == Q_SUS4 || color == CO_SUS4) third = fourth;
+  out[k++] = r;
+  if (color == CO_POWER) {
+    out[k++] = fifth;
+    out[k++] = r + 12;
+  } else {
+    if (color != CO_11TH) out[k++] = third;   // (the eleventh without its third, which rubs against it: before
+    out[k++] = fifth;                         // 0.16.12, five notes at most, the eleventh never got in: a ninth)
+  }
+  if (color == CO_7TH || color == CO_9TH || color == CO_11TH) out[k++] = seventh;
+  if (color == CO_9TH || color == CO_11TH || color == CO_ADD9) out[k++] = ninth;
+  if (color == CO_11TH) out[k++] = eleventh;
+  if (color == CO_ADD6) out[k++] = sixth;   // (five at most, the bass besides: kMaxV)
   const int8_t add[2] = {c.add0, c.add1};
   for (int i = 0; i < 2; ++i) {
     if (add[i] < 0 || k >= kMaxV - 1) continue;
-    int t = tone(s, n, d + add[i]), dup = 0;
+    int t = c.chr ? r + tone(s, n, add[i]) : tone(s, n, d + add[i]), dup = 0;
+    for (int j = 0; j < k; ++j) dup |= (out[j] - t) % 12 == 0;
+    if (!dup) out[k++] = t;
+  }
+  if (c.extra >= 0 && k < kMaxV - 1) {   // (0.16.12) a note off the scale: a line inside the chord (the cliché's)
+    int t = r + c.extra, dup = 0;
     for (int j = 0; j < k; ++j) dup |= (out[j] - t) % 12 == 0;
     if (!dup) out[k++] = t;
   }
@@ -510,11 +566,11 @@ const char* pads_knob_name(int k) {
 }
 
 void pads_defaults(float* k) {          // Tintin, triads, open, held, a slow swell, a little dark, an ensemble, no bell
-  static const float kD[8] = {1.5f / 17.0f, 0.125f, 0.375f, 1.0f, 0.62f, 0.4f, 0.75f, 0.5f};
+  static const float kD[8] = {2.5f / 27.0f, 1.5f / 9.0f, 0.375f, 1.0f, 0.62f, 0.4f, 0.75f, 0.5f};
   for (int i = 0; i < 8; ++i) k[i] = kD[i];
 }
 
-int pads_knob_steps(int k) { return k == 0 ? kProgs + 1 : k == 1 || k == 2 ? 4 : 128; }
+int pads_knob_steps(int k) { return k == 0 ? kProgs + 1 : k == 1 ? CO_N : k == 2 ? 4 : 128; }
 
 static void put_s(char* b, int n, int* at, const char* s) {
   while (*s && *at < n - 1) b[(*at)++] = *s++;
@@ -554,10 +610,7 @@ MI_COLD void pads_knob_text(int k, float u, char* b, int n) {
       int p = prog_of(u);
       return put_s(b, n, &at, p ? kProg[p - 1].name : "Manual");
     }
-    case 1: {
-      static const char* const kC[4] = {"Triad", "7th", "9th", "11th"};
-      return put_s(b, n, &at, kC[color_of(u)]);
-    }
+    case 1: return put_s(b, n, &at, kColorName[color_of(u)]);
     case 2: {
       static const char* const kV[4] = {"Close", "Open", "Wide", "Bass"};
       return put_s(b, n, &at, kV[voicing_of(u)]);

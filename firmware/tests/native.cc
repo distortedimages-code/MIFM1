@@ -2892,6 +2892,8 @@ int main(int argc, char** argv) {
     const int pads = eng_model_find(MK_PADS, 0);
     int ok = pads >= 0;
     eng_set_model(3, pads);
+    for (int c = 0; c < ENG_CABLES; ++c) p->cable[3][c].depth = 0;   // (0.16.12: the demo's L3 on T4's TIMBRE is
+                                                                    // COLOR here, its nine shares narrower: off)
     float kd[8];
     pads_defaults(kd);
     for (int i = 0; i < 8; ++i) {
@@ -2903,15 +2905,16 @@ int main(int argc, char** argv) {
     // the chords
     int ch[6], raised, roots_ok = 1, thirds_ok = 1;
     const int kRoot[8] = {0, 7, 9, 4, 5, 0, 5, 7}, kThird[8] = {4, 4, 3, 3, 4, 4, 4, 4};
-    for (int i = 0; i < 8; ++i) {         // Pachelbel (the third progression), C major (0xAB5)
-      int nn = pads_chord(3, i, 0, 0xAB5, 0.0f, ch, &raised);
+    const float kTriad = 1.5f / 9.0f;     // (0.16.12: COLOR's nine, TRIAD the second; Pachelbel the fifth of 26)
+    for (int i = 0; i < 8; ++i) {         // Pachelbel, C major (0xAB5)
+      int nn = pads_chord(5, i, 0, 0xAB5, kTriad, ch, &raised);
       roots_ok &= nn == 3 && (ch[0] % 12) == kRoot[i];
       thirds_ok &= ch[1] - ch[0] == kThird[i];
     }
-    int nf = pads_chord(4, 1, 0, 0x5AD, 0.0f, ch, &raised);   // la Folia's V in A minor (over A): E major, G#
+    int nf = pads_chord(7, 1, 0, 0x5AD, kTriad, ch, &raised);   // la Folia's V in A minor (over A): E major, G#
     uint16_t fm = pads_chord_scale(ch, nf, 0x5AD, raised);
     int folia = nf == 3 && ch[0] % 12 == 7 && ch[1] - ch[0] == 4 && raised == 11 && ((fm >> 11) & 1) && !((fm >> 10) & 1);
-    int nc = pads_chord(3, 0, 0, 0xAB5, 0.0f, ch, &raised);   // C major in C major: F out (over E)
+    int nc = pads_chord(5, 0, 0, 0xAB5, kTriad, ch, &raised);   // C major in C major: F out (over E)
     uint16_t cm = pads_chord_scale(ch, nc, 0xAB5, raised);
     int avoid = cm == 0xAB5 - (1u << 5);
     // SCALE Prog through the engine: PADS on track 4, Pachelbel, a trig each beat
@@ -2943,7 +2946,8 @@ int main(int argc, char** argv) {
     pads_init();
     for (int s2 = 0; s2 < 300; ++s2) {
       for (int i = 0; i < 8; ++i) k[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();
-      int prog = static_cast<int>(rnd() * 17.0f), cn = pads_chord(prog, s2, s2 % 7, 0x5AD, k[1], ch, &raised);
+      int prog = static_cast<int>(rnd() * static_cast<float>(pads_progs()));
+      int cn = pads_chord(prog, s2, s2 % 7, 0x5AD, k[1], ch, &raised);
       pads_set(24.0f + 60.0f * rnd(), k, ch, cn, s2 % 12);
       pads_gate(1);
       for (int b = 0; b < 200; ++b) {
@@ -4143,6 +4147,109 @@ int main(int argc, char** argv) {
     printf("Endless by a key, stopped: %d rises without a key; held %d (%d %d %d %d %d %d); let go %d after%s\n", idle,
            held, got[0], got[1], got[2], got[3], got[4], got[5], after, pos < 0 ? "" : ", STILL PLAYING");
     if (!ok || pos >= 0) ++failures, printf("FAIL: Endless by a key, stopped\n");
+    eng_defaults(p);
+    eng_fresh();
+  }
+
+  {                                     // 63. the harmony (0.16.12): PADS' progressions and colours of then where a
+    // project of then finds them; the new chords (off the scale, suspended, the cliché's line, POWER, the eleventh);
+    // the phrygian dominant; FLIP minor one bar, dorian the next
+    static const char* const kOldProg[17] = {"Manual", "Tintin", "Mirror", "Pachelbel", "Folia", "Lament", "Fifths",
+                                             "Gymnopedie", "Prelude", "Plagal", "Dorian", "Dub", "Hymn", "Phrygian",
+                                             "Epic", "Lento", "Static"};
+    static const char* const kOldColor[4] = {"Triad", "7th", "9th", "11th"};
+    char nm[24];
+    int kept = 1;
+    for (int i = 0; i < 17; ++i) {
+      pads_knob_text(0, (static_cast<float>(i) + 0.5f) / 17.0f, nm, sizeof nm);
+      if (strcmp(nm, kOldProg[i])) kept = 0, printf("  PROG %d of then: now %s\n", i, nm);
+    }
+    for (int i = 0; i < 4; ++i) {
+      pads_knob_text(1, (static_cast<float>(i) + 0.5f) / 4.0f, nm, sizeof nm);
+      if (strcmp(nm, kOldColor[i])) kept = 0, printf("  COLOR %d of then: now %s\n", i, nm);
+    }
+    auto prog_at = [&](const char* name) {   // (PROG's middle of that progression's share)
+      for (int i = 0; i < pads_progs(); ++i) {
+        float u = (static_cast<float>(i) + 0.5f) / static_cast<float>(pads_progs());
+        pads_knob_text(0, u, nm, sizeof nm);
+        if (!strcmp(nm, name)) return pads_prog(u);
+      }
+      return -1;
+    };
+    auto color_at = [&](const char* name) {
+      for (int i = 0; i < 9; ++i) {
+        float u = (static_cast<float>(i) + 0.5f) / 9.0f;
+        pads_knob_text(1, u, nm, sizeof nm);
+        if (!strcmp(nm, name)) return u;
+      }
+      return -1.0f;
+    };
+    auto chord_is = [&](int prog, int pos, const char* color, const int* want, int wn) {
+      int out[8], raised, n = pads_chord(prog, pos, 0, 0x5ADu, color_at(color), out, &raised);   // (A minor's: 0 A)
+      if (n != wn) return 0;
+      for (int i = 0; i < n; ++i)
+        if (out[i] != want[i]) return 0;
+      return 1;
+    };
+    const int kFlat2[3] = {1, 5, 8}, kCliche[4] = {0, 3, 7, 11}, kSus2[3] = {0, 2, 7}, kPower[3] = {0, 7, 12};
+    const int k11[5] = {0, 7, 10, 14, 17}, kTritone[3] = {6, 10, 13}, kHover[3] = {0, 2, 7};
+    int chords = chord_is(prog_at("Flat II"), 1, "Triad", kFlat2, 3) && chord_is(prog_at("Descent"), 1, "Triad", kCliche, 4) &&
+                 chord_is(0, 0, "Sus2", kSus2, 3) && chord_is(0, 0, "Power", kPower, 3) && chord_is(0, 0, "11th", k11, 5) &&
+                 chord_is(prog_at("Tritone"), 1, "Triad", kTritone, 3) && chord_is(prog_at("Hover"), 0, "Triad", kHover, 3);
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    eng_blank(p);
+    eng_fresh();
+    p->val[PG_GLOBAL * 4 + 0] = 0.60206f;
+    p->val[PG_GLOBAL * 4 + 2] = 0.0f;   // (C)
+    p->val[PG_GLOBAL * 4 + 1] = 16.0f;  // (the phrygian dominant: C Db E F G Ab Bb)
+    eng_render(l, r, 128);
+    eng_param_text(PG_GLOBAL * 4 + 1, 16.0f, nm, sizeof nm);
+    int pd = !strcmp(nm, "Phryg. dom") && eng_quantize(62) == 61 && eng_quantize(64) == 64 && eng_quantize(66) == 65;
+    p->val[PG_GLOBAL * 4 + 1] = 17.0f;  // FLIP
+    eng_render(l, r, 128);
+    int bar1 = eng_quantize(69);        // (stopped: minor, A to Ab)
+    eng_play(1);
+    for (int b = 0; b < 689 + 200; ++b) eng_render(l, r, 128);   // (into the second bar: dorian, A)
+    int bar2 = eng_quantize(69);
+    eng_play(0);
+    int flip = bar1 == 68 && bar2 == 69;
+    // the chords' names, from their notes: Descent in A minor, a trig a beat on PADS (T4)
+    eng_blank(p);
+    eng_fresh();
+    p->val[PG_GLOBAL * 4 + 0] = 0.60206f;
+    p->val[PG_GLOBAL * 4 + 1] = 2.0f;   // (minor)
+    p->val[PG_GLOBAL * 4 + 2] = 9.0f;   // (A)
+    eng_set_model(3, eng_model_find(MK_PADS, 0));
+    for (int c = 0; c < ENG_CABLES; ++c) p->cable[3][c].depth = 0;
+    for (int i = 0; i < pads_progs(); ++i) {
+      float u = (static_cast<float>(i) + 0.5f) / static_cast<float>(pads_progs());
+      pads_knob_text(0, u, nm, sizeof nm);
+      if (!strcmp(nm, "Descent")) p->val[PG_TRACK(3, 0) * 4 + 1] = u;
+    }
+    for (int st = 0; st < 16; ++st) eng_trig_set(3, st, st % 4 == 0);
+    static char names[4][16];
+    eng_play(1);
+    for (int b = 0, seen = -1; b < 689; ++b) {
+      eng_render(l, r, 128);
+      int pos = eng_pads_pos();
+      if (pos >= 0 && pos < 4 && pos != seen && b % 43 == 20) {
+        char line[48];
+        eng_pads_line(line, sizeof line);
+        const char* sp = line;
+        for (const char* q = line; *q; ++q)
+          if (*q == ' ') sp = q + 1;
+        strncpy(names[pos], sp, 15);
+        seen = pos;
+      }
+    }
+    eng_play(0);
+    int named = !strcmp(names[0], "Am") && !strcmp(names[1], "AmMaj7") && !strcmp(names[2], "Am7") && !strcmp(names[3], "Am6");
+    if (!named) printf("  Descent named: %s %s %s %s\n", names[0], names[1], names[2], names[3]);
+    flip &= named;
+    printf("the harmony: PROG and COLOR of then %s; the new chords %s; the phrygian dominant %s; FLIP A as %d then %d\n",
+           kept ? "where they were" : "MOVED", chords ? "ok" : "WRONG", pd ? "ok" : "WRONG", bar1, bar2);
+    if (!kept || !chords || !pd || !flip) ++failures, printf("FAIL: the harmony\n");
     eng_defaults(p);
     eng_fresh();
   }

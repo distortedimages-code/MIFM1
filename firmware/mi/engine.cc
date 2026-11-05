@@ -81,12 +81,14 @@ namespace {
 const char* const kLfoWaves[LW_N] = {"Sine", "Triangle", "Saw", "Ramp", "Square", "S&H", "Smooth"};
 const char* const kLfoModes[6] = {"Free", "Sync", "T1", "T2", "T3", "T4"};
 const char* const kOnOff[2] = {"Off", "On"};
-const char* const kScaleNames[16] = {"Off", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
+const char* const kScaleNames[18] = {"Off", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
                                      "Locrian", "Harm. minor", "Mel. minor", "Maj. penta", "Min. penta", "Blues",
-                                     "Whole tone", "Hirajoshi", "Prog"};   // (Prog: PADS' chord, as it goes)
-const int kScaleProg = 15;
-const uint16_t kScaleMasks[15] = {0xFFF, 0xAB5, 0x5AD, 0x6AD, 0x5AB, 0xAD5, 0x6B5, 0x56B, 0x9AD, 0xAAD, 0x295, 0x4A9,
-                                  0x4E9, 0x555, 0x18D};   // bit i: i semitones over the root
+                                     "Whole tone", "Hirajoshi", "Prog", "Phryg. dom", "Flip"};
+// (Prog: PADS' chord, as it goes; 0.16.12, after it (the projects' scales where they were): the phrygian dominant
+// (its major third over the flat second), FLIP (minor one bar, dorian the next: the sixth flat, then not))
+const int kScaleProg = 15, kScaleFlip = 17, kScales = 18;
+const uint16_t kScaleMasks[17] = {0xFFF, 0xAB5, 0x5AD, 0x6AD, 0x5AB, 0xAD5, 0x6B5, 0x56B, 0x9AD, 0xAAD, 0x295, 0x4A9,
+                                  0x4E9, 0x555, 0x18D, 0, 0x5B3};   // bit i: i semitones over the root
 const char* const kNoteName[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 const char* const kArpRates[6] = {"1/32", "1/16T", "1/16", "1/8T", "1/8", "1/4"};
 const float kArpMult[6] = {0.5f, 2.0f / 3.0f, 1.0f, 4.0f / 3.0f, 2.0f, 4.0f};   // in sixteenths
@@ -128,7 +130,7 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Delay", K_UNI, 0, 0, 0}, {"Delay", K_UNI, 0, 0, 0}, {"Delay", K_UNI, 0, 0, 0}, {"Delay", K_UNI, 0, 0, 0}},
   {{"Note", K_INT, -24, 24, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Ratch", K_INT, 1, ENG_RATCH_MAX, 0}, {"Length", K_INT, 1, 64, 0}},
   {{"Decay", K_UNI, 0, 0, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Depth", K_UNI, 0, 0, 0}, {"Length", K_INT, 1, 64, 0}},
-  {{"Tempo", K_UNI, 0, 0, 0}, {"Scale", K_ENUM, 0, 15, kScaleNames}, {"Root", K_ENUM, 0, 11, kNoteName},
+  {{"Tempo", K_UNI, 0, 0, 0}, {"Scale", K_ENUM, 0, kScales - 1, kScaleNames}, {"Root", K_ENUM, 0, 11, kNoteName},
    {"Swing", K_UNI, 0, 0, 0}},
   {{"Rate", K_ENUM, 0, 5, kArpRates}, {"Gate", K_UNI, 0, 0, 0}, {"Dir", K_ENUM, 0, 3, kArpDir},
    {"Transp", K_INT, -24, 24, 0}},
@@ -703,9 +705,13 @@ int quantize_mask(int n, uint32_t m, int root) {   // the nearest note of the sc
   }
   return n;
 }
+uint16_t base_mask(int sc) {            // a scale's notes, not PADS' chord's (Off, Prog: none); FLIP's this bar's
+  if (sc == kScaleFlip) return playing && tick >= 0 && (tick / 16) % 2 ? kScaleMasks[3] : kScaleMasks[2];
+  return sc > 0 && sc < kScaleFlip && sc != kScaleProg ? kScaleMasks[sc] : 0u;
+}
 uint32_t scale_mask(int sc) {           // SCALE's notes (Prog: the chord's, none without PADS)
   if (sc == kScaleProg) return pad_track >= 0 ? pad_mask : 0u;
-  return sc > 0 && sc < kScaleProg ? kScaleMasks[sc] : 0u;
+  return base_mask(sc);
 }
 void pads_now(float note);              // (its chord now: after track_kind, further down)
 // the render's: a table of the notes -32..159, made again when the scale (its notes) or its root changes (the
@@ -1387,7 +1393,7 @@ void pads_now(float note) {
     return;
   }
   const int sc = Pi(PG_GLOBAL, 1), root = Pi(PG_GLOBAL, 2), prog = pads_prog(E(t, 1));
-  const uint16_t m = kScaleMasks[sc > 0 && sc < kScaleProg ? sc : pads_prog_mode(prog)];
+  const uint16_t m = base_mask(sc) ? base_mask(sc) : base_mask(pads_prog_mode(prog));
   int deg = 0;
   if (prog == 0) {                      // MANUAL: the scale's note at the note or under it, its degree
     int rel = ((static_cast<int>(note + 0.5f) - root) % 12 + 12) % 12;
@@ -1418,8 +1424,8 @@ void mclaim(int t) {
 }
 uint16_t harmony_mask() {               // the harmony's scale (POLY's chords): PADS' (its chords'), else the project's
   const int sc = Pi(PG_GLOBAL, 1);      // (Off, Prog without PADS: none)
-  if (pad_track >= 0) return kScaleMasks[sc > 0 && sc < kScaleProg ? sc : pads_prog_mode(pads_prog(E(pad_track, 1)))];
-  return sc > 0 && sc < kScaleProg ? kScaleMasks[sc] : 0;
+  if (pad_track >= 0) return base_mask(sc) ? base_mask(sc) : base_mask(pads_prog_mode(pads_prog(E(pad_track, 1))));
+  return base_mask(sc);
 }
 inline int lx_param(int t, int i) { return PG_TRACK(t, 0) * 4 + 1 + i; }
 inline float lx_u(int param, float v) { return eng_pdef(param)->kind == K_BIP ? (v + 1.0f) * 0.5f : v; }
@@ -2567,23 +2573,58 @@ int eng_model_free(int t, int m) {
 }
 int eng_pads_track(void) { return pad_track; }
 int eng_pads_pos(void) { return pad_track >= 0 ? pad_pos : -1; }
-void eng_pads_chord(char* b, int n) {   // its root, minor (m), diminished (dim) or augmented (+), its seventh, sus
-  if (n <= 0) return;
+void eng_pads_chord(char* b, int n) {   // its root, its quality (m, dim, +, sus2, sus4, 5), its extension (7, Maj7, 9,
+  if (n <= 0) return;                   // 11, add9, 6, b6); a note none of them explains: + (0.16.12: from its notes)
   b[0] = 0;
   if (pad_track < 0 || pad_n < 3) return;
-  int r = pad_chord[0], third = pad_chord[1] - r, fifth = pad_chord[2] - r, sev = pad_n > 3 ? pad_chord[3] - r : -1;
-  char t[16];
-  int k = 0;
-  for (const char* q = kNoteName[((Pi(PG_GLOBAL, 2) + r) % 12 + 12) % 12]; *q; ++q) t[k++] = *q;
-  const char* suf = third == 3 ? (fifth == 6 ? "dim" : "m") : third == 4 ? (fifth == 8 ? "+" : "") :
-                    third == 5 ? "sus4" : third == 2 ? "sus2" : "";
-  for (const char* q = suf; *q; ++q) t[k++] = *q;
-  if (sev == 10 || sev == 11) {
-    if (sev == 11) t[k++] = 'M', t[k++] = 'a', t[k++] = 'j';
-    t[k++] = '7';
-  } else if (pad_n > 3) {
-    t[k++] = '+';                       // (more notes: an added one)
+  const int r = pad_chord[0];
+  uint32_t has = 0;                     // (bit i: a note i semitones over the root, 0..23)
+  for (int i = 1; i < pad_n; ++i) {
+    int d = pad_chord[i] - r;
+    while (d < 0) d += 12;
+    if (d < 24) has |= 1u << d;
   }
+  auto h = [&](int d) { return (has >> d) & 1u; };
+  uint32_t used = 0;
+  auto use = [&](int d) { used |= 1u << d; };
+  char t[20];
+  int k = 0;
+  auto put = [&](const char* q) { while (*q && k < 18) t[k++] = *q++; };
+  put(kNoteName[((Pi(PG_GLOBAL, 2) + r) % 12 + 12) % 12]);
+  int maj = h(4), mnr = !maj && h(3), sus2 = !maj && !mnr && h(2), sus4 = !maj && !mnr && !sus2 && h(5);
+  if (maj) use(4);
+  if (mnr) use(3);
+  if (sus2) use(2);
+  if (sus4) use(5);
+  if (h(7)) use(7);
+  if (h(12)) use(12);
+  int sev = h(10) ? 10 : h(11) ? 11 : 0, ninth = h(14), eleventh = h(17);
+  if (mnr && !h(7) && h(6)) put("dim"), use(6);
+  else if (maj && !h(7) && h(8)) put("+"), use(8);
+  else if (mnr) put("m");
+  else if (sus2) put("sus2");
+  else if (sus4) put("sus4");
+  else if (!maj && !sev && !ninth && !eleventh && h(7)) put("5");
+  if (eleventh && sev) {
+    put(sev == 11 ? "Maj11" : "11");
+    use(sev), use(14), use(17);
+  } else if (ninth && sev) {
+    put(sev == 11 ? "Maj9" : "9");
+    use(sev), use(14);
+  } else if (sev) {
+    put(sev == 11 ? "Maj7" : "7");
+    use(sev);
+  } else if (ninth) {
+    put("add9");
+    use(14);
+  } else if (h(9)) {
+    put("6");
+    use(9);
+  } else if (h(8) && h(7)) {
+    put("b6");
+    use(8);
+  }
+  if (has & ~used) put("+");            // (a note more: Tintin's voice, an added degree)
   t[k] = 0;
   for (k = 0; t[k] && k < n - 1; ++k) b[k] = t[k];
   b[k] = 0;

@@ -105,17 +105,18 @@ float fm4_shape_level(float u, int op, float x);   /* its operator op's level at
 float fm4_from_move(float move);         /* 0.10's MOVE (-1..1) as SHAPE (-1..1) */
 void fm4_knob_text(int k, float u, char *b, int n);
 
-/* ---- PADS (mi_pads.cc, 0.11): MIFM1's chords and their progressions (MANUAL, then sixteen: after Arvo Part,
- * Pachelbel, la Folia, the lament, the circle of fifths, Satie, Bach...), built in a scale (a 12-bit mask over its
- * root), played by a string pad; once a project. Its eight knobs (k: 0..1, a bipolar knob from its middle): PROG,
+/* ---- PADS (mi_pads.cc, 0.11): MIFM1's chords and their progressions (MANUAL, then 26: after Arvo Part,
+ * Pachelbel, la Folia, the lament, the circle of fifths, Satie, Bach...; 0.16.12: darker, suspended, off the scale),
+ * built in a scale (a 12-bit mask over its root), played by a string pad; once a project. Its eight knobs (k: 0..1, a bipolar knob from its middle): PROG,
  * COLOR, VOICING, DECAY, ATTACK, TONE, ENSEMBLE (- VINTAGE, + WIDE), BELLS ---- */
 int pads_progs(void);                    /* MANUAL and the progressions */
 int pads_prog(float u);                  /* PROG at u: 0 MANUAL, 1.. a progression */
 int pads_prog_len(int prog);             /* its chords */
 int pads_prog_mode(int prog);            /* its own mode (the engine's scale: 1 major, 2 minor...) */
-/* a chord: the prog's pos-th (MANUAL: the triad on the scale's degree), COLOR its extensions; its notes (semitones
- * over the scale's root, the root first) in out (6 at most), how many; raised: a note the scale lacks (a raised third,
- * 0..11), -1 none */
+/* a chord: the prog's pos-th (MANUAL: the triad on the scale's degree), COLOR its colour (POWER, TRIAD, SUS2, 7TH,
+ * SUS4, 9TH, ADD9, 11TH, ADD6); its notes (semitones over the scale's root, the root first) in out (6 at most), how
+ * many; raised: a note the scale lacks (a raised third, 0..11), -1 none (a root off the scale: its notes in the
+ * chord's scale all the same) */
 int pads_chord(int prog, int pos, int degree, uint16_t mask, float color, int *out, int *raised);
 uint16_t pads_chord_scale(const int *chord, int n, uint16_t mask, int raised);   /* its scale, the avoid notes out */
 void pads_init(void);

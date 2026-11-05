@@ -355,25 +355,40 @@ l'accord : son degré dans la gamme (une touche, un accord ; les pas, leurs lock
 | PROG | Les accords | D'après |
 | --- | --- | --- |
 | Manual | celui de la note jouée | |
+| Descent | i, i(maj7), i7, i6 : une voix qui descend par demi-tons à l'intérieur de l'accord mineur (0.16.12) | le « line cliché » des musiques de film |
 | Tintin | i tenu, et au-dessus une voix qui descend par degrés depuis l'octave et remonte (les notes de l'accord, déjà là, sautées ; mineur) | Arvo Pärt, *Für Alina* (1976) : les tintinnabuli |
 | Mirror | I, IV et V, une note ajoutée qui tourne autour (majeur) | Pärt, *Spiegel im Spiegel* (1978) |
+| Flat II | i ♭II ♭VII i : le ♭II majeur, un demi-ton au-dessus de la tonique, hors gamme (0.16.12) | la sixte napolitaine, le phrygien des bandes originales sombres |
 | Pachelbel | I V vi iii IV I IV V | le Canon en ré |
+| Tritone | i ♭V i ♭VI : un accord majeur à la quarte augmentée, hors gamme (0.16.12) | le triton, inquiétant |
 | Folia | i V i VII III VII i V | la Folia (Corelli, Vivaldi, Rachmaninov) |
 | Lament | i VII VI V | la basse de lamentation (Purcell, *Didon et Énée*), la cadence andalouse |
+| Rise | i III IV i : le IV majeur dans une tonalité mineure, qui soulève (0.16.12) | l'emprunt au dorien |
 | Fifths | vi ii V I IV vii iii vi | le cercle des quintes baroque |
 | Gymnopedie | IVmaj7 Imaj7 | Satie, la première *Gymnopédie* |
+| Hover | i(sus2) ♭VI(sus2) ♭III ♭VII(sus4) : suspendu, rien ne se résout (0.16.12) | les nappes des musiques de film d'aujourd'hui |
 | Prelude | I ii7 V7 I vi ii V7 I | Bach, le premier prélude du *Clavier bien tempéré* |
+| Shift | I i ♭VI ♭VII : le majeur puis le mineur sur la même tonique (0.16.12) | l'échange de modes |
 | Plagal | I IV I IV vi IV I I | l'amen des chorals |
 | Dorian | i7 IV7 | le vamp dorien |
+| Mediant | i ♭VI i III : le III majeur, hors gamme, une médiante chromatique (0.16.12) | les médiantes des musiques de film |
 | Dub | i7 iv7 i7 VII | le dub |
 | Hymn | I vi IV V I IV V I | un choral |
+| Pedal | i, puis ♭VII, v, ♭VII avec la tonique dedans : des accords qui bougent sur la tonique tenue (0.16.12) | la pédale |
 | Phrygian | i II i VII VI VII II i | le phrygien |
+| Dominant | I ♭II ♭vii ♭II, en phrygien dominant (0.16.12) | le phrygien dominant (flamenco, musiques du Moyen-Orient) |
 | Epic | i VI III VII | l'éolien des musiques de film |
 | Lento | i(add9) VI i(add9) iv | un mineur lent |
+| Haze | i(add9) ♭VI(maj7) iv(add9) ♭VI : lent, large (0.16.12) | les nappes ambient |
 | Static | I | un bourdon : en Prog, toute la machine sur un accord |
 
-**COLOR** ajoute à la triade la septième, la neuvième, la onzième (Triad, 7th, 9th, 11th : les notes de la gamme
-au-dessus de la quinte). **VOICING** : Close (serré), Open (la deuxième voix du haut descend d'une octave), Wide (la
+**COLOR** : la couleur de l'accord (0.16.12 : neuf ; avant, quatre) : **Power** (la fondamentale, la quinte et l'octave,
+sans tierce), **Triad**, **Sus2** et **Sus4** (la tierce remplacée par la seconde, la quarte), **7th**, **9th**, **11th**
+(sans sa tierce, qui frotte contre la onzième ; avant 0.16.12, cinq notes au plus, la onzième n'entrait jamais : une
+neuvième), **Add9** (la triade et la neuvième, sans septième), **Add6** (la triade et la sixte) ; toujours les notes de
+la gamme, sauf sur un accord hors gamme. Les dix progressions de 0.16.12 et ces couleurs sont rangées entre celles
+d'avant : un projet, un pattern ou un preset d'avant retrouve sa progression et sa couleur. Un LFO branché sur COLOR
+passe maintenant par plus de couleurs (ses parts sont plus étroites). **VOICING** : Close (serré), Open (la deuxième voix du haut descend d'une octave), Wide (la
 quatrième aussi), Bass (et une basse sous l'accord, sa fondamentale). Chaque accord est **conduit depuis le précédent** :
 de ses renversements, celui où les voix bougent le moins, autour de la note de la piste (FREQ, OCTAVE : le registre).
 **DECAY** de 0,2 à 20 s, Hold au bout (tenu tant que la note l'est ; depuis 0.15.2, joué par les pas ou Endless,
@@ -388,7 +403,7 @@ lentement) : à droite sur la note du haut (une octave au-dessus), à gauche sur
 
 | 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **PROG** (Manual, 16 progressions) | **COLOR** (Triad, 7th, 9th, 11th) | **VOICING** (Close, Open, Wide, Bass) | **DECAY** (0,2 à 20 s ; au bout, Hold) | **ATTACK** (1 ms à 4 s) | **TONE** (− : sombre, + : brillant) | **ENSEMBLE** (− : VINTAGE, + : WIDE) | **BELLS** (− : sur la basse, + : sur le haut) |
+| **PROG** (Manual, 26 progressions) | **COLOR** (Power, Triad, Sus2, 7th, Sus4, 9th, Add9, 11th, Add6) | **VOICING** (Close, Open, Wide, Bass) | **DECAY** (0,2 à 20 s ; au bout, Hold) | **ATTACK** (1 ms à 4 s) | **TONE** (− : sombre, + : brillant) | **ENSEMBLE** (− : VINTAGE, + : WIDE) | **BELLS** (− : sur la basse, + : sur le haut) |
 
 **La gamme Prog** (GLO, SCALE après Hirajoshi) : quand une piste joue PADS, **toutes les autres pistes suivent son
 accord**, en temps réel : à chaque trig de PADS, le quantiseur passe à la **gamme de l'accord**, ses notes et les notes
@@ -783,8 +798,9 @@ sauvegardé garde les siennes). **ENV tenu
 
 **Le quantiseur et le swing** (GLO) : TEMPO, SCALE et ROOT (chaque note, des pas, de l'aléatoire ou du clavier, va
 à la note de la gamme la plus proche : Off, Major, Minor, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Harmonic et
-Melodic minor, Major et Minor pentatonic, Blues, Whole tone, Hirajoshi, et Prog : l'accord que joue PADS, voir plus
-haut), SWING (50 % : droit ; 75 % : les
+Melodic minor, Major et Minor pentatonic, Blues, Whole tone, Hirajoshi, Prog : l'accord que joue PADS, voir plus
+haut ; puis, depuis 0.16.12, **Phryg. dom** (le phrygien dominant : la seconde mineure et la tierce majeure) et
+**Flip** (mineur une mesure, dorien la suivante : la sixte bémol, puis naturelle ; mineur à l'arrêt)), SWING (50 % : droit ; 75 % : les
 contretemps retardés d'une demi-double croche). Quand une gamme est choisie, tout ce qui fait une hauteur y reste :
 FREQ (et ce que les câbles et la dose d'aléatoire en font : un LFO sur FREQ joue en escalier dans la gamme), la
 transposition, la note de l'oscillateur de Warps. Seul P.ENV glisse encore d'une note à l'autre : c'est l'enveloppe
