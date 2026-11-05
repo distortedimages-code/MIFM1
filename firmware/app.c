@@ -527,6 +527,7 @@ static const char *module_name(int page)
                                                                         : track_kind(ptrack(page)) == MK_PADS ? "Pads"
                                                                         : track_kind(ptrack(page)) == MK_POLY ? "Poly"
                                                                         : track_kind(ptrack(page)) == MK_PROPHET ? "Prophet"
+                                                                        : track_kind(ptrack(page)) == MK_SQ1 ? "SQ-1"
                                                                         : "Plaits";
     }
     case PT_LFO: {
@@ -558,8 +559,8 @@ static const char *const LANE_SHORT[ENG_LANES] = {"T1", "T2", "T3", "T4", "DL", 
 /* the colours of a module's state, as its icons print them (in Mutable's: teal, orange, pink) */
 static uint16_t accent3(int i) { return i <= 0 ? AC1 : i == 1 ? AC2 : AC3; }
 
-static uint16_t model_accent(int m)      /* by bank: orange MIFM1's voices (ZERO, the FM), teal Plaits' chiptune and
-                                          * voices, pink the drums, the noises and the physical models */
+static uint16_t model_accent(int m)      /* by bank: orange MIFM1's voices (ZERO, the FM, SQ-1...), teal Plaits' speech,
+                                          * pink the drums, the noises and the physical models */
 {
     int b = eng_model_bank(m);
     return b == 2 ? AC2 : b == 3 ? AC1 : AC3;
@@ -1050,10 +1051,11 @@ static const vop_t ICONS[NICON][IOPS] = {
      {'L', 4, 27, 10, 17}, {'L', 10, 17, 10, 27}, {'L', 10, 27, 18, 17}, {'L', 18, 17, 18, 27},
      {'L', 18, 27, 26, 17}},                                                                        /* PROPHET: two
                                                                                                      * saws apart */
-    {{'L', 4, 24, 4, 10}, {'L', 4, 10, 12, 10}, {'L', 12, 10, 12, 24}, {'L', 12, 24, 20, 24}, {'L', 20, 24, 20, 10},
-     {'L', 20, 10, 28, 10}},                                                                        /* CHIPTUNE */
-    {{'L', 4, 24, 10, 22}, {'L', 10, 22, 13, 12}, {'L', 13, 12, 16, 7}, {'L', 16, 7, 19, 12}, {'L', 19, 12, 22, 22},
-     {'L', 22, 22, 28, 24}},                                                                        /* FORMANT */
+    {{'L', 2, 27, 6, 21}, {'L', 6, 21, 10, 27}, {'L', 11, 19, 16, 13}, {'L', 16, 13, 16, 19}, {'L', 16, 19, 20, 14},
+     {'L', 21, 11, 21, 4}, {'L', 21, 4, 24, 4}, {'L', 24, 4, 24, 11}, {'L', 24, 11, 29, 11}},          /* SQ-1: a
+                                                                                                     * Transwave's
+                                                                                                     * cycles, one
+                                                                                                     * after another */
     {{'R', 5, 6, 22, 14}, {'L', 10, 20, 8, 27}, {'L', 8, 27, 16, 20}},                              /* SPEECH */
     {{'C', 10, 18, 5, 0}, {'C', 17, 13, 6, 0}, {'C', 23, 19, 5, 0}},                                /* SWARM */
     {{'L', 4, 18, 7, 10}, {'L', 7, 10, 10, 23}, {'L', 10, 23, 13, 8}, {'L', 13, 8, 16, 21}, {'L', 16, 21, 19, 11},
@@ -1446,12 +1448,48 @@ static void fm_shape_panel(int t, int pg, uint16_t ac)
     }
 }
 
+/* SQ-1's first face: in the ring, the cycle its newest voice reads (its Transwave's place as it steps), its name, its
+ * program's family, the place */
+static void panel_sq1(int t, int m, uint16_t ac)
+{
+    float y[48];
+    char s[40], n[8];
+    int of = 32, at = eng_sq_cycle(t, y, 48, &of);
+    hoop(HX, HY, 27.0f, 2.0f, ac);
+    if (at < 0) {
+        vicon(HX, HY, 1.05f, 2.4f, ac, IC_MODEL + m, 0);
+    } else {
+        int reveal = anim_p >= 1.0f ? 48 : (int)(48.0f * (1.0f - (1.0f - anim_p) * (1.0f - anim_p)));
+        for (int i = 1; i < reveal; i++) {   /* (37 px wide, 13 px each way) */
+            float x0 = HX - 18.5f + (float)(i - 1) * (37.0f / 47.0f), x1 = HX - 18.5f + (float)i * (37.0f / 47.0f);
+            seg(x0, HY - y[i - 1] * 13.0f, x1, HY - y[i] * 13.0f, 4.0f, tint(ac, BG, 2));
+            seg(x0, HY - y[i - 1] * 13.0f, x1, HY - y[i] * 13.0f, 2.0f, ac);
+        }
+    }
+    int yl = hero_title(eng_algo_name(PG_TRACK(t, 0), m));
+    s[0] = 0;
+    text_cat(s, eng_sq_family(t), sizeof s);
+    if (at >= 0) {
+        text_cat(s, "|", sizeof s);
+        int_text(at % 32 + 1, n);
+        text_cat(s, n, sizeof s);
+        text_cat(s, " / ", sizeof s);
+        int_text(of, n);
+        text_cat(s, n, sizeof s);
+    }
+    hero_line(yl, s);
+}
+
 static void panel_plaits(int t, int face, uint16_t ac)
 {
     project_t *p = eng_project();
     int m = p->algo[PG_TRACK(t, 0)];
     char s[40], n[8];
     int alg = eng_fm_algo(t);            /* (the FM: its algorithm, as it plays) */
+    if (face != 2 && track_kind(t) == MK_SQ1) {
+        panel_sq1(t, m, ac);
+        return;
+    }
     hero_icon(alg >= 0 ? IC_ALG + alg : IC_MODEL + m, ac);
     if (face == 0) {                     /* the model (PADS: its progression, its chord) */
         int y = hero_title(eng_algo_name(PG_TRACK(t, 0), m));
@@ -2320,6 +2358,8 @@ static void draw_panel(void)
     }
     if ((pt == PT_PLAITS1 || pt == PT_PLAITS2 || pt == PT_PLAITS3 || pt == PT_SON2) && eng_fm_algo(tr) >= 0)
         s[1] = s[1] * 9 + 1 + eng_fm_algo(tr);   /* (the FM: its algorithm's drawing) */
+    if ((pt == PT_PLAITS1 || pt == PT_PLAITS2 || pt == PT_PLAITS3) && track_kind(tr) == MK_SQ1)
+        s[1] = s[1] * 37 + 2 + eng_sq_cycle(tr, 0, 0, 0);   /* (SQ-1: the cycle it reads) */
     if (tr >= 0 && tr == eng_pads_track()) {   /* (PADS: its progression's place, its chord) */
         char pl[40];
         eng_pads_line(pl, sizeof pl);

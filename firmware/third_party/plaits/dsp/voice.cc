@@ -45,12 +45,12 @@ void Voice::Init(BufferAllocator* allocator) {
   engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);
   engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 5 wave terrain
   engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 6 string machine
-  engines_.RegisterInstance(&chiptune_engine_, false, 0.5f, 0.5f);
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 7 chiptune (MIFM1 0.16.14: SQ-1 in its place)
   
   engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 8 virtual analog
   engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 9 waveshaping
   engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 10 FM
-  engines_.RegisterInstance(&grain_engine_, false, 0.7f, 0.6f);
+  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 11 grain (formant, gone in 0.16.14)
   engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 12 additive
   engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 13 wavetable
   engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 14 chords
@@ -180,15 +180,6 @@ void Voice::Render(
     speech_engine_.set_speed( 
         !modulations.trigger_patched || modulations.morph_patched ?
             0.0f : patch.morph_modulation_amount);
-  } else if (engine_index == 7) {
-    if (modulations.trigger_patched && !modulations.timbre_patched) {
-      // Disable internal envelope on TIMBRE, and enable the envelope generator
-      // built into the chiptune engine.
-      internal_envelope_amplitude_timbre = 0.0f;
-      chiptune_engine_.set_envelope_shape(patch.timbre_modulation_amount);
-    } else {
-      chiptune_engine_.set_envelope_shape(ChiptuneEngine::NO_ENVELOPE);
-    }
   }
   
   p.note = ApplyModulations(

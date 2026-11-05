@@ -197,8 +197,8 @@ const ModelDef kModelDef[ENG_MODELS] = {
   {"FM HI-HAT", "FHAT", MK_LXR, 3, 1},
   {"ZERO", "ZERO", MK_ZERO, 0, 2},
   {"FM", "FM", MK_FM, 0, 2}, {"PADS", "PADS", MK_PADS, 0, 2}, {"POLY", "POLY", MK_POLY, 0, 2},
-  {"PROPHET", "PRO5", MK_PROPHET, 0, 2},
-  {"CHIPTUNE", "CHIP", MK_PLAITS, 7, 3}, {"FORMANT", "FRMT", MK_PLAITS, 11, 3}, {"SPEECH", "SPCH", MK_PLAITS, 15, 3},
+  {"PROPHET", "PRO5", MK_PROPHET, 0, 2}, {"SQ-1", "SQ-1", MK_SQ1, 0, 2},
+  {"SPEECH", "SPCH", MK_PLAITS, 15, 3},
   {"SWARM", "SWRM", MK_PLAITS, 16, 4}, {"NOISE", "NOIS", MK_PLAITS, 17, 4}, {"PARTICLES", "PART", MK_PLAITS, 18, 4},
   {"STRING", "STRG", MK_PLAITS, 19, 4}, {"MODAL", "MODL", MK_PLAITS, 20, 4},
 };
@@ -515,12 +515,13 @@ float dice_curve() {                    // the dose's reach, 0..1: the knob's tr
   return d * d;
 }
 int dice_interval(int m) {              // the parameter (tp) of a model that is an interval (off the scale, thrown):
-  const ModelDef& d = mdef(m);          // Plaits' HARMONICS (chiptune, swarm, particle), PADS' PROG; 0 none (the FM's
-  if (d.kind == MK_PADS) return 1;      // RATIO: kept out of its chords, at the dose; POLY's CHORD: its parallel ones
-  if (d.kind == MK_POLY) return 7;      // would leave the scale; PROPHET's too)
-  if (d.kind == MK_PROPHET) return 8;
+  const ModelDef& d = mdef(m);          // Plaits' HARMONICS (swarm, particle), PADS' PROG; 0 none (the FM's RATIO:
+  if (d.kind == MK_PADS) return 1;      // kept out of its chords, at the dose; POLY's CHORD: its parallel ones would
+  if (d.kind == MK_POLY) return 7;      // leave the scale; PROPHET's too; SQ-1's WAVE: a program, its Transwave made
+  if (d.kind == MK_PROPHET) return 8;   // anew)
+  if (d.kind == MK_SQ1) return 1;
   if (d.kind != MK_PLAITS) return 0;
-  return d.sub == 7 || d.sub == 16 || d.sub == 18 ? 1 : 0;
+  return d.sub == 16 || d.sub == 18 ? 1 : 0;
 }
 void make_dice() {                      // the effects' (a track's: at its trigs, new_trig)
   for (int j = 0; j < n_fx_dice; ++j) fx_off[j] = fx_span[j] * (2.0f * rand01() - 1.0f);
@@ -1470,14 +1471,24 @@ void pads_now(float note) {
 // its owner, the machine whose state it holds (0xFF: none yet), made again when another comes (its _reset)
 alignas(8) uint8_t mstate[ENG_TRACKS][MF_STATE_BYTES];
 uint8_t mowner[ENG_TRACKS] = {0xFF, 0xFF, 0xFF, 0xFF};
+// (0.16.14) a track's Plaits voice's memory lent (SQ-1's Transwaves): made Plaits' again when another machine comes,
+// its epoch another (what was there gone)
+uint8_t vlent[ENG_TRACKS];
+uint32_t vepoch[ENG_TRACKS];
 void mclaim(int t) {
   const int k = track_kind(t);
+  if (vlent[t] && k != MK_SQ1) {
+    mp_init(voice[t]);
+    ++vepoch[t];
+    vlent[t] = 0;
+  }
   if (mowner[t] == k) return;
   if (k == MK_ZERO) zero_reset(t);
   else if (k == MK_DRUM) drum_reset(t);
   else if (k == MK_FM) fm4_reset(t);
   else if (k == MK_POLY) poly_reset(t);
   else if (k == MK_PROPHET) pro_reset(t);
+  else if (k == MK_SQ1) sq_reset(t);
   mowner[t] = static_cast<uint8_t>(k);
 }
 uint16_t harmony_mask() {               // the harmony's scale (POLY's chords): PADS' (its chords'), else the project's
@@ -1495,6 +1506,7 @@ MI_COLD void kit_of(int m, float* k) {          // a model's knobs as its kit ha
   else if (d.kind == MK_PADS) pads_defaults(k);
   else if (d.kind == MK_POLY) poly_defaults(k);
   else if (d.kind == MK_PROPHET) pro_defaults(k);
+  else if (d.kind == MK_SQ1) sq_defaults(k);
   else if (d.kind == MK_LXR) lx_defaults(d.sub, k);
   else
     for (int i = 0; i < LX_KNOBS; ++i) k[i] = 0.5f;
@@ -1602,7 +1614,7 @@ void set_voice(int t) {
       float nn[4];
       int cn = poly_notes(k[7], note, pad_chord, pad_track >= 0 ? pad_n : 0, harmony_mask(), Pi(PG_GLOBAL, 2), nn);
       pro_set(t, nn, cn, k);
-    }
+    } else if (kind == MK_SQ1) sq_set(t, note, k);
     else lx_set(t, sub, note, k);
     return;
   }
@@ -1954,6 +1966,7 @@ void render_voice(int t, uint32_t n) {
                                  (fm_fabsf(E(t, 8)) > 0.02f ? kWebPads[3] : 0.0f);
     if (track_kind(t) == MK_POLY) own = kWebPoly[0] + static_cast<float>(poly_voices(t)) * kWebPoly[1];   // (its voices)
     if (track_kind(t) == MK_PROPHET) own = kWebPro[0] + static_cast<float>(pro_voices(t)) * kWebPro[1];
+    if (track_kind(t) == MK_SQ1) own = kWebSq[0] + static_cast<float>(sq_voices(t)) * kWebSq[1];
     web_spend((own + fm + (bend[t].on ? kWebBend : 0.0f) +
                (glitch[t].on || glitch[t].mix > 0.0f ? kWebGlitch : 0.0f) +
                (proj.trauma || tdrv[t].m > 0.0f ? kWebTrauma : 0.0f)) * static_cast<float>(n) / 128.0f);
@@ -1962,7 +1975,7 @@ void render_voice(int t, uint32_t n) {
   int kind = track_kind(t);             // an FM drum: a rise triggers it, its own envelope does the rest; ZERO, a
   int lx = kind == MK_LXR, ac = kind == MK_ZERO, dr = kind == MK_DRUM, fm = kind == MK_FM;   // drum, the FM, PADS:
   int pd = kind == MK_PADS, pd_on = pd && t == pad_track;   // their gate, their own render (PADS: one track's)
-  int po = kind == MK_POLY, px = kind == MK_PROPHET;
+  int po = kind == MK_POLY, px = kind == MK_PROPHET, sq1 = kind == MK_SQ1;
   uint32_t step = n / kFrames, pos = 0;
   for (uint32_t k = 0; k < kFrames; ++k) {
     int g = fg[t][k];
@@ -1975,6 +1988,7 @@ void render_voice(int t, uint32_t n) {
       else if (fm) fm4_render(t, &vbuf[t][pos], at - pos);
       else if (po) poly_render(t, &vbuf[t][pos], at - pos);
       else if (px) pro_render(t, &vbuf[t][pos], at - pos);
+      else if (sq1) sq_render(t, &vbuf[t][pos], at - pos);
       else if (pd) {
         if (pd_on) pads_render(&vbuf[t][pos], at - pos);
         else for (uint32_t i = pos; i < at; ++i) vbuf[t][i] = 0.0f;
@@ -1994,6 +2008,7 @@ void render_voice(int t, uint32_t n) {
     else if (fm) fm4_gate(t, g);
     else if (po) poly_gate(t, g);
     else if (px) pro_gate(t, g);
+    else if (sq1) sq_gate(t, g);
     else if (pd) {
       if (pd_on) pads_gate(g);
     }
@@ -2008,6 +2023,7 @@ void render_voice(int t, uint32_t n) {
     else if (fm) fm4_render(t, &vbuf[t][pos], n - pos);
     else if (po) poly_render(t, &vbuf[t][pos], n - pos);
     else if (px) pro_render(t, &vbuf[t][pos], n - pos);
+    else if (sq1) sq_render(t, &vbuf[t][pos], n - pos);
     else if (pd) {
       if (pd_on) pads_render(&vbuf[t][pos], n - pos);
       else for (uint32_t i = pos; i < n; ++i) vbuf[t][i] = 0.0f;
@@ -2605,6 +2621,7 @@ const char* eng_param_name(int param) {
                                            : track_kind(t) == MK_PADS ? pads_knob_name(lk)
                                            : track_kind(t) == MK_POLY ? poly_knob_name(lk)
                                            : track_kind(t) == MK_PROPHET ? pro_knob_name(lk)
+                                           : track_kind(t) == MK_SQ1 ? sq_knob_name(lk)
                                                                      : lx_knob_name(lx_model(t), lk);
   }
   if (param >= 0 && param < 12 * 4 && (param / 4) % 3 == 0 && param % 4 >= 1) {
@@ -2719,10 +2736,30 @@ extern "C" void* mf_state(int t) { return mstate[t < 0 ? 0 : t >= ENG_TRACKS ? E
 extern "C" void mf_forget(void) {
   for (int t = 0; t < ENG_TRACKS; ++t) mowner[t] = 0xFF;
 }
+extern "C" void* mf_voice_mem(int t, uint32_t* bytes, uint32_t* epoch) {
+  t = t < 0 ? 0 : t >= ENG_TRACKS ? ENG_TRACKS - 1 : t;
+  if (track_kind(t) != MK_SQ1 || !voice[t]) {   // (only the machine on the track)
+    *bytes = 0;
+    *epoch = vepoch[t];
+    return nullptr;
+  }
+  vlent[t] = 1;
+  *bytes = mp_size() & ~7u;
+  *epoch = vepoch[t];
+  return voice[t];
+}
 int eng_fm_algo(int t) { return t >= 0 && t < ENG_TRACKS && track_kind(t) == MK_FM ? fm4_algo(E(t, 1)) : -1; }
 int eng_fm_shaped(int t) { return eng_fm_algo(t) >= 0 && fm4_shape((E(t, 6) + 1.0f) * 0.5f) ? fm4_modulators(eng_fm_algo(t)) : 0; }
 float eng_fm_shape(int t, int op, float x) {
   return eng_fm_algo(t) >= 0 ? fm4_shape_level((E(t, 6) + 1.0f) * 0.5f, op, x) : 0.0f;
+}
+int eng_sq_cycle(int t, float* y, int n, int* of) {
+  if (t < 0 || t >= ENG_TRACKS || track_kind(t) != MK_SQ1 || mowner[t] != MK_SQ1) return -1;
+  return sq_cycle(t, y, n, of);
+}
+const char* eng_sq_family(int t) {
+  if (t < 0 || t >= ENG_TRACKS || track_kind(t) != MK_SQ1) return "";
+  return sq_family(lx_u(lx_param(t, 0), E(t, 1)));
 }
 int eng_model_own(int m) { return mdef(m).kind != MK_PLAITS; }
 int eng_model_find(int kind, int sub) {
@@ -2740,6 +2777,7 @@ float eng_lx_step(int param, float v, int detents) {
                                             : track_kind(t) == MK_PADS ? pads_knob_steps(lk)
                                             : track_kind(t) == MK_POLY ? poly_knob_steps(lk)
                                             : track_kind(t) == MK_PROPHET ? pro_knob_steps(lk)
+                                            : track_kind(t) == MK_SQ1 ? sq_knob_steps(lk)
                                                                       : lx_knob_steps(lx_model(t), lk);
   float u = bip ? (v + 1.0f) * 0.5f : v;
   int i;
@@ -2792,7 +2830,8 @@ MI_COLD void eng_sound_get(int t, eng_sound_t* s) {
   sound_name(s, mdef(proj.algo[PG_TRACK(t, 0)]).name);
 }
 int eng_sound_check(const eng_sound_t* s, int bytes) {
-  if (bytes < static_cast<int>(sizeof *s) || s->magic != SND_MAGIC || s->version != SND_VERSION || s->size != sizeof *s)
+  if (bytes < static_cast<int>(sizeof *s) || s->magic != SND_MAGIC || (s->version != SND_VERSION && s->version != 1) ||
+      s->size != sizeof *s)             // (1: before 0.16.14, read as this one)
     return 0;
   for (int i = 0; i < SND_PAGES * 4; ++i)
     if (!(s->val[i] > -1000.0f && s->val[i] < 1000.0f)) return 0;   // (a NaN fails both)
@@ -2800,7 +2839,12 @@ int eng_sound_check(const eng_sound_t* s, int bytes) {
 }
 MI_COLD int eng_sound_set(int t, const eng_sound_t* s) {
   if (t < 0 || t >= ENG_TRACKS || !eng_sound_check(s, sizeof *s)) return -1;
-  int m = s->algo[0] < ENG_MODELS ? s->algo[0] : 0;
+  int m = s->algo[0], was_plaits = 0;
+  if (s->version == 1 && m >= 15) {     // (before 0.16.14: CHIPTUNE 15, FORMANT 16 now SQ-1 from its kit; the others one
+    was_plaits = m <= 16;               // lower)
+    m = was_plaits ? eng_model_find(MK_SQ1, 0) : m - 1;
+  }
+  m = m >= 0 && m < ENG_MODELS ? m : 0;
   if (!eng_model_free(t, m)) return -2;   // (PADS: once a project)
   for (int i = 0; i < SND_PAGES; ++i) {
     int pg = snd_page(t, i);
@@ -2812,6 +2856,10 @@ MI_COLD int eng_sound_set(int t, const eng_sound_t* s) {
     if (i == 0) proj.algo[pg] = static_cast<uint8_t>(m);
     else if (i == 4) proj.algo[pg] = static_cast<uint8_t>(s->algo[i] < MF_MODELS ? s->algo[i] : MF_OFF);
     else proj.algo[pg] = s->algo[i];
+  }
+  if (was_plaits) {                     // (its knobs SQ-1's kit, their randoms none)
+    lx_kit(&proj, t);
+    for (int k = 0; k < LX_KNOBS; ++k) proj.rnd[t][1 + k] = 0;
   }
   return 0;
 }
@@ -2909,6 +2957,9 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
     poly_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0 && track_kind(param / 12) == MK_PROPHET) {   // PROPHET's (its oscillators, Hz, a chord...)
     pro_knob_text(lk, lx_u(param, v), b, n);
+  } else if (lk >= 0 && track_kind(param / 12) == MK_SQ1) {   // SQ-1's (a program, %, its layers, its SPACE)
+    const int t = param / 12;
+    sq_knob_text(lk, lx_u(param, v), lx_u(lx_param(t, 0), proj.val[lx_param(t, 0)]), b, n);
   } else if (lk >= 0) {                   // an FM drum's: as the LXR-02 shows it (0..127, a wave)
     lx_knob_text(lx_model(param / 12), lk, lx_u(param, v), b, n);
   } else if (pt == PT_WARPS1 && k == 0 && i_of(v) >= WC_OSC1) {   // the oscillator's shape, as the algorithm uses it
@@ -4042,8 +4093,8 @@ void eng_rnd_redraw(project_t* p, int lane, int tp) {
 // a Plaits engine's model now (0.10: thirteen gone to the FM, on its own knobs, the nearest algorithm: *algo; -1:
 // still Plaits')
 int plaits_now(int sub, int* algo) {
-  int m = eng_model_find(MK_PLAITS, sub);
-  *algo = -1;
+  int m = sub == 7 || sub == 11 ? eng_model_find(MK_SQ1, 0) : eng_model_find(MK_PLAITS, sub);   // (0.16.14: CHIPTUNE,
+  *algo = -1;                                                                                   // FORMANT SQ-1)
   if (m >= 0) return m;
   //                      VCF PD 6OP 6OP 6OP TERR SMCH CHIP VA SHPR FM2 FRMT HARM WTBL CHRD
   static const int8_t kTo[15] = {1, 1, 4, 4, 4, 5, 5, -1, 1, 0, 0, -1, 7, 5, 5};
@@ -4056,9 +4107,31 @@ int plaits_now(int sub, int* algo) {
 // numbers (Plaits' 24, the LXR-02's four, ZERO), one of 0.9 from 0.9's (the drums, the FM drums, ZERO, then Plaits' 21
 // in its order), one of 0.10.0 from its (ZERO, the FM's eight, then Plaits' eight); a model gone the FM, on its own
 // knobs, ALGO the nearest
-int plaits_at(int i) {                  // (the eight of Plaits' left since 0.10, in their order)
-  static const uint8_t kSub8[8] = {7, 11, 15, 16, 17, 18, 19, 20};
-  return eng_model_find(MK_PLAITS, kSub8[i < 0 ? 0 : i > 7 ? 7 : i]);
+int plaits_at(int i) {                  // (the eight of Plaits' left since 0.10, in their order; 0.16.14: the first
+  static const uint8_t kSub8[8] = {7, 11, 15, 16, 17, 18, 19, 20};   // two, CHIPTUNE and FORMANT, SQ-1)
+  const int sub = kSub8[i < 0 ? 0 : i > 7 ? 7 : i];
+  return sub == 7 || sub == 11 ? eng_model_find(MK_SQ1, 0) : eng_model_find(MK_PLAITS, sub);
+}
+// 0.16.14: CHIPTUNE and FORMANT gone, SQ-1 in their place: a track that played one plays SQ-1 from its kit, its locks
+// on its eight knobs (Plaits' meanings) gone
+MI_COLD void sq_from_plaits(project_t* p, int t) {
+  lx_kit(p, t);
+  for (int i = 0; i < ENG_PLOCKS; ++i) {
+    plock_t& k = p->lock[i];
+    if (k.lane == t && k.tp >= 1 && k.tp <= LX_KNOBS) k.lane = 0xFF;
+  }
+}
+MI_COLD void models_v27(project_t* p) {   // (0.13 to 0.16.13's numbers: ..., PROPHET 14, CHIPTUNE 15, FORMANT 16,
+  for (int t = 0; t < ENG_TRACKS; ++t) {  // SPEECH 17 ... MODAL 22)
+    const int o = p->algo[PG_TRACK(t, 0)];
+    if (o <= 14) continue;
+    if (o <= 16) {
+      p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(eng_model_find(MK_SQ1, 0));
+      sq_from_plaits(p, t);
+    } else {
+      p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(o - 1 < ENG_MODELS ? o - 1 : 0);
+    }
+  }
 }
 MI_COLD void models_renumbered(project_t* p, int from) {
   for (int t = 0; t < ENG_TRACKS; ++t) {
@@ -4083,7 +4156,8 @@ MI_COLD void models_renumbered(project_t* p, int from) {
       else m = eng_model_find(MK_ZERO, 0);
     }
     p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(m < 0 ? 0 : m);
-    if (kit || algo >= 0) lx_kit(p, t);
+    if (mdef(m).kind == MK_SQ1) sq_from_plaits(p, t);
+    else if (kit || algo >= 0) lx_kit(p, t);
     if (algo >= 0) p->val[PG_TRACK(t, 0) * 4 + 1] = (static_cast<float>(algo) + 0.5f) / 8.0f;
   }
 }
@@ -4251,8 +4325,15 @@ int upgrade_before_16(project_t* p, int bytes);
 int upgrade_any(project_t* p, int bytes);
 MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them, sizeof(project_t) >= the largest)
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
+  const int v = p->magic == PROJECT_MAGIC ? static_cast<int>(p->version) : 0;
+  if (v == 27 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+    p->version = PROJECT_VERSION;       // (0.16.7 to 0.16.13: their layout this one, their models one more)
+    models_v27(p);
+    return 1;
+  }
   if (!upgrade_any(p, bytes)) return 0;
   climb_off_all(p);
+  if (v >= 22) models_v27(p);           // (0.13 to 0.16.6: their numbers 0.16.13's; before, made this one's)
   return 1;
 }
 MI_COLD int upgrade_any(project_t* p, int bytes) {
@@ -4346,6 +4427,8 @@ MI_COLD int eng_init(void) {
     voice[t] = arena + a;
     a += (mp_size() + 7u) & ~7u;
     mp_init(voice[t]);
+    vlent[t] = 0;
+    ++vepoch[t];
     vgate[t] = 0;
     vnote[t] = 48.0f;
     key_on[t] = 0;
@@ -4357,6 +4440,7 @@ MI_COLD int eng_init(void) {
   pads_init();
   poly_init();
   pro_init();
+  sq_init();
   reverb = arena + a;
   a += (mrv_size() + 7u) & ~7u;
   mrv_init(reverb);
@@ -4415,11 +4499,12 @@ void cut_now() {
     else if (k == MK_FM) fm4_silence(t);
     else if (k == MK_POLY) poly_silence(t);
     else if (k == MK_PROPHET) pro_silence(t);
+    else if (k == MK_SQ1) sq_silence(t);
   }
   pads_silence();
   for (int t = 0; t < ENG_TRACKS; ++t) mf_reset(t);   // (the filters' rings)
   for (int t = 0; t < ENG_TRACKS; ++t) {
-    mp_init(voice[t]);
+    if (!vlent[t]) mp_init(voice[t]);   // (SQ-1's Transwaves kept)
     vgate[t] = 0;                       // (a key still held: a new trig)
     quiet[t] = kQuiet;                  // (resting until then)
     bend[t].hold = bend[t].cnt = 0.0f;

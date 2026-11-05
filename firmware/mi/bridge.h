@@ -51,6 +51,9 @@ int lx_knob_steps(int model, int k);     /* its values a knob's turn goes throug
 #define MF_STATE_BYTES 640
 void *mf_state(int t);
 void mf_forget(void);
+/* (0.16.14) the track's Plaits voice's memory, lent while the track plays a machine that asks for it (SQ-1: its
+ * Transwaves, its line): its bytes; its epoch, another each time Plaits makes it its own again (what was there gone) */
+void *mf_voice_mem(int t, uint32_t *bytes, uint32_t *epoch);
 
 /* ---- the drums (mi_drum.cc, 0.9): MIFM1's, after Sonic Charge's Microtonic, an oscillator and a noise each with its
  * envelope, mixed and driven; six models (KICK, SNARE, CLAP, HAT, TOM, PERC), one engine. Their eight knobs as an FM
@@ -167,6 +170,29 @@ const char *pro_knob_name(int k);
 void pro_defaults(float *k);
 int pro_knob_steps(int k);               /* OSC's 13, CHORD's 15, the others 128 */
 void pro_knob_text(int k, float u, char *b, int n);
+
+/* ---- SQ-1 (mi_sq1.cc, 0.16.14): a pocket Ensoniq after the SQ-1 and its OTIS chip, four voices a track: Transwaves
+ * (32 cycles of 256 samples, or 8 loops of a bell's partials, MIFM1's own recipes, made in the track's Plaits voice's
+ * memory) read by a phase accumulator, linearly between two samples, the next cycle taken at its wrap; OTIS' poles,
+ * no resonance; three layers; a chorus, then the program's comb, phaser or drive. Its eight knobs (k: 0..1): WAVE
+ * (24 programs), INDEX, SWEEP (bipolar from its middle), MOTION, COLOR, SHAPE, STACK, SPACE ---- */
+void sq_init(void);
+void sq_reset(int t);
+void sq_silence(int t);
+void sq_set(int t, float note, const float *k);
+void sq_gate(int t, int g);
+void sq_render(int t, float *out, uint32_t n);
+int sq_voices(int t);
+int sq_progs(void);
+const char *sq_knob_name(int k);
+void sq_defaults(float *k);
+int sq_knob_steps(int k);                /* WAVE's 24, the others 128 */
+void sq_knob_text(int k, float u, float wave, char *b, int n);   /* (wave: WAVE's knob, SPACE's text names its effect) */
+const char *sq_prog_name(float wave);
+const char *sq_family(float wave);        /* its program's family (DIGITAL BASS, ELECTRIC...) */
+/* (the screen) the cycle the newest voice reads, n points of a period in y (-1..1); its place + 32 x the program, -1
+ * none; of: the Transwave's places (32, a bell's 8) */
+int sq_cycle(int t, float *y, int n, int *of);
 
 /* ---- the tracks' filters (mi_filter.cc): LADDER (Moog's, D'Angelo and Valimaki's model), MS-20 (Korg 35, its
  * resonance driven), SEM (Oberheim's state variable, noise into it), VOX (three formants); each with a vactrol

@@ -1822,7 +1822,7 @@ int main(int argc, char** argv) {
       o.lock[0] = plock_t{2, 5, TP_NOTE, 200};
       memcpy(&q, &o, sizeof o);
       int bytes = v == 12 ? static_cast<int>(sizeof o) : 3104;
-      int ok = eng_upgrade(&q, bytes) && eng_check(&q) && q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 7) && q.dice == 33 &&
+      int ok = eng_upgrade(&q, bytes) && eng_check(&q) && q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_SQ1, 0) && q.dice == 33 &&
                q.rnd[3][TP_NOTE] == cur.rnd[3][TP_NOTE] && q.rseed[1][3] == (v == 12 ? 5 : 0) && !q.rseed[1][30] &&
                q.lock[0].lane == 2 && q.lock[0].tp == TP_NOTE && q.algo[PG_FILT(1, 0)] == MF_OFF &&
                q.val[PG_FILT(1, 0) * 4] > 0.5f && q.val[PG_MIX * 4 + 1] == cur.val[PG_MIX * 4 + 1];
@@ -2851,7 +2851,7 @@ int main(int argc, char** argv) {
     for (int t = 0; t < ENG_TRACKS; ++t) q16.algo[PG_TRACK(t, 0)] = kOld[t];
     q16.val[PG_TRACK(0, 0) * 4 + 3] = 0.123f;
     int up_ok = eng_upgrade(as_v23(&q16), PROJECT_SIZE_22) && eng_check(&q16) && q16.algo[PG_TRACK(0, 0)] == fm &&
-                q16.algo[PG_TRACK(1, 0)] == eng_model_find(MK_PLAITS, 7) &&
+                q16.algo[PG_TRACK(1, 0)] == eng_model_find(MK_SQ1, 0) &&
                 q16.algo[PG_TRACK(2, 0)] == eng_model_find(MK_ZERO, 0) && q16.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PLAITS, 20);
     up_ok &= std::fabs(q16.val[PG_TRACK(0, 0) * 4 + 3] - kl[2]) < 1e-6f &&
              std::fabs(q16.val[PG_TRACK(0, 0) * 4 + 1] - 1.5f / 8.0f) < 1e-6f;
@@ -2860,7 +2860,7 @@ int main(int argc, char** argv) {
     const uint8_t kOld17[4] = {11, 16, 19, 26};
     for (int t = 0; t < ENG_TRACKS; ++t) q16.algo[PG_TRACK(t, 0)] = kOld17[t];
     up_ok &= eng_upgrade(as_v23(&q16), PROJECT_SIZE_22) && eng_check(&q16) && q16.algo[PG_TRACK(0, 0)] == fm &&
-             q16.algo[PG_TRACK(1, 0)] == fm && q16.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 7) &&
+             q16.algo[PG_TRACK(1, 0)] == fm && q16.algo[PG_TRACK(2, 0)] == eng_model_find(MK_SQ1, 0) &&
              q16.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PLAITS, 20) &&
              std::fabs(q16.val[PG_TRACK(0, 0) * 4 + 1] - 0.5f / 8.0f) < 1e-6f &&
              std::fabs(q16.val[PG_TRACK(1, 0) * 4 + 1] - 5.5f / 8.0f) < 1e-6f;
@@ -3157,7 +3157,7 @@ int main(int argc, char** argv) {
     const uint8_t kOld20[4] = {13, 12, 20, 11};
     for (int t = 0; t < ENG_TRACKS; ++t) q20.algo[PG_TRACK(t, 0)] = kOld20[t];
     int v20 = eng_upgrade(as_v23(&q20), PROJECT_SIZE_22) && eng_check(&q20) &&
-              q20.algo[PG_TRACK(0, 0)] == eng_model_find(MK_PLAITS, 7) &&
+              q20.algo[PG_TRACK(0, 0)] == eng_model_find(MK_SQ1, 0) &&
               q20.algo[PG_TRACK(1, 0)] == eng_model_find(MK_PADS, 0) &&
               q20.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 20) &&
               q20.algo[PG_TRACK(3, 0)] == eng_model_find(MK_FM, 0);
@@ -3337,7 +3337,7 @@ int main(int argc, char** argv) {
     const uint8_t kOld21[4] = {14, 13, 21, 12};
     for (int t = 0; t < ENG_TRACKS; ++t) q21.algo[PG_TRACK(t, 0)] = kOld21[t];
     int v21 = eng_upgrade(as_v23(&q21), PROJECT_SIZE_22) && eng_check(&q21) &&
-              q21.algo[PG_TRACK(0, 0)] == eng_model_find(MK_PLAITS, 7) &&
+              q21.algo[PG_TRACK(0, 0)] == eng_model_find(MK_SQ1, 0) &&
               q21.algo[PG_TRACK(1, 0)] == eng_model_find(MK_POLY, 0) &&
               q21.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 20) &&
               q21.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PADS, 0);
@@ -4355,6 +4355,194 @@ int main(int argc, char** argv) {
     eng_arp_opt_set(p, 0, AO_MODE, AM_LOOP);
     eng_defaults(p);
     eng_fresh();
+  }
+
+  {                                     // 65. SQ-1 (0.16.14): in CHIPTUNE's place (FORMANT gone); its knobs, its kit;
+    // every program sounding, finite, bounded, silent after its release; SWEEP moving its Transwave (a pluck's
+    // brighter at the trig, a pad's later), INDEX its place; the levels of its programs close; 300 settings bounded;
+    // through the engine one track after another machine and back (Plaits' memory lent and given back: SPEECH,
+    // MODAL sounding after it); a project of 0.16.13 (version 27) and one of 0.16.6 (26) renumbered, CHIPTUNE and
+    // FORMANT SQ-1 from its kit (their locks on its knobs gone); a preset of before (its version 1) the same
+    project_t* p = eng_project();
+    const uint32_t n = 128;
+    static float l[128], r[128];
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    const int sq_m = eng_model_find(MK_SQ1, 0);
+    int ok = sq_m == 15 && ENG_MODELS == 22 && eng_model_find(MK_PLAITS, 7) < 0 && eng_model_find(MK_PLAITS, 11) < 0 &&
+             eng_model_bank(sq_m) == 2 && eng_model_own(sq_m) && sq_progs() == 24;
+    eng_set_model(0, sq_m);
+    float kd[8];
+    sq_defaults(kd);
+    for (int i = 0; i < 8; ++i) {
+      int param = PG_TRACK(0, 0) * 4 + 1 + i;
+      float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
+      if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), sq_knob_name(i)) != 0) ok = 0;
+    }
+    char tx[24];
+    const float kMetal = 6.5f / 24.0f, kPiano = 3.5f / 24.0f;
+    struct { int k; float u, w; const char* want; } kTx[] = {
+        {0, 0.0f, 0.0f, "Res Bass"}, {0, kPiano, 0.0f, "E.Piano"}, {0, 1.0f, 0.0f, "Pluck"}, {2, 0.5f, 0.0f, "0%"},
+        {2, 1.0f, 0.0f, "+100%"}, {2, 0.0f, 0.0f, "-100%"}, {4, 0.6f, 0.0f, "Open"}, {4, 0.0f, 0.0f, "100% Dark"},
+        {4, 1.0f, 0.0f, "100% Thin"}, {5, 0.0f, 0.0f, "Perc"}, {5, 1.0f, 0.0f, "Pad"}, {6, 0.0f, 0.0f, "Off"},
+        {6, 0.5f, 0.0f, "100% 2nd"}, {6, 1.0f, 0.0f, "100% 3rd"}, {7, 0.0f, 0.0f, "Dry"}, {7, 0.25f, 0.0f, "50% Chorus"},
+        {7, 1.0f, kMetal, "100% +Comb"}, {7, 0.75f, kPiano, "50% +Phaser"}, {7, 1.0f, 0.0f, "100% +Drive"},
+        {3, 0.25f, 0.0f, "25%"}};
+    for (const auto& x : kTx) {
+      sq_knob_text(x.k, x.u, x.w, tx, sizeof tx);
+      if (std::strcmp(tx, x.want)) ok = 0, printf("SQ-1: knob %d at %.3f written %s, %s expected\n", x.k, x.u, tx, x.want);
+    }
+    if (std::strcmp(sq_family(kMetal), "Metallic") || std::strcmp(sq_family(1.0f), "Percussive")) ok = 0;
+    // every program: C3 held half a second, let go
+    static float ab[44100 * 4];
+    auto play = [&](const float* kk, float note, int held_blocks, int total_blocks) {
+      sq_reset(0);
+      sq_set(0, note, kk);
+      sq_gate(0, 1);
+      for (int b = 0; b < total_blocks; ++b) {
+        if (b == held_blocks) sq_gate(0, 0);
+        sq_render(0, &ab[b * n], n);
+      }
+    };
+    auto bright = [&](uint32_t from, uint32_t len) {   // (its brightness: the slope's energy against the level's)
+      double ex = 0.0, ed = 0.0;
+      for (uint32_t i = from; i < from + len; ++i) ex += ab[i] * ab[i], ed += (ab[i] - ab[i - 1]) * (ab[i] - ab[i - 1]);
+      return std::sqrt(ed / (ex + 1e-12));
+    };
+    auto rms = [&](uint32_t from, uint32_t len) {
+      double e = 0.0;
+      for (uint32_t i = from; i < from + len; ++i) e += ab[i] * ab[i];
+      return std::sqrt(e / len);
+    };
+    int sounds = 0, finite = 1, quiet = 1, moves = 0;
+    float pk_all = 0.0f;
+    double lo = 1e9, hi = 0.0;
+    for (int pr = 0; pr < 24; ++pr) {
+      float k[8];
+      sq_defaults(k);
+      k[0] = (pr + 0.5f) / 24.0f;
+      k[1] = 0.25f, k[2] = 0.85f, k[3] = 0.0f, k[5] = 0.45f, k[6] = 0.3f, k[7] = 0.0f;
+      play(k, 48.0f, 172, 1300);         // (half a second held, then three and a half)
+      float pk = 0.0f;
+      for (uint32_t i = 0; i < 1300 * n; ++i) {
+        if (!std::isfinite(ab[i])) finite = 0;
+        pk = std::max(pk, std::fabs(ab[i]));
+      }
+      double tail = 0.0;
+      for (uint32_t i = 1200 * n; i < 1300 * n; ++i) tail = std::max(tail, (double)std::fabs(ab[i]));
+      double lv = rms(2205, 8820), b0 = bright(441, 1764), b1 = bright(13230, 4410);
+      sounds += lv > 0.01 && pk < 1.0f;
+      quiet &= tail < 1e-4;
+      if (tail >= 1e-4) printf("SQ-1: program %d still %.5f after its release\n", pr, tail);
+      lo = std::min(lo, lv), hi = std::max(hi, lv);
+      pk_all = std::max(pk_all, pk);
+      static const int kRise[24] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0};
+      double ratio = kRise[pr] ? b1 / b0 : b0 / b1;
+      moves += ratio > 1.08;
+      if (getenv("SQ1_VERBOSE"))
+        printf("  SQ-1 %2d %-9s rms %.3f peak %.2f, brightness %.2f then %.2f (x%.2f)\n", pr, sq_prog_name(k[0]), lv, pk,
+               b0, b1, ratio);
+    }
+    // INDEX: Res Bass, no sweep, at its start and at its end
+    float k[8];
+    sq_defaults(k);
+    k[0] = 0.5f / 24.0f, k[2] = 0.5f, k[3] = 0.0f, k[6] = 0.0f, k[7] = 0.0f, k[5] = 0.6f, k[4] = 0.6f;
+    k[1] = 0.0f;
+    play(k, 48.0f, 400, 400);
+    double i0 = bright(8820, 8820);
+    k[1] = 1.0f;
+    play(k, 48.0f, 400, 400);
+    double i1 = bright(8820, 8820);
+    // a Transwave steps: the cycle read changes only at its wrap (the place on the screen one of 32)
+    float cyc[48];
+    int of = 0, at = sq_cycle(0, cyc, 48, &of);
+    int steps = at >= 0 && at % 32 == 31 && of == 32;
+    // anything: 300 settings
+    uint32_t sd = 9876u;
+    auto rnd = [&]() { sd = sd * 1664525u + 1013904223u; return static_cast<float>(sd >> 8) / 16777216.0f; };
+    float pk_any = 0.0f;
+    int nan_any = 0;
+    sq_reset(0);
+    for (int s2 = 0; s2 < 300; ++s2) {
+      for (int i = 0; i < 8; ++i) k[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();
+      sq_set(0, 24.0f + 84.0f * rnd(), k);
+      sq_gate(0, 1);
+      for (int b = 0; b < 60; ++b) {
+        if (b == 30) sq_gate(0, 0);
+        sq_render(0, ab, 32);
+        for (int i = 0; i < 32; ++i) {
+          if (!std::isfinite(ab[i])) nan_any = 1;
+          pk_any = std::max(pk_any, std::fabs(ab[i]));
+        }
+      }
+    }
+    // through the engine: SQ-1, SPEECH, SQ-1, MODAL, SQ-1 on track 1 (Plaits' memory lent and back)
+    eng_defaults(p);
+    eng_fresh();
+    for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(0, st, st % 2 == 0);
+    const int kSeq[5] = {sq_m, eng_model_find(MK_PLAITS, 15), sq_m, eng_model_find(MK_PLAITS, 20), sq_m};
+    eng_play(1);
+    int shared_ok = 1;
+    for (int m = 0; m < 5; ++m) {
+      eng_set_model(0, kSeq[m]);
+      float spk = 0.0f;
+      for (int b = 0; b < 300; ++b) {
+        eng_render(l, r, n);
+        for (uint32_t i = 0; i < n; ++i) {
+          if (!std::isfinite(l[i])) shared_ok = 0;
+          spk = std::max(spk, std::fabs(l[i]));
+        }
+      }
+      if (spk < 0.02f || spk > 1.5f) shared_ok = 0, printf("SQ-1: through the engine, model %d: peak %.3f\n", kSeq[m], spk);
+    }
+    eng_play(0);
+    // a project of 0.16.13 (version 27): CHIPTUNE (15) with a lock on HARMONICS and one on NOTE, FORMANT (16),
+    // SPEECH (17), MODAL (22); one of 0.16.6 (26): SWARM (18), POLY (13), STRING (21), CHIPTUNE (15)
+    static project_t q;
+    eng_defaults(&q);
+    q.version = 27;
+    const uint8_t kOld27[4] = {15, 16, 17, 22};
+    for (int t = 0; t < ENG_TRACKS; ++t) q.algo[PG_TRACK(t, 0)] = kOld27[t];
+    for (int i = 0; i < ENG_PLOCKS; ++i) q.lock[i].lane = 0xFF;
+    q.lock[0] = plock_t{0, 3, 1, 200};
+    q.lock[1] = plock_t{0, 4, TP_NOTE, 100};
+    q.val[PG_TRACK(0, 0) * 4 + 1] = 0.9f;   // (HARMONICS: SQ-1's WAVE then its kit's)
+    int v27 = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == sq_m &&
+              q.algo[PG_TRACK(1, 0)] == sq_m && q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 15) &&
+              q.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PLAITS, 20) && q.lock[0].lane == 0xFF &&
+              q.lock[1].lane == 0 && q.lock[1].tp == TP_NOTE && std::fabs(q.val[PG_TRACK(0, 0) * 4 + 1] - kd[0]) < 1e-6f;
+    eng_defaults(&q);
+    const uint8_t kOld26[4] = {18, 13, 21, 15};
+    for (int t = 0; t < ENG_TRACKS; ++t) q.algo[PG_TRACK(t, 0)] = kOld26[t];
+    int bytes26 = as_v26(&q, 26);
+    int v26 = eng_upgrade(&q, bytes26) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == eng_model_find(MK_PLAITS, 16) &&
+              q.algo[PG_TRACK(1, 0)] == eng_model_find(MK_POLY, 0) &&
+              q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 19) && q.algo[PG_TRACK(3, 0)] == sq_m;
+    // a preset of before: CHIPTUNE's (15) SQ-1's kit, STRING's (21) STRING
+    eng_defaults(p);
+    eng_fresh();
+    eng_sound_t a;
+    eng_set_model(1, eng_model_find(MK_PLAITS, 19));
+    eng_sound_get(1, &a);
+    a.version = 1;
+    a.algo[0] = 15;
+    a.val[1] = 0.95f;
+    int snd = eng_sound_check(&a, sizeof a) && eng_sound_set(2, &a) == 0 && p->algo[PG_TRACK(2, 0)] == sq_m &&
+              std::fabs(p->val[PG_TRACK(2, 0) * 4 + 1] - kd[0]) < 1e-6f;
+    a.algo[0] = 21;
+    snd &= eng_sound_set(3, &a) == 0 && p->algo[PG_TRACK(3, 0)] == eng_model_find(MK_PLAITS, 19);
+    eng_defaults(p);
+    eng_fresh();
+    printf("SQ-1: knobs %s; its 24 programs sounding %d, finite %s, after their release %s, peak %.2f, levels %.3f .. "
+           "%.3f; SWEEP moving %d of 24; INDEX brighter x%.2f; its Transwave stepping %s; 300 settings: peak %.2f%s; "
+           "through the engine %s; versions 27, 26 %s %s; a preset of before %s\n",
+           ok ? "ok" : "WRONG", sounds, finite ? "yes" : "NO", quiet ? "silent" : "STILL", pk_all, lo, hi, moves,
+           i1 / i0, steps ? "ok" : "WRONG", pk_any, nan_any ? ", NaN" : "", shared_ok ? "ok" : "WRONG",
+           v27 ? "read" : "WRONG", v26 ? "read" : "WRONG", snd ? "read" : "WRONG");
+    if (!ok || sounds != 24 || !finite || !quiet || pk_all > 1.0f || hi / lo > 2.0 || moves < 22 || i1 / i0 < 2.0 ||
+        !steps || pk_any > 1.2f || nan_any || !shared_ok || !v27 || !v26 || !snd)
+      ++failures, printf("FAIL: SQ-1\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

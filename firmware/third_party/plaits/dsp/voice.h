@@ -35,11 +35,10 @@
 #include "stmlib/dsp/limiter.h"
 #include "stmlib/utils/buffer_allocator.h"
 
-// MIFM1 (0.16.1): the eight engines its models play (CHIPTUNE 7, the grain's FORMANT 11, SPEECH 15, SWARM 16, NOISE
-// 17, PARTICLES 18, STRING 19, MODAL 20), each at its number; the sixteen others (gone from MIFM1's models in 0.9)
-// a silent engine in their places, their code and their state out of the firmware
+// MIFM1 (0.16.14): the six engines its models play (SPEECH 15, SWARM 16, NOISE 17, PARTICLES 18, STRING 19, MODAL
+// 20), each at its number; the eighteen others (gone from MIFM1's models in 0.9; CHIPTUNE 7 and the grain's FORMANT 11
+// in 0.16.14) a silent engine in their places, their code and their state out of the firmware
 #include "plaits/dsp/engine/engine.h"
-#include "plaits/dsp/engine/grain_engine.h"
 #include "plaits/dsp/engine/modal_engine.h"
 #include "plaits/dsp/engine/noise_engine.h"
 #include "plaits/dsp/engine/particle_engine.h"
@@ -47,7 +46,6 @@
 #include "plaits/dsp/engine/string_engine.h"
 #include "plaits/dsp/engine/swarm_engine.h"
 
-#include "plaits/dsp/engine2/chiptune_engine.h"
 
 #include "plaits/dsp/envelope.h"
 
@@ -205,7 +203,6 @@ class Voice {
   }
 
   NullEngine null_engine_;              // (MIFM1: in the sixteen engines' places)
-  GrainEngine grain_engine_;
   SpeechEngine speech_engine_;
 
   SwarmEngine swarm_engine_;
@@ -213,8 +210,6 @@ class Voice {
   ParticleEngine particle_engine_;
   StringEngine string_engine_;
   ModalEngine modal_engine_;
-
-  ChiptuneEngine chiptune_engine_;
 
   stmlib::HysteresisQuantizer2 engine_quantizer_;
   

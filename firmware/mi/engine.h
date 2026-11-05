@@ -127,17 +127,20 @@ int eng_model_enveloped(int model);      /* 1: a Plaits model with its own envel
                                           * string, modal, the drums), or an FM drum */
 /* the models (0.10.1), in ALGORITHM's order, by bank: MIFM1's six drums (mi_drum.cc), the LXR-02's four FM drums
  * (mi_lxr.cc), MIFM1's own voices (ZERO, mi_zero.cc; the FM, four operators and eight algorithms: mi_fm4.cc), then
- * Plaits' (its chiptune and voices, its noises and physical models). A model with its own knobs (a drum, an FM drum,
+ * MIFM1's SQ-1 (0.16.14: a pocket Ensoniq, mi_sq1.cc), then Plaits' (its speech, its noises and physical models). A model with its own knobs (a drum, an FM drum,
  * ZERO, the FM) takes its eight parameters from the knobs after FREQ: HARMONICS, TIMBRE, MORPH, the envelope page's
  * four, the pitch envelope's. Its kind says what plays it, its sub its index there (Plaits' engine, the LXR's voice,
  * the drum, the FM's kit) */
-enum { MK_PLAITS, MK_LXR, MK_ZERO, MK_DRUM, MK_FM, MK_PADS, MK_POLY, MK_PROPHET };
-#define ENG_MODELS 23
+enum { MK_PLAITS, MK_LXR, MK_ZERO, MK_DRUM, MK_FM, MK_PADS, MK_POLY, MK_PROPHET, MK_SQ1 };
+#define ENG_MODELS 22
 #define ENG_BANKS 5
 int eng_model_kind(int m);
 int eng_model_sub(int m);
 int eng_model_bank(int m);
 int eng_model_own(int m);                /* 1: its own eight knobs (not Plaits') */
+int eng_sq_cycle(int t, float *y, int n, int *of);   /* SQ-1 on track t: the cycle it reads (n points of a period, -1..1),
+                                                   * its place + 32 x its program; -1 none; of: its places */
+const char *eng_sq_family(int t);        /* SQ-1 on track t: its program's family ("" another machine) */
 int eng_model_find(int kind, int sub);   /* the model a kind's sub is, -1 none */
 const char *eng_model_abbr(int m);       /* in four letters or so (the tracks' row) */
 const char *eng_bank_name(int b);
@@ -155,7 +158,7 @@ void eng_set_model(int t, int model);    /* a track's model (an FM drum new to i
  * knobs' randoms, a name. Saved by the screen (app.c, pat_store.h), read onto any track */
 #define SND_PAGES 8
 #define SND_MAGIC 0x31444E53u            /* "SND1" */
-#define SND_VERSION 1
+#define SND_VERSION 2                    /* (1: before 0.16.14: CHIPTUNE, FORMANT read as SQ-1) */
 typedef struct {
     uint32_t magic;
     uint16_t version, size;
@@ -196,7 +199,9 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 27u              /* (26: 0.16.4's to 0.16.6's, without CLIMB (42 parameters a lane, 384 locks,
+#define PROJECT_VERSION 28u              /* (27: 0.16.7's to 0.16.13's, CHIPTUNE (15) and FORMANT (16) there: read,
+                                          * both SQ-1 (its kit, their locks on its knobs gone), the others one lower;
+                                          * 26: 0.16.4's to 0.16.6's, without CLIMB (42 parameters a lane, 384 locks,
                                           * 3820 bytes): read, CLIMB off, its locks the first 380;
                                           * 25: 0.16.2's and 0.16.3's, RATCH 1..8 then eight tuplets (9..16): read, each
                                           * as hits over a span, its locks too;

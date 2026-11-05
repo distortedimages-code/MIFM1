@@ -21,8 +21,11 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
 - **PROPHET** (0.13) : le grand polyphonique d'après le Prophet-5 de Sequential Circuits, quatre voix par piste, deux
   oscillateurs (treize réglages du panneau), son filtre, ses deux enveloppes, sa **Poly-Mod** (le balayage de la sync,
   la FM), un bouton **VINTAGE** comme celui de la Rev 4 et les accords de POLY (voir plus bas) ;
-- **Plaits** sur chaque piste, 8 de ses modèles (ses trois batteries et treize de ses oscillateurs ont laissé la place
-  aux moteurs de MIFM1 ; la voix et les puces suivront), et un **circuit bending** par piste (0.7, à la place du
+- **SQ-1** (0.16.14) : un Ensoniq de poche d'après le SQ-1 et sa puce OTIS, quatre voix par piste : des **Transwaves**
+  (32 cycles qui changent peu à peu, lus entiers et par marches), les filtres sans résonance de la puce, trois couches,
+  un petit effet ; 24 programmes en huit familles, huit potards (voir plus bas) ;
+- **Plaits** sur chaque piste, 6 de ses modèles (ses trois batteries, treize de ses oscillateurs, sa puce 8 bits et ses
+  formants ont laissé la place aux moteurs de MIFM1), et un **circuit bending** par piste (0.7, à la place du
   grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
   allumés, inversés ou coupés, des formes numériques) et son **glitch** à la manière du Data Bender de Qu-Bit (des
   répétitions calées au tempo, ralenties ou accélérées, des accidents) ;
@@ -93,7 +96,7 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
 pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
 en quatre gestes, le chemin du son (un schéma), le panneau (chaque numéro allume son repère sur la machine ;
-« Repères » les montre tous), les 23 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
+« Repères » les montre tous), les 22 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
 et ce qu'ils modélisent, les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le circuit bending,
 les effets, le séquenceur, la dose d'aléatoire, les spécifications, et des jauges de la charge du FM-1. « Essayer »,
 sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_try). Pour écouter MIFM1 sur un autre système (une
@@ -491,6 +494,43 @@ trig) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 4,5 % d'un 
 lisent, leurs modèles de Plaits renumérotés. Depuis la 0.13, ZERO, les batteries, la FM, POLY et PROPHET partagent la
 mémoire d'une piste (une piste ne joue qu'une machine à la fois) : passer d'une machine à l'autre la refait à neuf.
 
+**SQ-1** (0.16.14 ; ALGORITHM après PROPHET, la banque MIFM1, à la place de CHIPTUNE et FORMANT) : un **Ensoniq de
+poche**, d'après le SQ-1 (1990, un VFX-SD allégé : trois voix par son, des filtres numériques sans résonance, ses
+**Transwaves**) et sa puce **OTIS** (l'ES5505, dont MAME documente le fonctionnement). Ses manières, pas ses sons : ses
+ondes sont celles de MIFM1. Quatre voix par piste (une par trig, les précédentes résonnent dessous).
+
+- **La lecture** : des cycles 16 bits lus par un accumulateur de phase, linéairement entre deux échantillons, comme la
+  puce. Une **Transwave** : 32 cycles de 256 échantillons qui changent peu à peu (pour une cloche, 8 boucles de quatre
+  périodes, ses partiels arrondis au quart de la note : de l'inharmonique qui boucle juste). Une note lit un cycle entier
+  et prend le suivant **à sa fin**, comme la puce déplaçait ses points de boucle : la Transwave avance par marches, elle
+  ne se fond pas (le pas adouci sur 8 échantillons, pas plus). Treize Transwaves, faites à partir de recettes : une
+  résonance qui monte, trois FM (rapports 1, 2, 3), les modes d'une barre, ceux d'un verre, des touches (un clavier
+  électrique, ses barres), les grappes d'une nappe, un sinus replié, des voyelles (a, e, i, o, u), une impulsion qui
+  s'affine (50 à 3 %), une sync dure, un escalier (un sinus sur 32 marches, puis 2).
+- **Où elles vivent** : dans la mémoire de la voix Plaits de la piste (16 Ko de cycles, 2 Ko pour la ligne de SPACE),
+  prêtée tant que la piste joue SQ-1. Changer de programme refait la Transwave **un peu à chaque bloc** (environ 5 % du
+  FM-1 pendant ce temps, le cycle joué en premier) : la première note est là en quelques millisecondes, la Transwave
+  entière en 0,1 à 0,4 s ; deux programmes sur la même Transwave (Res Bass et Sweeper, par exemple) n'attendent rien.
+- **Les filtres** : ceux d'OTIS, des pôles simples sans résonance : deux ou quatre passe-bas, un passe-haut ; COLOR
+  les règle, le clavier et l'enveloppe les ouvrent un peu. Les ondes les plus brillantes replient à l'aigu (au-dessus
+  de do 5), comme sur l'original ; le passe-bas descend alors sous le repli.
+
+| WAVE | INDEX | SWEEP | MOTION | COLOR | SHAPE | STACK | SPACE |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| le programme (24) | où la note démarre dans la Transwave | une enveloppe l'y déplace (milieu : rien ; à droite vers le haut, à gauche vers le bas) | un LFO dessus (sa vitesse et sa profondeur ensemble ; après 50 % un léger vibrato, après 70 % instable) | à gauche plus sombre (les passe-bas se ferment), Open au milieu, à droite plus fin (le passe-haut monte) | l'enveloppe : Perc, Pluck, Keys (basses, claviers), Swell, Pad ; la durée du balayage avec | la deuxième couche (sa part, son désaccord : ailleurs dans la Transwave, à l'octave ou à la quinte), puis la troisième (un clic, un souffle, un tintement) | un chorus, puis l'effet du programme : phaser, peigne accordé sur la note, saturation |
+
+Les **24 programmes**, trois par famille : **basse numérique** (Res Bass, FM Bass, SyncBass), **électrique** (E.Piano,
+Clav, Tines), **métallique** (Metal, Anvil, Gong), **verre** (Glass, Crystal, Celeste), **claviers doux** (SoftKeys,
+Vox Keys, Hollow), **nappe évolutive** (Pad, Vox Pad, Sweeper), **industriel** (Industr., Digi, Grind), **percussif**
+(Perc, Mallet, Pluck). Chacun choisit sa Transwave, ses couches, l'échelle de son enveloppe, le sens de son balayage
+(une pincée retombe vers INDEX, une nappe monte depuis), ses pôles et son effet ; leurs niveaux sont égalisés. Le
+premier écran dessine **le cycle que la voix lit**, en direct, et sa place (« Electric · 13 / 32 »).
+
+Choisir SQ-1 met ses réglages aux siens (E.Piano, un peu de balayage, un chorus). Une voix coûte au FM-1 environ 3 %
+d'un bloc avec ses trois couches, SPACE à fond et le reste environ 5,5 % (quatre voix, trois couches, SPACE à fond :
+environ 19 % ; PROPHET, quatre voix : 15 %). Les projets et les sons enregistrés d'avant qui jouaient CHIPTUNE ou FORMANT passent à SQ-1 avec ses
+réglages ; les autres modèles de Plaits sont renumérotés.
+
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
 icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis
 les quatre potards côte à côte, dans l'ordre des KNOB 1 à 4 : un anneau fin allumé de son début (ou de son milieu,
@@ -861,8 +901,8 @@ rien ne boucle. **La dose suit une courbe** (son carré) : au début de la cours
 20 %, 4 % de la plage), de plus en plus francs, toute la plage à 100 %. **Tout reste dans la gamme** : FREQ (jusqu'à
 ±6 demi-tons à 100 %) et la transposition (±7) sautent par demi-tons entiers, puis sur les notes de la gamme choisie ;
 ce qui en sortirait n'est jamais tiré : l'enveloppe de hauteur (son glissando), le PING du filtre (une résonance
-qui sonne à n'importe quelle hauteur), HARMONICS là où c'est un intervalle (les accords de CHIPTUNE, l'écart de SWARM
-et de PARTICLE), RATIO de la FM dans ou vers ses accords, le décalage de Warps en décaleur de
+qui sonne à n'importe quelle hauteur), HARMONICS là où c'est un intervalle (l'écart de SWARM
+et de PARTICLE), WAVE de SQ-1 (un programme : sa Transwave refaite), RATIO de la FM dans ou vers ses accords, le décalage de Warps en décaleur de
 fréquence. Le reste : HARMONICS ailleurs, TIMBRE, MORPH, DECAY, COLOUR et les enveloppes de Plaits (sur une batterie
 FM, ses réglages), la gate, les bits (CLOCK, BITS, MASK, SHAPE) et le glitch (GLITCH, SIZE, BEND, DROP : à forte dose, des notes qui
 bégaient), le

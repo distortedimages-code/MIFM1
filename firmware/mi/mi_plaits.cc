@@ -22,6 +22,7 @@ struct PlaitsVoice {
   float note;                           // the note as set: the patch takes it at once, or with the trig (below)
   int note_wait;                        // Render calls until the voice sees a rise of the gate
 };
+static_assert(sizeof(PlaitsVoice) >= 16384 + 2048, "SQ-1 borrows a track's voice: its 32 cycles, SPACE's line");
 
 const char* const kModelNames[MP_MODELS] = {
   "VA VCF", "PHASE DIST", "6-OP FM 1", "6-OP FM 2", "6-OP FM 3", "WAVE TERRAIN", "STRING MACH", "CHIPTUNE",
