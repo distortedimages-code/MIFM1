@@ -22,9 +22,7 @@ struct PlaitsVoice {
   float note;                           // the note as set: the patch takes it at once, or with the trig (below)
   int note_wait;                        // Render calls until the voice sees a rise of the gate
 };
-// a track's voice's memory, lent to OTIS (its 32 cycles, SPACE's line) and to ROBOVOX: at least that much (0.16.17:
-// Plaits' speech gone, the voice itself smaller)
-const uint32_t kLent = 16384 + 2048;
+static_assert(sizeof(PlaitsVoice) >= 16384 + 2048, "SQ-1 borrows a track's voice: its 32 cycles, SPACE's line");
 
 const char* const kModelNames[MP_MODELS] = {
   "VA VCF", "PHASE DIST", "6-OP FM 1", "6-OP FM 2", "6-OP FM 3", "WAVE TERRAIN", "STRING MACH", "CHIPTUNE",
@@ -36,7 +34,7 @@ const char* const kModelNames[MP_MODELS] = {
 
 extern "C" {
 
-uint32_t mp_size(void) { return sizeof(PlaitsVoice) > kLent ? sizeof(PlaitsVoice) : kLent; }
+uint32_t mp_size(void) { return sizeof(PlaitsVoice); }
 
 void mp_init(void* mem) {
   PlaitsVoice* p = new (mem) PlaitsVoice();

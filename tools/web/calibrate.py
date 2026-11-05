@@ -182,7 +182,6 @@ def main():
           "static const float kWebPoly[2] = {" + ", ".join(f1(v) for v in polyc) + "};   /* POLY: its floor, a voice */",
           "static const float kWebPro[2] = {" + ", ".join(f1(v) for v in proc) + "};   /* REV3: its floor, a voice */",
           "static const float kWebSq[2] = {" + ", ".join(f1(v) for v in sqc) + "};   /* OTIS: its floor, a voice */",
-          "static const float kWebVox = 235.0f;   /* ROBOVOX: its voice (0.16.17: from its instructions, 35 k a block) */",
           f"static const float kWebBend = {f1(bend)};   /* the bits, one of their knobs up */",
           f"static const float kWebTrauma = {f1(trauma)};   /* TRAUMA's drive on a track */",
           "static const float kWebGlitch = 9.0f;   /* the glitch, taking or repeating its slice (estimated: a few loads a sample) */",

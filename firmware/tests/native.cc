@@ -4486,11 +4486,11 @@ int main(int argc, char** argv) {
         }
       }
     }
-    // through the engine: SQ-1, SWARM, SQ-1, MODAL, SQ-1 on track 1 (Plaits' memory lent and back)
+    // through the engine: SQ-1, SPEECH, SQ-1, MODAL, SQ-1 on track 1 (Plaits' memory lent and back)
     eng_defaults(p);
     eng_fresh();
     for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(0, st, st % 2 == 0);
-    const int kSeq[5] = {sq_m, eng_model_find(MK_PLAITS, 16), sq_m, eng_model_find(MK_PLAITS, 20), sq_m};
+    const int kSeq[5] = {sq_m, eng_model_find(MK_PLAITS, 15), sq_m, eng_model_find(MK_PLAITS, 20), sq_m};
     eng_play(1);
     int shared_ok = 1;
     for (int m = 0; m < 5; ++m) {
@@ -4518,7 +4518,7 @@ int main(int argc, char** argv) {
     q.lock[1] = plock_t{0, 4, TP_NOTE, 100};
     q.val[PG_TRACK(0, 0) * 4 + 1] = 0.9f;   // (HARMONICS: SQ-1's WAVE then its kit's)
     int v27 = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == sq_m &&
-              q.algo[PG_TRACK(1, 0)] == sq_m && q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_VOX, 0) &&
+              q.algo[PG_TRACK(1, 0)] == sq_m && q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 15) &&
               q.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PLAITS, 20) && q.lock[0].lane == 0xFF &&
               q.lock[1].lane == 0 && q.lock[1].tp == TP_NOTE && std::fabs(q.val[PG_TRACK(0, 0) * 4 + 1] - kd[0]) < 1e-6f;
     eng_defaults(&q);
@@ -4812,132 +4812,6 @@ int main(int argc, char** argv) {
            tape ? "ok" : "WRONG", rough[4], rough[0], dust ? "ok" : "WRONG", sub[5], sub[0], down ? "ok" : "WRONG");
     if (!names || !finite || !levels || !tape || !dust || !down) ++failures, printf("FAIL: PADS' TEXTURE\n");
     pads_init();
-  }
-
-  {                                     // 69. ROBOVOX (0.16.17): its knobs written; each phoneme sounding and
-    // finite; a word sung a syllable a trig; a babble the same for a seed, another at random; its source a track's
-    // sound; through the engine, SPEECH of 0.16.16 read as it
-    float k[8];
-    char tx[32];
-    vox_defaults(k);
-    int names = 1;
-    auto text = [&](int kn, float u, float mode, const char* want) {
-      vox_knob_text(kn, u, mode, tx, sizeof tx);
-      if (std::strcmp(tx, want)) names = 0, printf("ROBOVOX: knob %d at %.3f written \"%s\", not \"%s\"\n", kn, u, tx, want);
-    };
-    text(0, 0.1f, 0.0f, "Phon");
-    text(0, 0.5f, 0.0f, "Word");
-    text(0, 0.9f, 0.0f, "Babble");
-    text(1, (1 + 0.5f) / 64.0f, 0.1f, "E mEEt");
-    text(1, k[1], 0.5f, "ROBOT");
-    text(1, 0.0f, 0.9f, "Random");
-    text(2, 0.5f, 0.0f, "x1.0");
-    text(4, 1.0f, 0.0f, "+12 st");
-    text(6, 0.0f, 0.0f, "Pulse");
-    text(6, 0.65f, 0.0f, "Track 1");
-    text(7, 0.0f, 0.0f, "Off");
-    static float vb[44100];
-    // every phoneme, held 0.3 s at A2: finite; the vowels and the voiced ones sounding
-    int finite = 1, quiet = 0;
-    float lo = 1e9f, hi = 0.0f;
-    k[0] = 0.1f;
-    for (int ph = 1; ph < 64; ++ph) {
-      k[1] = (ph + 0.5f) / 64.0f;
-      vox_reset(0);
-      vox_set(0, 45.0f, k);
-      vox_gate(0, 1);
-      double e = 0.0;
-      for (int i = 0; i < 13184; i += 128) vox_render(0, &vb[i], 128);
-      for (int i = 0; i < 13184; ++i) finite &= std::isfinite(vb[i]) ? 1 : 0, e += vb[i] * vb[i];
-      const float rms = static_cast<float>(std::sqrt(e / 13184.0));
-      if (rms < 0.005f) ++quiet, printf("ROBOVOX: %s silent (%.4f)\n", vox_phon_name(ph), rms);
-      lo = std::min(lo, rms), hi = std::max(hi, rms);
-    }
-    // a word: ROBOT, a syllable a trig (RO, BOT, RO)
-    vox_defaults(k);
-    vox_reset(0);
-    int syl[3], word = -1;
-    for (int tr = 0; tr < 3; ++tr) {
-      vox_set(0, 45.0f, k);
-      vox_gate(0, 1);
-      for (int i = 0; i < 6400; i += 128) vox_render(0, vb, 128);
-      vox_view(0, &word, &syl[tr], nullptr, nullptr, nullptr, nullptr);
-      vox_gate(0, 0);
-      for (int i = 0; i < 4096; i += 128) vox_render(0, vb, 128);
-    }
-    const int words_ok = word == static_cast<int>(k[1] * vox_words()) && syl[0] == 1 && syl[1] == 0 && syl[2] == 1;
-    // a babble: a seed sings the same twice, at random another
-    auto babble = [&](float seed, float* out) {
-      float kk[8];
-      vox_defaults(kk);
-      kk[0] = 0.9f, kk[1] = seed;
-      vox_set(0, 45.0f, kk);
-      vox_gate(0, 1);
-      for (int i = 0; i < 8192; i += 128) vox_render(0, &out[i], 128);
-      vox_gate(0, 0);
-      for (int i = 8192; i < 16384; i += 128) vox_render(0, &out[i], 128);
-    };
-    static float b1[16384], b2[16384];
-    vox_reset(0), babble(0.5f, b1);
-    vox_reset(0), babble(0.5f, b2);
-    int same = 1;
-    for (int i = 0; i < 16384; ++i) same &= b1[i] == b2[i];
-    vox_reset(0), babble(0.0f, b1);
-    vox_reset(0), babble(0.0f, b2);   // (vox_reset keeps no seed: the random's own state differs? the same start)
-    // the source: a track's sound (a sine at 220 Hz) through the tract, against the pulse (the track ROBOVOX's in the
-    // engine: its Plaits voice's memory lent, the block kept there)
-    eng_defaults(p);
-    eng_set_model(0, eng_model_find(MK_VOX, 0));
-    vox_defaults(k);
-    k[0] = 0.1f, k[1] = (14 + 0.5f) / 64.0f;   // (AH)
-    static float car[128];
-    for (int i = 0; i < 128; ++i) car[i] = 0.5f * std::sin(2.0f * 3.14159265f * 220.0f * i / 44100.0f);
-    double ep = 0.0, ec = 0.0;
-    for (int pass = 0; pass < 2; ++pass) {
-      k[6] = pass ? 0.65f : 0.0f;
-      vox_reset(0);
-      vox_set(0, 45.0f, k);
-      vox_gate(0, 1);
-      for (int b = 0; b < 100; ++b) {
-        vox_carrier(0, pass ? car : nullptr, 128);
-        vox_render(0, vb, 128);
-        if (b >= 50)
-          for (int i = 0; i < 128; ++i) (pass ? ec : ep) += vb[i] * vb[i];
-      }
-    }
-    const int carried = ec > 1e-4 && std::fabs(ec - ep) > 0.1 * ep;
-    // through the engine: ROBOVOX on track 1, the steps playing; a project of 0.16.16 (28) with SPEECH (16)
-    eng_defaults(p);
-    eng_fresh();
-    for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(0, st, st % 4 == 0);
-    eng_set_model(0, eng_model_find(MK_VOX, 0));
-    eng_play(1);
-    float epk = 0.0f;
-    int efin = 1;
-    for (int b = 0; b < 400; ++b) {
-      eng_render(l, r, n);
-      for (uint32_t i = 0; i < n; ++i) efin &= std::isfinite(l[i]) ? 1 : 0, epk = std::max(epk, std::fabs(l[i]));
-    }
-    eng_play(0);
-    static project_t q;
-    eng_defaults(&q);
-    q.version = 28;
-    q.algo[PG_TRACK(2, 0)] = 16;
-    for (int i = 0; i < ENG_PLOCKS; ++i) q.lock[i].lane = 0xFF;
-    q.lock[0] = plock_t{2, 3, 2, 200};
-    q.val[PG_TRACK(2, 0) * 4 + 1] = 0.05f;   // (Plaits' HARMONICS: ROBOVOX's MODE then its kit's, Word)
-    float kd[8];
-    vox_defaults(kd);
-    const int v28 = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_VOX, 0) &&
-                    q.lock[0].lane == 0xFF && std::fabs(q.val[PG_TRACK(2, 0) * 4 + 1] - kd[0]) < 1e-6f;
-    printf("ROBOVOX: knobs %s; 63 phonemes finite %s, sounding %d (rms %.3f .. %.3f); ROBOT a syllable a trig %s; a "
-           "seed's babble the same %s; a track's sound its source %s (%.3f against %.3f); through the engine peak %.2f "
-           "%s; 0.16.16's SPEECH read %s\n",
-           names ? "ok" : "WRONG", finite ? "yes" : "NO", 63 - quiet, lo, hi, words_ok ? "ok" : "WRONG",
-           same ? "ok" : "WRONG", carried ? "ok" : "WRONG", std::sqrt(ec / 6400.0), std::sqrt(ep / 6400.0), epk,
-           efin && epk > 0.02f && epk < 1.5f ? "ok" : "WRONG", v28 ? "ok" : "WRONG");
-    if (!names || !finite || quiet > 2 || !words_ok || !same || !carried || !efin || epk < 0.02f || epk > 1.5f || !v28)
-      ++failures, printf("FAIL: ROBOVOX\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

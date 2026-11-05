@@ -530,7 +530,6 @@ static const char *module_name(int page)
                                                                         : track_kind(ptrack(page)) == MK_POLY ? "Poly"
                                                                         : track_kind(ptrack(page)) == MK_PROPHET ? "Rev3"
                                                                         : track_kind(ptrack(page)) == MK_SQ1 ? "Otis"
-                                                                        : track_kind(ptrack(page)) == MK_VOX ? "Robovox"
                                                                         : "Plaits";
     }
     case PT_LFO: {
@@ -1059,10 +1058,7 @@ static const vop_t ICONS[NICON][IOPS] = {
                                                                                                      * Transwave's
                                                                                                      * cycles, one
                                                                                                      * after another */
-    {{'R', 7, 7, 18, 15}, {'D', 12, 13, 2, 0}, {'D', 20, 13, 2, 0}, {'L', 12, 18, 20, 18}, {'L', 16, 7, 16, 3},
-     {'D', 16, 3, 1, 0}, {'L', 11, 22, 11, 27}, {'L', 21, 22, 21, 27}},                             /* ROBOVOX: a
-                                                                                                     * robot's head,
-                                                                                                     * its antenna */
+    {{'R', 5, 6, 22, 14}, {'L', 10, 20, 8, 27}, {'L', 8, 27, 16, 20}},                              /* SPEECH */
     {{'C', 10, 18, 5, 0}, {'C', 17, 13, 6, 0}, {'C', 23, 19, 5, 0}},                                /* SWARM */
     {{'L', 4, 18, 7, 10}, {'L', 7, 10, 10, 23}, {'L', 10, 23, 13, 8}, {'L', 13, 8, 16, 21}, {'L', 16, 21, 19, 11},
      {'L', 19, 11, 22, 24}, {'L', 22, 24, 25, 12}, {'L', 25, 12, 28, 17}},                          /* NOISE */
@@ -1486,50 +1482,6 @@ static void panel_sq1(int t, int m, uint16_t ac)
     hero_line(yl, s);
 }
 
-/* (0.16.17) ROBOVOX's: in the hoop the vowels' chart (F2 across, the front ones left; F1 down, the open ones low)
- * and the dot of its formants now, as the chip moves them a code at a time, the voice's level its size, the noise's a
- * ring; under the name the word and its syllable, the phoneme sung (Phon: its name and an example) */
-static void panel_vox(int t, int m, uint16_t ac)
-{
-    char s[48], n[8];
-    int word = -1, syl = 0;
-    float f1 = 0.0f, f2 = 0.0f, va = 0.0f, fa = 0.0f;
-    const int ph = eng_vox_view(t, &word, &syl, &f1, &f2, &va, &fa);
-    hoop(HX, HY, 27.0f, 2.0f, ac);
-    /* the chart: a quadrilateral, i (top left), u (top right), a (bottom) */
-    const uint16_t dim = tint(ac, BG, 3);
-    seg(HX - 16.0f, HY - 12.0f, HX + 14.0f, HY - 12.0f, 1.2f, dim);
-    seg(HX + 14.0f, HY - 12.0f, HX + 8.0f, HY + 13.0f, 1.2f, dim);
-    seg(HX + 8.0f, HY + 13.0f, HX - 6.0f, HY + 13.0f, 1.2f, dim);
-    seg(HX - 6.0f, HY + 13.0f, HX - 16.0f, HY - 12.0f, 1.2f, dim);
-    if (ph >= 0) {
-        const float x = HX + 16.0f - f2 * (32.0f / 32.0f), y = HY - 14.0f + f1 * (28.0f / 16.0f);
-        if (fa > 0.06f)
-            hoop(x, y, 4.0f + 6.0f * fa, 1.2f, tint(ac, BG, 5));
-        disc(x, y, 1.6f + 3.2f * va, ac);
-    }
-    int yl = hero_title(eng_algo_name(PG_TRACK(t, 0), m));
-    s[0] = 0;
-    if (ph < -1) {
-        text_cat(s, eng_bank_name(eng_model_bank(m)), sizeof s);
-    } else if (word >= 0) {
-        text_cat(s, eng_vox_word(word), sizeof s);
-        text_cat(s, "|", sizeof s);
-        int_text(syl == 0 ? eng_vox_syllables(word) : syl, n);   /* (the one sung: next's before it) */
-        text_cat(s, n, sizeof s);
-        text_cat(s, " / ", sizeof s);
-        int_text(eng_vox_syllables(word), n);
-        text_cat(s, n, sizeof s);
-    } else {
-        text_cat(s, "SC-02", sizeof s);
-    }
-    if (ph > 0) {
-        text_cat(s, "|", sizeof s);
-        text_cat(s, eng_vox_phon(ph), sizeof s);
-    }
-    hero_line(yl, s);
-}
-
 static void panel_plaits(int t, int face, uint16_t ac)
 {
     project_t *p = eng_project();
@@ -1538,10 +1490,6 @@ static void panel_plaits(int t, int face, uint16_t ac)
     int alg = eng_fm_algo(t);            /* (the FM: its algorithm, as it plays) */
     if (face != 2 && track_kind(t) == MK_SQ1) {
         panel_sq1(t, m, ac);
-        return;
-    }
-    if (face != 2 && track_kind(t) == MK_VOX) {
-        panel_vox(t, m, ac);
         return;
     }
     hero_icon(alg >= 0 ? IC_ALG + alg : IC_MODEL + m, ac);
@@ -2420,13 +2368,6 @@ static void draw_panel(void)
         s[1] = s[1] * 9 + 1 + eng_fm_algo(tr);   /* (the FM: its algorithm's drawing) */
     if ((pt == PT_PLAITS1 || pt == PT_PLAITS2 || pt == PT_PLAITS3) && track_kind(tr) == MK_SQ1)
         s[1] = s[1] * 37 + 2 + eng_sq_cycle(tr, 0, 0, 0);   /* (OTIS: the cycle it reads) */
-    if ((pt == PT_PLAITS1 || pt == PT_PLAITS2 || pt == PT_PLAITS3) && track_kind(tr) == MK_VOX) {
-        int w = -1, sy = 0;                      /* (ROBOVOX: its phoneme, its formants, its levels) */
-        float a1 = 0.0f, a2 = 0.0f, va = 0.0f, fa = 0.0f;
-        const int ph = eng_vox_view(tr, &w, &sy, &a1, &a2, &va, &fa);
-        s[1] = s[1] * 41 + 3 + ph * 7 + w * 131 + sy * 17 + (int)(a1 * 4.0f) * 977 + (int)(a2 * 4.0f) * 7919 +
-               (int)(va * 8.0f) * 104729 + (int)(fa * 8.0f) * 15485863;
-    }
     if (tr >= 0 && tr == eng_pads_track()) {   /* (PADS: its progression's place, its chord) */
         char pl[40];
         eng_pads_line(pl, sizeof pl);

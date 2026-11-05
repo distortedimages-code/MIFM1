@@ -54,7 +54,7 @@ void Voice::Init(BufferAllocator* allocator) {
   engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 12 additive
   engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 13 wavetable
   engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 14 chords
-  engines_.RegisterInstance(&null_engine_, false, 1.0f, 1.0f);   // 15 speech (MIFM1 0.16.17: ROBOVOX in its place)
+  engines_.RegisterInstance(&speech_engine_, false, -0.7f, 0.8f);
 
   engines_.RegisterInstance(&swarm_engine_, false, -3.0f, 1.0f);
   engines_.RegisterInstance(&noise_engine_, false, -1.0f, -1.0f);
@@ -174,6 +174,12 @@ void Voice::Render(
   if (engine_index == 15) {
     internal_envelope_amplitude = 2.0f - p.harmonics * 6.0f;
     CONSTRAIN(internal_envelope_amplitude, 0.0f, 1.0f);
+    speech_engine_.set_prosody_amount(
+        !modulations.trigger_patched || modulations.frequency_patched ?
+            0.0f : patch.frequency_modulation_amount);
+    speech_engine_.set_speed( 
+        !modulations.trigger_patched || modulations.morph_patched ?
+            0.0f : patch.morph_modulation_amount);
   }
   
   p.note = ApplyModulations(

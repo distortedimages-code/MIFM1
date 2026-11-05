@@ -10,7 +10,7 @@ OUT = build
 SRC = $(wildcard firmware/mi/*.cc) $(shell find firmware/third_party -name '*.cc')
 OBJ = $(patsubst %.cc,$(OUT)/obj/%.o,$(SRC))
 
-.PHONY: pat-store all test lxr-check vox-check uac-multi base-patch device-check firmware host web clean
+.PHONY: pat-store all test lxr-check uac-multi base-patch device-check firmware host web clean
 all: test
 
 $(OUT)/obj/%.o: %.cc
@@ -24,7 +24,7 @@ $(OUT)/native: firmware/tests/native.cc $(OBJ)
 	$(CC) $(OUT)/obj/native.o $(OBJ) -lm -o $@
 
 # the engine on a computer: the default patch plays, every track and model sounds, no NaN; WAVs in build/wav
-test: $(OUT)/native lxr-check vox-check uac-multi pat-store
+test: $(OUT)/native lxr-check uac-multi pat-store
 	@mkdir -p $(OUT)/wav
 	$(OUT)/native $(OUT)/wav 16
 
@@ -32,13 +32,6 @@ test: $(OUT)/native lxr-check vox-check uac-multi pat-store
 $(OUT)/pat_store_test: firmware/tests/pat_store_test.c firmware/pat_store.h
 	@mkdir -p $(OUT)
 	$(CC) -std=c11 -O2 -Wall -Wextra -Wno-unused-function -Ibase/include firmware/tests/pat_store_test.c -o $@
-# ROBOVOX (0.16.17): its filters against MAME's, code by code; its vowels' formants where its table puts them
-$(OUT)/vox_check: tools/robovox/vox_check.cc firmware/mi/mi_robovox.cc firmware/mi/robovox_tables.h
-	@mkdir -p $(OUT)
-	$(CXX) -std=gnu++11 -O2 -ffp-contract=off -w -Ifirmware -Ifirmware/mi -Ibase/include tools/robovox/vox_check.cc -o $@
-vox-check: $(OUT)/vox_check
-	$(OUT)/vox_check
-
 pat-store: $(OUT)/pat_store_test
 	$(OUT)/pat_store_test
 

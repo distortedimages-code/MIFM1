@@ -21,7 +21,7 @@ static const float kWebModel[22] = {   /* a voice playing, by model */
     305.0f,  /* 13 POLY */
     404.8f,  /* 14 REV3 */
     441.2f,  /* 15 OTIS */
-    298.2f,  /* 16 ROBOVOX (its own: kWebVox) */
+    298.2f,  /* 16 SPEECH */
     486.1f,  /* 17 SWARM */
     396.5f,  /* 18 NOISE */
     610.2f,  /* 19 PARTICLES */
@@ -40,7 +40,6 @@ static const float kWebPads[4] = {113.9f, 11.9f, 21.2f, 69.2f};   /* PADS: its f
 static const float kWebPoly[2] = {27.7f, 76.5f};   /* POLY: its floor, a voice */
 static const float kWebPro[2] = {28.3f, 104.4f};   /* REV3: its floor, a voice */
 static const float kWebSq[2] = {162.7f, 94.2f};   /* OTIS: its floor, a voice */
-static const float kWebVox = 235.0f;   /* ROBOVOX: its voice (0.16.17: from its instructions, 35 k a block) */
 static const float kWebBend = 77.4f;   /* the bits, one of their knobs up */
 static const float kWebTrauma = 42.5f;   /* TRAUMA's drive on a track */
 static const float kWebGlitch = 9.0f;   /* the glitch, taking or repeating its slice (estimated: a few loads a sample) */
