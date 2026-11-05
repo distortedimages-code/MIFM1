@@ -79,7 +79,7 @@ namespace {
 
 // ---------------------------------------------------------------- parameters ---
 const char* const kLfoWaves[LW_N] = {"Sine",  "Triangle", "Saw",   "Ramp",   "Square", "S&H",    "Smooth", "Pump",
-                                     "Stairs", "Clave",   "Bounce", "Rises", "Falls",  "Zigzag", "Chaos"};
+                                     "Stairs", "Clave",   "Bounce", "Rises", "Falls",  "Zigzag", "Chaos",  "Follow"};
 const char* const kLfoModes[6] = {"Free", "Sync", "T1", "T2", "T3", "T4"};
 const char* const kOnOff[2] = {"Off", "On"};
 const char* const kScaleNames[18] = {"Off", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
@@ -153,6 +153,8 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Glitch", K_UNI, 0, 0, 0}, {"Size", K_ENUM, 0, GL_N - 1, kGlitchSizes}, {"Bend", K_BIP, 0, 0, 0},
    {"Drop", K_UNI, 0, 0, 0}},
   {{"Curve", K_BIP, 0, 0, 0}, {"Curve", K_BIP, 0, 0, 0}, {"Curve", K_BIP, 0, 0, 0}, {"Curve", K_BIP, 0, 0, 0}},
+  {{"Source", K_ENUM, 0, 3, kTrackNames}, {"Gain", K_BIP, 0, 0, 0}, {"Thresh", K_UNI, 0, 0, 0},
+   {"Filter", K_BIP, 0, 0, 0}},
 };
 const char* const kBusModes[3] = {"OFF", "COMP", "OTT"};
 const char* const kDelayAlgos[2] = {"SYNC", "FREE"};
@@ -215,6 +217,7 @@ const char* const kLfoRatioNames[9] = {"4 / beat", "2 / beat", "1 / beat", "1 / 
                                          "1 / 2 bars", "1 / 4 bars", "1 / 8 bars", "1 / 16 bars"};
 
 int page_type(int page) {
+  if (page >= PG_FOLLOW(0)) return PT_FOLLOW;
   if (page >= PG_GLITCH(0)) return PT_GLITCH;
   if (page >= PG_FILT(0, 0)) return PT_FILT1 + (page - PG_FILT(0, 0)) % 3;
   if (page < 12) return PT_PLAITS1 + page % 3;
@@ -254,6 +257,13 @@ inline int i_of(float v) { return static_cast<int>(v + 0.5f); }
 float bpm_of(float v) { return 30.0f * fm_exp2f(v * 3.321928f); }          // 0..1: 30..300 BPM
 float lfo_hz(float v) { return 0.02f * fm_exp2f(v * 9.965784f); }          // an LFO's RATE: 0.02..20 Hz
 float lfo_tau(float v) { return 0.001f * fm_exp2f(v * 11.0f); }             // its SLEW: 1 ms..2 s
+// (0.16.23) FOLLOW's: ATTACK (RATE's place) 0.5 ms..1 s, DECAY (SLEW's) 5 ms..5 s; its input's GAIN -24..+24 dB,
+// THRESH -60..0 dB, FILTER (to the left a low pass from 18 kHz down to 100 Hz, to the right a high pass from 20 Hz up
+// to 5 kHz, 12 dB an octave, off in its middle)
+MI_COLD float fol_att(float v) { return 0.0005f * fm_exp2f(v * 10.966f); }
+MI_COLD float fol_dec(float v) { return 0.005f * fm_exp2f(v * 9.966f); }
+MI_COLD float fol_db(float v) { return -60.0f + 60.0f * v; }
+MI_COLD float fol_hz(float v) { return v < 0.0f ? 18000.0f * fm_exp2f(v * 7.492f) : 20.0f * fm_exp2f(v * 7.966f); }
 float delay_ms(float v) { return fm_exp2f(v * 10.228819f); }                // the delay's FREE time: 1..1200 ms
 float gate_frac(float v) { return 0.05f + 0.9f * v; }                         // LENGTH: 5..95 % of the sixteenth
 float lane_tau(float v) { return 0.01f * fm_exp2f(v * 9.0f); }                // an effect lane's DECAY: 10 ms..5.1 s
@@ -777,15 +787,81 @@ struct Lfo {
   float phase, out, a, b;               // its phase (0..1), what comes out, the random's last value and the next
   uint32_t rises, seed;                 // its track's trigs seen; its own random (the steps' stays theirs)
   float cx, cy, cz;                     // (CHAOS: where it is)
+  float fe, f1, f2, det, ad;            // (FOLLOW: its level, its filter, TRIG's detector, its envelope)
+  uint8_t armed, fire, rising;          // (TRIG: ready, a rise heard, the envelope rising)
+  uint32_t frises;                      // (T1..T4: the track's trigs seen)
 };
 Lfo lfo[3];
+
+// (0.16.23) FOLLOW: an LFO listening to a track (its last block, as the track played it: before its level, the mix's
+// filter and duck), through its GAIN and FILTER; FOLLOW its level (its ATTACK and DECAY, under THRESH nothing, over it
+// stretched back to 0..1), TRIG its rises over THRESH (a detector of 1 ms up and 50 ms down, ready again under half of
+// it): the envelope's start (run_lfos). Out: 0..1
+struct FolK {                           // (a follower's coefficients this block)
+  float g, thr, c, ka, kb, kc, a, r, ta, tr;
+};
+__attribute__((noinline)) MI_COLD FolK fol_coefs(int i) {         // (for size: a block's)
+  const int pg = PG_LFO(i), fp = PG_FOLLOW(i);
+  const float fv = P(fp, 3), fc = fol_hz(fv), sr = kSr;
+  FolK k;
+  k.g = fm_exp2f(P(fp, 1) * 24.0f * 0.16609640f);
+  k.thr = fm_exp2f(fol_db(P(fp, 2)) * 0.16609640f);
+  k.c = 1.0f - fm_expf(-6.2831853f * (fc < 0.45f * sr ? fc : 0.45f * sr) / sr);
+  // (the filter: what comes in, the first low pass, the second, mixed: off (1 0 0), LP (0 0 1), HP (1 -2 1))
+  k.ka = fv <= -0.02f ? 0.0f : 1.0f, k.kb = fv >= 0.02f ? -2.0f : 0.0f;
+  k.kc = fv <= -0.02f || fv >= 0.02f ? 1.0f : 0.0f;
+  k.a = 1.0f - fm_expf(-1.0f / (fol_att(P(pg, 1)) * sr)), k.r = 1.0f - fm_expf(-1.0f / (fol_dec(P(pg, 3)) * sr));
+  k.ta = 1.0f - fm_expf(-1.0f / (0.001f * sr)), k.tr = 1.0f - fm_expf(-1.0f / (0.05f * sr));
+  return k;
+}
+__attribute__((noinline)) void follow_listen(const float* x, int i, uint32_t n) {   // (its loop at -O2)
+  Lfo& o = lfo[i];
+  const FolK k = fol_coefs(i);
+  float f1 = o.f1, f2 = o.f2, e = o.fe, d = o.det;
+  int armed = o.armed, fire = o.fire;
+  for (uint32_t j = 0; j < n; ++j) {    // (FOLLOW's level and TRIG's detector both: no branch on the mode)
+    const float y = k.g * x[j];
+    f1 += k.c * (y - f1);
+    f2 += k.c * (f1 - f2);
+    const float l = fm_fabsf(k.ka * y + k.kb * f1 + k.kc * f2);
+    e += (l > e ? k.a : k.r) * (l - e);
+    d += (l > d ? k.ta : k.tr) * (l - d);
+    const int over = d > k.thr, under = d < 0.5f * k.thr;
+    fire |= armed & over;
+    armed = (armed & !over) | under;
+  }
+  o.f1 = fm_fabsf(f1) < 1e-20f ? 0.0f : f1, o.f2 = fm_fabsf(f2) < 1e-20f ? 0.0f : f2;
+  o.fe = e < 1e-20f ? 0.0f : e, o.det = d < 1e-20f ? 0.0f : d;
+  o.armed = static_cast<uint8_t>(armed), o.fire = static_cast<uint8_t>(Pi(PG_LFO(i), 2) == LF_TRIG && fire);
+}
+__attribute__((noinline)) MI_COLD float follow_out(Lfo& o, int i, float block_hz) {   // FOLLOW's value this block (0..1)
+  const int pg = PG_LFO(i), mode = Pi(pg, 2);
+  if (mode == LF_FOLLOW) {
+    const float thr = fm_exp2f(fol_db(P(PG_FOLLOW(i), 2)) * 0.16609640f);
+    const float v = o.fe <= thr ? 0.0f : (o.fe - thr) / (1.0f - thr > 1e-6f ? 1.0f - thr : 1e-6f);
+    return v > 1.0f ? 1.0f : v;
+  }
+  if (mode >= LF_T1 && mode < LF_T1 + ENG_TRACKS) {   // the track's trigs
+    const uint32_t rr = vrises[mode - LF_T1];
+    if (rr != o.frises) o.frises = rr, o.fire = 1;
+  }
+  if (o.fire) o.fire = 0, o.rising = 1;   // (from where it is: no click)
+  if (o.rising) {
+    o.ad += 1.0f / (fol_att(P(pg, 1)) * block_hz);
+    if (o.ad >= 1.0f) o.ad = 1.0f, o.rising = 0;
+  } else {
+    o.ad *= fm_expf(-6.9077553f / (fol_dec(P(pg, 3)) * block_hz));   // (DECAY: its fall to -60 dB)
+    if (o.ad < 1e-5f) o.ad = 0.0f;
+  }
+  return o.ad;
+}
 
 float lfo_hit(float x) {                // a hit x units ago (0..1.5 its fall), then the floor
   if (x >= 1.5f) return -1.0f;
   const float d = 1.0f - x * (1.0f / 1.5f);
   return -1.0f + 2.0f * d * d;
 }
-float lfo_figure(int wave, float ph) {   // the rhythmic waves at their phase, -1..1
+__attribute__((noinline)) MI_COLD float lfo_figure(int wave, float ph) {   // the rhythmic waves at their phase, -1..1
   const float u = 8.0f * ph;            // (the eighths of the cycle)
   const float s = u < 3.0f ? 0.0f : u < 6.0f ? 3.0f : 6.0f, len = u < 6.0f ? 3.0f : 2.0f;   // (3 + 3 + 2)
   switch (wave) {
@@ -810,7 +886,7 @@ float lfo_figure(int wave, float ph) {   // the rhythmic waves at their phase, -
     }
   }
 }
-float lfo_chaos(Lfo& o, float inc) {    // Lorenz's attractor run inc of a cycle on (~0.8 of its time a cycle)
+__attribute__((noinline)) MI_COLD float lfo_chaos(Lfo& o, float inc) {    // Lorenz's attractor run inc of a cycle on (~0.8 of its time a cycle)
   if (o.cx == 0.0f && o.cy == 0.0f && o.cz == 0.0f) o.cx = 1.0f, o.cy = 1.0f + 0.5f * (o.seed & 3u), o.cz = 20.0f;
   float dt = (inc < 0.0f ? 0.0f : inc > 0.25f ? 0.25f : inc) * 0.8f;
   int n = 1 + static_cast<int>(dt * 125.0f);   // (steps of 0.008 at most: Euler holds there)
@@ -831,7 +907,7 @@ float lfo_rand(Lfo& o) {
   return static_cast<float>(o.seed >> 8) * (2.0f / 16777216.0f) - 1.0f;
 }
 
-void run_lfos(uint32_t n) {
+__attribute__((noinline)) MI_COLD void run_lfos(uint32_t n) {   // (a block's: for size, out of the render)
   float block_hz = kSr / static_cast<float>(n), beat_hz = bpm_of(P(PG_GLOBAL, 0)) / 60.0f;
   for (int i = 0; i < 3; ++i) {
     Lfo& o = lfo[i];
@@ -880,9 +956,10 @@ void run_lfos(uint32_t n) {
       case LW_SH: v = o.b; break;
       case LW_SMOOTH: v = o.a + (o.b - o.a) * (0.5f - 0.5f * fm_cosf(3.14159265f * ph)); break;
       case LW_CHAOS: v = lfo_chaos(o, inc); break;
+      case LW_FOLLOW: v = follow_out(o, i, block_hz); break;
       default: v = lfo_figure(wave, ph); break;
     }
-    float slew = P(PG_LFO(i), 3);
+    float slew = wave == LW_FOLLOW ? 0.0f : P(PG_LFO(i), 3);   // (FOLLOW: SLEW's place its DECAY)
     if (slew < 0.005f) o.out = v;
     else o.out += (v - o.out) * (1.0f - fm_expf(-1.0f / (lfo_tau(slew) * block_hz)));
     src[SRC_L1 + i] = o.out;
@@ -2931,6 +3008,10 @@ const char* eng_param_name(int param) {
                                            : track_kind(t) == MK_VOCODER ? voc_knob_name(lk)
                                                                      : lx_knob_name(lx_model(t), lk);
   }
+  if (param >= PG_LFO(0) * 4 && param < PG_LFO(3) * 4 && param % 4 && Pi(param / 4, 0) == LW_FOLLOW) {
+    static const char* const kF[4] = {"Wave", "Attack", "Mode", "Decay"};   // (0.16.23) FOLLOW's, in the LFO's places
+    return kF[param % 4];
+  }
   if (param >= 0 && param < 12 * 4 && (param / 4) % 3 == 0 && param % 4 >= 1) {
     int m = track_sub(param / 12);
     return kModelKnobs[m < 0 || m > 23 ? 0 : m][param % 4 - 1];
@@ -3317,6 +3398,40 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
   } else if (pt == PT_WARPS1 && k == 0 && i_of(v) >= WC_OSC1) {   // the oscillator's shape, as the algorithm uses it
     int o = i_of(v) > WC_OSC3 ? 2 : i_of(v) - WC_OSC1;
     put(b, n, Pi(PG_WARPS(1), 3) == WM_SHIFT ? kWarpsCarrier[WC_OSC1 + o] : kOscXmod[o]);
+  } else if (pt == PT_LFO && k && Pi(param / 4, 0) == LW_FOLLOW) {   // (0.16.23) FOLLOW's ATTACK, MODE, DECAY
+    if (k == 2) {
+      static const char* const kM[6] = {"Follow", "Trig", "T1", "T2", "T3", "T4"};
+      const int m = i_of(v);
+      put(b, n, kM[m < 0 ? 0 : m > 5 ? 5 : m]);
+    } else {
+      const float t = k == 1 ? fol_att(v) : fol_dec(v);
+      if (t < 1.0f) {
+        put_num(b, n, static_cast<int32_t>(t * (t < 0.01f ? 10000.0f : 1000.0f) + 0.5f), t < 0.01f ? 1 : 0, 0);
+        put_end(b, n, " ms");
+      } else {
+        put_num(b, n, static_cast<int32_t>(t * 100.0f + 0.5f), 2, 0);
+        put_end(b, n, " s");
+      }
+    }
+  } else if (pt == PT_FOLLOW && k == 1) {   // GAIN: dB
+    put_num(b, n, static_cast<int32_t>(v * 24.0f * 10.0f + (v < 0 ? -0.5f : 0.5f)), 1, 1);
+    put_end(b, n, " dB");
+  } else if (pt == PT_FOLLOW && k == 2) {   // THRESH: dB
+    put_num(b, n, static_cast<int32_t>(fol_db(v) + (v < 1.0f ? -0.5f : 0.5f)), 0, 1);
+    put_end(b, n, " dB");
+  } else if (pt == PT_FOLLOW && k == 3) {   // FILTER: off, LP or HP at its cutoff
+    if (v > -0.02f && v < 0.02f) {
+      put(b, n, "Off");
+    } else {
+      const float hz = fol_hz(v);
+      put(b, n, v < 0 ? "LP " : "HP ");
+      if (hz < 1000.0f) {
+        put_num(b + 3, n - 3, static_cast<int32_t>(hz + 0.5f), 0, 0);
+      } else {
+        put_num(b + 3, n - 3, static_cast<int32_t>(hz * 0.01f + 0.5f), 1, 0);
+        put_end(b, n, "k");
+      }
+    }
   } else if (pt == PT_FILT3 && k == 0) {  // TYPE: LP BP HP, VOX's voices
     int i = iround(v);
     put(b, n, mf_type_name(proj.algo[(param / 4) - 2], i < 0 ? 0 : i > 2 ? 2 : i));
@@ -3963,9 +4078,10 @@ namespace {
 // the locks a project had before 0.16.7: 384 (now 380); the used ones read in order into the ones there are now (more
 // than 380 used: the last left out)
 const int kOldLocks = 384;
-MI_COLD void locks_from(project_t* p, const plock_t* o) {
+const int kOldPages = 68;               // (the pages before 0.16.23: the followers' after them)
+MI_COLD void locks_from(project_t* p, const plock_t* o, int n = kOldLocks) {
   int j = 0;
-  for (int i = 0; i < kOldLocks && j < ENG_PLOCKS; ++i)
+  for (int i = 0; i < n && j < ENG_PLOCKS; ++i)
     if (o[i].lane != 0xFF) p->lock[j++] = o[i];
   for (; j < ENG_PLOCKS; ++j) p->lock[j].lane = 0xFF, p->lock[j].step = 0, p->lock[j].tp = 0, p->lock[j].v = 0;
 }
@@ -4549,8 +4665,8 @@ static_assert(sizeof(project_t) <= 3824u, "a project in one record of the patter
 struct project_v23 {
   uint32_t magic;
   uint16_t version, size;
-  float val[ENG_NPARAMS];
-  uint8_t algo[ENG_NPAGES];
+  float val[kOldPages * 4];
+  uint8_t algo[kOldPages];
   uint8_t out_mode, warps_hq, theme, dice, dice_seed;
   cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
   uint8_t trig[ENG_LANES][ENG_STEPS / 8];
@@ -4571,8 +4687,8 @@ static_assert(TP_CURVE == 41, "CURVE after the 41 parameters 0.15's lanes had");
 struct project_v26 {
   uint32_t magic;
   uint16_t version, size;
-  float val[ENG_NPARAMS];
-  uint8_t algo[ENG_NPAGES];
+  float val[kOldPages * 4];
+  uint8_t algo[kOldPages];
   uint8_t out_mode, warps_hq, theme, dice, dice_seed;
   cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
   uint8_t trig[ENG_LANES][ENG_STEPS / 8];
@@ -4593,6 +4709,31 @@ static_assert(sizeof(project_v26) == PROJECT_SIZE_26 && offsetof(project_v26, en
               "0.16.0's to 0.16.6's layout (0.16.0's: Endless' options from its padding on)");
 static_assert(TP_CLIMB == 42 && sizeof(project_t) >= PROJECT_SIZE_26, "CLIMB after the 42 parameters 0.16.6's lanes "
               "had; a project's buffer holds an older one");
+// 0.16.7's to 0.16.22's (versions 27 to 32): 68 pages (no followers), 380 locks; the same size as now
+struct project_v32 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[kOldPages * 4];
+  uint8_t algo[kOldPages];
+  uint8_t out_mode, warps_hq, theme, dice, dice_seed;
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+  int8_t rnd[ENG_LANES][ENG_NTP];
+  uint16_t seed[ENG_LANES];
+  plock_t lock[380];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+  uint8_t rseed[ENG_LANES][ENG_NTP];
+  uint8_t trauma;
+  int8_t speed[ENG_LANES];
+  uint8_t dir[ENG_LANES];
+  uint8_t endless_opt[ENG_TRACKS][4];
+  uint8_t arp_opt[ENG_TRACKS];
+  uint8_t rsv[4];
+};
+static_assert(sizeof(project_v32) == PROJECT_SIZE_32 && sizeof(project_t) == PROJECT_SIZE_32,
+              "0.16.7's to 0.16.22's layout, and now's: the same size (the followers' pages in thirteen locks' room)");
 union UpgBuf {
   project_old<33> v4;
   project_old<35> v5;
@@ -4605,6 +4746,7 @@ union UpgBuf {
   project_v14 v14;
   project_v23 v23;
   project_v26 v26;
+  project_v32 v32;
 };
 UpgBuf upg PLAT_POOL;                    // (0.16.1: in the pool, out of the RAM the screen and the engine share)
 MI_COLD void upgrade_v23(project_t* p, const project_v23& o) {
@@ -4613,9 +4755,9 @@ MI_COLD void upgrade_v23(project_t* p, const project_v23& o) {
   p->magic = PROJECT_MAGIC;
   p->version = PROJECT_VERSION;
   p->size = sizeof(project_t);
-  for (int i = 0; i < ENG_NPARAMS; ++i) p->val[i] = o.val[i];
+  for (int i = 0; i < kOldPages * 4; ++i) p->val[i] = o.val[i];   // (the followers' pages 0: their defaults)
   p->val[PG_CURVE * 4 + 0] = p->val[PG_CURVE * 4 + 1] = p->val[PG_CURVE * 4 + 2] = p->val[PG_CURVE * 4 + 3] = 0.0f;
-  for (int i = 0; i < ENG_NPAGES; ++i) p->algo[i] = o.algo[i];
+  for (int i = 0; i < kOldPages; ++i) p->algo[i] = o.algo[i];
   p->out_mode = o.out_mode, p->warps_hq = o.warps_hq, p->theme = o.theme, p->dice = o.dice;
   p->dice_seed = o.dice_seed;
   for (int g = 0; g <= ENG_TRACKS; ++g)
@@ -4639,8 +4781,8 @@ MI_COLD void upgrade_v26(project_t* p, const project_v26& o) {   // (CLIMB off: 
   p->magic = PROJECT_MAGIC;
   p->version = PROJECT_VERSION;
   p->size = sizeof(project_t);
-  for (int i = 0; i < ENG_NPARAMS; ++i) p->val[i] = o.val[i];
-  for (int i = 0; i < ENG_NPAGES; ++i) p->algo[i] = o.algo[i];
+  for (int i = 0; i < kOldPages * 4; ++i) p->val[i] = o.val[i];
+  for (int i = 0; i < kOldPages; ++i) p->algo[i] = o.algo[i];
   p->out_mode = o.out_mode, p->warps_hq = o.warps_hq, p->theme = o.theme, p->dice = o.dice;
   p->dice_seed = o.dice_seed;
   for (int g = 0; g <= ENG_TRACKS; ++g)
@@ -4658,6 +4800,35 @@ MI_COLD void upgrade_v26(project_t* p, const project_v26& o) {   // (CLIMB off: 
     p->endless_len[t] = o.endless_len[t];
     p->endless_key[t] = o.endless_key[t];
     for (int i = 0; i < 3; ++i) p->endless_opt[t][i] = o.endless_opt[t][i];
+  }
+  p->trauma = o.trauma;
+}
+MI_COLD void upgrade_v32(project_t* p, const project_v32& o) {   // (the followers' pages 0; the locks past 367 out)
+  uint8_t* raw = reinterpret_cast<uint8_t*>(p);
+  for (uint32_t i = 0; i < sizeof(project_t); ++i) raw[i] = 0;
+  p->magic = PROJECT_MAGIC;
+  p->version = PROJECT_VERSION;
+  p->size = sizeof(project_t);
+  for (int i = 0; i < kOldPages * 4; ++i) p->val[i] = o.val[i];
+  for (int i = 0; i < kOldPages; ++i) p->algo[i] = o.algo[i];
+  p->out_mode = o.out_mode, p->warps_hq = o.warps_hq, p->theme = o.theme, p->dice = o.dice;
+  p->dice_seed = o.dice_seed;
+  for (int g = 0; g <= ENG_TRACKS; ++g)
+    for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c] = o.cable[g][c];
+  for (int l = 0; l < ENG_LANES; ++l) {
+    for (int b = 0; b < ENG_STEPS / 8; ++b) p->trig[l][b] = o.trig[l][b];
+    for (int i = 0; i < ENG_NTP; ++i) p->rnd[l][i] = o.rnd[l][i], p->rseed[l][i] = o.rseed[l][i];
+    p->seed[l] = o.seed[l];
+    p->speed[l] = o.speed[l];
+    p->dir[l] = o.dir[l];
+  }
+  locks_from(p, o.lock, 380);
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    for (int i = 0; i < ENG_ENDLESS; ++i) p->endless[t][i] = o.endless[t][i];
+    p->endless_len[t] = o.endless_len[t];
+    p->endless_key[t] = o.endless_key[t];
+    for (int i = 0; i < 4; ++i) p->endless_opt[t][i] = o.endless_opt[t][i];
+    p->arp_opt[t] = o.arp_opt[t];
   }
   p->trauma = o.trauma;
 }
@@ -4690,8 +4861,12 @@ int upgrade_any(project_t* p, int bytes);
 MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them, sizeof(project_t) >= the largest)
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   const int v = p->magic == PROJECT_MAGIC ? static_cast<int>(p->version) : 0;
-  if (v >= 27 && v <= 31 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
-    p->version = PROJECT_VERSION;       // (0.16.7 to 0.16.20: their layout this one; 0.16.13's models one more; then
+  if (v >= 27 && v <= 32 && bytes == static_cast<int>(sizeof(project_v32)) && p->size == sizeof(project_v32)) {
+    const uint8_t* from = reinterpret_cast<const uint8_t*>(p);   // (0.16.7 to 0.16.22: 68 pages, 380 locks)
+    uint8_t* to = reinterpret_cast<uint8_t*>(&upg.v32);
+    for (uint32_t i = 0; i < sizeof(project_v32); ++i) to[i] = from[i];
+    upgrade_v32(p, upg.v32);
+    if (v == 32) return 1;              // (0.16.13's models one more; then
     if (v == 27) models_v27(p);         // TAURUS at 16, VOCODER at 17, the models from there one further on; 0.16.17's
     if (v <= 30) taurus_in(p);          // ROBOVOX (16), withdrawn: SPEECH again in its place, at noon)
     vocoder_in(p);
@@ -5048,6 +5223,12 @@ void eng_render(float* l, float* r, uint32_t n) {
       mclaim(t);                         // (its state its own first)
       voc_modulator(t, u >= 0 && u != t && fx_n == n ? mbuf[u] : nullptr, n);
     }
+  if (fx_n == n)                        // (0.16.23) the followers: the same, their tracks' last block
+    for (int i = 0; i < 3; ++i)
+      if (Pi(PG_LFO(i), 0) == LW_FOLLOW && Pi(PG_LFO(i), 2) <= LF_TRIG) {
+        const int src = Pi(PG_FOLLOW(i), 0);
+        follow_listen(mbuf[src < 0 ? 0 : src > ENG_TRACKS - 1 ? ENG_TRACKS - 1 : src], i, n);
+      }
   int c1ok = use_core1 && plat_cpu2_on(), jobs = 0;
   make_sub_costs();
   uint32_t ja = c1ok ? split_early(early, last_voices) : 0u, pending = 0;   // core 1's first job, its job outstanding

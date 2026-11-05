@@ -68,10 +68,12 @@ struct Wav {
   void close() { if (f) fclose(f); }
 };
 
-// the locks a project had before 0.16.7 (384; 380 now): a project's of now into an old layout's, the last free
+// the locks a project had before 0.16.7 (384; 367 now): a project's of now into an old layout's, the last free; the
+// pages before 0.16.23 (68: the followers' after them)
 #define OLD_LOCKS 384
-static void old_locks(plock_t* o, const plock_t* q) {
-  for (int i = 0; i < OLD_LOCKS; ++i) o[i] = i < ENG_PLOCKS ? q[i] : plock_t{0xFF, 0, 0, 0};
+#define OLD_PAGES 68
+static void old_locks(plock_t* o, const plock_t* q, int n = OLD_LOCKS) {
+  for (int i = 0; i < n; ++i) o[i] = i < ENG_PLOCKS ? q[i] : plock_t{0xFF, 0, 0, 0};
 }
 
 // a project of now, written as 0.7 to 0.15 kept theirs (versions 15 to 23: 41 parameters a lane, no SPEED, DIRECTION or
@@ -79,8 +81,8 @@ static void old_locks(plock_t* o, const plock_t* q) {
 struct V23 {
   uint32_t magic;
   uint16_t version, size;
-  float val[ENG_NPARAMS];
-  uint8_t algo[ENG_NPAGES];
+  float val[OLD_PAGES * 4];
+  uint8_t algo[OLD_PAGES];
   uint8_t out_mode, warps_hq, theme, dice, dice_seed;
   cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
   uint8_t trig[ENG_LANES][ENG_STEPS / 8];
@@ -121,8 +123,8 @@ static project_t* as_v23(project_t* q) {
 struct V26 {
   uint32_t magic;
   uint16_t version, size;
-  float val[ENG_NPARAMS];
-  uint8_t algo[ENG_NPAGES];
+  float val[OLD_PAGES * 4];
+  uint8_t algo[OLD_PAGES];
   uint8_t out_mode, warps_hq, theme, dice, dice_seed;
   cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
   uint8_t trig[ENG_LANES][ENG_STEPS / 8];
@@ -163,6 +165,56 @@ static int as_v26(project_t* q, int version) {   // (its bytes: what eng_upgrade
   memset(q, 0xA5, sizeof *q);
   memcpy(q, &o, sizeof o);
   return o.size;
+}
+
+// a project of now, written as 0.16.7 to 0.16.22 kept theirs (versions 27 to 32: 68 pages, no followers, 380 locks;
+// 3824 bytes, as now), its version as the test set it
+struct V32 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[OLD_PAGES * 4];
+  uint8_t algo[OLD_PAGES];
+  uint8_t out_mode, warps_hq, theme, dice, dice_seed;
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+  int8_t rnd[ENG_LANES][ENG_NTP];
+  uint16_t seed[ENG_LANES];
+  plock_t lock[380];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+  uint8_t rseed[ENG_LANES][ENG_NTP];
+  uint8_t trauma;
+  int8_t speed[ENG_LANES];
+  uint8_t dir[ENG_LANES];
+  uint8_t endless_opt[ENG_TRACKS][4];
+  uint8_t arp_opt[ENG_TRACKS];
+  uint8_t rsv[4];
+};
+static_assert(sizeof(V32) == PROJECT_SIZE_32 && sizeof(V32) == sizeof(project_t), "0.16.22's layout");
+static void as_v32(project_t* q, int version) {
+  static V32 o;
+  memset(&o, 0, sizeof o);
+  o.magic = q->magic, o.version = static_cast<uint16_t>(version), o.size = PROJECT_SIZE_32;
+  memcpy(o.val, q->val, sizeof o.val);
+  memcpy(o.algo, q->algo, sizeof o.algo);
+  o.out_mode = q->out_mode, o.warps_hq = q->warps_hq, o.theme = q->theme, o.dice = q->dice, o.dice_seed = q->dice_seed;
+  memcpy(o.cable, q->cable, sizeof o.cable);
+  memcpy(o.trig, q->trig, sizeof o.trig);
+  memcpy(o.rnd, q->rnd, sizeof o.rnd);
+  memcpy(o.seed, q->seed, sizeof o.seed);
+  old_locks(o.lock, q->lock, 380);
+  memcpy(o.endless, q->endless, sizeof o.endless);
+  memcpy(o.endless_len, q->endless_len, sizeof o.endless_len);
+  memcpy(o.endless_key, q->endless_key, sizeof o.endless_key);
+  memcpy(o.rseed, q->rseed, sizeof o.rseed);
+  o.trauma = q->trauma;
+  memcpy(o.speed, q->speed, sizeof o.speed);
+  memcpy(o.dir, q->dir, sizeof o.dir);
+  memcpy(o.endless_opt, q->endless_opt, sizeof o.endless_opt);
+  memcpy(o.arp_opt, q->arp_opt, sizeof o.arp_opt);
+  memset(q, 0xA5, sizeof *q);
+  memcpy(q, &o, sizeof o);
 }
 
 int main(int argc, char** argv) {
@@ -4517,6 +4569,7 @@ int main(int argc, char** argv) {
     q.lock[0] = plock_t{0, 3, 1, 200};
     q.lock[1] = plock_t{0, 4, TP_NOTE, 100};
     q.val[PG_TRACK(0, 0) * 4 + 1] = 0.9f;   // (HARMONICS: SQ-1's WAVE then its kit's)
+    as_v32(&q, 27);                     // (0.16.22's layout: 68 pages, 380 locks)
     int v27 = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == sq_m &&
               q.algo[PG_TRACK(1, 0)] == sq_m && q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 15) &&
               q.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PLAITS, 20) && q.lock[0].lane == 0xFF &&
@@ -4824,6 +4877,7 @@ int main(int argc, char** argv) {
     q.lock[0] = plock_t{2, 3, 2, 200};   // (a lock on its second knob)
     q.lock[1] = plock_t{2, 4, TP_NOTE, 90};
     q.val[PG_TRACK(2, 0) * 4 + 1] = 0.9f;
+    as_v32(&q, 29);                     // (0.16.22's layout: 68 pages, 380 locks)
     const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.version == PROJECT_VERSION &&
                         q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 15) && q.lock[0].lane == 0xFF &&
                         q.lock[1].lane == 2 && std::fabs(q.val[PG_TRACK(2, 0) * 4 + 1] - 0.5f) < 1e-6f;
@@ -5064,6 +5118,7 @@ int main(int argc, char** argv) {
     q.algo[PG_TRACK(1, 0)] = 16;
     q.algo[PG_TRACK(2, 0)] = 15;
     q.algo[PG_TRACK(3, 0)] = 21;         // (MODAL then)
+    as_v32(&q, 30);                     // (0.16.22's layout: 68 pages, 380 locks)
     const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(1, 0)] == speech &&
                         q.algo[PG_TRACK(2, 0)] == 15 && q.algo[PG_TRACK(3, 0)] == modal;
     eng_defaults(p);
@@ -5260,6 +5315,7 @@ int main(int argc, char** argv) {
     q.algo[PG_TRACK(0, 0)] = 16;
     q.algo[PG_TRACK(1, 0)] = 17;
     q.algo[PG_TRACK(2, 0)] = 22;
+    as_v32(&q, 31);                     // (0.16.22's layout: 68 pages, 380 locks)
     const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == 16 &&
                         q.algo[PG_TRACK(1, 0)] == speech && q.algo[PG_TRACK(2, 0)] == ENG_MODELS - 1;
     eng_defaults(p);
@@ -5363,7 +5419,7 @@ int main(int argc, char** argv) {
     const int chaos = cfinite && cmin >= -1.0f && cmax <= 1.0f && cmin < -0.5f && cmax > 0.5f && wings >= 6;
     char t[16];
     eng_param_text(PG_LFO(0) * 4, static_cast<float>(LW_CHAOS), t, sizeof t);
-    const int names = !strcmp(t, "Chaos") && LW_N == 15;
+    const int names = !strcmp(t, "Chaos") && LW_N == 16;
     eng_defaults(p);
     eng_fresh();
     printf("LFO waves: PUMP %s, STAIRS %d steps, CLAVE its hits %.2f %.2f %.2f (%s), BOUNCE %s, RISES and FALLS %s, "
@@ -5372,6 +5428,83 @@ int main(int argc, char** argv) {
            cmax, wings, chaos ? "ok" : "WRONG", names ? "ok" : "WRONG");
     if (!pump || steps != 4 || !clave || !bounce || !ramps || !zig || !chaos || !names)
       ++failures, printf("FAIL: the LFOs' new waves\n");
+  }
+
+  // 74. (0.16.23) FOLLOW on LFO 1, listening to T1 in the default project: FOLLOW up while T1 plays, back to 0 after;
+  // its high pass at 5 kHz taking most of a kick's level; TRIG: an envelope at each of T1's hits (its rises counted
+  // over 4 s), and the same from T1's trigs; its names and texts; a project of 0.16.22 (version 32: 68 pages, 380
+  // locks) read: its parameters where they were, the followers' pages 0, its used locks in order (367 at most)
+  {
+    project_t* p = eng_project();
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    const uint32_t nb = 128;
+    static float l[128], r[128];
+    const int lf = PG_LFO(0) * 4, fp = PG_FOLLOW(0) * 4;
+    p->val[lf + 0] = static_cast<float>(LW_FOLLOW);
+    p->val[lf + 1] = 0.2f;                                // (ATTACK ~2.3 ms)
+    p->val[lf + 2] = static_cast<float>(LF_FOLLOW);
+    p->val[lf + 3] = 0.45f;                               // (DECAY ~110 ms)
+    p->val[fp + 0] = 0.0f, p->val[fp + 1] = 0.25f, p->val[fp + 2] = 0.0f, p->val[fp + 3] = 0.0f;   // T1, +6 dB
+    for (int b = 0; b < 4; ++b) eng_render(l, r, nb);    // (the wave before it, a block)
+    auto run = [&](float secs, float* mx, int* rises) {
+      *mx = 0.0f;
+      int up = 0, n = 0;
+      for (int b = 0; b < static_cast<int>(secs * 44100.0f / nb); ++b) {
+        eng_render(l, r, nb);
+        const float v = eng_src(SRC_L1);
+        if (!std::isfinite(v) || v < -1e-6f || v > 1.0f + 1e-6f) *mx = 9.0f;
+        *mx = std::fmax(*mx, v);
+        if (!up && v > 0.8f) up = 1, ++n;
+        else if (up && v < 0.2f) up = 0;
+      }
+      if (rises) *rises = n;
+    };
+    float playing, after, hp, trig_mx;
+    int trig_n = 0, steps_n = 0, ignored;
+    eng_play(1);
+    run(2.0f, &playing, &ignored);
+    eng_play(0);
+    run(1.5f, &after, &ignored);
+    run(0.5f, &after, &ignored);                          // (its last half second: settled)
+    p->val[fp + 3] = 1.0f;                                // (HP 5 kHz)
+    eng_play(1);
+    run(2.0f, &hp, &ignored);
+    p->val[fp + 3] = 0.0f;
+    p->val[lf + 2] = static_cast<float>(LF_TRIG);
+    p->val[fp + 2] = 0.6f;                                // (-24 dB)
+    p->val[lf + 1] = 0.0f, p->val[lf + 3] = 0.3f;         // (ATTACK 0.5 ms, DECAY ~40 ms)
+    run(4.0f, &trig_mx, &trig_n);
+    p->val[lf + 2] = static_cast<float>(LF_T1);
+    run(4.0f, &trig_mx, &steps_n);
+    eng_play(0);
+    char t[16], m[16];
+    eng_param_text(lf + 2, static_cast<float>(LF_TRIG), m, sizeof m);
+    eng_param_text(fp + 3, -0.5f, t, sizeof t);
+    const int names = !strcmp(eng_param_name(lf + 1), "Attack") && !strcmp(eng_param_name(lf + 3), "Decay") &&
+                      !strcmp(m, "Trig") && !strncmp(t, "LP ", 3) && !strcmp(eng_param_name(fp + 2), "Thresh");
+    // a project of 0.16.22: an LFO's wave, a lock at 379
+    static project_t q;
+    eng_defaults(&q);
+    q.val[lf + 0] = static_cast<float>(LW_CHAOS);
+    q.val[PG_GLITCH(3) * 4 + 2] = 0.7f;
+    for (int i = 0; i < ENG_PLOCKS; ++i) q.lock[i].lane = 0xFF;
+    q.lock[0] = plock_t{1, 2, TP_NOTE, 77};
+    as_v32(&q, 32);
+    reinterpret_cast<V32*>(&q)->lock[379] = plock_t{2, 5, TP_NOTE, 99};   // (its last place: the second used)
+    const int up32 = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.val[lf + 0] == static_cast<float>(LW_CHAOS) &&
+                     q.val[PG_GLITCH(3) * 4 + 2] == 0.7f && q.val[fp + 1] == 0.0f && q.val[fp + 3] == 0.0f &&
+                     q.lock[0].lane == 1 && q.lock[0].v == 77 && q.lock[1].lane == 2 && q.lock[1].v == 99 &&
+                     q.lock[2].lane == 0xFF;
+    eng_defaults(p);
+    eng_fresh();
+    const int follow = playing > 0.3f && after < 0.01f && hp < 0.5f * playing;
+    const int trig = trig_n >= 6 && steps_n >= 6 && std::abs(trig_n - steps_n) <= 2;   // (a rise a hit: as many)
+    printf("FOLLOW: T1 playing %.2f, after %.4f, its lows cut %.2f (%s); TRIG %d rises, from T1's trigs %d (%s); "
+           "names %s; 0.16.22's project %s\n", playing, after, hp, follow ? "ok" : "WRONG", trig_n, steps_n,
+           trig ? "ok" : "WRONG", names ? "ok" : "WRONG", up32 ? "ok" : "WRONG");
+    if (!follow || !trig || !names || !up32) ++failures, printf("FAIL: FOLLOW\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

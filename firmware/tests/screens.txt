@@ -135,7 +135,20 @@ shot 08b_lfo3_bounce.png
 turn K1 4
 wait 1600
 shot 08c_lfo3_chaos.png
-turn K1 -8
+turn K1 1
+turn K3 -1
+wait 1600
+shot 08d_lfo3_follow.png
+turn SELECT 1
+turn K2 6
+turn K4 -10
+wait 1600
+shot 08e_lfo3_in.png
+turn K2 -6
+turn K4 10
+turn SELECT -1
+turn K3 1
+turn K1 -9
 wait 300
 tap SEQ
 wait 300

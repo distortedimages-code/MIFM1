@@ -333,6 +333,15 @@ static int shown_page(int page)          /* the page the screen shows for one it
     }
 }
 
+static int lfo_of(int page)              /* (0.16.23) the LFO an LFO's page (or its follower's) belongs to: 0..2 */
+{
+    return clamp(page >= PG_FOLLOW(0) && page < PG_FOLLOW(3) ? page - PG_FOLLOW(0) : page - PG_LFO(0), 0, 2);
+}
+static int lfo_follows(int i)            /* its WAVE on FOLLOW */
+{
+    return (int)(eng_project()->val[PG_LFO(i) * 4] + 0.5f) == LW_FOLLOW;
+}
+
 #define MAXFACES 7
 static int module_pages(int page, int *f)   /* its module's pages (its faces), in order; how many */
 {
@@ -341,9 +350,15 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_BEND: case PT_GLITCH: case PT_FILT1: case PT_FILT2: case PT_FILT3:
     case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2:
         return cat_pages(track_cat(page), t, f);
-    case PT_LFO:                         /* the three LFOs */
-        f[0] = PG_LFO(0), f[1] = PG_LFO(1), f[2] = PG_LFO(2);
-        return 3;
+    case PT_LFO: case PT_FOLLOW: {       /* the three LFOs; (0.16.23) a follower's input after its LFO */
+        int n = 0;
+        for (int i = 0; i < 3; i++) {
+            f[n++] = PG_LFO(i);
+            if (lfo_follows(i))
+                f[n++] = PG_FOLLOW(i);
+        }
+        return n;
+    }
     case PT_MIX: case PT_PAN: case PT_SPREAD: case PT_EQ: case PT_DUCK: case PT_COMP: case PT_OTT:   /* the mixer:
                                           * the levels, the pans, the spreads (0.16.19), the filters, the duck, the
                                           * master bus (its two modes) */
@@ -542,9 +557,9 @@ static const char *module_name(int page)
                                                                         : track_kind(ptrack(page)) == MK_VOCODER ? "Vocoder"
                                                                         : "Plaits";
     }
-    case PT_LFO: {
-        static const char *const N[3] = {"LFO 1", "LFO 2", "LFO 3"};
-        return N[clamp(page - PG_LFO(0), 0, 2)];
+    case PT_LFO: case PT_FOLLOW: {
+        static const char *const N[3] = {"LFO 1", "LFO 2", "LFO 3"}, *const I[3] = {"LFO 1 In", "LFO 2 In", "LFO 3 In"};
+        return ptype(page) == PT_FOLLOW ? I[lfo_of(page)] : N[lfo_of(page)];
     }
     case PT_MIX: case PT_PAN: case PT_SPREAD: case PT_EQ: case PT_DUCK: case PT_COMP: case PT_OTT: return "Mixer";
     case PT_STEP: case PT_RND: return "Steps";
@@ -605,7 +620,7 @@ static uint16_t page_accent(int page)
         return model_accent(p->algo[PG_TRACK(ptrack(page), 0)]);
     case PT_EUC: return lane_accent(eng_page_lane(page));
     case PT_PLAY: return lane_accent(plane(page));
-    case PT_LFO: return accent3(page - PG_LFO(0));   /* LFO 1, 2, 3: the three colours */
+    case PT_LFO: case PT_FOLLOW: return accent3(lfo_of(page));   /* LFO 1, 2, 3: the three colours */
     default: return lane_accent(eng_page_lane(page));
     }
 }
@@ -694,9 +709,9 @@ static void param_name(int param, char *b, uint32_t max)
         text_cat(b, "T", max);
         int_text(t + 1, n);
         text_cat(b, n, max);
-    } else if (page < PG_MIX) {
+    } else if (page < PG_MIX || ptype(page) == PT_FOLLOW) {
         n[0] = 'L';
-        n[1] = (char)('1' + clamp(page - PG_LFO(0), 0, 2));
+        n[1] = (char)('1' + lfo_of(page));
         n[2] = 0;
         text_cat(b, n, max);
     } else {
@@ -1128,6 +1143,9 @@ static const vop_t ICONS[NICON][IOPS] = {
     {{'L', 4, 24, 13, 8}, {'L', 13, 8, 16, 18}, {'L', 16, 18, 22, 11}, {'L', 22, 11, 28, 24}},       /* zigzag */
     {{'L', 16, 16, 11, 8}, {'L', 11, 8, 5, 13}, {'L', 5, 13, 9, 22}, {'L', 9, 22, 16, 16},
      {'L', 16, 16, 23, 10}, {'L', 23, 10, 28, 17}, {'L', 28, 17, 22, 24}, {'L', 22, 24, 16, 16}},    /* chaos */
+    {{'L', 6, 13, 6, 19}, {'L', 10, 9, 10, 23}, {'L', 14, 12, 14, 20}, {'L', 18, 15, 18, 17}, {'L', 22, 10, 22, 22},
+     {'L', 26, 14, 26, 18}, {'L', 4, 12, 10, 7}, {'L', 10, 7, 18, 13}, {'L', 18, 13, 22, 8}, {'L', 22, 8, 28, 13}},
+                                                                                                     /* follow */
     {{'L', 8, 6, 8, 26}, {'L', 16, 6, 16, 26}, {'L', 24, 6, 24, 26}, {'L', 5, 20, 11, 20}, {'L', 13, 10, 19, 10},
      {'L', 21, 16, 27, 16}},                                                                         /* mixer */
     {{'D', 7, 16, 2, 0}, {'L', 11, 10, 13, 16}, {'L', 13, 16, 11, 22}, {'L', 16, 7, 19, 16}, {'L', 19, 16, 16, 25},
@@ -1627,6 +1645,22 @@ static void panel_lfo(int i)
     eng_param_text(pg * 4 + 1, eng_final(pg * 4 + 1), v, sizeof v);
     label_text(v, u, sizeof u);
     text_cat(s, u, sizeof s);
+    if (w == LW_FOLLOW) {                /* (0.16.23) FOLLOW: what it listens to, how */
+        int src = clamp((int)(p->val[PG_FOLLOW(i) * 4] + 0.5f), 0, ENG_TRACKS - 1);
+        s[0] = 0;
+        text_cat(s, m == LF_FOLLOW ? "FOLLOWS T" : m == LF_TRIG ? "OPENS ON T" : "AT EACH TRIG OF T", sizeof s);
+        v[0] = (char)('1' + (m >= LF_T1 ? clamp(m - LF_T1, 0, ENG_TRACKS - 1) : src));
+        v[1] = 0;
+        text_cat(s, v, sizeof s);
+        if (m <= LF_TRIG) {
+            eng_param_text(PG_FOLLOW(i) * 4 + 2, p->val[PG_FOLLOW(i) * 4 + 2], v, sizeof v);
+            label_text(v, u, sizeof u);
+            text_cat(s, m == LF_FOLLOW ? "|OVER " : "|AT ", sizeof s);
+            text_cat(s, u, sizeof s);
+        }
+        hero_line(48, s);
+        return;
+    }
     text_cat(s, m == LM_FREE ? "|FREE" : m == LM_SYNC ? "|ON THE TEMPO" : "|AGAIN AT T", sizeof s);
     if (m >= LM_T1) {
         v[0] = (char)('1' + clamp(m - LM_T1, 0, ENG_TRACKS - 1));
@@ -1641,7 +1675,7 @@ static void panel_lfo(int i)
 static void lfo_scope(int force)         /* the LFO these 1.4 s (eng_hist), the newest at the right */
 {
     static int32_t shown;
-    int i = clamp(ui.page - PG_LFO(0), 0, 2), h[ENG_HIST];
+    int i = lfo_of(ui.page), h[ENG_HIST];
     int32_t key = i + 1;
     for (int j = 0; j < ENG_HIST; j++) {
         h[j] = eng_hist(SRC_L1 + i, j);
@@ -2337,8 +2371,12 @@ static void draw_panel(void)
                             (int)(eng_final(ui.page * 4) * 50.0f + 50.0f) << 9 | (int)(eng_final(ui.page * 4 + 1) * 100.0f) << 16;
         break;
     case PT_LFO:
-        s[2] = (int)p->val[ui.page * 4] | (int)p->val[ui.page * 4 + 2] << 4 |
+        s[2] = (int)p->val[ui.page * 4] | (int)p->val[ui.page * 4 + 2] << 5 |
                (int)(eng_final(ui.page * 4 + 1) * 1000.0f) << 8;
+        break;
+    case PT_FOLLOW:                      /* (its source, its gain and threshold, its mode) */
+        s[2] = (int)p->val[ui.page * 4] | (int)(p->val[ui.page * 4 + 1] * 50.0f + 50.0f) << 2 |
+               (int)(p->val[ui.page * 4 + 2] * 60.0f) << 10 | (int)p->val[PG_LFO(lfo_of(ui.page)) * 4 + 2] << 17;
         break;
     case PT_STEP: case PT_LANE: case PT_PLAY: {
         int l = plane(ui.page);
@@ -2441,7 +2479,7 @@ static void draw_panel(void)
     if (!ui.full && !ui.body_panel && !memcmp(s, ui.panel_shown, sizeof s)) {
         if (fx)
             fx_meter(0);
-        if (pt == PT_LFO)
+        if (pt == PT_LFO || pt == PT_FOLLOW)
             lfo_scope(0);
         return;
     }
@@ -2454,7 +2492,7 @@ static void draw_panel(void)
         break;
     case PT_SON2: panel_plaits(tr, 2, page_accent(ui.page)); break;
     case PT_ENV2: panel_env2(tr, page_accent(ui.page)); break;
-    case PT_LFO: panel_lfo(ui.page - PG_LFO(0)); break;
+    case PT_LFO: case PT_FOLLOW: panel_lfo(lfo_of(ui.page)); break;
     case PT_MIX: case PT_PAN: panel_mixer(pt == PT_PAN); break;
     case PT_SPREAD: panel_spread(); break;
     case PT_EQ: panel_eq(); break;
@@ -2479,7 +2517,7 @@ static void draw_panel(void)
     blit(0, PANEL_Y);
     if (fx)
         fx_meter(1);
-    if (pt == PT_LFO)
+    if (pt == PT_LFO || pt == PT_FOLLOW)
         lfo_scope(1);
 }
 
@@ -3264,7 +3302,7 @@ static int foot_mode(void)
     if (foot_lane() >= 0)
         return 5;
     switch (ptype(ui.page)) {
-    case PT_LFO: return 1;
+    case PT_LFO: case PT_FOLLOW: return 1;
     default: return 0;
     }
 }
@@ -3712,7 +3750,7 @@ static void draw_footer(void)
         foot_steps(fl);
     } else {
         for (int i = 0; i < 4; i++) {    /* a cell under each knob (60 px), the LED and the name from its left */
-            int x = i * 60 + 8, act = mode ? i == ui.page - PG_LFO(0) : i == ui.track;
+            int x = i * 60 + 8, act = mode ? i == lfo_of(ui.page) : i == ui.track;
             t[0] = 0;
             if (mode) {                  /* the LFOs: each in its colour, the page's in white */
                 if (i >= 3)
@@ -5020,7 +5058,7 @@ static void module_button(int b)
         break;
     }
     case B_LFO:                          /* the LFOs: 1, then 2, 3 */
-        go_page(here && pt == PT_LFO ? next : PG_LFO(0));
+        go_page(here && (pt == PT_LFO || pt == PT_FOLLOW) ? next : PG_LFO(0));
         break;
     case B_SEQ:                          /* the lane's steps (a track's: then its ratchets, its RANDOM face, its
                                           * Euclidean one) */
@@ -5942,7 +5980,7 @@ static void input(void)
      * the keys: the steps (the one playing blinks), or held; MOD mode: the LFOs' keys blinking at their rates */
     {
         static const uint8_t PAGE_BTN[PT_SPREAD + 1] = {
-            [PT_PLAITS1] = B_EDIT, [PT_PLAITS2] = B_ENV, [PT_PLAITS3] = B_EDIT, [PT_LFO] = B_LFO,
+            [PT_PLAITS1] = B_EDIT, [PT_PLAITS2] = B_ENV, [PT_PLAITS3] = B_EDIT, [PT_LFO] = B_LFO, [PT_FOLLOW] = B_LFO,
             [PT_MIX] = B_HOME, [PT_PAN] = B_HOME, [PT_REVERB] = B_FX, [PT_RSEND] = B_FX, [PT_DELAY1] = B_FX,
             [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
             [PT_ARP] = B_ARP, [PT_WARPS1] = B_FX, [PT_WARPS2] = B_FX, [PT_DUCK] = B_HOME, [PT_COMP] = B_HOME,

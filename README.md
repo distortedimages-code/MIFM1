@@ -58,7 +58,8 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   les pistes et au clavier, FREQ, la transposition et l'oscillateur de Warps compris ;
 - **trois LFO** comme modulateurs (sinus, triangle, dent de scie, rampe, carré, S&H, aléatoire lissé ; depuis
   0.16.22, sept formes rythmiques et le chaos de Lorenz), chacun libre, calé sur le tempo ou relancé par les trigs d'une
-  piste, avec un **slew** ;
+  piste, avec un **slew** ; depuis 0.16.23, chacun peut devenir un **suiveur d'enveloppe** (FOLLOW) qui écoute une
+  piste ;
 - une **matrice de câbles** : les 3 LFO vers presque tous les paramètres, 8 câbles par piste et 8 globaux, posés en
   tenant la touche d'un LFO et en tournant un potard (en atténuverteur) ;
 - une **dose d'aléatoire** cachée (OCT− tenu, SELECT), sur son propre écran, qui relance tout le son à chaque trig
@@ -789,8 +790,9 @@ la note), *Bounce* (en haut, puis redescend pas à pas), *Random* (n'importe laq
 propres lectures (le pas 1 monte d'une mesure à l'autre sans rien devoir au pas 5), depuis le PLAY ou le début d'un
 autre pattern. CLIMB se locke pas par pas : une piste à 0 dont un seul pas est locké à +5, et lui seul grimpe ; ENV
 tenu, son aléatoire. Un trig qui ne joue pas (sa PROB) ne compte pas. GLO tenu : NOTES, ON ou SHAPE sur les quatre
-pistes. Les projets d'avant 0.16.7 sont relus sans CLIMB ; ils avaient 384 locks, il y en a 380 (les quatre derniers
-ont fait la place de CLIMB : un projet qui les utilisait tous perd les quatre derniers).
+pistes. Les projets d'avant 0.16.7 sont relus sans CLIMB ; ils avaient 384 locks, il y en a eu 380 (les quatre derniers
+ont fait la place de CLIMB : un projet qui les utilisait tous perd les quatre derniers), puis 367 depuis 0.16.23 (treize
+ont fait la place des followers des LFO ; un projet en relit 367 au plus, dans l'ordre).
 
 La deuxième page du son (EDIT,
 SELECT) donne la **GATE** de la note (5 à 95 % du pas, lockable : des notes courtes et longues dans le même pattern),
@@ -922,6 +924,23 @@ applique) ; en T1 à T4, la figure repart à chaque trig de la piste.
 - **Chaos** : l'attracteur de **Lorenz** (1963 ; σ 10, ρ 28, β 8/3), sa coordonnée x : il tourne autour d'une de
   ses deux ailes, puis de l'autre, sans jamais refaire le même chemin. Ni périodique ni aléatoire : déterministe et
   imprévisible. RATE règle sa vitesse (un tour d'aile par cycle, à peu près).
+
+**Le suiveur d'enveloppe** (0.16.23, la forme **Follow**). Le LFO écoute une piste et rend son niveau (de 0 à 1),
+pour moduler ce qu'on veut avec : un kick qui ouvre le filtre d'une autre piste, une voix qui pousse une réverbe. Sa
+face prend trois potards à sa façon : **ATTACK** (à la place de RATE, 0,5 ms à 1 s), **MODE** et **DECAY** (à la place
+de SLEW, 5 ms à 5 s). MODE :
+
+- **Follow** : il suit le niveau de la piste, avec son attaque et son relâchement.
+- **Trig** : il déclenche une enveloppe attaque / decay chaque fois que la piste dépasse le seuil (THRESH ; il se
+  réarme quand elle repasse sous la moitié du seuil).
+- **T1** à **T4** : la même enveloppe, déclenchée par les trigs de la piste (sans écouter le son).
+
+Une deuxième face, **LFO 1 In** (2, 3), apparaît après la sienne (LFO, puis SELECT) : son entrée. **SOURCE** : la piste
+écoutée (T1 à T4), prise avant son volume, le filtre du mixer et le duck : une piste au volume à zéro s'entend
+encore. **GAIN** : de −24 à +24 dB. **THRESH** : de −60 à 0 dB, le seuil de Trig ; en Follow, le plancher (en dessous,
+0 ; au-dessus, le reste étiré jusqu'à 1). **FILTER** : à gauche un passe-bas de 18 kHz à 100 Hz (n'écouter que les
+graves : le kick d'un mix), à droite un passe-haut de 20 Hz à 5 kHz (n'écouter que les aigus : les charleys), 12 dB
+par octave, éteint au milieu. Il écoute le dernier bloc de la piste (2,9 ms de retard) et coûte presque rien.
 
 **Le son** (EDIT), première page : FREQ, puis HARMONICS, TIMBRE et MORPH sous le nom (court) que leur donne le manuel de Plaits pour
 le modèle choisi (le SWARM : DETUNE, DENSITY, GRAIN ; le MODAL : STRUCT, BRIGHT, DECAY…) ; sur une batterie, une

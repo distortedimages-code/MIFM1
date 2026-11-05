@@ -26,11 +26,12 @@ extern "C" {
 #define LANE_REVERB 5
 #define LANE_WARPS 6
 #define ENG_CABLES 8                     /* per track, and as many global */
-#define ENG_NPAGES 68
+#define ENG_NPAGES 71                     /* (68 until 0.16.22: the followers' three pages after them, 0.16.23) */
 #define ENG_NPARAMS (ENG_NPAGES * 4)
 #define ENG_STEPS 64                     /* the steps a lane: four pages of 16 */
-#define ENG_PLOCKS 380                   /* parameter locks, for all the lanes' steps (384 until 0.16.6: four gave
-                                          * their room to CLIMB's randoms, 0.16.7) */
+#define ENG_PLOCKS 367                   /* parameter locks, for all the lanes' steps (384 until 0.16.6: four gave
+                                          * their room to CLIMB's randoms, 0.16.7; 380 until 0.16.22: thirteen to the
+                                          * followers' pages, 0.16.23, the project the same size) */
 #define ENG_ENDLESS 64                   /* an Endless sequence's notes (and rests), a track */
 #define ENDLESS_REST 0xFF
 
@@ -78,9 +79,12 @@ extern "C" {
 #define PG_GLITCH(t) (64 + (t))          /* its glitch (after its filter): GLITCH (a sixteenth's chance to repeat), SIZE
                                           * (the slice: 1/64 .. 1/8), BEND (each repeat slower and lower, or faster
                                           * and higher), DROP (a repeat's chance of an accident: backwards, a hole) */
+#define PG_FOLLOW(i) (68 + (i))          /* (0.16.23) an LFO's follower (its WAVE on FOLLOW), its input: SOURCE (the
+                                          * track it listens to), GAIN (-24..+24 dB), THRESH (-60..0 dB: TRIG's,
+                                          * FOLLOW's floor), FILTER (to the left the highs cut, to the right the lows) */
 enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_LFO, PT_MIX, PT_PAN, PT_REVERB, PT_RSEND, PT_DELAY1,
        PT_DELAY2, PT_DSEND, PT_STEP, PT_LANE, PT_GLOBAL, PT_ARP, PT_WARPS1, PT_WARPS2, PT_DUCK, PT_COMP, PT_OTT, PT_EQ,
-       PT_BEND, PT_EUC, PT_FILT1, PT_FILT2, PT_FILT3, PT_GLITCH, PT_CURVE, NPT };
+       PT_BEND, PT_EUC, PT_FILT1, PT_FILT2, PT_FILT3, PT_GLITCH, PT_CURVE, PT_FOLLOW, NPT };
 enum { BS_OFF, BS_RECT, BS_DOWN, BS_DOWN3, BS_FOLD, BS_SWAP, BS_N };   /* the bits' SHAPE */
 #define BM_N 12                          /* the bits' MASKs */
 enum { GL_64, GL_32, GL_16, GL_8, GL_N };   /* the glitch's SIZE */
@@ -92,7 +96,11 @@ enum { WM_WARPS, WM_DRY, WM_SHIFT };    /* Warps' MODE: the modulator's track si
                                          * frequency shifter (the module's easter egg) */
 enum { LW_SINE, LW_TRI, LW_SAW, LW_RAMP, LW_SQUARE, LW_SH, LW_SMOOTH,   /* an LFO's waves; (0.16.22) the rhythmic */
        LW_PUMP, LW_STAIRS, LW_CLAVE, LW_BOUNCE, LW_RISES, LW_FALLS, LW_ZIGZAG,   /* ones, their figures on a cycle cut */
-       LW_CHAOS, LW_N };                 /* in eight, and Chaos (Lorenz's attractor) */
+       LW_CHAOS, LW_FOLLOW, LW_N };      /* in eight, and Chaos (Lorenz's attractor); (0.16.23) FOLLOW: a track's
+                                          * level (its RATE ATTACK, its SLEW DECAY, its MODE LF_*; its input on
+                                          * PG_FOLLOW) */
+enum { LF_FOLLOW, LF_TRIG, LF_T1 };     /* FOLLOW's MODE (in the LFO's MODE): the level followed; an attack and decay
+                                          * at each rise over THRESH; at each of T1's (..T4's) trigs */
 enum { LM_FREE, LM_SYNC, LM_T1 };       /* an LFO's MODE: free, synced to the tempo, started at T1's (..T4's) trigs */
 enum { DL_SYNC, DL_FREE };              /* the delay's ALGORITHM: its time in divisions of the tempo, or in ms */
 
@@ -209,7 +217,9 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 32u              /* (31: 0.16.20's: VOCODER (0.16.21) not yet at 17, the models from there one
+#define PROJECT_VERSION 33u              /* (32: 0.16.21's and 0.16.22's: 68 pages, 380 locks, no followers: read,
+                                          * the followers' pages at their defaults, the locks past 367 left out;
+                                          * 31: 0.16.20's: VOCODER (0.16.21) not yet at 17, the models from there one
                                           * lower: read, one further on; 30: 0.16.18's and 0.16.19's: TAURUS (0.16.20)
                                           * not yet at 16 either: read, from 16 one further on, then from 17;
                                           * 29: 0.16.17's, ROBOVOX (16, withdrawn) there: read, SPEECH back from noon
@@ -275,6 +285,7 @@ typedef struct {
 } project_t;
 #define PROJECT_SIZE_24 3804u            /* (0.16.0's and 0.16.1's project, version 24) */
 #define PROJECT_SIZE_26 3820u            /* (0.16.2's to 0.16.6's, versions 25, 26) */
+#define PROJECT_SIZE_32 3824u            /* (0.16.7's to 0.16.22's, versions 27 to 32; now's too) */
 enum { CL_TIMES, CL_ON, CL_SHAPE };      /* (0.16.7) CLIMB's options: how many times before the note again (2..16), */
 enum { CLON_TRIG, CLON_RATCH, CLON_BOTH, CLON_N };   /* what climbs: each play of the trig, each hit of its ratchets
                                           * (from the trig's note again), both (each hit on from the last) */
