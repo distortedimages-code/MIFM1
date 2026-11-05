@@ -365,6 +365,8 @@ float fx_env[kFx], fx_open[kFx] = {1.0f, 1.0f, 1.0f};
 int fx_hit[kFx];
 // Endless: its clock, the note playing, ping-pong's way, recording
 float e_clk[ENG_TRACKS];
+volatile int e_free[ENG_TRACKS], e_free_go[ENG_TRACKS];   // (0.16.11) Endless played by a key held, the sequencer
+                                        // stopped: on; from its first note (the main loop's ask, taken by the render)
 int e_pos[ENG_TRACKS], e_dir[ENG_TRACKS], e_note[ENG_TRACKS];
 int32_t e_cnt[ENG_TRACKS];              // (0.16.2) Endless' steps since PLAY (its REST counts them)
 int e_state[ENG_TRACKS];                // (0.16.3) what its last step did (ES_*: the screen shows it)
@@ -1208,7 +1210,15 @@ void sequence(uint32_t n) {
     for (int oi = 0; oi < ENG_TRACKS; ++oi) {   // (PADS' track first: its trig moves the others' scale)
       int t = pad_track < 0 ? oi : oi == 0 ? pad_track : oi <= pad_track ? oi - 1 : oi;
       int raw, g, rise = 0;
-      if (endless[t] && playing && (e_clk[t] += fl) >= el[t]) {   // Endless: its next note (or rest)
+      if (e_free_go[t]) {               // (0.16.11) a key held, stopped: Endless from its first note, at once
+        e_free_go[t] = 0;
+        e_clk[t] = 1e9f;
+        e_pos[t] = -1;
+        e_dir[t] = 1;
+        e_cnt[t] = 0;
+      }
+      int e_run = playing || (e_free[t] && endless[t]);
+      if (endless[t] && e_run && (e_clk[t] += fl) >= el[t]) {   // Endless: its next note (or rest)
         int len = proj.endless_len[t], d = Pi(PG_ARP(t), 2), sd = eng_endless_opt(t, EO_STRIDE);
         int rn = eng_endless_opt(t, EO_REST), pause = rn >= 2 && e_cnt[t] % rn == rn - 1;
         e_clk[t] = e_clk[t] >= 2.0f * el[t] ? 0.0f : e_clk[t] - el[t];
@@ -1294,7 +1304,7 @@ void sequence(uint32_t n) {
       if (e_rec[t]) {
         raw = 0;
       } else {
-        raw = playing && raw_left[t] > 0.0f;
+        raw = (playing || (e_free[t] && endless[t])) && raw_left[t] > 0.0f;
         raw_left[t] -= fl;
       }
       if (!rat_on[t]) {
@@ -4942,10 +4952,19 @@ void eng_endless_key(int t, int note) {   // from its first note
       return;
     }
 }
-int eng_endless_pos(int t) { return eng_endless_on(t) && playing ? e_pos[t] : -1; }
+int eng_endless_pos(int t) { return eng_endless_on(t) && (playing || e_free[t]) ? e_pos[t] : -1; }
+void eng_endless_free(int t, int on) {   // (0.16.11) the sequencer stopped: Endless by a key held (-1: all let go)
+  for (int i = 0; i < ENG_TRACKS; ++i) {
+    if (t >= 0 && i != t) continue;
+    if (on && !e_free[i]) e_free_go[i] = 1;
+    e_free[i] = on;
+  }
+}
 int eng_climb_now(int t, int step) {
   return t >= 0 && t < ENG_TRACKS && step >= 0 && step < ENG_STEPS && playing ? climb_off[t][step] : 0;
 }
-int eng_endless_state(int t) { return t >= 0 && t < ENG_TRACKS && eng_endless_on(t) && playing ? e_state[t] : ES_NOTE; }
+int eng_endless_state(int t) {
+  return t >= 0 && t < ENG_TRACKS && eng_endless_on(t) && (playing || e_free[t]) ? e_state[t] : ES_NOTE;
+}
 
 }  // extern "C"

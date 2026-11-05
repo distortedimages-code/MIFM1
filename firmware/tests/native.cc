@@ -4103,6 +4103,50 @@ int main(int argc, char** argv) {
     eng_fresh();
   }
 
+  {                                     // 62. Endless played by a key held, the sequencer stopped (0.16.11): its notes
+    // at its rate from its first, transposed by the key; nothing once let go; nothing without a key
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    eng_blank(p);
+    eng_fresh();
+    eng_set_model(0, eng_model_find(MK_DRUM, 0));
+    p->val[PG_GLOBAL * 4 + 0] = 0.60206f;   // (120 BPM: a sixteenth 43 blocks)
+    p->val[PG_GLOBAL * 4 + 1] = 0.0f;
+    eng_endless_add(0, 60);
+    eng_endless_add(0, 63);
+    eng_endless_add(0, 67);
+    eng_play(0);
+    int got[16], n = 0, last = 0;
+    auto listen = [&](int blocks) {
+      int c = 0;
+      for (int b = 0; b < blocks; ++b) {
+        eng_render(l, r, 128);
+        int g = (eng_gates() & 1u) != 0;
+        if (g && !last) {
+          if (n < 16) got[n++] = eng_note(0);
+          ++c;
+        }
+        last = g;
+      }
+      return c;
+    };
+    int idle = listen(200);              // (stopped, no key: nothing)
+    eng_endless_key(0, 65);              // (a key: F, its first note C: +5)
+    eng_endless_free(0, 1);
+    int held = listen(6 * 43 + 20);
+    eng_endless_free(-1, 0);
+    listen(30);
+    int after = listen(200);
+    const int kWant[6] = {65, 68, 72, 65, 68, 72};
+    int ok = !idle && held == 7 && !after, pos = eng_endless_pos(0);
+    for (int i = 0; i < 6 && ok; ++i) ok &= got[i] == kWant[i];
+    printf("Endless by a key, stopped: %d rises without a key; held %d (%d %d %d %d %d %d); let go %d after%s\n", idle,
+           held, got[0], got[1], got[2], got[3], got[4], got[5], after, pos < 0 ? "" : ", STILL PLAYING");
+    if (!ok || pos >= 0) ++failures, printf("FAIL: Endless by a key, stopped\n");
+    eng_defaults(p);
+    eng_fresh();
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

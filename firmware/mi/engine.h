@@ -340,6 +340,8 @@ void eng_endless_clear(int t);
 int eng_endless_on(int t);               /* 1: it plays the track */
 void eng_endless_key(int t, int note);   /* a key: its transposition */
 int eng_endless_pos(int t);              /* the note playing, -1 none */
+void eng_endless_free(int t, int on);    /* (0.16.11) the sequencer stopped: Endless played while a key is held (on),
+                                          * from its first note; -1: every track let go */
 enum { ES_NOTE, ES_REST, ES_PAUSE, ES_HOLE, ES_LEAP };   /* (0.16.3) what Endless' last step did: a note, a recorded
                                           * rest, REST's pause, a hole (HOLES), a note an octave up (LEAP) */
 int eng_endless_state(int t);

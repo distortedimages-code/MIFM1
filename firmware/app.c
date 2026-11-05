@@ -5281,10 +5281,18 @@ static void poll_keys(void)
                 eng_endless_key(ui.track, note);
                 dirty = 1;
             }
+        } else if (eng_endless_on(ui.track)) {   /* (0.16.11) stopped: a key plays Endless from it, while held */
+            if (down) {
+                eng_endless_key(ui.track, note);
+                eng_endless_free(ui.track, 1);
+                dirty = 1;
+            }
         } else {
             eng_key(ui.track, note, down);
         }
     }
+    if (!keys || eng_playing())          /* (every key let go, or PLAY: Endless by the keys stops) */
+        eng_endless_free(-1, 0);
     ui.keys = keys;
 }
 

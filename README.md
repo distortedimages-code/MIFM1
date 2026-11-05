@@ -34,7 +34,7 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
 - un **séquenceur pas à pas** à la Elektron, 64 pas par piste, avec P-locks, et deux modes de jeu : **KEY** (le
   clavier joue la piste) et **STEP** (le clavier est la grille, les touches noires choisissent la piste ou l'effet) ;
 - **Endless** sur chaque piste, comme sur l'OP-1 : on enregistre des notes et des silences un par un, ils tournent
-  en boucle, une touche les transpose ;
+  en boucle, une touche les transpose ; séquenceur arrêté, une touche tenue les joue (0.16.11) ;
 - sur chaque trig : **probabilité**, **ratchets**, **longueur**, et un **aléatoire** sur n'importe quel réglage de la
   piste (à droite nouveau à chaque trig, à gauche en boucle) ; un **swing** global ; des **rythmes euclidiens** sur
   chaque piste de pas ;
@@ -793,7 +793,9 @@ interne de Plaits, un glissando voulu.
 **Endless** (ARP, comme sur l'OP-1) : sur sa page, **REC** lance l'enregistrement (la frise passe en REC, le bouton
 clignote) ; chaque touche ajoute une note (on l'entend), **SEL** ajoute un silence, jusqu'à 64 pas. **REC** à
 nouveau : la piste joue ces notes en boucle sur le tempo, à la place de ses pas. Pendant qu'elle joue, **une
-touche transpose** la boucle depuis sa première note (la transposition reste). Ses potards : RATE (1/32 à 1/4, avec
+touche transpose** la boucle depuis sa première note (la transposition reste). **Le séquenceur à l'arrêt** (0.16.11),
+une touche tenue la joue : depuis sa première note, transposée par la touche, au tempo et à sa RATE ; on lâche, elle
+s'arrête (une autre touche pendant qu'on tient : la transposition suit). Ses potards : RATE (1/32 à 1/4, avec
 les triolets), GATE (la longueur des notes), DIRECTION (avant, arrière, aller-retour, au hasard), TRANSPOSE. **REC
 tenu** efface la boucle (la piste retrouve ses pas). Probabilité, ratchets, aléatoire et quantiseur s'appliquent aussi
 à ses notes. En bas, ses notes en barres, la note jouée en blanc. **Sa deuxième face** (0.16.2 ; ARP à nouveau, ou
