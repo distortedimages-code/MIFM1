@@ -216,6 +216,7 @@ static struct {
     int anim;
     int held_step, step_new, step_edit;  /* a step held (-1: none), made by this press, locked meanwhile */
     int ekeys[8], ekn;                   /* (0.16.15) the keys held on Endless, the newest last (its transposition) */
+    int cview, cstep, clane;             /* (0.16.16) a step's notes shown (a step held and REC): the step, its lane */
     int erec;                            /* the track Endless records (-1: none) */
     int used[NB];                        /* a knob turned while that button was held: no tap when it is let go */
     int mod;                             /* MOD mode */
@@ -527,8 +528,8 @@ static const char *module_name(int page)
                                                                         : track_kind(ptrack(page)) == MK_FM ? "FM"
                                                                         : track_kind(ptrack(page)) == MK_PADS ? "Pads"
                                                                         : track_kind(ptrack(page)) == MK_POLY ? "Poly"
-                                                                        : track_kind(ptrack(page)) == MK_PROPHET ? "Prophet"
-                                                                        : track_kind(ptrack(page)) == MK_SQ1 ? "SQ-1"
+                                                                        : track_kind(ptrack(page)) == MK_PROPHET ? "Rev3"
+                                                                        : track_kind(ptrack(page)) == MK_SQ1 ? "Otis"
                                                                         : "Plaits";
     }
     case PT_LFO: {
@@ -560,7 +561,7 @@ static const char *const LANE_SHORT[ENG_LANES] = {"T1", "T2", "T3", "T4", "DL", 
 /* the colours of a module's state, as its icons print them (in Mutable's: teal, orange, pink) */
 static uint16_t accent3(int i) { return i <= 0 ? AC1 : i == 1 ? AC2 : AC3; }
 
-static uint16_t model_accent(int m)      /* by bank: orange MIFM1's voices (ZERO, the FM, SQ-1...), teal Plaits' speech,
+static uint16_t model_accent(int m)      /* by bank: orange MIFM1's voices (ZERO, the FM, OTIS...), teal Plaits' speech,
                                           * pink the drums, the noises and the physical models */
 {
     int b = eng_model_bank(m);
@@ -1053,7 +1054,7 @@ static const vop_t ICONS[NICON][IOPS] = {
      {'L', 18, 27, 26, 17}},                                                                        /* PROPHET: two
                                                                                                      * saws apart */
     {{'L', 2, 27, 6, 21}, {'L', 6, 21, 10, 27}, {'L', 11, 19, 16, 13}, {'L', 16, 13, 16, 19}, {'L', 16, 19, 20, 14},
-     {'L', 21, 11, 21, 4}, {'L', 21, 4, 24, 4}, {'L', 24, 4, 24, 11}, {'L', 24, 11, 29, 11}},          /* SQ-1: a
+     {'L', 21, 11, 21, 4}, {'L', 21, 4, 24, 4}, {'L', 24, 4, 24, 11}, {'L', 24, 11, 29, 11}},          /* OTIS: a
                                                                                                      * Transwave's
                                                                                                      * cycles, one
                                                                                                      * after another */
@@ -1449,7 +1450,7 @@ static void fm_shape_panel(int t, int pg, uint16_t ac)
     }
 }
 
-/* SQ-1's first face: in the ring, the cycle its newest voice reads (its Transwave's place as it steps), its name, its
+/* OTIS's first face: in the ring, the cycle its newest voice reads (its Transwave's place as it steps), its name, its
  * program's family, the place */
 static void panel_sq1(int t, int m, uint16_t ac)
 {
@@ -2253,9 +2254,15 @@ static void fx_meter(int force)
     blit(226, PANEL_Y + 12);
 }
 
+static void panel_chord(void);
+static void draw_chord_knob(int k, int force);
 static void draw_panel(void)
 {
     project_t *p = eng_project();
+    if (ui.cview) {                      /* (0.16.16) a step's notes */
+        panel_chord();
+        return;
+    }
     int pt = ptype(ui.page), tr = ptrack(ui.page);
     int32_t s[3] = {ui.page, algo_page(ui.page) >= 0 ? p->algo[algo_page(ui.page)] : -1, 0};
     int fx = pt == PT_DELAY1 || pt == PT_DELAY2 || pt == PT_DSEND || pt == PT_REVERB || pt == PT_RSEND ||
@@ -2360,7 +2367,7 @@ static void draw_panel(void)
     if ((pt == PT_PLAITS1 || pt == PT_PLAITS2 || pt == PT_PLAITS3 || pt == PT_SON2) && eng_fm_algo(tr) >= 0)
         s[1] = s[1] * 9 + 1 + eng_fm_algo(tr);   /* (the FM: its algorithm's drawing) */
     if ((pt == PT_PLAITS1 || pt == PT_PLAITS2 || pt == PT_PLAITS3) && track_kind(tr) == MK_SQ1)
-        s[1] = s[1] * 37 + 2 + eng_sq_cycle(tr, 0, 0, 0);   /* (SQ-1: the cycle it reads) */
+        s[1] = s[1] * 37 + 2 + eng_sq_cycle(tr, 0, 0, 0);   /* (OTIS: the cycle it reads) */
     if (tr >= 0 && tr == eng_pads_track()) {   /* (PADS: its progression's place, its chord) */
         char pl[40];
         eng_pads_line(pl, sizeof pl);
@@ -2835,6 +2842,10 @@ static void play_turn(int k, int32_t e)  /* a byte knob turned (byte_knob): the 
 static void draw_knob_at(int page, int k, int force)
 {
     project_t *p = eng_project();
+    if (ui.cview && page == ui.page) {   /* (0.16.16) a step's notes */
+        draw_chord_knob(k, force);
+        return;
+    }
     if (byte_knob(page, k)) {
         draw_play_knob(page, k, force);
         return;
@@ -2848,7 +2859,7 @@ static void draw_knob_at(int page, int k, int force)
     float v = p->val[param], f = eng_final(param), u, uf;
     char txt[32], c[32], lab[24], under[32];
     int hash = 0, hot = page == ui.page && ui.touched_k == k && plat_ms() - ui.touched_at[k] < 1200u, ncab = 0;
-    int bip = d->kind == K_BIP || (d->kind == K_INT && d->lo < 0);
+    int bip = eng_param_centered(param);   /* (0.16.16: a machine's own say) */
     uint16_t ac = page_accent(page), mc = mod_colour(ac), vc;
     under[0] = 0;
     if (view == KV_RND) {                /* the random's depth: right new at each trig, left a loop */
@@ -3216,13 +3227,16 @@ static void foot_steps(int t)            /* the steps of a page: a trig lit, a l
         cv_rect(231, 8, 3, 18, HI);
         return;
     }
+    uint8_t chords[ENG_STEPS];
+    if (t < ENG_TRACKS)
+        eng_step_chords(t, chords);
     for (int i = 0; i < 16; i++) {
         int st = ui.spage * 16 + i, x = 9 + i * 13;
         if (st >= len) {
             cv_rect(x + 4, 16, 3, 3, RULE);
             continue;
         }
-        if (st == ui.held_step)
+        if (st == ui.held_step || (ui.cview && t == ui.clane && st == ui.cstep))
             cv_rect(x, 8, 11, 18, HI);
         else if (eng_trig(t, st))
             cv_rect(x, 8, 11, 18, st == now ? HI : ac);
@@ -3232,6 +3246,9 @@ static void foot_steps(int t)            /* the steps of a page: a trig lit, a l
             cv_rect(x + 2, 10, 7, 14, ac);
         if (eng_step_locked(t, st))
             disc((float)x + 5.0f, 22.0f, 1.6f, BG);
+        if (t < ENG_TRACKS && chords[st] && eng_trig(t, st))   /* (0.16.16) a chord: a tick a note over the first */
+            for (int c = 0; c < chords[st]; c++)
+                cv_rect(x + 2, 10 + c * 3, 7, 1, BG);
         if (!(i & 3))
             cv_rect(x, 28, 11, 1, DIM);  /* the beats */
     }
@@ -3528,11 +3545,13 @@ static void draw_footer(void)
         for (int i = 0; i < 16; i++)
             lh = lh * 3 + eng_trig(fl, ui.spage * 16 + i) + (eng_step_locked(fl, ui.spage * 16 + i) ? 2 : 0);
         lh = lh * 67 + (int)p->val[PG_STEP(fl) * 4 + 3];
-        if (fl < ENG_TRACKS) {           /* (its trigs' lengths) */
-            uint8_t tie[ENG_STEPS];
+        if (fl < ENG_TRACKS) {           /* (its trigs' lengths, their chords; a step's notes shown) */
+            uint8_t tie[ENG_STEPS], ch[ENG_STEPS];
             eng_step_ties(fl, tie);
+            eng_step_chords(fl, ch);
             for (int i = 0; i < ENG_STEPS; i++)
-                lh = lh * 7 + tie[i] * eng_trig(fl, i);
+                lh = lh * 7 + (tie[i] + 64 * ch[i]) * eng_trig(fl, i);
+            lh = lh * 131 + (ui.cview ? ui.cstep + 1 : 0);
         }
         if (fl >= ENG_TRACKS)
             lh = lh * 19 + (int)(eng_lane_open(fl) * 18.0f + 0.5f);
@@ -4715,6 +4734,7 @@ static void set_lane(int l)              /* the steps shown: their page kept if 
  * another module, at once. The lane follows the page whose knobs a lane's steps lock */
 static void go_page_dir(int page, int dir)
 {
+    ui.cview = 0;                        /* (another page: a step's notes no longer shown) */
     page = shown_page(page);
     int g = ptype(page) == PT_GLOBAL || ptype(page) == PT_SYS, l = page_lane(page);
     if (g && ptype(ui.page) != PT_GLOBAL && ptype(ui.page) != PT_SYS)
@@ -5223,6 +5243,20 @@ static void button_up(int b)
             ui.full = 1;
             break;
         }
+        if (ui.cview) {                  /* (0.16.16) a step's notes: back to the steps */
+            ui.cview = 0;
+            ui.held_step = -1;
+            ui.full = 1;
+            break;
+        }
+        if (ui.grid && ui.held_step >= 0 && ui.lane < ENG_TRACKS && eng_trig(ui.lane, ui.held_step)) {
+            ui.cview = 1;                /* a trig held: its notes, the keys playing them in or out */
+            ui.cstep = ui.held_step;
+            ui.clane = ui.lane;
+            ui.held_step = -1;
+            ui.full = 1;
+            break;
+        }
         ui.grid = !ui.grid;              /* STEP mode: the lane the page's knobs belong to, else the last one */
         if (ui.grid && page_lane(ui.page) >= 0)
             set_lane(page_lane(ui.page));
@@ -5334,6 +5368,144 @@ static void select_lane(int l)
 
 /* the keys: the active track's notes; MOD's sources; STEP mode: the white keys are the 16 steps of a page (held: its
  * locks on the knobs), the first seven black keys the lanes */
+/* (0.16.16) a step's notes (a trig held and REC): the keys play their notes in or out of it (four at most, one at
+ * least; heard as played), the knobs move them by semitones; the machines that play chords play them all, the others
+ * the lowest (the rest shown dotted) */
+static void chord_key(int note, int down)
+{
+    int nt[4], n = eng_step_notes(ui.clane, ui.cstep, nt), v = note - 48, at = -1;
+    eng_key(ui.clane, note, down);       /* (heard) */
+    if (!down)
+        return;
+    for (int i = 0; i < n; i++)
+        if (nt[i] == v)
+            at = i;
+    if (at >= 0) {                       /* in it: out (the last one stays) */
+        if (n == 1)
+            return;
+        for (int i = at; i < n - 1; i++)
+            nt[i] = nt[i + 1];
+        n--;
+    } else if (n == 4) {
+        app_say("CHORD", "4 NOTES AT MOST");
+        return;
+    } else {
+        nt[n++] = v;
+    }
+    int e = eng_step_notes_set(ui.clane, ui.cstep, nt, n);
+    if (e == -2)
+        app_say("CHORD", "OUT OF RANGE");
+    else if (e)
+        app_say("CHORD", "NO ROOM");
+    dirty = 1;
+}
+
+static void chord_turn(int k, int32_t e)
+{
+    int nt[4], n = eng_step_notes(ui.clane, ui.cstep, nt);
+    if (k >= n)
+        return;
+    nt[k] += e > 0 ? 1 : -1;
+    if (eng_step_notes_set(ui.clane, ui.cstep, nt, n) == 0)
+        dirty = 1;
+}
+
+static void draw_chord_knob(int k, int force)
+{
+    int nt[4], n = eng_step_notes(ui.clane, ui.cstep, nt), poly = eng_track_chords(ui.clane);
+    int hot = ui.touched_k == k && plat_ms() - ui.touched_at[k] < 1200u, on = k < n, off = on && k > 0 && !poly;
+    uint16_t ac = track_accent(ui.clane);
+    char txt[12], lab[12], under[24];
+    lab[0] = under[0] = 0;
+    text_cat(lab, "NOTE ", sizeof lab);
+    int_text(k + 1, txt);
+    text_cat(lab, txt, sizeof lab);
+    txt[0] = 0;
+    if (on)
+        note_text(48 + nt[k], txt);
+    else
+        text_cat(txt, "-", sizeof txt);
+    int32_t s[4] = {k | on << 4 | off << 5 | 1 << 23, text_hash(txt) * 31 + text_hash(lab), 0xC4D, hot | (int32_t)ac << 2};
+    if (!force && !ui.full && !ui.body_knobs && !memcmp(s, ui.knob_shown[k], sizeof s))
+        return;
+    memcpy(ui.knob_shown[k], s, sizeof s);
+    cv_begin(KNOB_W, KNOB_H, BG);
+    {
+        int w = text_w(&FONT_S, lab);
+        cv_text(30 - w / 2, 0, &FONT_S, lab, hot ? HI : MUTED);
+        if (hot)
+            cv_rect(30 - w / 2, 17, w, 1, ac);
+    }
+    if (!on) {
+        arc(RX, RY, R0 + 0.5f, R1 - 0.5f, 0.0f, 1.0f, TRACK);
+    } else if (off) {                    /* (a machine of one voice: not played, dotted) */
+        for (float q = 0.0f; q < 1.0f; q += 0.05f)
+            arc(RX, RY, R0 + 0.5f, R1 - 0.5f, q, q + 0.022f, MUTED);
+        text_cat(under, "MONO", sizeof under);
+    } else {
+        lit_arc(RX, RY, R0, R1, 0.0f, 1.0f, ac);
+    }
+    ring_text(txt, on && !off ? HI : DIM, under, sizeof under);
+    if (under[0])
+        cv_text(30 - text_w(&FONT_XS, under) / 2, 78, &FONT_XS, under, MUTED);
+    blit((uint32_t)(k * KNOB_W), KNOB_Y);
+}
+
+static void panel_chord(void)            /* the step's notes on two octaves of keys, its chord's name, mono or not */
+{
+    int nt[4], n = eng_step_notes(ui.clane, ui.cstep, nt), poly = eng_track_chords(ui.clane);
+    int32_t s[3] = {0xC40 | ui.cstep << 12 | ui.clane << 20 | poly << 23, n, 0};
+    for (int i = 0; i < n; i++)
+        s[2] = s[2] * 97 + nt[i] + 40;
+    if (!ui.full && !ui.body_panel && !memcmp(s, ui.panel_shown, sizeof s))
+        return;
+    memcpy(ui.panel_shown, s, sizeof s);
+    uint16_t ac = track_accent(ui.clane);
+    char t[40], v[16];
+    cv_begin(240, PANEL_H, BG);
+    t[0] = 0;
+    text_cat(t, "STEP ", sizeof t);
+    int_text(ui.cstep + 1, v);
+    text_cat(t, v, sizeof t);
+    text_cat(t, "  ", sizeof t);
+    if (n >= 2) {
+        eng_chord_name(nt, n, v, sizeof v);
+    } else {
+        note_text(48 + nt[0], v);
+    }
+    text_cat(t, v, sizeof t);
+    cv_text(8, 0, &FONT_M, t, HI);
+    const char *badge = poly ? "CHORDS" : "MONO: THE LOWEST";
+    cv_text(232 - text_w(&FONT_XS, badge), 6, &FONT_XS, badge, poly ? ac : MUTED);
+    /* the keys: two octaves from the C under the lowest (three if the chord is wider) */
+    int lo = 48 + nt[0], c0 = lo - ((lo % 12) + 12) % 12, oct = 48 + nt[n - 1] - c0 >= 24 ? 3 : 2;
+    int nw = 7 * oct, kw = 224 / nw, x0 = (240 - kw * nw) / 2, y0 = 30, h = 44;
+    static const int8_t WH[7] = {0, 2, 4, 5, 7, 9, 11}, BL[5] = {1, 3, 6, 8, 10}, BX[5] = {0, 1, 3, 4, 5};
+    for (int pass = 0; pass < 2; pass++)
+        for (int o = 0; o < oct; o++)
+            for (int j = 0; j < (pass ? 5 : 7); j++) {
+                int m = c0 + 12 * o + (pass ? BL[j] : WH[j]), in = -1;
+                for (int i = 0; i < n; i++)
+                    if (48 + nt[i] == m)
+                        in = i;
+                int x = pass ? x0 + (o * 7 + BX[j]) * kw + kw - kw / 3 : x0 + (o * 7 + j) * kw;
+                int w = pass ? (kw * 2) / 3 : kw - 1, hh = pass ? h * 3 / 5 : h;
+                uint16_t c = pass ? TRACK : MUTED;
+                cv_rect(x, y0, w, hh, pass ? BG : TRACK);
+                if (in >= 0 && (poly || in == 0)) {
+                    c = ac;
+                    cv_rect(x + 1, y0 + 1, w - 2, hh - 2, c);
+                } else if (in >= 0) {        /* (ignored: dotted) */
+                    for (int yy = y0 + 2; yy < y0 + hh - 2; yy += 3)
+                        for (int xx = x + 2; xx < x + w - 2; xx += 3)
+                            cv_rect(xx, yy, 1, 1, ac);
+                } else if (pass) {
+                    cv_rect(x + 1, y0 + 1, w - 2, hh - 2, TRACK);
+                }
+            }
+    blit(0, PANEL_Y);
+}
+
 /* (0.16.15) a trig held (a), another step pressed (b): its length up to b (b before it: its own step again); with
  * ratchets, their span instead (its hits over those steps) */
 static void step_span(int l, int a, int b)
@@ -5454,7 +5626,9 @@ static void poll_keys(void)
         }
         if (ui.mod)                      /* MOD: the keys are the sources (held_source) */
             continue;
-        if (ui.grid) {
+        if (ui.cview) {                  /* (0.16.16) a step's notes: a key plays its note in or out */
+            chord_key(note, down);
+        } else if (ui.grid) {
             grid_key((int)k, down);
         } else if (ui.erec >= 0) {       /* Endless recording: a note a key, heard */
             if (down && eng_endless_add(ui.erec, note) != 0)
@@ -5655,6 +5829,12 @@ static void input(void)
         }
         if (ui.matrix) {
             matrix_turn(i, e);
+            continue;
+        }
+        if (ui.cview) {                  /* (0.16.16) a step's notes: each a knob, by semitones */
+            chord_turn(i, e);
+            ui.touched_at[i] = plat_ms();
+            ui.touched_k = i;
             continue;
         }
         if (byte_knob(ui.page, i)) {     /* SPEED, DIRECTION, Endless' options: the project's bytes, not a lock's */

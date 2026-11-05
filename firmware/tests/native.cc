@@ -4389,7 +4389,7 @@ int main(int argc, char** argv) {
     char tx[24];
     const float kMetal = 6.5f / 24.0f, kPiano = 3.5f / 24.0f;
     struct { int k; float u, w; const char* want; } kTx[] = {
-        {0, 0.0f, 0.0f, "Res Bass"}, {0, kPiano, 0.0f, "E.Piano"}, {0, 1.0f, 0.0f, "Pluck"}, {2, 0.5f, 0.0f, "0%"},
+        {0, 0.0f, 0.0f, "Res Bass"}, {0, kPiano, 0.0f, "E.Piano"}, {0, 1.0f, 0.0f, "Click"}, {2, 0.5f, 0.0f, "0%"},
         {2, 1.0f, 0.0f, "+100%"}, {2, 0.0f, 0.0f, "-100%"}, {4, 0.6f, 0.0f, "Open"}, {4, 0.0f, 0.0f, "100% Dark"},
         {4, 1.0f, 0.0f, "100% Thin"}, {5, 0.0f, 0.0f, "Perc"}, {5, 1.0f, 0.0f, "Pad"}, {6, 0.0f, 0.0f, "Off"},
         {6, 0.5f, 0.0f, "100% 2nd"}, {6, 1.0f, 0.0f, "100% 3rd"}, {7, 0.0f, 0.0f, "Dry"}, {7, 0.25f, 0.0f, "50% Chorus"},
@@ -4404,7 +4404,7 @@ int main(int argc, char** argv) {
     static float ab[44100 * 4];
     auto play = [&](const float* kk, float note, int held_blocks, int total_blocks) {
       sq_reset(0);
-      sq_set(0, note, kk);
+      sq_set(0, &note, 1, kk);
       sq_gate(0, 1);
       for (int b = 0; b < total_blocks; ++b) {
         if (b == held_blocks) sq_gate(0, 0);
@@ -4443,7 +4443,7 @@ int main(int argc, char** argv) {
       if (tail >= 1e-4) printf("SQ-1: program %d still %.5f after its release\n", pr, tail);
       lo = std::min(lo, lv), hi = std::max(hi, lv);
       pk_all = std::max(pk_all, pk);
-      static const int kRise[24] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0};
+      static const int kRise[24] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0};
       double ratio = kRise[pr] ? b1 / b0 : b0 / b1;
       moves += ratio > 1.08;
       if (getenv("SQ1_VERBOSE"))
@@ -4472,7 +4472,10 @@ int main(int argc, char** argv) {
     sq_reset(0);
     for (int s2 = 0; s2 < 300; ++s2) {
       for (int i = 0; i < 8; ++i) k[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();
-      sq_set(0, 24.0f + 84.0f * rnd(), k);
+      {
+        const float nn = 24.0f + 84.0f * rnd();
+        sq_set(0, &nn, 1, k);
+      }
       sq_gate(0, 1);
       for (int b = 0; b < 60; ++b) {
         if (b == 30) sq_gate(0, 0);
@@ -4669,6 +4672,146 @@ int main(int argc, char** argv) {
            mono ? "ok" : "WRONG", n1, n2, n3, back ? "yes" : "NO", ph3, ph1, ph0, xh3, xh1, xh0, sh3, sh1, sh0,
            pmono ? "ok" : "WRONG", g1, g4, tie_ok ? "ok" : "WRONG");
     if (!mono || !chords || !pmono || !tie_ok) ++failures, printf("FAIL: the keys\n");
+  }
+
+  {                                     // 67. a step's chord (0.16.16): its notes kept (NOTE the lowest, the others
+    // over it), read back in order; POLY in Poly plays them all (a voice each), the FM the lowest alone; its name
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    for (int l2 = 0; l2 < ENG_LANES; ++l2)
+      for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(l2, st, 0);
+    eng_set_model(0, eng_model_find(MK_POLY, 0));
+    {
+      int param = PG_TRACK(0, 0) * 4 + 1 + 3;   // (DECAY at Hold: the voices held while the gate is)
+      p->val[param] = eng_pdef(param)->kind == K_BIP ? 1.0f : 1.0f;
+      param = PG_TRACK(0, 2) * 4 + 1;           // (GATE long)
+      p->val[param] = 0.9f;
+    }
+    eng_trig_set(0, 0, 1);
+    const int want[3] = {7, 0, 4};
+    int nt[4], ok = eng_step_notes_set(0, 0, want, 3) == 0;
+    int n = eng_step_notes(0, 0, nt);
+    ok &= n == 3 && nt[0] == 0 && nt[1] == 4 && nt[2] == 7;
+    uint8_t ch[ENG_STEPS];
+    eng_step_chords(0, ch);
+    ok &= ch[0] == 2 && ch[1] == 0;
+    char name[16];
+    eng_chord_name(nt, n, name, sizeof name);
+    const int wide[3] = {0, 12, 16};
+    char name2[16];
+    eng_chord_name(wide, 3, name2, sizeof name2);
+    ok &= !std::strcmp(name, "C") && !std::strcmp(name2, "C");
+    const int far[2] = {-30, 0};
+    ok &= eng_step_notes_set(0, 0, far, 2) == -2;
+    eng_play(1);
+    int vmax = 0;
+    for (int b = 0; b < 30; ++b) {
+      eng_render(l, r, 128);
+      vmax = std::max(vmax, poly_voices(0));
+    }
+    eng_play(0);
+    eng_render(l, r, 128);
+    eng_set_model(0, eng_model_find(MK_FM, 0));   // (one voice: the lowest, as the note alone)
+    auto heard = [&]() {
+      int got = -1;
+      eng_play(1);
+      for (int b = 0; b < 30; ++b) {
+        eng_render(l, r, 128);
+        if ((eng_gates() & 1u) && got < 0) got = eng_note(0);
+      }
+      eng_play(0);
+      for (int b = 0; b < 20; ++b) eng_render(l, r, 128);
+      return got;
+    };
+    const int chord_note = heard();
+    const int one[1] = {0};
+    eng_step_notes_set(0, 0, one, 1);
+    const int low = chord_note >= 0 && chord_note == heard();
+    eng_lock_clear(0, 0);
+    ok &= eng_step_notes(0, 0, nt) == 1;
+    eng_defaults(p);
+    eng_fresh();
+    printf("a step's chord: kept and read %s (%s, a wide one %s), POLY's voices %d, the FM on the lowest %s\n",
+           ok ? "ok" : "WRONG", name, name2, vmax, low ? "ok" : "WRONG");
+    if (!ok || vmax != 3 || !low) ++failures, printf("FAIL: a step's chord\n");
+  }
+
+  {                                     // 68. PADS' TEXTURE (0.16.16): Off, Bell, Tape, Drift, Dust, Down, each
+    // sounding, finite, its level near Off's; Tape's pitch wavering, Dust rougher, Down an octave under
+    static float buf[44100 * 2];
+    auto play = [&](float tex, int one) {   // (one: a single note, one saw: its pitch to follow)
+      float k[8];
+      const int chord[3] = {0, 4, 7};
+      pads_init();
+      pads_defaults(k);
+      k[7] = tex;
+      k[4] = 0.0f;                      // (no swell)
+      k[5] = 0.7f;                      // (bright enough to see)
+      if (one) k[6] = 0.5f;
+      pads_set(48.0f, k, chord, one ? 1 : 3, 0);
+      pads_gate(1);
+      for (uint32_t i = 0; i < 44100 * 2; i += 128) pads_render(&buf[i], 128);
+      pads_gate(0);
+    };
+    auto level = [&](int from, int len, double hz) {
+      double re = 0.0, im = 0.0, w = 2.0 * 3.14159265358979 * hz / 44100.0;
+      for (int i = 0; i < len; ++i) {
+        double h = 0.5 - 0.5 * std::cos(2.0 * 3.14159265358979 * i / len), v = buf[from + i] * h;
+        re += v * std::cos(w * i);
+        im -= v * std::sin(w * i);
+      }
+      return std::sqrt(re * re + im * im) / (0.25 * len);
+    };
+    auto wander = [&]() {               // (the note's pitch over ten windows of 0.2 s: its range, Hz)
+      double lo = 1e9, hi = 0.0;
+      for (int b = 0; b < 10; ++b) {
+        double bf = 0.0, bl = 0.0;
+        for (double f = 120.0; f < 142.0; f += 0.05) {
+          double l = level(22050 + b * 4410, 8820, f);
+          if (l > bl) bl = l, bf = f;
+        }
+        lo = std::min(lo, bf), hi = std::max(hi, bf);
+      }
+      return hi - lo;
+    };
+    char tx[24];
+    int names = 1, finite = 1;
+    const float kAt[6] = {0.0f, 0.04f + 0.192f * 0.7f, 0.232f + 0.192f * 0.9f, 0.424f + 0.192f * 0.9f,
+                          0.616f + 0.192f * 0.99f, 0.808f + 0.192f * 0.9f};
+    const char* const kName[6] = {"Off", "Bell", "Tape", "Drift", "Dust", "Down"};
+    double lv[6], rough[6], sub[6];
+    for (int t = 0; t < 6; ++t) {
+      pads_knob_text(7, kAt[t], tx, sizeof tx);
+      if (std::strncmp(tx, kName[t], std::strlen(kName[t]))) names = 0, printf("PADS: TEXTURE at %.3f written %s\n", kAt[t], tx);
+      play(kAt[t], 0);
+      double e = 0.0, d = 0.0;
+      for (int i = 0; i < 44100 * 2; ++i) finite &= std::isfinite(buf[i]) ? 1 : 0;
+      for (int i = 22050; i < 44100; ++i) {
+        const double q = buf[i] - buf[i - 1];
+        e += buf[i] * buf[i];
+        d += q * q;
+      }
+      lv[t] = std::sqrt(e / 22050.0);
+      rough[t] = std::sqrt(d / (e + 1e-12));   // (the first difference over the level: the top)
+      sub[t] = level(22050, 16384, 32.70);       // (C1: an octave under the chord's lowest, C2)
+    }
+    play(kAt[2], 1);
+    const double tape_w = wander();
+    play(kAt[0], 1);
+    const double off_w = wander();
+    int levels = 1;
+    for (int t = 1; t < 6; ++t) levels &= lv[t] > 0.5 * lv[0] && lv[t] < 2.0 * lv[0];
+    const int tape = tape_w > 1.0 && tape_w > 4.0 * off_w + 0.2, dust = rough[4] > 1.5 * rough[0],
+              down = sub[5] > 0.03 && sub[5] > 8.0 * sub[0];
+    printf("PADS' TEXTURE: names %s, finite %s; levels %.3f (Off) %.3f %.3f %.3f %.3f %.3f; Tape's pitch over %.2f Hz "
+           "(Off %.2f) %s; Dust rough %.3f (Off %.3f) %s; Down an octave under %.3f (Off %.3f) %s\n",
+           names ? "ok" : "WRONG", finite ? "yes" : "NO", lv[0], lv[1], lv[2], lv[3], lv[4], lv[5], tape_w, off_w,
+           tape ? "ok" : "WRONG", rough[4], rough[0], dust ? "ok" : "WRONG", sub[5], sub[0], down ? "ok" : "WRONG");
+    if (!names || !finite || !levels || !tape || !dust || !down) ++failures, printf("FAIL: PADS' TEXTURE\n");
+    pads_init();
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

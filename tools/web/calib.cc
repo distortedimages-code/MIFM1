@@ -89,7 +89,7 @@ int main(int argc, char** argv) {
     if (extra & 512) p->val[PG_TRACK(0, 0) * 4 + 1] = 0.0f;   // PADS (512), MANUAL: a triad; 64 an eleventh, a bass
     if (extra & 64) p->val[PG_TRACK(0, 0) * 4 + 2] = p->val[PG_TRACK(0, 0) * 4 + 3] = 0.9f;   // under it (6 notes);
     if (extra & 128) p->val[PG_TRACK(0, 1) * 4 + 3] = -0.5f;  // 128 ENSEMBLE to VINTAGE (one saw a note); 256 the bells
-    if (extra & 256) p->val[PG_TRACK(0, 2) * 4 + 0] = 0.5f;   // (their bell on the top note)
+    if (extra & 256) p->val[PG_TRACK(0, 2) * 4 + 0] = 2.0f * 0.136f - 1.0f;   // (TEXTURE: Bell, on the top note)
     if (extra & 1024) p->val[PG_TRACK(0, 1) * 4 + 0] = 1.0f;  // POLY (1024): held; 2048 UNISON (four voices); 8192
     if (extra & 2048) p->val[PG_TRACK(0, 2) * 4 + 0] = 0.5f;  // its DECAY short (a voice a trig, over before the
     if (extra & 8192) p->val[PG_TRACK(0, 1) * 4 + 0] = 0.0f;  // next); PROPHET: 1024 held, 8192 short, 16384 a

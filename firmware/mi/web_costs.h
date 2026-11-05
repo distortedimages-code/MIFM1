@@ -19,8 +19,8 @@ static const float kWebModel[22] = {   /* a voice playing, by model */
     373.7f,  /* 11 FM */
     205.5f,  /* 12 PADS */
     305.0f,  /* 13 POLY */
-    404.8f,  /* 14 PROPHET */
-    441.2f,  /* 15 SQ-1 */
+    404.8f,  /* 14 REV3 */
+    441.2f,  /* 15 OTIS */
     298.2f,  /* 16 SPEECH */
     486.1f,  /* 17 SWARM */
     396.5f,  /* 18 NOISE */
@@ -38,8 +38,8 @@ static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, 
 static const float kWebFm[3] = {37.1f, 81.8f, 22.2f};   /* the FM's extra: its square, PW, SYNC */
 static const float kWebPads[4] = {113.9f, 11.9f, 21.2f, 69.2f};   /* PADS: its floor, a note (one saw, three), its bell */
 static const float kWebPoly[2] = {27.7f, 76.5f};   /* POLY: its floor, a voice */
-static const float kWebPro[2] = {28.3f, 104.4f};   /* PROPHET: its floor, a voice */
-static const float kWebSq[2] = {162.7f, 94.2f};   /* SQ-1: its floor, a voice */
+static const float kWebPro[2] = {28.3f, 104.4f};   /* REV3: its floor, a voice */
+static const float kWebSq[2] = {162.7f, 94.2f};   /* OTIS: its floor, a voice */
 static const float kWebBend = 77.4f;   /* the bits, one of their knobs up */
 static const float kWebTrauma = 42.5f;   /* TRAUMA's drive on a track */
 static const float kWebGlitch = 9.0f;   /* the glitch, taking or repeating its slice (estimated: a few loads a sample) */

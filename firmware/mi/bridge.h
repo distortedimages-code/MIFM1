@@ -151,7 +151,7 @@ int poly_voices(int t);                  /* its voices sounding */
 int poly_chord(float u);                 /* PROPHET's CHORD at u: -7 .. 7 (0 Off) */
 const char *poly_chord_name(float u);    /* its name (Off, Triad, 7th...) */
 /* (0.16.15) the keys held on the track (ids: the keys, notes: their pitches, n: 4 at most), a voice each; called
- * every block (an empty list lets them go). POLY's in MODE Poly, PROPHET's with CHORD Off, SQ-1's */
+ * every block (an empty list lets them go). POLY's in MODE Poly, REV3's (MK_PROPHET) with CHORD Off, OTIS' (MK_SQ1) */
 void poly_keys(int t, const int *ids, const float *notes, int n);
 void pro_keys(int t, const int *ids, const float *notes, int n);
 void sq_keys(int t, const int *ids, const float *notes, int n);
@@ -160,7 +160,7 @@ void poly_defaults(float *k);
 int poly_knob_steps(int k);              /* MODE's 2 (0.16.15: Mono, Poly; CHORD's place), the others 128 */
 void poly_knob_text(int k, float u, char *b, int n);
 
-/* ---- PROPHET (mi_prophet.cc, 0.13): a five-voice classic after Sequential Circuits' Prophet-5 (its third revision),
+/* ---- REV3 (mi_prophet.cc, 0.13 as PROPHET, renamed 0.16.16): a five-voice classic after Sequential Circuits' Prophet-5 (its third revision),
  * four voices a track: two oscillators (thirteen settings of them: saws, pulses, a fifth, an octave, a sub, synced, a
  * bell...), noise, Curtis' four poles, the filter's envelope and the level's, POLY-MOD (- the filter's envelope on A's
  * pitch: the sync's sweep; + B on A's frequency: FM). Its eight knobs (k: 0..1, a bipolar knob from its middle): OSC,
@@ -177,7 +177,7 @@ void pro_defaults(float *k);
 int pro_knob_steps(int k);               /* OSC's 13, CHORD's 15, the others 128 */
 void pro_knob_text(int k, float u, char *b, int n);
 
-/* ---- SQ-1 (mi_sq1.cc, 0.16.14): a pocket Ensoniq after the SQ-1 and its OTIS chip, four voices a track: Transwaves
+/* ---- OTIS (mi_sq1.cc, 0.16.14 as SQ-1, renamed 0.16.16): a pocket Ensoniq after the SQ-1 and its OTIS chip, four voices a track: Transwaves
  * (32 cycles of 256 samples, or 8 loops of a bell's partials, MIFM1's own recipes, made in the track's Plaits voice's
  * memory) read by a phase accumulator, linearly between two samples, the next cycle taken at its wrap; OTIS' poles,
  * no resonance; three layers; a chorus, then the program's comb, phaser or drive. Its eight knobs (k: 0..1): WAVE
@@ -185,7 +185,7 @@ void pro_knob_text(int k, float u, char *b, int n);
 void sq_init(void);
 void sq_reset(int t);
 void sq_silence(int t);
-void sq_set(int t, float note, const float *k);
+void sq_set(int t, const float *notes, int n, const float *k);   /* (0.16.16: a chord, 4 notes at most) */
 void sq_gate(int t, int g);
 void sq_render(int t, float *out, uint32_t n);
 int sq_voices(int t);

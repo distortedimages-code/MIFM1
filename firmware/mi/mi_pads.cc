@@ -16,8 +16,11 @@
 // The pad: each note one saw (VINTAGE, ENSEMBLE to the left: each a little off, wandering on its own) or three
 // (ENSEMBLE to the right: a string machine's ensemble, wider), a sine under them (TONE to the left: rounder, the saws
 // filtered down), a low pass on the sum that blooms with the envelope; the chord voiced close to the last one (each
-// voice moves the least it can), VOICING spreading it (open, wide, a bass under it). BELLS: at each trig a bell (two
-// operators, 1 : 3.5, its index falling) on the top note or on the bass.
+// voice moves the least it can), VOICING spreading it (open, wide, a bass under it). TEXTURE (0.16.16, BELLS' place;
+// after Boards of Canada's ways, as they told them): Bell (at each trig a bell, two operators, 1 : 3.5, its index
+// falling, on the top note), Tape (wow and flutter, the tape's saturation, its top worn), Drift (the notes clashing a
+// little out of tune, chorusing microtonally), Dust (a sampler's lower bits and rate, hiss and crackle), Down (an
+// octave under each note, darker: resampled down); each from a touch to all of it.
 #include <stdint.h>
 #include "fastmath.h"
 #include "bridge.h"
@@ -157,6 +160,10 @@ struct Pad {
   int gate, trig, alive, let_go, voiced;
   float lp1, lp2;                       // the low pass (a state variable filter: its two states)
   float bell_c, bell_m, bell_e, bell_i, bell_hz, bell_k, bell_ik;   // the bell: its phases, level, index, pitch
+  float wow, flut, flut_t;              // (0.16.16) Tape: its wow's phase, its flutter (now, aiming)
+  float dx[kMaxV], dy[kMaxV];           // Down: each note's sine an octave under
+  float dust_v, crack;                  // Dust: the sample held, a crackle ringing
+  int dust_h, flut_n;
   float dcx, dcy;
   uint32_t rnd;
   float gn;                             // (0.16.5) its level now: 0.55 / sqrt(the chord's notes), glided (a chord of
@@ -165,6 +172,21 @@ struct Pad {
 Pad pad;
 
 inline float t60_s(float u) { return 0.2f * fm_exp2f(u * 6.644f); }        // DECAY: 0.2 .. 20 s
+// TEXTURE: Off at the left, then five, each from a touch to all of it
+enum { TX_OFF, TX_BELL, TX_TAPE, TX_DRIFT, TX_DUST, TX_DOWN, TX_N };
+const char* const kTexName[TX_N] = {"Off", "Bell", "Tape", "Drift", "Dust", "Down"};
+inline int tex_of(float u, float* amt) {
+  if (u < 0.04f) {
+    *amt = 0.0f;
+    return TX_OFF;
+  }
+  const float z = (u - 0.04f) / 0.192f;
+  int k = static_cast<int>(z);
+  k = k > 4 ? 4 : k;
+  const float a = z - static_cast<float>(k);
+  *amt = 0.15f + 0.85f * (a < 0.0f ? 0.0f : a > 1.0f ? 1.0f : a);
+  return TX_BELL + k;
+}
 inline float attack_s(float u) { return 0.001f * fm_exp2f(u * 12.0f); }    // ATTACK: 1 ms .. 4 s
 inline int prog_of(float u) {
   int p = static_cast<int>(u * static_cast<float>(kProgs + 1));
@@ -321,7 +343,7 @@ void pads_init(void) {
   for (uint32_t i = 0; i < sizeof(Pad); ++i) raw[i] = 0;
   pad.rnd = 0x9E3779B9u;
   pad.note = 48.0f;
-  for (int i = 0; i < kMaxV; ++i) pad.sy[i] = 1.0f;
+  for (int i = 0; i < kMaxV; ++i) pad.sy[i] = pad.dy[i] = 1.0f;
   pad.att = 1.0f;
   float d[8];
   pads_defaults(d);
@@ -429,7 +451,9 @@ void pads_render(float* out, uint32_t n) {
   Pad& v = pad;
   const float A = attack_s(v.k[4]);
   const int held = v.k[3] > 0.98f;
-  const float tone = 2.0f * v.k[5] - 1.0f, ens = 2.0f * v.k[6] - 1.0f, bells = 2.0f * v.k[7] - 1.0f;
+  const float tone = 2.0f * v.k[5] - 1.0f, ens = 2.0f * v.k[6] - 1.0f;
+  float ta = 0.0f;
+  const int tx = tex_of(v.k[7], &ta);
   if (v.trig) {
     v.trig = 0;
     if (!v.alive || v.env < 1e-3f) {    // from silence: the phases scattered (a pad has no first cycle), the filter
@@ -437,6 +461,8 @@ void pads_render(float* out, uint32_t n) {
         for (int j = 0; j < 3; ++j) v.ph[i][j] = 0.5f + 0.5f * bip(v.rnd);
         v.sx[i] = 0.0f;
         v.sy[i] = 1.0f;
+        v.dx[i] = 0.0f;
+        v.dy[i] = 1.0f;
       }
       v.lp1 = v.lp2 = 0.0f;
       v.dcx = v.dcy = 0.0f;
@@ -448,10 +474,9 @@ void pads_render(float* out, uint32_t n) {
     v.dec = 1.0f;
     v.let_go = 0;
     v.alive = 1;
-    if (fm_fabsf(bells) > 0.02f && v.nv > 0) {   // the bell: on the top note (an octave up) or the bass (two)
-      float top = v.pitch[v.nv - 1], low = v.pitch[0];
-      v.bell_hz = note_hz(bells > 0.0f ? top + 12.0f : low + 24.0f);
-      v.bell_e = fm_fabsf(bells);
+    if (tx == TX_BELL && v.nv > 0) {    // the bell: on the top note, an octave up
+      v.bell_hz = note_hz(v.pitch[v.nv - 1] + 12.0f);
+      v.bell_e = ta;
       v.bell_i = 1.0f;
     }
   }
@@ -466,13 +491,25 @@ void pads_render(float* out, uint32_t n) {
     for (int i = 0; i < kMaxV; ++i) v.dr_t[i] = bip(v.rnd);
   }
   for (int i = 0; i < kMaxV; ++i) v.dr[i] += (v.dr_t[i] - v.dr[i]) * clampf(static_cast<float>(n) * 2e-5f, 0.0f, 1.0f);
+  // Tape: the wow (0.45 Hz) and the flutter (a new aim every 20 ms, smoothed), the same for every note
+  float tape = 0.0f;
+  if (tx == TX_TAPE) {
+    v.wow += 0.45f * static_cast<float>(n) / kSr;
+    v.wow -= v.wow >= 1.0f ? 1.0f : 0.0f;
+    v.flut_n -= static_cast<int>(n);
+    if (v.flut_n <= 0) v.flut_n = 882, v.flut_t = bip(v.rnd);
+    v.flut += (v.flut_t - v.flut) * clampf(static_cast<float>(n) / 300.0f, 0.0f, 1.0f);
+    tape = ta * (0.28f * sin_cyc(v.wow) + 0.08f * v.flut);   // (semitones)
+  }
+  static const float kDrift[kMaxV] = {1.0f, -0.6f, 0.4f, -1.0f, 0.8f, -0.3f};
   // the voices' steps: the saws (ENSEMBLE to the right: three, apart; to the left one, VINTAGE: a few cents off and
   // wandering), the sine
   const int nsaw = ens > 0.02f ? 3 : 1;
   const float vint = ens < 0.0f ? -ens : 0.0f, wide = ens > 0.0f ? ens : 0.0f;
   float inc[kMaxV][3], idt[kMaxV][3], se[kMaxV];
   for (int i = 0; i < v.nv; ++i) {
-    float off = (0.04f + vint * 0.22f) * (static_cast<float>(i % 3) - 1.0f) + v.dr[i] * (0.03f + vint * 0.12f);
+    float off = (0.04f + vint * 0.22f) * (static_cast<float>(i % 3) - 1.0f) + v.dr[i] * (0.03f + vint * 0.12f) + tape;
+    if (tx == TX_DRIFT) off += ta * (0.32f * kDrift[i] + 0.15f * v.dr[i]);   // (Drift: out of tune, each its way)
     float f = note_hz(v.pitch[i] + off);
     se[i] = 2.0f * sin_cyc(clampf(0.5f * f / kSr, 0.0f, 0.2f));   // (the circle's step: 2 sin(pi f / sr))
     for (int j = 0; j < nsaw; ++j) {
@@ -492,7 +529,21 @@ void pads_render(float* out, uint32_t n) {
   const float dk = held && v.gate && !v.let_go ? 1.0f : fm_expf(-6.9078f / ((v.let_go ? 0.06f + 0.6f * A : t60_s(v.k[3])) * kSr));
   const float ainc = 1.0f / (A * kSr);
   // the low pass: TONE, blooming with the envelope (an octave and a half over it)
-  const float fc0 = 250.0f * fm_exp2f((tone + 1.0f) * 2.9f);   // 250 Hz .. 14 kHz
+  const float worn = tx == TX_TAPE ? 0.8f * ta : tx == TX_DOWN ? 0.7f * ta : 0.0f;   // (Tape's top worn, Down's)
+  const float fc0 = 250.0f * fm_exp2f((tone + 1.0f) * 2.9f - worn);   // 250 Hz .. 14 kHz
+  // Down: an octave under each note (a sine), its step; Dust: its rate (44.1 kHz held down to 8), its bits (12 to 5)
+  float de[kMaxV];
+  if (tx == TX_DOWN)
+    for (int i = 0; i < v.nv; ++i) de[i] = 0.5f * se[i];
+  const float g_down = tx == TX_DOWN ? 0.9f * ta * (g_saw + g_sin) : 0.0f;
+  const int hold = tx == TX_DUST ? 1 + static_cast<int>(ta * 4.5f) : 1;
+  const float qstep = tx == TX_DUST ? fm_exp2f(-(12.0f - 7.0f * ta)) : 0.0f;
+  const float drive = tx == TX_TAPE ? 1.0f + 2.0f * ta : 1.0f;
+  const float qinv = tx == TX_DUST ? 1.0f / qstep : 0.0f, hiss = ta * 0.004f * (1.0f / 2147483648.0f);
+  const uint32_t crk = static_cast<uint32_t>(ta * 1.2f + 0.5f);
+  int d_h = v.dust_h;                   // (Dust's state, kept in locals over the block)
+  float d_v = v.dust_v, d_cr = v.crack;
+  uint32_t d_rnd = v.rnd;
   // the bell
   const float bk = fm_expf(-1.0f / (2.2f * kSr)), bik = fm_expf(-1.0f / (0.35f * kSr));
   const float binc = v.bell_hz / kSr;
@@ -503,6 +554,19 @@ void pads_render(float* out, uint32_t n) {
       uint32_t m = n - s < 32u ? n - s : 32u;
       if (nsaw == 3) voices<3>(v, sum, m, inc, idt, se, g_saw, g_sin);
       else voices<1>(v, sum, m, inc, idt, se, g_saw, g_sin);
+      if (g_down > 0.0f)                // (Down: each note's sine an octave under, added)
+        for (int i = 0; i < v.nv; ++i) {
+          float x = v.dx[i], y = v.dy[i];
+          const float e = de[i];
+          for (uint32_t q = 0; q < m; ++q) {
+            x += e * y;
+            y -= e * x;
+            sum[q] += g_down * y;
+          }
+          const float r = 0.5f * (1.0f + (1.0f - 0.25f * e * e) / (x * x + e * x * y + y * y + 1e-9f));
+          v.dx[i] = x * r;
+          v.dy[i] = y * r;
+        }
     }
     float e;
     if (v.att < 1.0f) {
@@ -527,6 +591,16 @@ void pads_render(float* out, uint32_t n) {
     v.lp2 = 2.0f * v2 - v.lp2;
     norm += (norm_to - norm) * gk;
     float y = v2 * norm * e;
+    if (tx == TX_TAPE) {                // (Tape: its saturation, the level about kept)
+      const float z = y * drive;
+      y = z / (1.0f + 0.6f * fm_fabsf(z)) * (1.0f + 0.5f * ta) / drive;
+    } else if (tx == TX_DUST) {         // (Dust: held, on fewer bits; hiss, now and then a crackle; its state in locals)
+      if (--d_h <= 0) d_h = hold, d_v = fm_floorf(y * qinv + 0.5f) * qstep;
+      const uint32_t r = xs(d_rnd);     // (one draw: its bits the hiss, its top the crackle's chance)
+      y = d_v + hiss * static_cast<float>(static_cast<int32_t>(r)) + d_cr;
+      if ((r >> 20) < crk) d_cr = ta * 0.12f * bip(d_rnd);   // (~10 a s)
+      d_cr *= 0.55f;
+    }
     if (v.bell_e > 1e-4f) {             // the bell: 1 : 3.5, its index falling fast, its level slowly
       v.bell_m += binc * 3.5f;
       v.bell_m -= v.bell_m >= 1.0f ? 1.0f : 0.0f;
@@ -551,6 +625,7 @@ void pads_render(float* out, uint32_t n) {
     out[s] = yd;
   }
   v.gn = norm;
+  v.dust_h = d_h, v.dust_v = d_v, v.crack = d_cr, v.rnd = d_rnd;
   if (v.att >= 1.0f && !(held && v.gate && !v.let_go) && v.env < 1e-5f && v.bell_e < 1e-4f) {
     v.alive = 0;
     v.env = 0.0f;
@@ -561,12 +636,12 @@ void pads_render(float* out, uint32_t n) {
 int pads_voices(void) { return pad.alive ? pad.nv : 0; }
 
 const char* pads_knob_name(int k) {
-  static const char* const kN[8] = {"Prog", "Color", "Voicing", "Decay", "Attack", "Tone", "Ensemble", "Bells"};
+  static const char* const kN[8] = {"Prog", "Color", "Voicing", "Decay", "Attack", "Tone", "Ensemble", "Texture"};
   return k >= 0 && k < 8 ? kN[k] : "";
 }
 
-void pads_defaults(float* k) {          // Tintin, triads, open, held, a slow swell, a little dark, an ensemble, no bell
-  static const float kD[8] = {2.5f / 27.0f, 1.5f / 9.0f, 0.375f, 1.0f, 0.62f, 0.4f, 0.75f, 0.5f};
+void pads_defaults(float* k) {          // Tintin, triads, open, held, a slow swell, a little dark, an ensemble, no
+  static const float kD[8] = {2.5f / 27.0f, 1.5f / 9.0f, 0.375f, 1.0f, 0.62f, 0.4f, 0.75f, 0.0f};   // texture
   for (int i = 0; i < 8; ++i) k[i] = kD[i];
 }
 
@@ -619,12 +694,21 @@ MI_COLD void pads_knob_text(int k, float u, char* b, int n) {
       if (u > 0.98f) return put_s(b, n, &at, "Hold");
       return put_time(b, n, &at, t60_s(u));
     case 4: return put_time(b, n, &at, attack_s(u));
-    case 5: case 6: case 7: {
+    case 7: {                           // TEXTURE: its name, how much
+      float a = 0.0f;
+      const int tx = tex_of(u, &a);
+      put_s(b, n, &at, kTexName[tx]);
+      if (tx == TX_OFF) return;
+      put_s(b, n, &at, " ");
+      put_i(b, n, &at, static_cast<int>(a * 100.0f + 0.5f));
+      return put_s(b, n, &at, "%");
+    }
+    case 5: case 6: {
       float w = 2.0f * u - 1.0f;
       int x = static_cast<int>(w * 100.0f + (w < 0.0f ? -0.5f : 0.5f));
-      if (x == 0) return put_s(b, n, &at, k == 7 ? "Off" : "0%");
+      if (x == 0) return put_s(b, n, &at, "0%");
       put_i(b, n, &at, x < 0 ? -x : x);
-      static const char* const kL[3][2] = {{"% DARK", "% BRIGHT"}, {"% VINTAGE", "% WIDE"}, {"% BASS", "% TOP"}};
+      static const char* const kL[2][2] = {{"% DARK", "% BRIGHT"}, {"% VINTAGE", "% WIDE"}};
       return put_s(b, n, &at, kL[k - 5][x > 0]);
     }
     default:

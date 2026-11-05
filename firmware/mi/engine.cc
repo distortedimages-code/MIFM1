@@ -197,7 +197,7 @@ const ModelDef kModelDef[ENG_MODELS] = {
   {"FM HI-HAT", "FHAT", MK_LXR, 3, 1},
   {"ZERO", "ZERO", MK_ZERO, 0, 2},
   {"FM", "FM", MK_FM, 0, 2}, {"PADS", "PADS", MK_PADS, 0, 2}, {"POLY", "POLY", MK_POLY, 0, 2},
-  {"PROPHET", "PRO5", MK_PROPHET, 0, 2}, {"SQ-1", "SQ-1", MK_SQ1, 0, 2},
+  {"REV3", "REV3", MK_PROPHET, 0, 2}, {"OTIS", "OTIS", MK_SQ1, 0, 2},
   {"SPEECH", "SPCH", MK_PLAITS, 15, 3},
   {"SWARM", "SWRM", MK_PLAITS, 16, 4}, {"NOISE", "NOIS", MK_PLAITS, 17, 4}, {"PARTICLES", "PART", MK_PLAITS, 18, 4},
   {"STRING", "STRG", MK_PLAITS, 19, 4}, {"MODAL", "MODL", MK_PLAITS, 20, 4},
@@ -876,17 +876,31 @@ void dice_ratch(int t, float d) {
 // knob, no random), its value the steps it holds over (1..63); the step held and another one pressed further
 const int kTpTie = ENG_NTP;
 uint8_t trig_tie[ENG_LANES];            // the trig playing's
+// (0.16.16) a step's chord: its NOTE the lowest, up to three notes over it, each a lock of its own (tp kTpNote2 ..
+// kTpNote2 + 2: the semitones over NOTE, 1..96); the machines that play chords (POLY in Poly, REV3 with CHORD Off,
+// OTIS) play them all, the others NOTE alone
+const int kTpNote2 = ENG_NTP + 1;
+uint8_t trig_iv[ENG_TRACKS][3], trig_cn[ENG_TRACKS];   // the trig playing's
 void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_param, lane_lockable, the bounds)
   int16_t at[ENG_NTP];
   for (int tp = 0; tp < ENG_NTP; ++tp) at[tp] = -1;
   if (lock_gen_seen != lock_gen) make_lock_steps();
   trig_tie[lane] = 0;
+  uint8_t iv[3] = {0, 0, 0};
   if (locks && step >= 0 && step < ENG_STEPS && ((lock_steps[lane][step / 32] >> (step % 32)) & 1u))
     for (int i = 0; i < ENG_PLOCKS; ++i)
       if (proj.lock[i].lane == lane && proj.lock[i].step == step) {
-        if (proj.lock[i].tp < ENG_NTP) at[proj.lock[i].tp] = static_cast<int16_t>(i);
-        else if (proj.lock[i].tp == kTpTie) trig_tie[lane] = proj.lock[i].v;
+        const int tp = proj.lock[i].tp;
+        if (tp < ENG_NTP) at[tp] = static_cast<int16_t>(i);
+        else if (tp == kTpTie) trig_tie[lane] = proj.lock[i].v;
+        else if (tp >= kTpNote2 && tp < kTpNote2 + 3) iv[tp - kTpNote2] = proj.lock[i].v;
       }
+  if (lane < ENG_TRACKS) {              // (its chord's notes over NOTE, in order)
+    int c = 0;
+    for (int j = 0; j < 3; ++j)
+      if (iv[j]) trig_iv[lane][c++] = iv[j];
+    trig_cn[lane] = static_cast<uint8_t>(c);
+  }
   for (int tp = 0; tp < ENG_NTP; ++tp) {
     tdelta[lane][tp] = 0.0f;
     if (!((lane_lockable[lane][tp >> 5] >> (tp & 31)) & 1u)) continue;
@@ -1338,6 +1352,7 @@ void sequence(uint32_t n) {
           raw_left[t] = fm_maxf(fl * 2.0f, held_pad(t) ? el[t] * (static_cast<float>(rests) + 1.5f)
                                                       : el[t] * clampf(P(PG_ARP(t), 1), 0.05f, 1.0f) * 0.98f);
           e_note[t] = nt;
+          trig_cn[t] = 0;               // (Endless: a note alone)
           rise = 1;
         }
       }
@@ -1415,6 +1430,7 @@ void sequence(uint32_t n) {
         if (key_hold[t] > 0) --key_hold[t];
       } else if (key_on[t] || key_hold[t] > 0) {   // the keyboard plays over; a new key, a new trig
         g = !(key_retrig[t] && k == 0);
+        trig_cn[t] = 0;                 // (a key alone, not the step's chord)
         fnote[t][k] = static_cast<float>(quantize(key_note[t] + 12 * iround(E(t, TP_OCTAVE)) +
                                                   iround(E(t, TP_TRANSPOSE))));   // (OCTAVE too, as the steps)
         if (key_hold[t] > 0) --key_hold[t];
@@ -1607,7 +1623,7 @@ const FactorySound kFactory[ENG_FACTORY] = {
    0.0f, MF_SEM, {0.58f, 0.45f, 0.45f, 0.32f, 0.0f, 0.0f, 0.0f, 0.3f, MF_LP, 0.15f, -0.3f, 0.05f}, NO_BITS, NO_GLITCH},
   // a dark pad (PADS: Lament, sevenths, wide, swelling, long: a trig of a sixteenth blooms); a pluck (Plaits' string); a lead (PROPHET: synced, its
   // sweep); noise (Plaits': clocked, resonant, crushed to five bits with holes, glitched)
-  {"DARK PAD", MK_PADS, 0, {STEP(5, 17), STEP(1, 4), STEP(2, 4), 0.8f, 0.7f, 0.3f, 0.875f, 0.5f}, 0.0f, 0.95f, 0.0f,
+  {"DARK PAD", MK_PADS, 0, {STEP(5, 17), STEP(1, 4), STEP(2, 4), 0.8f, 0.7f, 0.3f, 0.875f, 0.334f}, 0.0f, 0.95f, 0.0f,
    0.0f, NO_FILTER, NO_BITS, NO_GLITCH},
   {"PLUCK", MK_PLAITS, 19, {0.35f, 0.62f, 0.55f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f}, 0.0f, 0.5f, 0.0f, 0.0f,
    NO_FILTER, NO_BITS, NO_GLITCH},
@@ -1651,6 +1667,20 @@ void keys_to_voices(int t, int kind) {
   else sq_keys(t, ids, nt, n);
 }
 
+// (0.16.16) the trig's notes: its note, its step's chord over it (a machine that plays chords: POLY in Poly, REV3 with
+// CHORD Off, OTIS), each in the scale; how many
+int step_chord(int t, float note, float* out) {
+  int n = 0;
+  out[n++] = note;
+  if (!kb_poly(t)) return n;
+  for (int i = 0; i < trig_cn[t] && i < 3; ++i) {
+    float x = note + static_cast<float>(trig_iv[t][i]);
+    if (scale_on()) x = static_cast<float>(quantize(iround(x)));
+    out[n++] = x;
+  }
+  return n;
+}
+
 void set_voice(int t) {
   mclaim(t);
   if (own_knobs(t)) {
@@ -1664,13 +1694,18 @@ void set_voice(int t) {
     else if (kind == MK_FM) fm4_set(t, note, k);
     else if (kind == MK_PADS) {
       if (t == pad_track) pads_set(note, k, pad_chord, pad_n, Pi(PG_GLOBAL, 2));
-    } else if (kind == MK_POLY) {       // (0.16.15: one note; its chords the keys')
-      poly_set(t, &note, 1, k);
-    } else if (kind == MK_PROPHET) {    // (its chord: POLY's, CHORD its eighth knob)
+    } else if (kind == MK_POLY) {       // (0.16.15: one note; its chords the keys', 0.16.16 the step's)
+      float sc[4];
+      poly_set(t, sc, step_chord(t, note, sc), k);
+    } else if (kind == MK_PROPHET) {    // (its chord: the S-1's memory, the harmony; Off: the step's, 0.16.16)
       float nn[4];
       int cn = poly_notes(k[7], note, pad_chord, pad_track >= 0 ? pad_n : 0, harmony_mask(), Pi(PG_GLOBAL, 2), nn);
+      if (cn == 1) cn = step_chord(t, note, nn);
       pro_set(t, nn, cn, k);
-    } else if (kind == MK_SQ1) sq_set(t, note, k);
+    } else if (kind == MK_SQ1) {
+      float sc[4];
+      sq_set(t, sc, step_chord(t, note, sc), k);
+    }
     else lx_set(t, sub, note, k);
     if (kind == MK_POLY || kind == MK_PROPHET || kind == MK_SQ1) keys_to_voices(t, kind);
     return;
@@ -2017,10 +2052,14 @@ void render_voice(int t, uint32_t n) {
       fm = (E(t, 7) < -0.004f ? kWebFm[0] : 0.0f) + (mu < -0.004f ? kWebFm[1] : mu > 0.004f ? kWebFm[2] : 0.0f);
     }
     float own = kWebModel[m < 0 ? 0 : m > ENG_MODELS - 1 ? ENG_MODELS - 1 : m];
-    if (track_kind(t) == MK_PADS)       // (PADS: its notes, one saw each or three, its bell)
+    if (track_kind(t) == MK_PADS) {     // (PADS: its notes, one saw each or three, its TEXTURE: Off under 0.04, then
+      const float tu = (E(t, 8) + 1.0f) * 0.5f;   // Bell, Tape, Drift, Dust, Down; Dust's and Down's estimated from
+      const int tz = tu < 0.04f ? -1 : static_cast<int>((tu - 0.04f) / 0.192f);   // their instructions, 0.16.16)
+      const float nv = static_cast<float>(pads_voices());
       own = t != pad_track ? kWebRest
-                           : kWebPads[0] + static_cast<float>(pads_voices()) * kWebPads[E(t, 7) > 0.02f ? 2 : 1] +
-                                 (fm_fabsf(E(t, 8)) > 0.02f ? kWebPads[3] : 0.0f);
+                           : kWebPads[0] + nv * kWebPads[E(t, 7) > 0.02f ? 2 : 1] +
+                                 (tz == 0 ? kWebPads[3] : tz == 3 ? 31.0f : tz >= 4 ? 14.7f * nv : 0.0f);
+    }
     if (track_kind(t) == MK_POLY) own = kWebPoly[0] + static_cast<float>(poly_voices(t)) * kWebPoly[1];   // (its voices)
     if (track_kind(t) == MK_PROPHET) own = kWebPro[0] + static_cast<float>(pro_voices(t)) * kWebPro[1];
     if (track_kind(t) == MK_SQ1) own = kWebSq[0] + static_cast<float>(sq_voices(t)) * kWebSq[1];
@@ -2688,6 +2727,20 @@ const char* eng_param_name(int param) {
   return eng_pdef(param)->name;
 }
 
+// (0.16.16) a knob drawn from its middle (its - +): a bipolar parameter's, a negative range's; a machine's own knobs say
+// where theirs start (PADS' TEXTURE, OTIS' SHAPE, STACK and SPACE from the left on a bipolar place; OTIS' SWEEP and
+// COLOR from the middle on a plain one)
+int eng_param_centered(int param) {
+  const eng_pdef_t* d = eng_pdef(param);
+  const int c = d->kind == K_BIP || (d->kind == K_INT && d->lo < 0);
+  const int lk = eng_lx_knob(param);
+  if (lk < 0 || zero_on(param / 12)) return c;
+  const int k = track_kind(param / 12);
+  if (k == MK_PADS && lk == 7) return 0;
+  if (k == MK_SQ1) return lk == 2 || lk == 4;
+  return c;
+}
+
 int eng_model_enveloped(int m) {        // (Plaits' string, modal; the models with their own knobs)
   const ModelDef& d = mdef(m);
   return d.kind != MK_PLAITS || d.sub >= 19;
@@ -2705,14 +2758,16 @@ int eng_model_free(int t, int m) {
 }
 int eng_pads_track(void) { return pad_track; }
 int eng_pads_pos(void) { return pad_track >= 0 ? pad_pos : -1; }
-void eng_pads_chord(char* b, int n) {   // its root, its quality (m, dim, +, sus2, sus4, 5), its extension (7, Maj7, 9,
-  if (n <= 0) return;                   // 11, add9, 6, b6); a note none of them explains: + (0.16.12: from its notes)
+// a chord's name from its notes (semitones, its root first; pc0: the pitch class of 0): its root, its quality (m, dim,
+// +, sus2, sus4, 5), its extension (7, Maj7, 9, 11, add9, 6, b6); a note none of them explains: + (0.16.12)
+MI_COLD void chord_name(const int* notes, int nn, int pc0, char* b, int n) {
+  if (n <= 0) return;
   b[0] = 0;
-  if (pad_track < 0 || pad_n < 3) return;
-  const int r = pad_chord[0];
+  if (nn < 1) return;
+  const int r = notes[0];
   uint32_t has = 0;                     // (bit i: a note i semitones over the root, 0..23)
-  for (int i = 1; i < pad_n; ++i) {
-    int d = pad_chord[i] - r;
+  for (int i = 1; i < nn; ++i) {
+    int d = notes[i] - r;
     while (d < 0) d += 12;
     if (d < 24) has |= 1u << d;
   }
@@ -2722,7 +2777,7 @@ void eng_pads_chord(char* b, int n) {   // its root, its quality (m, dim, +, sus
   char t[20];
   int k = 0;
   auto put = [&](const char* q) { while (*q && k < 18) t[k++] = *q++; };
-  put(kNoteName[((Pi(PG_GLOBAL, 2) + r) % 12 + 12) % 12]);
+  put(kNoteName[((pc0 + r) % 12 + 12) % 12]);
   int maj = h(4), mnr = !maj && h(3), sus2 = !maj && !mnr && h(2), sus4 = !maj && !mnr && !sus2 && h(5);
   if (maj) use(4);
   if (mnr) use(3);
@@ -2760,6 +2815,23 @@ void eng_pads_chord(char* b, int n) {   // its root, its quality (m, dim, +, sus
   t[k] = 0;
   for (k = 0; t[k] && k < n - 1; ++k) b[k] = t[k];
   b[k] = 0;
+}
+void eng_pads_chord(char* b, int n) {   // PADS' chord now
+  if (n <= 0) return;
+  b[0] = 0;
+  if (pad_track < 0 || pad_n < 3) return;
+  chord_name(pad_chord, pad_n, Pi(PG_GLOBAL, 2), b, n);
+}
+void eng_chord_name(const int* notes, int nn, char* b, int n) {   // (a step's: its notes over an octave folded in,
+  int f[4], m = 0;                                                  // its ninth, eleventh and thirteenth kept)
+  nn = nn > 4 ? 4 : nn;
+  for (int i = 0; i < nn; ++i) {
+    int d = notes[i] - notes[0];
+    while (d >= 24) d -= 12;
+    if (d >= 12 && d != 14 && d != 17 && d != 21) d -= 12;
+    if (!i || d) f[m++] = notes[0] + d;  // (the root's octaves: the root)
+  }
+  chord_name(f, m, 0, b, n);
 }
 void eng_pads_line(char* b, int n) {    // the progression, its place, the chord: "Tintin 3/8 Am"
   if (n <= 0) return;
@@ -5197,6 +5269,66 @@ void eng_step_ties(int lane, uint8_t* out) {   // every step's (ENG_STEPS), one 
     if (proj.lock[i].lane == lane && proj.lock[i].tp == kTpTie && proj.lock[i].step < ENG_STEPS)
       out[proj.lock[i].step] = proj.lock[i].v;
 }
+// (0.16.16) a step's notes (NOTE's values: its lock, else the track's; the chord's over it), the lowest first; how many
+int eng_step_notes(int lane, int step, int* out) {
+  if (lane < 0 || lane >= ENG_TRACKS || step < 0 || step >= ENG_STEPS) return 0;
+  float v = 0.0f;
+  int base = eng_lock(lane, step, TP_NOTE, &v) ? iround(v) : iround(proj.val[eng_track_param(lane, TP_NOTE)]);
+  int n = 0;
+  out[n++] = base;
+  for (int i = 0; i < ENG_PLOCKS; ++i)
+    if (proj.lock[i].lane == lane && proj.lock[i].step == step && proj.lock[i].tp >= kTpNote2 &&
+        proj.lock[i].tp < kTpNote2 + 3 && proj.lock[i].v && n < 4)
+      out[n++] = base + proj.lock[i].v;
+  for (int i = 1; i < n; ++i)           // (in order)
+    for (int j = i; j > 0 && out[j] < out[j - 1]; --j) {
+      int x = out[j];
+      out[j] = out[j - 1], out[j - 1] = x;
+    }
+  return n;
+}
+int eng_step_notes_set(int lane, int step, const int* notes, int n) {   // 0 ok; -1 no room, -2 out of NOTE's range
+  if (lane < 0 || lane >= ENG_TRACKS || step < 0 || step >= ENG_STEPS || n < 1) return -1;
+  int s[4];
+  n = n > 4 ? 4 : n;
+  for (int i = 0; i < n; ++i) s[i] = notes[i];
+  for (int i = 1; i < n; ++i)
+    for (int j = i; j > 0 && s[j] < s[j - 1]; --j) {
+      int x = s[j];
+      s[j] = s[j - 1], s[j - 1] = x;
+    }
+  const eng_pdef_t* d = eng_pdef(eng_track_param(lane, TP_NOTE));
+  if (s[0] < static_cast<int>(d->lo) || s[0] > static_cast<int>(d->hi) || s[n - 1] - s[0] > 96) return -2;
+  int m = 0;                            // (the same notes once)
+  for (int i = 0; i < n; ++i)
+    if (!m || s[i] != s[m - 1]) s[m++] = s[i];
+  n = m;
+  for (int j = 0; j < 3; ++j) {         // the chord's locks: the old ones out, then the new
+    int i = lock_find(lane, step, kTpNote2 + j);
+    if (i >= 0) proj.lock[i].lane = 0xFF;
+  }
+  if (eng_lock_set(lane, step, TP_NOTE, static_cast<float>(s[0])) != 0) return -1;
+  for (int j = 1; j < n; ++j) {
+    int i = -1;
+    for (int q = 0; q < ENG_PLOCKS && i < 0; ++q)
+      if (proj.lock[q].lane == 0xFF) i = q;
+    if (i < 0) return -1;
+    proj.lock[i].v = static_cast<uint8_t>(s[j] - s[0]);
+    proj.lock[i].step = static_cast<uint8_t>(step);
+    proj.lock[i].tp = static_cast<uint8_t>(kTpNote2 + j - 1);
+    proj.lock[i].lane = static_cast<uint8_t>(lane);
+  }
+  ++lock_gen;
+  return 0;
+}
+void eng_step_chords(int lane, uint8_t* out) {   // every step's notes over its NOTE (0: a note alone), one look
+  for (int s = 0; s < ENG_STEPS; ++s) out[s] = 0;
+  for (int i = 0; i < ENG_PLOCKS; ++i)
+    if (proj.lock[i].lane == lane && proj.lock[i].tp >= kTpNote2 && proj.lock[i].tp < kTpNote2 + 3 &&
+        proj.lock[i].step < ENG_STEPS && proj.lock[i].v)
+      ++out[proj.lock[i].step];
+}
+int eng_track_chords(int t) { return t >= 0 && t < ENG_TRACKS && kb_poly(t); }
 int eng_step_locked(int lane, int step) {
   int n = 0;
   for (int i = 0; i < ENG_PLOCKS; ++i) n += proj.lock[i].lane == lane && proj.lock[i].step == step;

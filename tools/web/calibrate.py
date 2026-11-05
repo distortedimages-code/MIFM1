@@ -37,8 +37,8 @@ VA = NAMES.index("FM")                               # (the filters', the bus', 
 PAD = VA                                             # (the FM's square, PW and SYNC: three operators heard, calib.cc)
 PADS = NAMES.index("PADS")                           # (PADS: its notes, one saw each or three, its bell: calib.cc)
 POLY = NAMES.index("POLY")                           # (POLY: a voice held, four in unison)
-PRO = NAMES.index("PROPHET")                         # (PROPHET: a voice, four in a chord)
-SQ1 = NAMES.index("SQ-1")                            # (SQ-1: a voice, four ringing on; its three layers, SPACE)
+PRO = NAMES.index("REV3")                            # (REV3, after the Prophet-5: a voice, four in a chord)
+SQ1 = NAMES.index("OTIS")                            # (OTIS, after the SQ-1: a voice, four ringing on; its layers, SPACE)
 
 
 def build():
@@ -180,8 +180,8 @@ def main():
           "static const float kWebPads[4] = {" + ", ".join(f1(v) for v in pads) + "};   /* PADS: its floor, a note "
           "(one saw, three), its bell */",
           "static const float kWebPoly[2] = {" + ", ".join(f1(v) for v in polyc) + "};   /* POLY: its floor, a voice */",
-          "static const float kWebPro[2] = {" + ", ".join(f1(v) for v in proc) + "};   /* PROPHET: its floor, a voice */",
-          "static const float kWebSq[2] = {" + ", ".join(f1(v) for v in sqc) + "};   /* SQ-1: its floor, a voice */",
+          "static const float kWebPro[2] = {" + ", ".join(f1(v) for v in proc) + "};   /* REV3: its floor, a voice */",
+          "static const float kWebSq[2] = {" + ", ".join(f1(v) for v in sqc) + "};   /* OTIS: its floor, a voice */",
           f"static const float kWebBend = {f1(bend)};   /* the bits, one of their knobs up */",
           f"static const float kWebTrauma = {f1(trauma)};   /* TRAUMA's drive on a track */",
           "static const float kWebGlitch = 9.0f;   /* the glitch, taking or repeating its slice (estimated: a few loads a sample) */",

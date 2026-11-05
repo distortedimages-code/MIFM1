@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 // Copyright (C) 2026 Yoann
-// MIFM1's SQ-1 (0.16.14): a pocket Ensoniq, after the SQ-1 (1990) and its OTIS chip (the ES5505: 16-bit PCM read by a
+// MIFM1's OTIS (0.16.14 as SQ-1; 0.16.16 named after the Ensoniq chip it reads like): a pocket Ensoniq, after the SQ-1 (1990) and its OTIS chip (the ES5505: 16-bit PCM read by a
 // phase accumulator, two samples apart linearly; a loop's points moved while it plays, the Transwaves; four one-pole
 // filters, no resonance; MAME's es5506.cpp, Aaron Giles', read for how). Not its sounds, its ways: eight knobs a
-// track, four voices, 24 programs on 13 Transwaves of MIFM1's own.
+// track, four voices, 24 programs on 15 Transwaves of MIFM1's own (0.16.16: eight of the first kept, seven grainier).
 //
 // A Transwave: 32 cycles of 256 samples (or, for a bell, 8 loops of 1024: four of its periods, its partials rounded
 // to a quarter of the note), made from a recipe (a resonance climbing, FM, a bar's partials, a glass', keys, a pad's
-// clusters, a fold, vowels, a pulse narrowing, a hard sync, a staircase) into the track's Plaits voice's memory, lent
+// clusters, vowels, a hard sync; then random cycles smoothed less and less, a crusher, chirps, VOSIM's pulses,
+// harmonics shuffled, a ring modulator, an FM fed back to noise) into the track's Plaits voice's memory, lent
 // while the track plays this machine (16 KB the cycles, what is left SPACE's line). A cycle read whole, the next one
 // taken at its wrap, as the chip's loop points moved: a Transwave steps through its cycles, it does not morph.
 //
@@ -41,6 +42,13 @@ inline float sin_cyc(float ph) {        // a sine of a phase in cycles
   return s * z * (1.5707963f + z2 * (-0.64596336f + z2 * (0.079688469f + z2 * (-0.0046722113f + z2 * 0.00015081274f))));
 }
 inline float lsin(uint32_t i) { return plaits::lut_sine[i & 511u]; }   // (512 a cycle)
+inline float fsin(float ph) {           // a sine of a phase in cycles, from the table, between two of its steps (the
+  ph -= fm_floorf(ph);                  // grainy recipes': cheaper than sin_cyc, -80 dB enough for them)
+  const float u = ph * 512.0f;
+  const int i = static_cast<int>(u);
+  const float fr = u - static_cast<float>(i);
+  return plaits::lut_sine[i] + (plaits::lut_sine[i + 1] - plaits::lut_sine[i]) * fr;
+}
 inline uint32_t xs(uint32_t& s) {
   s ^= s << 13;
   s ^= s >> 17;
@@ -60,17 +68,23 @@ inline uint32_t inc_of(float hz, float periods) {
 }
 
 // ---- the Transwaves ----
-enum { G_RESO, G_FM, G_BELL, G_HARM, G_PAD, G_FOLD, G_VOX, G_PULSE, G_SYNC, G_DIGI };
+// (0.16.16) seven classics (a resonance, an electric piano's FM, keys, a pad, vowels, a hard sync, a bar's and a
+// glass' modes) and seven of grain: random cycles, a crushed wave, a chirp, VOSIM's pulses, harmonics shuffled, a ring
+// modulation, an FM fed back into chaos
+enum { G_RESO, G_FM, G_BELL, G_HARM, G_PAD, G_VOX, G_SYNC, G_GRAIN, G_CRUSH, G_CHIRP, G_BURST, G_SHUFFLE, G_RING,
+       G_CHAOS };
 struct Wave {
   uint8_t gen, ga;                      // its recipe, the recipe's setting (an FM's ratio; a bell: bar 0, glass 1)
   float gb;                             // (an FM's index at its last cycle)
   uint8_t hmax;                         // its highest harmonic that counts (the poles kept under where it folds)
 };
-enum { W_RESO, W_FM1, W_FM2, W_FM3, W_BAR, W_GLASS, W_KEYS, W_PAD, W_FOLD, W_VOX, W_PULSE, W_SYNC, W_DIGI, W_N };
+enum { W_RESO, W_FM1, W_BAR, W_GLASS, W_KEYS, W_PAD, W_VOX, W_SYNC, W_GRAIN, W_CRUSH, W_CHIRP, W_BURST, W_SHUFFLE,
+       W_RING, W_CHAOS, W_N };
 const Wave kWave[W_N] = {
-    {G_RESO, 0, 0.0f, 64},  {G_FM, 1, 5.5f, 24},   {G_FM, 2, 7.0f, 40},  {G_FM, 3, 5.0f, 40},  {G_BELL, 0, 0.0f, 20},
-    {G_BELL, 1, 0.0f, 14},  {G_HARM, 0, 0.0f, 48}, {G_PAD, 0, 0.0f, 48}, {G_FOLD, 0, 0.0f, 96}, {G_VOX, 0, 0.0f, 40},
-    {G_PULSE, 0, 0.0f, 64}, {G_SYNC, 0, 0.0f, 96}, {G_DIGI, 0, 0.0f, 96},
+    {G_RESO, 0, 0.0f, 64},    {G_FM, 1, 5.5f, 24},    {G_BELL, 0, 0.0f, 20},  {G_BELL, 1, 0.0f, 14},
+    {G_HARM, 0, 0.0f, 48},    {G_PAD, 0, 0.0f, 48},   {G_VOX, 0, 0.0f, 40},   {G_SYNC, 0, 0.0f, 96},
+    {G_GRAIN, 0, 0.0f, 128},  {G_CRUSH, 0, 0.0f, 128}, {G_CHIRP, 0, 0.0f, 48}, {G_BURST, 0, 0.0f, 64},
+    {G_SHUFFLE, 0, 0.0f, 64}, {G_RING, 0, 0.0f, 40},  {G_CHAOS, 0, 0.0f, 128},
 };
 inline int looped(int w) { return kWave[w].gen == G_BELL; }
 
@@ -92,38 +106,38 @@ struct Prog {
 };
 const int kProgs = 24;
 const Prog kProg[kProgs] = {
-    // DIGITAL BASS
-    {"Res Bass", W_RESO, -12, 0, L3_TICK, 0.6f, SW_FALL, F_LP4, 1.2f, SP_DRIVE, 0.5f, 1.16f},
-    {"FM Bass", W_FM2, -12, 2, L3_TICK, 0.5f, SW_FALL, F_LP2, 0.8f, SP_DRIVE, 0.4f, 0.86f},
-    {"SyncBass", W_SYNC, 0, 4, L3_TICK, 0.7f, SW_FALL, F_LP4, 0.6f, SP_DRIVE, 0.6f, 0.87f},
+    // GRIT BASS
+    {"Res Bass", W_RESO, -12, 0, L3_TICK, 0.6f, SW_FALL, F_LP4, 1.2f, SP_DRIVE, 0.5f, 1.15f},
+    {"Crusher", W_CRUSH, -12, 4, L3_TICK, 0.6f, SW_FALL, F_LP4, 0.8f, SP_DRIVE, 0.6f, 0.78f},
+    {"Chaos", W_CHAOS, 0, 3, L3_TICK, 0.7f, SW_FALL, F_LP2, 0.6f, SP_DRIVE, 0.7f, 0.90f},
     // ELECTRIC
-    {"E.Piano", W_FM1, 12, 3, L3_TICK, 1.2f, SW_FALL, F_LP2, 0.3f, SP_PHASER, 0.6f, 0.63f},
-    {"Clav", W_PULSE, 0, 5, L3_TICK, 0.5f, SW_FALL, F_THIN, 0.8f, SP_PHASER, 0.5f, 1.50f},
-    {"Tines", W_KEYS, 12, 6, L3_TICK, 1.0f, SW_FALL, F_LP4, 0.8f, SP_PHASER, 0.5f, 0.65f},
+    {"E.Piano", W_FM1, 12, 3, L3_TICK, 1.2f, SW_FALL, F_LP2, 0.3f, SP_PHASER, 0.6f, 0.64f},
+    {"Tines", W_KEYS, 12, 6, L3_TICK, 1.0f, SW_FALL, F_LP4, 0.8f, SP_PHASER, 0.5f, 0.66f},
+    {"Shard", W_SHUFFLE, 12, 5, L3_TICK, 0.8f, SW_FALL, F_THIN, 0.5f, SP_COMB, 0.7f, 1.14f},
     // METALLIC
-    {"Metal", W_BAR, 7, 1, L3_NOISE, 1.2f, SW_FALL, F_THIN, 0.0f, SP_COMB, 0.8f, 1.05f},
-    {"Anvil", W_BAR, 0, 2, L3_RING, 0.5f, SW_FALL, F_LP2, 0.5f, SP_COMB, 0.5f, 1.45f},
-    {"Gong", W_BAR, -12, 1, L3_NOISE, 2.5f, SW_RISE, F_LP2, 0.2f, SP_PHASER, 1.0f, 0.76f},
+    {"Metal", W_BAR, 7, 1, L3_NOISE, 1.2f, SW_FALL, F_THIN, 0.0f, SP_COMB, 0.8f, 1.06f},
+    {"Ring", W_RING, 0, 6, L3_RING, 0.6f, SW_FALL, F_LP2, 0.4f, SP_COMB, 0.6f, 1.31f},
+    {"Gong", W_BAR, -12, 1, L3_NOISE, 2.5f, SW_RISE, F_LP2, 0.2f, SP_PHASER, 1.0f, 0.77f},
     // GLASS
-    {"Glass", W_GLASS, 12, 1, L3_TICK, 1.4f, SW_RISE, F_LP2, 0.0f, SP_PHASER, 0.6f, 0.75f},
-    {"Crystal", W_GLASS, 19, 2, L3_RING, 0.8f, SW_FALL, F_THIN, 0.3f, SP_COMB, 0.5f, 1.02f},
-    {"Celeste", W_GLASS, 12, 0, L3_TICK, 0.6f, SW_FALL, F_LP2, 0.4f, SP_PHASER, 0.4f, 0.92f},
-    // SOFT KEYS
-    {"SoftKeys", W_KEYS, 0, 3, L3_TICK, 1.0f, SW_FALL, F_LP4, 0.6f, SP_PHASER, 0.5f, 0.57f},
-    {"Vox Keys", W_VOX, 12, 2, L3_TICK, 0.9f, SW_FALL, F_LP2, 0.4f, SP_PHASER, 0.6f, 0.96f},
-    {"Hollow", W_PULSE, 12, 2, L3_TICK, 1.0f, SW_FALL, F_LP4, 0.5f, SP_PHASER, 0.5f, 1.23f},
+    {"Glass", W_GLASS, 12, 1, L3_TICK, 1.4f, SW_RISE, F_LP2, 0.0f, SP_PHASER, 0.6f, 0.76f},
+    {"Chirp", W_CHIRP, 12, 4, L3_TICK, 0.7f, SW_FALL, F_THIN, 0.4f, SP_COMB, 0.6f, 0.97f},
+    {"Crystal", W_GLASS, 19, 2, L3_RING, 0.8f, SW_FALL, F_THIN, 0.3f, SP_COMB, 0.5f, 1.04f},
+    // VOICES
+    {"Vox", W_VOX, 12, 2, L3_TICK, 0.9f, SW_FALL, F_LP2, 0.4f, SP_PHASER, 0.6f, 0.97f},
+    {"Grains", W_BURST, 0, 6, L3_NOISE, 1.0f, SW_FALL, F_LP2, 0.3f, SP_PHASER, 0.8f, 1.93f},
+    {"Choir", W_VOX, 0, 8, L3_NOISE, 2.0f, SW_RISE, F_LP2, 0.0f, SP_PHASER, 0.8f, 0.97f},
     // EVOLVING PAD
-    {"Pad", W_PAD, 0, 10, L3_NOISE, 2.0f, SW_RISE, F_LP2, 0.2f, SP_PHASER, 1.0f, 1.22f},
-    {"Vox Pad", W_VOX, 0, 8, L3_NOISE, 2.0f, SW_RISE, F_LP2, 0.0f, SP_PHASER, 0.8f, 0.96f},
-    {"Sweeper", W_RESO, 12, 6, L3_NONE, 2.5f, SW_RISE, F_LP2, 0.0f, SP_PHASER, 1.0f, 0.89f},
+    {"Pad", W_PAD, 0, 10, L3_NOISE, 2.0f, SW_RISE, F_LP2, 0.2f, SP_PHASER, 1.0f, 1.26f},
+    {"Dust", W_GRAIN, 0, 8, L3_NOISE, 2.2f, SW_RISE, F_LP2, 0.2f, SP_PHASER, 1.0f, 0.92f},
+    {"Sweeper", W_RESO, 12, 6, L3_NONE, 2.5f, SW_RISE, F_LP2, 0.0f, SP_PHASER, 1.0f, 0.91f},
     // INDUSTRIAL
-    {"Industr.", W_FOLD, -12, 8, L3_NOISE, 0.8f, SW_FALL, F_THIN, 0.6f, SP_DRIVE, 1.0f, 0.82f},
-    {"Digi", W_DIGI, 12, 8, L3_TICK, 1.0f, SW_FALL, F_LP2, 0.3f, SP_COMB, 0.6f, 0.56f},
-    {"Grind", W_SYNC, 7, 10, L3_RING, 0.7f, SW_FALL, F_THIN, 0.4f, SP_DRIVE, 0.9f, 0.83f},
+    {"Grind", W_SYNC, 7, 10, L3_RING, 0.7f, SW_FALL, F_THIN, 0.4f, SP_DRIVE, 0.9f, 0.87f},
+    {"Static", W_GRAIN, -12, 12, L3_NOISE, 0.8f, SW_FALL, F_THIN, 0.6f, SP_DRIVE, 1.0f, 1.26f},
+    {"Machine", W_CHAOS, 7, 9, L3_RING, 0.6f, SW_FALL, F_LP4, 0.8f, SP_COMB, 0.8f, 1.04f},
     // PERCUSSIVE
-    {"Perc", W_FM3, 19, 0, L3_RING, 0.4f, SW_FALL, F_LP2, 0.5f, SP_COMB, 0.4f, 0.82f},
-    {"Mallet", W_BAR, 12, 0, L3_TICK, 0.35f, SW_FALL, F_LP2, 0.8f, SP_PHASER, 0.3f, 1.12f},
-    {"Pluck", W_PULSE, 12, 6, L3_TICK, 0.4f, SW_FALL, F_LP4, 1.0f, SP_PHASER, 0.5f, 1.39f},
+    {"Perc", W_RING, 19, 0, L3_RING, 0.4f, SW_FALL, F_LP2, 0.5f, SP_COMB, 0.4f, 1.48f},
+    {"Mallet", W_BAR, 12, 0, L3_TICK, 0.35f, SW_FALL, F_LP2, 0.8f, SP_PHASER, 0.3f, 1.14f},
+    {"Click", W_CRUSH, 12, 6, L3_TICK, 0.35f, SW_FALL, F_LP4, 1.0f, SP_COMB, 0.5f, 0.81f},
 };
 inline int prog_of(float u) {
   int i = static_cast<int>(u * static_cast<float>(kProgs));
@@ -137,6 +151,7 @@ struct SVoice {
   uint8_t was[3], xf[3];                // the samples left of its fade (8 at a change: the step's edge, not a morph)
   uint8_t alive, let_go, trig;
   int8_t key;                           // (0.16.15) the key it plays (the keyboard's chords), -1 a trig's
+  uint8_t slot;                         // (0.16.16) its note in its trig's chord
   float note;
   float env, a0, att, dec;              // the envelope: its level, where its attack began, its progress, the fall's
   float swe, t;                         // the sweep's envelope; the time since the trig (s)
@@ -146,7 +161,9 @@ struct SVoice {
 };
 struct Sq {
   float k[8];
-  float note;
+  float note;                           // the trig's note (0.16.16: its chord's, the step's, notes[0] .. its n)
+  float notes[kVoices];
+  int n;
   int gate, trig;
   SVoice v[kVoices];
   uint32_t rnd, clock;
@@ -175,7 +192,7 @@ const SqAt sq = {};
 const uint32_t kWork = 16;              // (the work a sample of time earns)
 inline int nterms(int w) {
   switch (kWave[w].gen) {
-    case G_RESO: case G_PULSE: return 64;
+    case G_RESO: case G_SHUFFLE: return 64;
     case G_HARM: case G_PAD: return 48;
     case G_VOX: return 40;
     case G_BELL: return 7;
@@ -224,8 +241,14 @@ MI_COLD float term(int w, int f, int m, uint32_t* cyc) {
       }
       return (v + 0.02f) * fm_exp2f(-0.5f * fm_log2f(h));
     }
-    case G_PULSE:                       // a pulse narrowing, 50 % to 3 % (cosines: centred on the cycle's start)
-      return sin_cyc(0.5f * h * 0.5f * fm_exp2f(-4.06f * x)) / h;
+    case G_SHUFFLE: {                   // harmonics shuffled: some kept, some not (fewer, higher, cycle by cycle; the
+      if (m > 8 + static_cast<int>(56.0f * x)) return 0.0f;   // fundamental always), their signs anywhere
+      const uint32_t hs = (static_cast<uint32_t>(m) * 2654435761u) ^ (static_cast<uint32_t>(f / 2) * 0x85EBCA6Bu);
+      const uint32_t z = (hs ^ (hs >> 15)) * 0x2C1B3C6Du;
+      if (m > 1 && static_cast<float>(z >> 8) * (1.0f / 16777216.0f) > 0.85f - 0.55f * x) return 0.0f;
+      const float v = fm_exp2f(-0.7f * fm_log2f(h));
+      return (z & 1u) ? -v : v;
+    }
     case G_BELL: {                      // a bell's loop: four of the note's periods, its partials rounded to a quarter
       static const float kR[2][6] = {{1.0f, 2.756f, 5.404f, 8.933f, 13.34f, 18.64f},   // of it (a bar's free modes; a
                                      {1.0f, 2.32f, 4.25f, 6.63f, 9.38f, 12.6f}};       // glass'), brighter loop by
@@ -264,7 +287,7 @@ MI_COLD void smooth(int16_t* d, int len) {      // [1 2 1] / 4 round the cycle (
 }
 // the terms m0 .. m1 - 1 added into the half cycle (its first len / 2 + 1 samples)
 __attribute__((noinline)) void add_terms(int16_t* d, int len, int w, int f, int m0, int m1, float g) {
-  const uint32_t off = kWave[w].gen == G_PULSE ? 128u : 0u;   // (cosines)
+  const uint32_t off = 0u;               // (sines: the cycles all start at 0)
   const int half = len / 2;
   for (int m = m0; m < m1; ++m) {
     uint32_t cyc = 0;
@@ -284,7 +307,7 @@ __attribute__((noinline)) void add_terms(int16_t* d, int len, int w, int f, int 
     }
   }
 }
-// a cycle made in time (FM, a fold, a sync, a staircase): at once
+// a cycle made in time (FM, a sync, the grainy ones): at once
 MI_COLD void make_now(int w, int f, int16_t* d) {
   const Wave& W = kWave[w];
   const float x = static_cast<float>(f) / static_cast<float>(kFrames - 1);
@@ -293,19 +316,8 @@ MI_COLD void make_now(int w, int f, int16_t* d) {
       const float I = 0.05f + W.gb * powr(x, 1.2f), r = static_cast<float>(W.ga);
       for (int i = 0; i < kLen; ++i) {
         const float ph = static_cast<float>(i) / static_cast<float>(kLen);
-        d[i] = static_cast<int16_t>(29000.0f * sin_cyc(ph + I * 0.159155f * sin_cyc(r * ph)));
+        d[i] = static_cast<int16_t>(29000.0f * fsin(ph + I * 0.159155f * fsin(r * ph)));
       }
-      break;
-    }
-    case G_FOLD: {                      // a sine folded more and more (an industrial's metal)
-      const float g = 1.0f + 7.0f * powr(x, 1.3f);
-      for (int i = 0; i < kLen; ++i) {
-        const float ph = static_cast<float>(i) / static_cast<float>(kLen);
-        float v = g * sin_cyc(ph) + 0.3f * x * sin_cyc(2.0f * ph);
-        for (int q = 0; q < 6 && (v > 1.0f || v < -1.0f); ++q) v = v > 1.0f ? 2.0f - v : -2.0f - v;
-        d[i] = static_cast<int16_t>(29000.0f * v);
-      }
-      smooth(d, kLen);
       break;
     }
     case G_SYNC: {                      // a saw hard-synced, its ratio 1 to 7.5
@@ -318,12 +330,75 @@ MI_COLD void make_now(int w, int f, int16_t* d) {
       smooth(d, kLen);
       break;
     }
-    case G_DIGI: {                      // a sine and its third on fewer and fewer steps (32 to 2: a staircase's grain)
-      const float lv = 1.0f + 31.0f * (1.0f - x) * (1.0f - x);
+    case G_GRAIN: {                     // random cycles: a common one and this one's own (more of it to the right),
+      uint32_t s0 = 0x2545F491u, s1 = 0x9E3779B9u ^ (static_cast<uint32_t>(f + 1) * 0x85EBCA6Bu);   // smoothed less
+      const float a = 0.03f + 0.97f * x * x;   // and less: a dark wobble to a raw buzz
+      for (int i = 0; i < kLen; ++i) d[i] = static_cast<int16_t>(20000.0f * ((1.0f - x) * bip(s0) + x * bip(s1)));
+      float y1 = 0.0f, y2 = 0.0f;
+      for (int lap = 0; lap < 3; ++lap)  // (two poles round the cycle, settled)
+        for (int i = 0; i < kLen; ++i) {
+          y1 += a * (static_cast<float>(d[i]) - y1);
+          y2 += a * (y1 - y2);
+          if (lap == 2) d[i] = static_cast<int16_t>(y2);
+        }
+      int32_t mean = 0;
+      for (int i = 0; i < kLen; ++i) mean += d[i];
+      mean /= kLen;
+      for (int i = 0; i < kLen; ++i) d[i] = static_cast<int16_t>(d[i] - mean);
+      break;
+    }
+    case G_CRUSH: {                     // a sine and a saw, crushed: held over more and more samples (1 to 16), on
+      const int hold = 1 + static_cast<int>(15.0f * powr(x, 1.5f) + 0.5f);   // fewer and fewer levels (64 to 2)
+      const float lv = 2.0f + 62.0f * (1.0f - x) * (1.0f - x);
+      for (int i = 0; i < kLen; ++i) {
+        const float ph = static_cast<float>((i / hold) * hold) / static_cast<float>(kLen);
+        const float v = 0.7f * fsin(ph) + 0.3f * (2.0f * ph - 1.0f);
+        d[i] = static_cast<int16_t>(29000.0f * fm_floorf(v * lv + 0.5f) / lv);
+      }
+      break;
+    }
+    case G_CHIRP: {                     // a chirp in each cycle, from the note up 1 to 41 harmonics, in a sine's window
+      const float k = 1.0f + 40.0f * powr(x, 1.3f);
+      for (int i = 0; i < kLen; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(kLen);
+        d[i] = static_cast<int16_t>(29000.0f * fsin(t + 0.5f * k * t * t) * fsin(0.5f * t));
+      }
+      break;
+    }
+    case G_BURST: {                     // VOSIM's (Kaegi and Tempelaars, 1978): three sine-squared pulses, each softer,
+      const float F = 3.0f + 25.0f * x;   // their pitch the formant (3 to 28 harmonics), then silence to the cycle's end
+      int32_t mean = 0;
+      for (int i = 0; i < kLen; ++i) {
+        const float u = static_cast<float>(i) / static_cast<float>(kLen) * F;
+        const int k = static_cast<int>(u);
+        float v = 0.0f;
+        if (k < 3) {
+          const float sn = fsin(0.5f * (u - static_cast<float>(k)));
+          v = (k == 0 ? 1.0f : k == 1 ? 0.7f : 0.49f) * sn * sn;
+        }
+        d[i] = static_cast<int16_t>(29000.0f * v);
+        mean += d[i];
+      }
+      mean /= kLen;
+      for (int i = 0; i < kLen; ++i) d[i] = static_cast<int16_t>(d[i] - mean);
+      break;
+    }
+    case G_RING: {                      // the note by two sines 2 to 32 and half again as many times over: a clang
+      const int r = 2 + static_cast<int>(30.0f * powr(x, 1.4f) + 0.5f), r2 = r + 1 + r / 2;
       for (int i = 0; i < kLen; ++i) {
         const float ph = static_cast<float>(i) / static_cast<float>(kLen);
-        const float v = (sin_cyc(ph) + 0.4f * x * sin_cyc(3.0f * ph)) / (1.0f + 0.4f * x);
-        d[i] = static_cast<int16_t>(29000.0f * fm_floorf(v * lv + 0.5f) / lv);
+        const float c = fsin(ph);
+        d[i] = static_cast<int16_t>(29000.0f * (c * (0.6f * fsin(r * ph) + 0.4f * fsin(r2 * ph)) + 0.25f * c));
+      }
+      break;
+    }
+    case G_CHAOS: {                     // an FM fed back on itself (0.3 to 5): its own sine, then a scream, then noise
+      const float beta = (0.3f + 4.7f * x) * 0.159155f;   // that keeps (the same each cycle)
+      float y = 0.0f;
+      for (int i = kLen - 64; i < 2 * kLen; ++i) {   // (settled over the cycle's last quarter first)
+        const int j = i % kLen;
+        y = fsin(static_cast<float>(j) / static_cast<float>(kLen) + beta * y);
+        if (i >= kLen) d[j] = static_cast<int16_t>(29000.0f * y);
       }
       smooth(d, kLen);
       break;
@@ -408,7 +483,7 @@ MI_COLD __attribute__((noinline)) void build(Sq& s, int t, int w, uint32_t n, in
     s.credit -= static_cast<uint32_t>(m1 - s.job_m) * per;
     s.job_m = static_cast<uint8_t>(m1);
     if (m1 < nt) return;
-    const int half = len / 2, even = kWave[w].gen == G_PULSE;   // its other half: the same (cosines) or turned over
+    const int half = len / 2, even = 0;   // its other half: turned over (a sum of sines)
     for (int i = 1; i < half; ++i) d[len - i] = static_cast<int16_t>(even ? d[i] : -d[i]);
     if (!even) d[0] = d[half] = 0;
     normalize(d, len);
@@ -434,29 +509,37 @@ inline Shape shape_of(float u, float scale) {
 }
 
 // a trig: a voice (a free one, else the quietest, the oldest); the ones still sounding let go
-void take(Sq& s) {
+void take(Sq& s) {                      // (0.16.16: a voice for each of its chord's notes)
   ++s.clock;
-  int best = 0;
-  float bs = 1e9f;
-  for (int i = 0; i < kVoices; ++i) {
-    const SVoice& v = s.v[i];
-    float score = v.alive ? v.env + 1.0f - static_cast<float>(s.clock - v.age) * 1e-6f : 0.0f;
-    if (v.alive && v.key >= 0) score += 2.0f;   // (a key held: the last taken)
-    if (score < bs) bs = score, best = i;
+  const int n = s.n < 1 ? 1 : s.n > kVoices ? kVoices : s.n;
+  int used = 0;
+  for (int j = 0; j < n; ++j) {
+    int best = 0;
+    float bs = 1e9f;
+    for (int i = 0; i < kVoices; ++i) {
+      if ((used >> i) & 1) continue;
+      const SVoice& v = s.v[i];
+      float score = v.alive ? v.env + 1.0f - static_cast<float>(s.clock - v.age) * 1e-6f : 0.0f;
+      if (v.alive && v.key >= 0) score += 2.0f;   // (a key held: the last taken)
+      if (score < bs) bs = score, best = i;
+    }
+    used |= 1 << best;
+    SVoice& v = s.v[best];
+    v.key = -1;
+    v.slot = static_cast<uint8_t>(j);
+    v.note = s.notes[j];
+    if (!v.alive) {                     // from silence: its poles at rest, its layers' phases anywhere
+      for (int l = 0; l < 3; ++l) v.ph[l] = xs(s.rnd);
+      v.s1 = v.s2 = v.s3 = v.s4 = v.h1 = 0.0f;
+      v.env = 0.0f;
+    }
+    v.sign = ((s.clock + static_cast<uint32_t>(j)) & 1u) ? 1.0f : -1.0f;
+    v.trig = 1;
+    v.age = s.clock;
   }
   for (int i = 0; i < kVoices; ++i)
-    if (i != best && s.v[i].alive && !s.v[i].let_go && s.v[i].key < 0) s.v[i].let_go = 1, s.v[i].dec = s.v[i].env;
-  SVoice& v = s.v[best];
-  v.key = -1;
-  v.note = s.note;
-  if (!v.alive) {                       // from silence: its poles at rest, its layers' phases anywhere
-    for (int l = 0; l < 3; ++l) v.ph[l] = xs(s.rnd);
-    v.s1 = v.s2 = v.s3 = v.s4 = v.h1 = 0.0f;
-    v.env = 0.0f;
-  }
-  v.sign = (s.clock & 1u) ? 1.0f : -1.0f;
-  v.trig = 1;
-  v.age = s.clock;
+    if (!((used >> i) & 1) && s.v[i].alive && !s.v[i].let_go && s.v[i].key < 0)
+      s.v[i].let_go = 1, s.v[i].dec = s.v[i].env;
 }
 
 // a layer's samples added into y: its cycle read at its phase, linearly between two samples; at its wrap the next one
@@ -509,7 +592,8 @@ void sq_reset(int t) {
   float d[8];
   sq_defaults(d);
   for (int i = 0; i < 8; ++i) s.k[i] = d[i];
-  s.note = 48.0f;
+  s.note = s.notes[0] = 48.0f;
+  s.n = 1;
   for (int i = 0; i < kVoices; ++i) s.v[i].att = 1.0f, s.v[i].key = -1;
 }
 
@@ -532,14 +616,18 @@ void sq_silence(int t) {                // (its bank kept; SPACE's line silent)
     for (uint32_t i = 0; i < kLine; ++i) b[kFrames * kLen + i] = 0;
 }
 
-void sq_set(int t, float note, const float* k) {
+void sq_set(int t, const float* notes, int n, const float* k) {
   if (t < 0 || t >= MF_TRACKS) return;
   Sq& s = sq[t];
   for (int i = 0; i < 8; ++i) s.k[i] = clampf(k[i], 0.0f, 1.0f);
-  s.note = note;
-  if (s.gate)                           // (the note held follows: a lock, FREQ's modulations)
+  n = n < 1 ? 1 : n > kVoices ? kVoices : n;
+  for (int i = 0; i < n; ++i) s.notes[i] = notes[i];
+  s.note = notes[0];
+  if (s.gate && n == s.n)               // (the notes held follow: a lock, FREQ's modulations)
     for (int i = 0; i < kVoices; ++i)
-      if (s.v[i].alive && !s.v[i].let_go && s.v[i].age == s.clock && s.v[i].key < 0) s.v[i].note = note;
+      if (s.v[i].alive && !s.v[i].let_go && s.v[i].age == s.clock && s.v[i].key < 0 && s.v[i].slot < n)
+        s.v[i].note = notes[s.v[i].slot];
+  s.n = n;
 }
 
 void sq_gate(int t, int g) {
@@ -877,7 +965,7 @@ int sq_knob_steps(int k) { return k == 0 ? kProgs : 128; }
 int sq_progs(void) { return kProgs; }
 const char* sq_prog_name(float wave) { return kProg[prog_of(wave)].name; }
 const char* sq_family(float wave) {
-  static const char* const kF[8] = {"Digital Bass", "Electric", "Metallic", "Glass", "Soft Keys", "Evolving Pad",
+  static const char* const kF[8] = {"Grit Bass", "Electric", "Metallic", "Glass", "Voices", "Evolving Pad",
                                     "Industrial", "Percussive"};
   return kF[prog_of(wave) / 3];
 }

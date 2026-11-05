@@ -14,17 +14,21 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   des opérateurs, dont huit vrais accords (voir plus bas) ;
 - **PADS** de MIFM1 (0.11) : des accords et leurs progressions (Arvo Pärt, la Folia, Pachelbel, la basse de
   lamentation, Bach, Satie…) joués par une nappe de cordes, sur une piste ; ses accords suivent la gamme du projet, et
-  la gamme **Prog** fait suivre l'accord joué à toutes les autres pistes, en temps réel (voir plus bas) ;
+  la gamme **Prog** fait suivre l'accord joué à toutes les autres pistes, en temps réel ; une **TEXTURE** d'après les
+  nappes usées de Boards of Canada (0.16.16 : la bande, la dérive, la poussière, l'octave dessous, une cloche ; voir
+  plus bas) ;
 - **POLY** (0.12) : un petit synthé analogique polyphonique d'après le SH-101 de Roland et le S-1, quatre voix par
   piste, chacune son filtre à quatre pôles et son enveloppe ; **MODE** Mono ou Poly (0.16.15 : en Poly, les accords
   se jouent à la main au clavier), et un mode **VINTAGE** qui écarte un peu chaque voix (voir plus bas) ;
-- **PROPHET** (0.13) : le grand polyphonique d'après le Prophet-5 de Sequential Circuits, quatre voix par piste, deux
+- **REV3** (0.13, PROPHET jusqu'à 0.16.15) : le grand polyphonique d'après le Prophet-5 de Sequential Circuits, nommé
+  d'après sa troisième révision, quatre voix par piste, deux
   oscillateurs (treize réglages du panneau), son filtre, ses deux enveloppes, sa **Poly-Mod** (le balayage de la sync,
   la FM), un bouton **VINTAGE** comme celui de la Rev 4, une mémoire d'accords ou des accords qui suivent l'harmonie
   (celle de PADS, ou la gamme), et sans accord, ceux qu'on joue au clavier (voir plus bas) ;
-- **SQ-1** (0.16.14) : un Ensoniq de poche d'après le SQ-1 et sa puce OTIS, quatre voix par piste : des **Transwaves**
-  (32 cycles qui changent peu à peu, lus entiers et par marches), les filtres sans résonance de la puce, trois couches,
-  un petit effet ; 24 programmes en huit familles, huit potards (voir plus bas) ;
+- **OTIS** (0.16.14, SQ-1 jusqu'à 0.16.15) : un Ensoniq de poche, nommé d'après la puce du SQ-1 (OTIS, l'ES5505),
+  quatre voix par piste : des **Transwaves** (32 cycles qui changent peu à peu, lus entiers et par marches ; depuis
+  0.16.16, huit classiques et sept plus granuleuses), les filtres sans résonance de la puce, trois couches, un petit
+  effet ; 24 programmes en huit familles, huit potards (voir plus bas) ;
 - **Plaits** sur chaque piste, 6 de ses modèles (ses trois batteries, treize de ses oscillateurs, sa puce 8 bits et ses
   formants ont laissé la place aux moteurs de MIFM1), et un **circuit bending** par piste (0.7, à la place du
   grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
@@ -402,12 +406,21 @@ de scie par note, de plus en plus écartées (une string machine, ses cordes) ; 
 mais chaque voix un peu désaccordée et **dérivant lentement à sa façon**, comme celles d'un vieux polyphonique, de plus
 en plus vers la gauche. **TONE** : à gauche une sinusoïde sous chaque note et les scies filtrées (plus rond, plus
 sombre), à droite plus brillant ; un passe-bas (d'état variable, celui de Zavalishin) qui s'ouvre avec l'enveloppe.
-**BELLS** sonne à chaque accord une **cloche FM** (deux opérateurs, 1 : 3,5, son index qui retombe vite, son niveau
-lentement) : à droite sur la note du haut (une octave au-dessus), à gauche sur la basse (deux octaves), Off au milieu.
+**TEXTURE** (0.16.16, à la place de BELLS) use la nappe, d'après celles de **Boards of Canada** (des synthés anciens
+volontairement désaccordés, des prises superposées sur une bande mono qui se heurtent en un chorus microtonal, saturées
+puis rééchantillonnées ; voir le site) : Off à gauche, puis cinq textures, chacune sur sa part du potard, d'une touche à
+tout de gauche à droite. **Bell** : la **cloche FM** sur la note du haut, une octave au-dessus (deux opérateurs, 1 : 3,5,
+son index qui retombe vite, son niveau lentement). **Tape** : une bande, son **pleurage** (0,45 Hz) et son
+**scintillement** (une nouvelle visée toutes les 20 ms, lissée), les mêmes sur toutes les notes (jusqu'à un tiers de
+demi-ton), une saturation douce (le niveau à peu près gardé) et l'aigu usé (le passe-bas jusqu'à 0,8 octave plus bas).
+**Drift** : chaque voix fausse à sa façon (jusqu'à près d'un demi-ton : un écart à elle et une dérive lente). **Dust** :
+la poussière, chaque échantillon tenu sur un à cinq, de 11 à 5 bits, un souffle et, dans la seconde moitié de sa part,
+un craquement (jusqu'à une dizaine par seconde). **Down** : un sinus une octave sous chaque note, le passe-bas jusqu'à
+0,7 octave plus bas. L'ancien BELLS n'est pas converti : un projet d'avant lit sa valeur comme une TEXTURE.
 
 | 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **PROG** (Manual, 26 progressions) | **COLOR** (Power, Triad, Sus2, 7th, Sus4, 9th, Add9, 11th, Add6) | **VOICING** (Close, Open, Wide, Bass) | **DECAY** (0,2 à 20 s ; au bout, Hold) | **ATTACK** (1 ms à 4 s) | **TONE** (− : sombre, + : brillant) | **ENSEMBLE** (− : VINTAGE, + : WIDE) | **BELLS** (− : sur la basse, + : sur le haut) |
+| **PROG** (Manual, 26 progressions) | **COLOR** (Power, Triad, Sus2, 7th, Sus4, 9th, Add9, 11th, Add6) | **VOICING** (Close, Open, Wide, Bass) | **DECAY** (0,2 à 20 s ; au bout, Hold) | **ATTACK** (1 ms à 4 s) | **TONE** (− : sombre, + : brillant) | **ENSEMBLE** (− : VINTAGE, + : WIDE) | **TEXTURE** (Off, Bell, Tape, Drift, Dust, Down) |
 
 **La gamme Prog** (GLO, SCALE après Hirajoshi) : quand une piste joue PADS, **toutes les autres pistes suivent son
 accord**, en temps réel : à chaque trig de PADS, le quantiseur passe à la **gamme de l'accord**, ses notes et les notes
@@ -416,8 +429,9 @@ au-dessus d'une note de l'accord : la quarte sur un accord majeur). Une basse, u
 clavier : tout reste dans l'harmonie. Sans piste PADS, Prog ne quantise rien.
 
 Choisir PADS met ces réglages aux siens (Tintin, des triades ouvertes, tenues, une montée lente, un peu sombre, en
-ensemble, sans cloche) et garde l'OCTAVE de la piste. Elle coûte au FM-1 de 5 % d'un bloc (une triade, une dent de
-scie par note) à 12 % (six notes, trois dents de scie chacune, la cloche) ; sur ses réglages, 7 %. Les projets d'avant
+ensemble, sans texture) et garde l'OCTAVE de la piste. Elle coûte au FM-1 de 5 % d'un bloc (une triade, une dent de
+scie par note) à 12 % (six notes, trois dents de scie chacune, la cloche) ; sur ses réglages, 7 %. TEXTURE sur
+Down y ajoute environ 30 % (un sinus par note), sur Dust 10 %, les autres presque rien. Les projets d'avant
 se lisent, leurs modèles de Plaits renumérotés.
 
 **POLY** (0.12 ; ALGORITHM après PADS, la banque MIFM1) : un petit synthé analogique polyphonique d'après le
@@ -441,7 +455,7 @@ touche, revient à la précédente encore tenue quand on la lâche) ; **Poly**, 
 résonnent sous la nouvelle (quatre au plus, la plus discrète cédée la première), et **les accords se jouent à la main
 au clavier** : chaque touche tenue a sa voix (quatre au plus, les plus récentes), lâchée elle retombe comme un trig
 (DECAY à Hold : elle se relâche) ; les pas de la piste se taisent tant qu'une touche est tenue. Les accords de la
-mémoire du S-1 et de l'harmonie sont passés à PROPHET (son CHORD). La dose d'aléatoire ne touche pas MODE.
+mémoire du S-1 et de l'harmonie sont passés à REV3 (son CHORD). La dose d'aléatoire ne touche pas MODE.
 
 **VOICE** : à gauche **VINTAGE**, comme sur un vieux polyphonique : chaque voix sa propre justesse (quelques cents),
 une dérive lente qui lui est propre, son filtre et son enveloppe un peu à part, de plus en plus vers la gauche ; au
@@ -449,7 +463,7 @@ milieu des voix exactes ; à droite **UNISON** : sans accord, les quatre voix su
 (un lead épais), avec un accord, ses voix légèrement désaccordées. Le niveau des voix suit leur nombre (0,6 / √voix
 qui sonnent) ; depuis 0.16.5 il y glisse en quelques millisecondes : quand une note qui résonnait encore sous la
 suivante s'éteignait, il sautait d'un coup, un petit clic juste après l'attaque de la nouvelle (pas en UNISON, où les
-quatre voix sonnent toujours). De même dans PROPHET et PADS.
+quatre voix sonnent toujours). De même dans REV3 et PADS.
 
 | 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -459,8 +473,9 @@ Choisir POLY met ces réglages aux siens (une dent de scie sur sa sous-octave, u
 de vintage) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 3 % d'un bloc (quatre : 11 %). Les projets
 d'avant se lisent, leurs modèles de Plaits renumérotés.
 
-**PROPHET** (0.13 ; ALGORITHM après POLY, la banque MIFM1) : d'après le **Prophet-5** de Sequential Circuits (Dave Smith
-et John Bowen, 1978 : le premier polyphonique entièrement programmable), sa troisième révision (les puces Curtis).
+**REV3** (0.13 ; PROPHET jusqu'à 0.16.15 ; ALGORITHM après POLY, la banque MIFM1) : d'après le **Prophet-5** de
+Sequential Circuits (Dave Smith et John Bowen, 1978 : le premier polyphonique entièrement programmable), et nommé d'après
+sa troisième révision, la **Rev 3** (les puces Curtis).
 **Quatre voix par piste**, chacune deux oscillateurs, du bruit, le filtre à quatre pôles et deux enveloppes (celle du
 filtre, celle du volume). **OSC** choisit l'un de treize réglages des oscillateurs, ceux qu'on retrouve sur tous les
 programmes du Prophet : **Saws** (deux dents de scie), **Saw+Sq**, **Pulses** (deux impulsions), **Fifth** (B une
@@ -483,38 +498,51 @@ du Prophet-5 Rev 4 (2020) : des voix exactes d'aujourd'hui aux premières révis
 écartés (jusqu'à 14 cents), chaque voix sa justesse, sa dérive lente, sa coupure et ses enveloppes un peu à part.
 **CHORD** : à droite la **mémoire d'accords** du S-1, des accords parallèles sur la note (Oct, 5th, Sus4, Major,
 Minor, Min7, Min9 : les accords de la dub techno) ; à gauche l'**harmonie** : l'accord que joue PADS quand une piste la
-joue (la note choisit le registre ; à chaque accord de PADS, PROPHET suit), sinon celui de la gamme du projet sur la
+joue (la note choisit le registre ; à chaque accord de PADS, REV3 suit), sinon celui de la gamme du projet sur la
 note (une gamme majeure si elle est Off) : **Triad**, **7th**, **9th** (sans sa quinte), **Open** (fondamentale,
 quinte, dixième), **Sus**, **Root5** (la fondamentale et sa quinte), **Root** (la fondamentale seule, sous la note :
 une basse qui suit la progression). Au milieu **Off** : une voix par trig, les précédentes résonnant dessous (leur
 niveau glisse quand l'une s'éteint, depuis 0.16.5, comme dans POLY), et depuis 0.16.15 **les accords joués à la main
-au clavier**, une voix par touche tenue, comme POLY en Poly. La dose d'aléatoire ne touche pas CHORD (ses accords
+au clavier**, une voix par touche tenue, comme POLY en Poly, et depuis 0.16.16 les accords des pas (voir le mode
+STEP). La dose d'aléatoire ne touche pas CHORD (ses accords
 parallèles sortiraient de la gamme).
 
 | 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | **OSC** (13 réglages) | **CUTOFF** (20 Hz à 20 kHz) | **RESO** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **VINTAGE** (Clean, puis les premières révisions) | **ENV** (− : avec une attaque, + : pincée) | **POLY-MOD** (− : l'enveloppe sur A, + : B sur A) | **CHORD** (− : l'harmonie, + : une mémoire d'accords ; Off : le clavier) |
 
-Choisir PROPHET met ces réglages aux siens (deux dents de scie un peu écartées, un filtre de cuivre, une voix par
+Choisir REV3 met ces réglages aux siens (deux dents de scie un peu écartées, un filtre de cuivre, une voix par
 trig) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 4,5 % d'un bloc (quatre : 15 %). Les projets d'avant se
-lisent, leurs modèles de Plaits renumérotés. Depuis la 0.13, ZERO, les batteries, la FM, POLY et PROPHET partagent la
+lisent, leurs modèles de Plaits renumérotés. Depuis la 0.13, ZERO, les batteries, la FM, POLY, REV3 et OTIS partagent la
 mémoire d'une piste (une piste ne joue qu'une machine à la fois) : passer d'une machine à l'autre la refait à neuf.
 
-**SQ-1** (0.16.14 ; ALGORITHM après PROPHET, la banque MIFM1, à la place de CHIPTUNE et FORMANT) : un **Ensoniq de
-poche**, d'après le SQ-1 (1990, un VFX-SD allégé : trois voix par son, des filtres numériques sans résonance, ses
-**Transwaves**) et sa puce **OTIS** (l'ES5505, dont MAME documente le fonctionnement). Ses manières, pas ses sons : ses
-ondes sont celles de MIFM1. Quatre voix par piste (une par trig, les précédentes résonnent dessous).
+**OTIS** (0.16.14 sous le nom SQ-1, renommé en 0.16.16 ; ALGORITHM après REV3, la banque MIFM1, à la place de
+CHIPTUNE et FORMANT) : un **Ensoniq de poche**, d'après le SQ-1 (1990, un VFX-SD allégé : trois voix par son, des
+filtres numériques sans résonance, ses **Transwaves**), et nommé d'après sa puce, **OTIS** (l'ES5505, dont MAME documente
+le fonctionnement). Ses manières, pas ses sons : ses ondes sont celles de MIFM1. Quatre voix par piste (une par trig,
+les précédentes résonnent dessous).
 
 - **La lecture** : des cycles 16 bits lus par un accumulateur de phase, linéairement entre deux échantillons, comme la
   puce. Une **Transwave** : 32 cycles de 256 échantillons qui changent peu à peu (pour une cloche, 8 boucles de quatre
   périodes, ses partiels arrondis au quart de la note : de l'inharmonique qui boucle juste). Une note lit un cycle entier
   et prend le suivant **à sa fin**, comme la puce déplaçait ses points de boucle : la Transwave avance par marches, elle
-  ne se fond pas (le pas adouci sur 8 échantillons, pas plus). Treize Transwaves, faites à partir de recettes : une
-  résonance qui monte, trois FM (rapports 1, 2, 3), les modes d'une barre, ceux d'un verre, des touches (un clavier
-  électrique, ses barres), les grappes d'une nappe, un sinus replié, des voyelles (a, e, i, o, u), une impulsion qui
-  s'affine (50 à 3 %), une sync dure, un escalier (un sinus sur 32 marches, puis 2).
+  ne se fond pas (le pas adouci sur 8 échantillons, pas plus).
+- **Les Transwaves** (0.16.16 : quinze, faites à partir de recettes ; entre parenthèses, les programmes qui les jouent).
+  **Huit classiques** : une résonance qui monte (Res Bass, Sweeper), une FM dont l'indice grandit (E.Piano), les modes
+  d'une barre (Metal, Gong, Mallet), ceux d'un verre (Glass, Crystal), des touches, un clavier électrique et ses barres
+  (Tines), les grappes d'une nappe (Pad), des voyelles a, e, i, o, u (Vox, Choir), une sync dure (Grind). **Sept plus
+  granuleuses** : des cycles au hasard (un commun à tous, et le sien, de plus en plus vers la fin) lissés de moins en
+  moins, d'un remous sombre à un buzz brut (Dust, Static) ; un sinus et une scie écrasés, tenus sur 1 à 16
+  échantillons, sur 64 à 2 niveaux (Crusher, Click) ; un glissando dans chaque cycle, de la note jusqu'à 1 à 41
+  harmoniques, dans une fenêtre en sinus (Chirp) ; le **VOSIM** (Kaegi et Tempelaars, 1978) : trois impulsions en
+  sinus carré, chacune plus douce, leur hauteur le formant (3 à 28 harmoniques), puis le silence jusqu'à la fin du cycle
+  (Grains) ; des harmoniques rebattues, gardées ou non d'un cycle à l'autre (moins nombreuses, plus haut), leurs signes
+  au hasard (Shard) ; la note par deux sinus 2 à 32 fois plus haut, et une fois et demie autant : un fracas de
+  modulateur en anneau (Ring, Perc) ; une FM rebouclée sur elle-même (de 0,3 à 5) : son sinus, puis un cri, puis un
+  bruit qui tient, le même à chaque cycle (Chaos, Machine). Le repli, l'impulsion qui s'affine, l'escalier et deux des
+  trois FM de 0.16.14 sont partis.
 - **Où elles vivent** : dans la mémoire de la voix Plaits de la piste (16 Ko de cycles, 2 Ko pour la ligne de SPACE),
-  prêtée tant que la piste joue SQ-1. Changer de programme refait la Transwave **un peu à chaque bloc** (environ 5 % du
+  prêtée tant que la piste joue OTIS. Changer de programme refait la Transwave **un peu à chaque bloc** (environ 5 % du
   FM-1 pendant ce temps, le cycle joué en premier) : la première note est là en quelques millisecondes, la Transwave
   entière en 0,1 à 0,4 s ; deux programmes sur la même Transwave (Res Bass et Sweeper, par exemple) n'attendent rien.
 - **Les filtres** : ceux d'OTIS, des pôles simples sans résonance : deux ou quatre passe-bas, un passe-haut ; COLOR
@@ -525,18 +553,18 @@ ondes sont celles de MIFM1. Quatre voix par piste (une par trig, les précédent
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | le programme (24) | où la note démarre dans la Transwave | une enveloppe l'y déplace (milieu : rien ; à droite vers le haut, à gauche vers le bas) | un LFO dessus (sa vitesse et sa profondeur ensemble ; après 50 % un léger vibrato, après 70 % instable) | à gauche plus sombre (les passe-bas se ferment), Open au milieu, à droite plus fin (le passe-haut monte) | l'enveloppe : Perc, Pluck, Keys (basses, claviers), Swell, Pad ; la durée du balayage avec | la deuxième couche (sa part, son désaccord : ailleurs dans la Transwave, à l'octave ou à la quinte), puis la troisième (un clic, un souffle, un tintement) | un chorus, puis l'effet du programme : phaser, peigne accordé sur la note, saturation |
 
-Les **24 programmes**, trois par famille : **basse numérique** (Res Bass, FM Bass, SyncBass), **électrique** (E.Piano,
-Clav, Tines), **métallique** (Metal, Anvil, Gong), **verre** (Glass, Crystal, Celeste), **claviers doux** (SoftKeys,
-Vox Keys, Hollow), **nappe évolutive** (Pad, Vox Pad, Sweeper), **industriel** (Industr., Digi, Grind), **percussif**
-(Perc, Mallet, Pluck). Chacun choisit sa Transwave, ses couches, l'échelle de son enveloppe, le sens de son balayage
+Les **24 programmes**, trois par famille (0.16.16) : **Grit Bass** (Res Bass, Crusher, Chaos), **Electric** (E.Piano,
+Tines, Shard), **Metallic** (Metal, Ring, Gong), **Glass** (Glass, Chirp, Crystal), **Voices** (Vox, Grains, Choir),
+**Evolving Pad** (Pad, Dust, Sweeper), **Industrial** (Grind, Static, Machine), **Percussive** (Perc, Mallet,
+Click). Chacun choisit sa Transwave, ses couches, l'échelle de son enveloppe, le sens de son balayage
 (une pincée retombe vers INDEX, une nappe monte depuis), ses pôles et son effet ; leurs niveaux sont égalisés. Le
 premier écran dessine **le cycle que la voix lit**, en direct, et sa place (« Electric · 13 / 32 »).
 
-Au clavier, SQ-1 joue les accords à la main (0.16.15) : une voix par touche tenue, quatre au plus, chacune relâchée avec
-sa touche ; les pas de la piste se taisent tant qu'une touche est tenue. Choisir SQ-1 met ses réglages aux siens
+Au clavier, OTIS joue les accords à la main (0.16.15) : une voix par touche tenue, quatre au plus, chacune relâchée avec
+sa touche ; les pas de la piste se taisent tant qu'une touche est tenue ; depuis 0.16.16, il joue aussi les accords des pas. Choisir OTIS met ses réglages aux siens
 (E.Piano, un peu de balayage, un chorus). Une voix coûte au FM-1 environ 3 %
 d'un bloc avec ses trois couches, SPACE à fond et le reste environ 5,5 % (quatre voix, trois couches, SPACE à fond :
-environ 19 % ; PROPHET, quatre voix : 15 %). Les projets et les sons enregistrés d'avant qui jouaient CHIPTUNE ou FORMANT passent à SQ-1 avec ses
+environ 19 % ; REV3, quatre voix : 15 %). Les projets et les sons enregistrés d'avant qui jouaient CHIPTUNE ou FORMANT passent à OTIS avec ses
 réglages ; les autres modèles de Plaits sont renumérotés.
 
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
@@ -643,7 +671,13 @@ son niveau, ses envois, son pan, sa note…) ; pour un effet, sur ses potards. L
 (0.16.15) lui donne sa **longueur** : la note tient jusqu'à ce pas (sur ce pas, la part qu'en donne GATE), une barre
 la montre sur les pas qu'elle couvre ; un trig qui a des **ratchets** les étale sur ces pas à la place (ses coups sur
 autant de pas, SPAN ; l'écran dit lequel). Un pas avant le trig le ramène à son seul pas. La longueur est un lock du
-pas (effacée avec les autres). La piste de pas suit la page : aller sur le delay (FX) montre les pas du delay.
+pas (effacée avec les autres). **Tenir un trig et appuyer sur REC** (0.16.16) montre **ses notes** : l'écran
+dessine un clavier de deux ou trois octaves, les notes du pas pleines, et le nom de l'accord (« STEP 5  Cm7 ») ; une
+touche du clavier ajoute sa note ou l'enlève (on l'entend ; quatre au plus, une au moins), les potards 1 à 4 déplacent
+chacune d'un demi-ton ; **REC** à nouveau revient aux pas. POLY en Poly, REV3 sans accord et OTIS jouent tout
+l'accord ; une machine à une seule voix joue la plus grave, l'écran dit « MONO: THE LOWEST » et dessine les autres en
+pointillé. NOTE reste la plus grave, les autres sont des locks du pas (des intervalles au-dessus d'elle, jusqu'à huit
+octaves), effacés avec les autres ; un trig joué au clavier ou par Endless n'a pas d'accord. La piste de pas suit la page : aller sur le delay (FX) montre les pas du delay.
 **REC** à nouveau : retour au mode KEY.
 
 Les pages d'une section se suivent sous SELECT (ou en retapant son bouton) ; depuis 0.16.6, une barre sous l'en-tête
@@ -709,8 +743,8 @@ OCTAVE compris), ses bits, son filtre, son glitch et l'aléatoire de ces potards
 ses pas ni ses câbles (ils restent ceux de la piste). EDIT tenu, l'écran des presets de la piste active s'ouvre
 (PRESETS change de piste) : 11 banques sur les **touches noires**, 16 sons sur les **touches blanches**. **A, c'est
 l'usine** : KICK LONG, KICK HARD, SNARE, CLAP, HAT, OPEN HAT, TOM, METAL (le résonateur modal), ACID (POLY), FM BASS
-(celle de la démo), REESE (PROPHET, deux scies qui dérivent), FM STAB, DARK PAD (PADS), PLUCK (la corde de Plaits),
-SYNC LEAD (PROPHET) et LE BRUIT (le bruit de Plaits, cinq bits troués, glitché). **B à K sont à toi** (160 sons). Une
+(celle de la démo), REESE (REV3, deux scies qui dérivent), FM STAB, DARK PAD (PADS, sa TEXTURE sur Tape), PLUCK (la corde de Plaits),
+SYNC LEAD (REV3) et LE BRUIT (le bruit de Plaits, cinq bits troués, glitché). **B à K sont à toi** (160 sons). Une
 touche blanche **pose le son sur la piste** et le joue (do 3, comme un pas) tant qu'elle est tenue ; **SAVE tenu et une
 touche blanche** y garde le son de la piste (il garde le nom du son d'où il vient, sinon celui du modèle) ; **REC tenu
 et une touche blanche** l'efface ; la banque A ne bouge pas. PADS ne va que sur une piste à la fois : l'écran dit
@@ -914,7 +948,7 @@ rien ne boucle. **La dose suit une courbe** (son carré) : au début de la cours
 ±6 demi-tons à 100 %) et la transposition (±7) sautent par demi-tons entiers, puis sur les notes de la gamme choisie ;
 ce qui en sortirait n'est jamais tiré : l'enveloppe de hauteur (son glissando), le PING du filtre (une résonance
 qui sonne à n'importe quelle hauteur), HARMONICS là où c'est un intervalle (l'écart de SWARM
-et de PARTICLE), WAVE de SQ-1 (un programme : sa Transwave refaite), RATIO de la FM dans ou vers ses accords, le décalage de Warps en décaleur de
+et de PARTICLE), WAVE d'OTIS (un programme : sa Transwave refaite), RATIO de la FM dans ou vers ses accords, le décalage de Warps en décaleur de
 fréquence. Le reste : HARMONICS ailleurs, TIMBRE, MORPH, DECAY, COLOUR et les enveloppes de Plaits (sur une batterie
 FM, ses réglages), la gate, les bits (CLOCK, BITS, MASK, SHAPE) et le glitch (GLITCH, SIZE, BEND, DROP : à forte dose, des notes qui
 bégaient), le
@@ -1007,7 +1041,7 @@ qualité de Warps, le thème reste quand on charge un autre projet ; il est gard
 **Le clavier** relance la note à chaque touche, même jouée legato, et une touche tapée très vite sonne quand même.
 Depuis 0.16.15, il **garde les touches tenues** : une voix seule (la FM, ZERO, Plaits, les batteries, POLY en Mono…)
 joue la **dernière** touche appuyée, et quand on la lâche alors qu'une autre est encore tenue, **elle revient sur
-celle-ci** (un nouveau trig) ; Endless fait de même avec sa transposition. POLY en Poly, PROPHET sans accord et SQ-1
+celle-ci** (un nouveau trig) ; Endless fait de même avec sa transposition. POLY en Poly, REV3 sans accord et OTIS
 jouent toutes les touches tenues, une voix chacune : des accords à la main.
 
 Un projet sauvegardé avec les 0.1.4 à 0.2.6 se recharge : ses réglages, ses modèles, ses câbles (sauf ceux qui
@@ -1017,6 +1051,55 @@ coupé ; depuis 0.7, le grit d'un projet plus ancien est oublié : le circuit be
 partent des LFO 1, 2 et 3, les autres sont retirés, et les LFO démarrent comme ceux d'un projet neuf ; les potards de
 Warps passent sur leurs nouvelles faces (MIX à 100 %, DRY et Freq shift dans MODE), avec leurs locks et leurs
 aléatoires ; le delay est en SYNC.
+
+## Inspirations
+
+Chaque moteur de MIFM1 doit quelque chose à une machine, et le site le raconte, moteur par moteur
+([distortedimages-code.github.io/MIFM1/emu](https://distortedimages-code.github.io/MIFM1/emu/)) :
+
+- les batteries : le **Microtonic** de Sonic Charge (Magnus Lidström, 2003) ; les batteries FM : le **LXR-02** d'Erica
+  Synths, héritier du LXR de Sonic Potions (son code) ;
+- la FM : la puce **YM2612** de la Mega Drive (Yamaha, 1988) et les enveloppes du **DX7** (1983) ; ZERO : la FM à travers
+  zéro, de John Chowning aux oscillateurs analogiques ;
+- PADS : le tintinnabuli d'**Arvo Pärt** (1976), les string machines, et pour sa TEXTURE les nappes usées de **Boards of
+  Canada** ;
+- POLY : le **SH-101** de Roland (1982) et l'**AIRA S-1** (2023) ; REV3 : le **Prophet-5** de Sequential Circuits (1978),
+  sa Rev 3 et le bouton Vintage de la Rev 4 (2020) ;
+- OTIS : l'**Ensoniq SQ-1** (1990), le **VFX** (1989) et ses Transwaves (ses filtres n'avaient pas de résonance :
+  elles étaient le seul moyen d'en avoir une), la puce **OTIS** (ES5505) ; avant eux, le **Mirage** (1984, un
+  échantillonneur 8 bits à 1 695 dollars) et l'**ESQ-1** (trois oscillateurs par voix sur la puce DOC de Robert Yannes,
+  celui du SID du Commodore 64) ;
+- les filtres : l'échelle de **Moog**, le Korg 35 du **MS-20**, le **SEM** d'Oberheim ; le circuit bending : le
+  **Biscuit** d'OTO et le **Data Bender** de Qu-Bit ; le delay : les potards du **Zen Delay** ; la réverbe et Warps :
+  **Clouds** et **Warps** de Mutable Instruments ;
+- le séquenceur : les P-locks d'**Elektron**, Endless de l'**OP-1**, les chaînes des **Pocket Operators**, les rythmes
+  euclidiens de Toussaint et Bjorklund.
+
+**Le bruit avant nous** (0.16.16, sur le site) : la lignée d'où vient Audiotrauma, et les machines qu'elle avait en
+main. **Cabaret Voltaire** (Sheffield, 1973 : des boucles de bande, puis des oscillateurs en kit) ; **Throbbing
+Gristle** (leur label, Industrial Records, donne son nom au genre ; le Gristleizer de Chris Carter, un filtre et un
+ampli contrôlés en tension avec un LFO) ; **Einstürzende Neubauten** (Berlin-Ouest, 1980 : la ferraille et les outils de
+chantier) et **Test Dept** (Londres, 1981 ; *Shoulder to Shoulder* avec le chœur des mineurs grévistes du sud du pays
+de Galles, 1985) ; **Front 242** (*No Comment*, 1984 : « Electronic body music » sur la pochette ; un Emulator II, un
+DX7, une Drumulator) ; **Ministry** (*Twitch*, 1986, leur premier disque échantillonné, sur un Fairlight) ; **Skinny
+Puppy** (*VIVIsectVI*, 1988 : un Ensoniq ESQ-1 et deux Mirage dans le matériel dessiné par Dwayne Goettel) ; **Nine Inch
+Nails** (*Pretty Hate Machine*, 1989, sur un Emax, un Prophet VS, un Xpander et un Minimoog ; sur la tournée Self
+Destruct, 1994-96, jusqu'à quatre DX7 détruits par soir, joués comme contrôleurs ; en mai 2000, le groupe « n'a presque
+plus de claviers à casser » et cherche des DX7 d'origine ; les touches arrachées à coups de talon se racontent partout,
+sans source de première main). Aussi Severed Heads, Nitzer Ebb, SPK.
+
+Sources : [Pretty Hate Machine](https://en.wikipedia.org/wiki/Pretty_Hate_Machine),
+[Far Out](https://faroutmagazine.co.uk/did-nine-inch-nails-really-destroy-their-keyboards-every-night/),
+[Sweetwater inSync, 2000](https://www.sweetwater.com/insync/nine-inch-nails-needs-dx-7/),
+[le matériel de VIVIsectVI](https://www.matrixsynth.com/2012/04/skinny-puppy-vivisect-synth-layout.html),
+[Dwayne Goettel](https://en.wikipedia.org/wiki/Dwayne_Goettel),
+[Reverb sur Throbbing Gristle](https://reverb.com/news/the-gear-of-throbbing-gristle),
+[Front 242](https://en.wikipedia.org/wiki/Front_242),
+[Twitch](https://en.wikipedia.org/wiki/Twitch_(Ministry_album)),
+[Music Has the Right to Children](https://en.wikipedia.org/wiki/Music_Has_the_Right_to_Children),
+[MusicRadar sur The Campfire Headphase](https://www.musicradar.com/artists/its-our-take-on-a-pop-record-pop-music-that-has-been-melted-on-a-hot-dashboard-in-the-sun-how-boards-of-canada-brewed-a-serene-genre-blurring-classic),
+[Ensoniq Mirage](https://en.wikipedia.org/wiki/Ensoniq_Mirage), [ESQ-1](https://en.wikipedia.org/wiki/Ensoniq_ESQ-1),
+[VFX](https://en.wikipedia.org/wiki/Ensoniq_VFX) ; les autres sur le site.
 
 ## Le dépôt
 

@@ -121,6 +121,7 @@ typedef struct {
     const char *const *names;            /* K_ENUM */
 } eng_pdef_t;
 const eng_pdef_t *eng_pdef(int param);
+int eng_param_centered(int param);       /* (0.16.16) its knob drawn from the middle, - + under it */
 const char *eng_param_name(int param);   /* its name as the module prints it: Plaits' HARMONICS, TIMBRE and MORPH by
                                           * model (the kick's MORPH is its Decay) */
 int eng_model_enveloped(int model);      /* 1: a Plaits model with its own envelope, the LPG bypassed (6-op FM,
@@ -345,6 +346,14 @@ void eng_lock_clear(int lane, int step); /* all its locks */
 int eng_step_tie(int lane, int step);
 int eng_step_tie_set(int lane, int step, int steps);   /* 0 ok, -1 no room */
 void eng_step_ties(int lane, uint8_t *out);   /* all ENG_STEPS of them, one look */
+/* (0.16.16) a track's step as a chord: its NOTE the lowest, up to three notes over it (locks of their own kind);
+ * the machines that play chords (eng_track_chords: POLY in Poly, REV3 with CHORD Off, OTIS) play them all, the others
+ * NOTE alone */
+int eng_step_notes(int lane, int step, int *out);   /* its notes (NOTE's values), the lowest first: how many (1..4) */
+int eng_step_notes_set(int lane, int step, const int *notes, int n);   /* 0 ok; -1 no room; -2 out of NOTE's range */
+void eng_step_chords(int lane, uint8_t *out);   /* every step's notes over its NOTE (0: alone), ENG_STEPS of them */
+int eng_track_chords(int t);             /* 1: track t's machine plays chords (a step's, the keys') */
+void eng_chord_name(const int *notes, int nn, char *b, int n);   /* "Cm7" (0: C), its notes the lowest first */
 void eng_steps_clear(int lane);          /* the lane's pattern: every trig and lock (its knobs and randoms stay) */
 void eng_fresh(void);                    /* another project loaded: the last one's trigs' locks and randoms gone */
 int eng_step_locked(int lane, int step); /* how many locks it has */
