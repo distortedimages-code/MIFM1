@@ -286,8 +286,9 @@ struct XBlock {                         // a voice's settings for a sub-block
   float G, cx, ks;                      // the filter: the one-poles' gain; the loop solved (u = cx x - ks S)
 };
 
-// the oscillators: n samples into x (each its own loop by what it has: B's triangle, the FM, the sync)
-template <bool TRI, bool FM, bool SYNC>
+// the oscillators: n samples into x (each its own loop by what it has: B's triangle, the sync; the FM in all of them,
+// 0 when there is none: A's step times 1, the same sound to the bit, 0.16.24: half the code)
+template <bool TRI, bool SYNC>
 void oscs(XVoice& v, const XBlock& c, float* __restrict x, int n) {
   float pa = v.pa, pb = v.pb, p1 = v.p1, p2 = v.p2, carry = v.carry, bprev = v.bprev;
   const float db = c.db, idb = c.idb, da0 = c.da, fm = c.fm, noise = c.noise;
@@ -313,7 +314,7 @@ void oscs(XVoice& v, const XBlock& c, float* __restrict x, int n) {
       if (TRI && old_pb < 0.5f && pb >= 0.5f) corner(-Db, (pb - 0.5f) * idb, p2, p1, cur, carry);
     }
     // A: its step (B's FM on it), its wrap, its pulse's fall; synced: started again where B wrapped
-    const float da = FM ? da0 * (1.0f + fm * bprev) : da0;
+    const float da = da0 * (1.0f + fm * bprev);
     const float old_pa = pa;
     pa += da;
     if (SYNC && tb >= 0.0f) {
@@ -336,7 +337,7 @@ void oscs(XVoice& v, const XBlock& c, float* __restrict x, int n) {
     // the sample: A, B, the noise
     cur += Aa * pa + Ab - (pa >= apw ? 2.0f * P : 0.0f) + Ba * pb + Bb - (pb >= bpw ? 2.0f * Q : 0.0f);
     if (TRI) cur += btri * (pb < 0.5f ? 4.0f * pb - 1.0f : 3.0f - 4.0f * pb);
-    if (FM) bprev = 2.0f * pb - 1.0f;   // (its FM: B as a saw)
+    bprev = 2.0f * pb - 1.0f;           // (its FM: B as a saw)
     if (noise != 0.0f) cur += noise * bip(v.nz);
     x[s] = p2;                          // (the sample two before: now whole)
     p2 = p1;
@@ -348,16 +349,12 @@ void oscs(XVoice& v, const XBlock& c, float* __restrict x, int n) {
 // n (<= kSub) samples of a voice, added to y: its oscillators into x, then its filter
 void voice_block(XVoice& v, const XBlock& c, int sync, float e0, float de, float* __restrict y, int n) {
   float x[kSub];
-  const int tri = c.btri != 0.0f, fm = c.fm != 0.0f;
-  switch ((tri ? 4 : 0) | (fm ? 2 : 0) | (sync ? 1 : 0)) {
-    case 0: oscs<false, false, false>(v, c, x, n); break;
-    case 1: oscs<false, false, true>(v, c, x, n); break;
-    case 2: oscs<false, true, false>(v, c, x, n); break;
-    case 3: oscs<false, true, true>(v, c, x, n); break;
-    case 4: oscs<true, false, false>(v, c, x, n); break;
-    case 5: oscs<true, false, true>(v, c, x, n); break;
-    case 6: oscs<true, true, false>(v, c, x, n); break;
-    default: oscs<true, true, true>(v, c, x, n); break;
+  const int tri = c.btri != 0.0f;
+  switch ((tri ? 2 : 0) | (sync ? 1 : 0)) {
+    case 0: oscs<false, false>(v, c, x, n); break;
+    case 1: oscs<false, true>(v, c, x, n); break;
+    case 2: oscs<true, false>(v, c, x, n); break;
+    default: oscs<true, true>(v, c, x, n); break;
   }
   // the filter: Curtis' four poles (one-poles in a loop, solved at once), its input soft-clipped
   float s1 = v.s1, s2 = v.s2, s3 = v.s3, s4 = v.s4, e = e0;

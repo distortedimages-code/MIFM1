@@ -201,7 +201,7 @@ const ModelDef kModelDef[ENG_MODELS] = {
   {"ZERO", "ZERO", MK_ZERO, 0, 2},
   {"FM", "FM", MK_FM, 0, 2}, {"PADS", "PADS", MK_PADS, 0, 2}, {"POLY", "POLY", MK_POLY, 0, 2},
   {"REV3", "REV3", MK_PROPHET, 0, 2}, {"OTIS", "OTIS", MK_SQ1, 0, 2}, {"TAURUS", "TAUR", MK_TAURUS, 0, 2},
-  {"VOCODER", "VOCO", MK_VOCODER, 0, 2},
+  {"VOCODER", "VOCO", MK_VOCODER, 0, 2}, {"STATIC", "STAT", MK_STATIC, 0, 2},
   {"SPEECH", "SPCH", MK_PLAITS, 15, 3},
   {"SWARM", "SWRM", MK_PLAITS, 16, 4}, {"NOISE", "NOIS", MK_PLAITS, 17, 4}, {"PARTICLES", "PART", MK_PLAITS, 18, 4},
   {"STRING", "STRG", MK_PLAITS, 19, 4}, {"MODAL", "MODL", MK_PLAITS, 20, 4},
@@ -1666,6 +1666,7 @@ void mclaim(int t) {
   else if (k == MK_SQ1) sq_reset(t);
   else if (k == MK_TAURUS) taurus_reset(t);
   else if (k == MK_VOCODER) voc_reset(t);
+  else if (k == MK_STATIC) static_reset(t);
   mowner[t] = static_cast<uint8_t>(k);
 }
 uint16_t harmony_mask() {               // the harmony's scale (POLY's chords): PADS' (its chords'), else the project's
@@ -1693,6 +1694,7 @@ MI_COLD void kit_of(int m, float* k) {          // a model's knobs as its kit ha
   else if (d.kind == MK_SQ1) sq_defaults(k);
   else if (d.kind == MK_TAURUS) taurus_defaults(k);
   else if (d.kind == MK_VOCODER) voc_defaults(k);
+  else if (d.kind == MK_STATIC) static_defaults(k);
   else if (d.kind == MK_LXR) lx_defaults(d.sub, k);
   else
     for (int i = 0; i < LX_KNOBS; ++i) k[i] = 0.5f;
@@ -1850,6 +1852,8 @@ void set_voice(int t) {
       sq_set(t, sc, step_chord(t, note, sc), k);
     } else if (kind == MK_TAURUS) {
       taurus_set(t, note, k);
+    } else if (kind == MK_STATIC) {
+      static_set(t, note, k);
     } else if (kind == MK_VOCODER) {
       float sc[4];
       voc_set(t, sc, step_chord(t, note, sc), k);
@@ -2223,7 +2227,7 @@ void render_voice(int t, uint32_t n) {
   int lx = kind == MK_LXR, ac = kind == MK_ZERO, dr = kind == MK_DRUM, fm = kind == MK_FM;   // drum, the FM, PADS:
   int pd = kind == MK_PADS, pd_on = pd && t == pad_track;   // their gate, their own render (PADS: one track's)
   int po = kind == MK_POLY, px = kind == MK_PROPHET, sq1 = kind == MK_SQ1, tau = kind == MK_TAURUS;
-  int vc = kind == MK_VOCODER;
+  int vc = kind == MK_VOCODER, stc = kind == MK_STATIC;
   uint32_t step = n / kFrames, pos = 0;
   for (uint32_t k = 0; k < kFrames; ++k) {
     int g = fg[t][k];
@@ -2239,6 +2243,7 @@ void render_voice(int t, uint32_t n) {
       else if (sq1) sq_render(t, &vbuf[t][pos], at - pos);
       else if (tau) taurus_render(t, &vbuf[t][pos], at - pos);
       else if (vc) voc_render(t, &vbuf[t][pos], at - pos);
+      else if (stc) static_render(t, &vbuf[t][pos], at - pos);
       else if (pd) {
         if (pd_on) pads_render(&vbuf[t][pos], at - pos);
         else for (uint32_t i = pos; i < at; ++i) vbuf[t][i] = 0.0f;
@@ -2261,6 +2266,7 @@ void render_voice(int t, uint32_t n) {
     else if (sq1) sq_gate(t, g);
     else if (tau) taurus_gate(t, g);
     else if (vc) voc_gate(t, g);
+    else if (stc) static_gate(t, g);
     else if (pd) {
       if (pd_on) pads_gate(g);
     }
@@ -2278,6 +2284,7 @@ void render_voice(int t, uint32_t n) {
     else if (sq1) sq_render(t, &vbuf[t][pos], n - pos);
     else if (tau) taurus_render(t, &vbuf[t][pos], n - pos);
     else if (vc) voc_render(t, &vbuf[t][pos], n - pos);
+    else if (stc) static_render(t, &vbuf[t][pos], n - pos);
     else if (pd) {
       if (pd_on) pads_render(&vbuf[t][pos], n - pos);
       else for (uint32_t i = pos; i < n; ++i) vbuf[t][i] = 0.0f;
@@ -3006,6 +3013,7 @@ const char* eng_param_name(int param) {
                                            : track_kind(t) == MK_SQ1 ? sq_knob_name(lk)
                                            : track_kind(t) == MK_TAURUS ? taurus_knob_name(lk)
                                            : track_kind(t) == MK_VOCODER ? voc_knob_name(lk)
+                                           : track_kind(t) == MK_STATIC ? static_knob_name(lk)
                                                                      : lx_knob_name(lx_model(t), lk);
   }
   if (param >= PG_LFO(0) * 4 && param < PG_LFO(3) * 4 && param % 4 && Pi(param / 4, 0) == LW_FOLLOW) {
@@ -3203,6 +3211,7 @@ float eng_lx_step(int param, float v, int detents) {
                                             : track_kind(t) == MK_SQ1 ? sq_knob_steps(lk)
                                             : track_kind(t) == MK_TAURUS ? taurus_knob_steps(lk)
                                             : track_kind(t) == MK_VOCODER ? voc_knob_steps(lk)
+                                            : track_kind(t) == MK_STATIC ? static_knob_steps(lk)
                                                                       : lx_knob_steps(lx_model(t), lk);
   float u = bip ? (v + 1.0f) * 0.5f : v;
   int i;
@@ -3273,6 +3282,7 @@ MI_COLD int eng_sound_set(int t, const eng_sound_t* s) {
   }
   if (s->version <= 4 && m >= 16) ++m;   // (0.16.20: TAURUS at 16, the models from there one further on)
   if (s->version <= 5 && m >= 17) ++m;   // (0.16.21: VOCODER at 17, the same)
+  if (s->version <= 6 && m >= 18) ++m;   // (0.16.24: STATIC at 18, the same)
   m = m >= 0 && m < ENG_MODELS ? m : 0;
   if (!eng_model_free(t, m)) return -2;   // (PADS: once a project)
   for (int i = 0; i < SND_PAGES; ++i) {
@@ -3393,6 +3403,8 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
     taurus_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0 && track_kind(param / 12) == MK_VOCODER) {   // VOCODER's (a track, a tone, times, bands)
     voc_knob_text(lk, lx_u(param, v), b, n);
+  } else if (lk >= 0 && track_kind(param / 12) == MK_STATIC) {   // STATIC's (a mix, a ratio, times, %)
+    static_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0) {                   // an FM drum's: as the LXR-02 shows it (0..127, a wave)
     lx_knob_text(lx_model(param / 12), lk, lx_u(param, v), b, n);
   } else if (pt == PT_WARPS1 && k == 0 && i_of(v) >= WC_OSC1) {   // the oscillator's shape, as the algorithm uses it
@@ -4601,6 +4613,7 @@ MI_COLD void models_from(project_t* p, int at) {   // a machine come in at at: t
 }
 MI_COLD void taurus_in(project_t* p) { models_from(p, 16); }   // (0.16.20)
 MI_COLD void vocoder_in(project_t* p) { models_from(p, 17); }  // (0.16.21)
+MI_COLD void static_in(project_t* p) { models_from(p, 18); }   // (0.16.24)
 MI_COLD void models_v27(project_t* p) {   // (0.13 to 0.16.13's numbers: ..., PROPHET 14, CHIPTUNE 15, FORMANT 16,
   for (int t = 0; t < ENG_TRACKS; ++t) {  // SPEECH 17 ... MODAL 22)
     const int o = p->algo[PG_TRACK(t, 0)];
@@ -4861,15 +4874,20 @@ int upgrade_any(project_t* p, int bytes);
 MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them, sizeof(project_t) >= the largest)
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   const int v = p->magic == PROJECT_MAGIC ? static_cast<int>(p->version) : 0;
+  if (v == 33 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+    p->version = PROJECT_VERSION;       // (0.16.23: its layout this one; STATIC at 18, the models from there one
+    static_in(p);                       // further on)
+    return 1;
+  }
   if (v >= 27 && v <= 32 && bytes == static_cast<int>(sizeof(project_v32)) && p->size == sizeof(project_v32)) {
     const uint8_t* from = reinterpret_cast<const uint8_t*>(p);   // (0.16.7 to 0.16.22: 68 pages, 380 locks)
     uint8_t* to = reinterpret_cast<uint8_t*>(&upg.v32);
     for (uint32_t i = 0; i < sizeof(project_v32); ++i) to[i] = from[i];
     upgrade_v32(p, upg.v32);
-    if (v == 32) return 1;              // (0.16.13's models one more; then
-    if (v == 27) models_v27(p);         // TAURUS at 16, VOCODER at 17, the models from there one further on; 0.16.17's
-    if (v <= 30) taurus_in(p);          // ROBOVOX (16), withdrawn: SPEECH again in its place, at noon)
-    vocoder_in(p);
+    if (v == 27) models_v27(p);         // (0.16.13's models one more; then TAURUS at 16, VOCODER at 17, STATIC at 18,
+    if (v <= 30) taurus_in(p);          // the models from there one further on; 0.16.17's ROBOVOX (16), withdrawn:
+    if (v <= 31) vocoder_in(p);         // SPEECH again in its place, at noon)
+    static_in(p);
     if (v == 29)
       for (int t = 0; t < ENG_TRACKS; ++t)
         if (p->algo[PG_TRACK(t, 0)] == eng_model_find(MK_PLAITS, 15)) sq_from_plaits(p, t);
@@ -4877,8 +4895,8 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
   }
   if (!upgrade_any(p, bytes)) return 0;
   climb_off_all(p);
-  if (v >= 22) models_v27(p), taurus_in(p), vocoder_in(p);   // (0.13 to 0.16.6: their numbers 0.16.13's; before,
-                                                             // made this one's)
+  if (v >= 22) models_v27(p), taurus_in(p), vocoder_in(p), static_in(p);   // (0.13 to 0.16.6: their numbers
+                                                                            // 0.16.13's; before, made this one's)
   return 1;
 }
 MI_COLD int upgrade_any(project_t* p, int bytes) {
@@ -4987,6 +5005,7 @@ MI_COLD int eng_init(void) {
   poly_init();
   taurus_init();
   voc_init();
+  static_init();
   pro_init();
   sq_init();
   reverb = arena + a;
@@ -5053,6 +5072,7 @@ void cut_now() {
     else if (k == MK_SQ1) sq_silence(t);
     else if (k == MK_TAURUS) taurus_silence(t);
     else if (k == MK_VOCODER) voc_silence(t);
+    else if (k == MK_STATIC) static_silence(t);
   }
   pads_silence();
   for (int t = 0; t < ENG_TRACKS; ++t) mf_reset(t);   // (the filters' rings)
@@ -5439,6 +5459,8 @@ void eng_render(float* l, float* r, uint32_t n) {
     float tl = level * 0.85f * fm_cosf(a), tr = level * 0.85f * fm_sinf(a);
     // the sends: post-fader, before the pan (both effects are stereo themselves), each through its lane's opening
     float ts = snd_s[t] * gain * open[fr], td = dsnd_s[t] * gain * open[fd];
+    if (track_kind(t) == MK_STATIC)      // (0.16.24) STATIC's SPACE: its send raised with its height (its last block's)
+      ts = fm_minf(snd_s[t] + static_space(t), 1.0f) * gain * open[fr];
     mj.gain[t] = gain;
     mj.gl[t] = mix_gl[t];
     mj.gr[t] = mix_gr[t];

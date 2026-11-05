@@ -144,9 +144,10 @@ int eng_model_enveloped(int model);      /* 1: a Plaits model with its own envel
  * ZERO, the FM) takes its eight parameters from the knobs after FREQ: HARMONICS, TIMBRE, MORPH, the envelope page's
  * four, the pitch envelope's. Its kind says what plays it, its sub its index there (Plaits' engine, the LXR's voice,
  * the drum, the FM's kit) */
-enum { MK_PLAITS, MK_LXR, MK_ZERO, MK_DRUM, MK_FM, MK_PADS, MK_POLY, MK_PROPHET, MK_SQ1, MK_TAURUS, MK_VOCODER };
-#define ENG_MODELS 24                    /* (0.16.20: TAURUS at 16; 0.16.21: VOCODER, MIFM1's last, at 17; Plaits' from
-                                          * 18) */
+enum { MK_PLAITS, MK_LXR, MK_ZERO, MK_DRUM, MK_FM, MK_PADS, MK_POLY, MK_PROPHET, MK_SQ1, MK_TAURUS, MK_VOCODER,
+       MK_STATIC };
+#define ENG_MODELS 25                    /* (0.16.20: TAURUS at 16; 0.16.21: VOCODER at 17; 0.16.24: STATIC, MIFM1's
+                                          * last, at 18; Plaits' from 19) */
 #define ENG_BANKS 5
 int eng_model_kind(int m);
 int eng_model_sub(int m);
@@ -172,7 +173,8 @@ void eng_set_model(int t, int model);    /* a track's model (an FM drum new to i
  * knobs' randoms, a name. Saved by the screen (app.c, pat_store.h), read onto any track */
 #define SND_PAGES 8
 #define SND_MAGIC 0x31444E53u            /* "SND1" */
-#define SND_VERSION 6                    /* (5: 0.16.20's, VOCODER (0.16.21) not yet at 17: read, the models from 17 one
+#define SND_VERSION 7                    /* (6: 0.16.21's to 0.16.23's, STATIC (0.16.24) not yet at 18: read, the
+                                          * models from 18 one further on, as the older ones after theirs; 5: 0.16.20's, VOCODER (0.16.21) not yet at 17: read, the models from 17 one
                                           * further on, as 1 to 4's after theirs; 4: 0.16.18's and 0.16.19's, TAURUS
                                           * (0.16.20) not yet at 16 either: from 16 one further on first; 3: 0.16.17's, ROBOVOX (16)
                                           * read as SPEECH from noon; 2: 0.16.14 to 0.16.16's, as 4; 1: before 0.16.14:
@@ -217,7 +219,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 33u              /* (32: 0.16.21's and 0.16.22's: 68 pages, 380 locks, no followers: read,
+#define PROJECT_VERSION 34u              /* (33: 0.16.23's: STATIC (0.16.24) not yet at 18: read, the models from 18
+                                          * one further on, as the older ones after theirs; 32: 0.16.21's and 0.16.22's: 68 pages, 380 locks, no followers: read,
                                           * the followers' pages at their defaults, the locks past 367 left out;
                                           * 31: 0.16.20's: VOCODER (0.16.21) not yet at 17, the models from there one
                                           * lower: read, one further on; 30: 0.16.18's and 0.16.19's: TAURUS (0.16.20)

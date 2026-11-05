@@ -871,6 +871,19 @@ turn SELECT 1
 wait 400
 shot 18zl_vocoder_3.png
 turn SELECT -2
+turn ALGO 1
+wait 1500
+shot 18zm_static.png
+wav static.wav
+wait 5000
+wavstop
+turn SELECT 1
+wait 400
+shot 18zn_static_2.png
+turn SELECT 1
+wait 400
+shot 18zo_static_3.png
+turn SELECT -2
 tap PLAY
 wait 300
 res 0

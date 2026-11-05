@@ -4428,7 +4428,7 @@ int main(int argc, char** argv) {
     eng_defaults(p);
     eng_fresh();
     const int sq_m = eng_model_find(MK_SQ1, 0);
-    int ok = sq_m == 15 && ENG_MODELS == 24 && eng_model_find(MK_PLAITS, 7) < 0 && eng_model_find(MK_PLAITS, 11) < 0 &&
+    int ok = sq_m == 15 && ENG_MODELS == 25 && eng_model_find(MK_PLAITS, 7) < 0 && eng_model_find(MK_PLAITS, 11) < 0 &&
              eng_model_bank(sq_m) == 2 && eng_model_own(sq_m) && sq_progs() == 24;
     eng_set_model(0, sq_m);
     float kd[8];
@@ -5155,7 +5155,7 @@ int main(int argc, char** argv) {
     // (SPEECH on T1 after it, sounding); a project of 0.16.20 (31) and a sound (5) renumbered (TAURUS 16 kept, SPEECH
     // 17 now 18, MODAL the last)
     const int vm = eng_model_find(MK_VOCODER, 0), speech = eng_model_find(MK_PLAITS, 15);
-    int ok = vm == 17 && ENG_MODELS == 24 && eng_model_bank(vm) == 2 && eng_model_own(vm) && speech == 18 &&
+    int ok = vm == 17 && ENG_MODELS == 25 && eng_model_bank(vm) == 2 && eng_model_own(vm) && speech == 19 &&
              eng_model_find(MK_TAURUS, 0) == 16;
     project_t* p = eng_project();
     eng_defaults(p);
@@ -5505,6 +5505,128 @@ int main(int argc, char** argv) {
            "names %s; 0.16.22's project %s\n", playing, after, hp, follow ? "ok" : "WRONG", trig_n, steps_n,
            trig ? "ok" : "WRONG", names ? "ok" : "WRONG", up32 ? "ok" : "WRONG");
     if (!follow || !trig || !names || !up32) ++failures, printf("FAIL: FOLLOW\n");
+  }
+
+  // 75. (0.16.24) STATIC: after VOCODER (18), Plaits' one further on; its knobs, its texts; VARY at 0 the same noise
+  // at each trig (to the bit), at 1 another; DENSITY at 0 the noise silent, low a dust (most of its steps 0); RATE low:
+  // steps (digital: held over many samples), high: white; DECAY short gone in 0.2 s, HOLD held while the gate is;
+  // SPACE: a sub sine's share 0, a high one's SPACE itself; a project of 0.16.23 (33) and a sound (6) renumbered
+  {
+    const int sm = eng_model_find(MK_STATIC, 0), speech = eng_model_find(MK_PLAITS, 15);
+    int ok = sm == 18 && ENG_MODELS == 25 && eng_model_bank(sm) == 2 && eng_model_own(sm) && speech == 19;
+    project_t* p = eng_project();
+    eng_defaults(p);
+    eng_fresh();
+    eng_set_model(0, sm);
+    float kd[8];
+    static_defaults(kd);
+    for (int i = 0; i < 8; ++i) {
+      int param = PG_TRACK(0, 0) * 4 + 1 + i;
+      float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
+      if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), static_knob_name(i)) != 0) ok = 0;
+    }
+    char tx[24];
+    struct { int k; float u; const char* want; } kTx[] = {{0, 0.0f, "Sine"}, {0, 1.0f, "Noise"}, {1, 0.0f, "/64"},
+                                                         {1, 1.0f, "x256"}, {2, 0.0f, "Digital"}, {4, 0.0f, "Same"},
+                                                         {4, 1.0f, "New"}, {5, 1.0f, "Hold"}, {5, 0.0f, "3ms"}};
+    int texts = 1;
+    for (auto& x : kTx) {
+      static_knob_text(x.k, x.u, tx, sizeof tx);
+      if (std::strcmp(tx, x.want) != 0) texts = 0, printf("  STATIC knob %d at %.2f: %s, not %s\n", x.k, x.u, tx, x.want);
+    }
+    eng_defaults(p);
+    eng_fresh();
+    static_init();                      // (its state on track 1 the machine's own, here)
+    static float a[8192], b[8192];
+    auto play = [&](const float* k, float note, int len, int on, float* out) {
+      static_set(1, note, k);
+      static_gate(1, 1);
+      for (int s0 = 0; s0 < len; s0 += 64) {
+        if (s0 >= on) static_gate(1, 0);
+        static_set(1, note, k);
+        static_render(1, out + s0, 64);
+      }
+      static_gate(1, 0);
+      static float rest[64];            // (then its sound out, its capacitor at rest: the next one from silence)
+      for (int i = 0; i < 44100 * 3 / 64; ++i) static_render(1, rest, 64);
+    };
+    float k[8] = {1.0f, 0.5f, 0.0f, 1.0f, 0.0f, 0.6f, 0.5f, 0.0f};   // (noise, digital, all there, the same)
+    static_reset(1);
+    play(k, 60.0f, 4096, 64, a);
+    play(k, 60.0f, 4096, 64, b);
+    int same = 1;
+    for (int i = 0; i < 2048; ++i) same &= a[i] == b[i];
+    k[4] = 1.0f;
+    play(k, 60.0f, 4096, 64, b);
+    int differ = 0;
+    for (int i = 0; i < 2048; ++i) differ += a[i] != b[i];
+    // DENSITY: 0 silent; 0.3 (9 % of the steps): mostly 0 (RATE at the note x1, digital)
+    k[1] = 6.0f / 14.0f, k[5] = 0.97f, k[4] = 0.0f;       // (the clock at the note; HOLD)
+    k[3] = 0.0f;
+    play(k, 60.0f, 8192, 8192, a);
+    float pk0 = 0.0f;
+    for (int i = 0; i < 8192; ++i) pk0 = std::fmax(pk0, std::fabs(a[i]));
+    k[3] = 0.3f;
+    play(k, 60.0f, 8192, 8192, a);
+    int zeros = 0;
+    for (int i = 4096; i < 8192; ++i) zeros += std::fabs(a[i]) < 0.02f;
+    // RATE: low (the note /64): runs of the same value; high (x256): a new one every sample
+    k[3] = 1.0f, k[6] = 0.0f;
+    auto runs = [&](float rate) {
+      k[1] = rate;
+      play(k, 60.0f, 8192, 8192, a);
+      int eq = 0;
+      for (int i = 4097; i < 8192; ++i) eq += std::fabs(a[i] - a[i - 1]) < 1e-3f;   // (the DC block's tilt aside)
+      return eq;
+    };
+    const int slow = runs(0.0f), fast = runs(1.0f);
+    // DECAY: short, then HOLD
+    k[1] = 0.5f, k[5] = 0.2f;
+    play(k, 60.0f, 8192, 64, a);
+    float tail = 0.0f;
+    for (int i = 8192 - 1024; i < 8192; ++i) tail = std::fmax(tail, std::fabs(a[i]));
+    k[5] = 1.0f;
+    play(k, 60.0f, 8192, 8192, a);
+    float held = 0.0f;
+    for (int i = 8192 - 1024; i < 8192; ++i) held = std::fmax(held, std::fabs(a[i]));
+    // SPACE: a sine at 36 (65 Hz), at 96 (1 kHz)
+    k[0] = 0.0f, k[6] = 0.8f;
+    auto space_at = [&](float note) {   // (while it sounds)
+      static_set(1, note, k);
+      static_gate(1, 1);
+      for (int s0 = 0; s0 < 1024; s0 += 64) static_render(1, a + s0, 64);
+      const float sp = static_space(1);
+      static_gate(1, 0);
+      return sp;
+    };
+    const float sp_lo = space_at(36.0f), sp_hi = space_at(108.0f);
+    // a project of 0.16.23 (33): SPEECH 18, MODAL 23; a sound of 0.16.21 to 0.16.23 (6): SPEECH 18
+    static project_t q;
+    eng_defaults(&q);
+    q.version = 33;
+    q.algo[PG_TRACK(0, 0)] = 18;
+    q.algo[PG_TRACK(1, 0)] = 23;
+    q.algo[PG_TRACK(2, 0)] = 17;
+    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == speech &&
+                        q.algo[PG_TRACK(1, 0)] == ENG_MODELS - 1 && q.algo[PG_TRACK(2, 0)] == 17;
+    eng_sound_t snd;
+    eng_sound_get(1, &snd);
+    snd.version = 6;
+    snd.algo[0] = 18;
+    eng_set_model(1, eng_model_find(MK_FM, 0));
+    const int snd_ok = eng_sound_set(1, &snd) == 0 && p->algo[PG_TRACK(1, 0)] == speech;
+    eng_defaults(p);
+    eng_fresh();
+    const int noise = same && differ > 1000 && pk0 < 1e-6f && zeros > 2500 && slow > 3500 && fast < 400;
+    const int env = tail < 1e-3f && held > 0.1f;
+    const int space = sp_lo < 0.01f && sp_hi > 0.7f;
+    printf("STATIC: at %d of %d, knobs %s, texts %s; VARY 0 the same noise %s, 1 another (%d of 2048 differ); DENSITY 0 "
+           "peak %.1e, 0.3 %d of 4096 near 0; RATE low %d of 4095 held, high %d (%s); DECAY short after 0.17 s %.1e, "
+           "HOLD %.2f (%s); SPACE at 65 Hz %.3f, at 4 kHz %.2f (%s); 0.16.23's project %s, its sound %s\n", sm,
+           ENG_MODELS, ok ? "ok" : "WRONG", texts ? "ok" : "WRONG", same ? "yes" : "NO", differ, pk0, zeros, slow, fast,
+           noise ? "ok" : "WRONG", tail, held, env ? "ok" : "WRONG", sp_lo, sp_hi, space ? "ok" : "WRONG",
+           proj_ok ? "ok" : "WRONG", snd_ok ? "ok" : "WRONG");
+    if (!ok || !texts || !noise || !env || !space || !proj_ok || !snd_ok) ++failures, printf("FAIL: STATIC\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

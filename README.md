@@ -37,6 +37,10 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   la voix est une piste au choix (MOD), la porteuse quatre voix de **scies** grasses qui deviennent des **cordes** puis
   un **chœur** (TONE), un **ensemble** pour l'épaissir, SHIFT pour déplacer les formants, AIR pour laisser passer les
   sifflantes ; sans voix, une machine à cordes (voir plus bas) ;
+- **STATIC** (0.16.24) : une machine de bruit pour des séquences très contrastées, d'après les sinus et le bruit blanc de
+  **Ryoji Ikeda** et de **Pan Sonic**, et le sample and hold qui ralentit le bruit de l'**ECHON 6** de Morphor : du sinus
+  pur au bruit blanc, du crépitement au souffle, digital ou analogique, le même bruit à chaque trig ou un autre ; plus
+  il est aigu, plus il part dans la réverbe, le sub reste sec (voir plus bas) ;
 - **Plaits** sur chaque piste, 6 de ses modèles (ses trois batteries, treize de ses oscillateurs, sa puce 8 bits et ses
   formants ont laissé la place aux moteurs de MIFM1), et un **circuit bending** par piste (0.7, à la place du
   grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
@@ -113,7 +117,7 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
 pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
 en quatre gestes, le chemin du son (un schéma), le panneau (chaque numéro allume son repère sur la machine ;
-« Repères » les montre tous), les 24 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
+« Repères » les montre tous), les 25 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
 et ce qu'ils modélisent, les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le circuit bending,
 les effets, le séquenceur, la dose d'aléatoire, les spécifications, et des jauges de la charge du FM-1. « Essayer »,
 sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_try). Pour écouter MIFM1 sur un autre système (une
@@ -524,7 +528,7 @@ parallèles sortiraient de la gamme).
 | **OSC** (13 réglages) | **CUTOFF** (20 Hz à 20 kHz) | **RESO** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **VINTAGE** (Clean, puis les premières révisions) | **ENV** (− : avec une attaque, + : pincée) | **POLY-MOD** (− : l'enveloppe sur A, + : B sur A) | **CHORD** (− : l'harmonie, + : une mémoire d'accords ; Off : le clavier) |
 
 Choisir REV3 met ces réglages aux siens (deux dents de scie un peu écartées, un filtre de cuivre, une voix par
-trig) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 4,5 % d'un bloc (quatre : 15 %). Les projets d'avant se
+trig) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 4,7 % d'un bloc (quatre : 16 %). Les projets d'avant se
 lisent, leurs modèles de Plaits renumérotés. Depuis la 0.13, ZERO, les batteries, la FM, POLY, REV3 et OTIS partagent la
 mémoire d'une piste (une piste ne joue qu'une machine à la fois) : passer d'une machine à l'autre la refait à neuf.
 
@@ -576,7 +580,7 @@ Au clavier, OTIS joue les accords à la main (0.16.15) : une voix par touche ten
 sa touche ; les pas de la piste se taisent tant qu'une touche est tenue ; depuis 0.16.16, il joue aussi les accords des pas. Choisir OTIS met ses réglages aux siens
 (E.Piano, un peu de balayage, un chorus). Une voix coûte au FM-1 environ 3 %
 d'un bloc avec ses trois couches, SPACE à fond et le reste environ 5,5 % (quatre voix, trois couches, SPACE à fond :
-environ 19 % ; REV3, quatre voix : 15 %). Les projets et les sons enregistrés d'avant qui jouaient CHIPTUNE ou FORMANT passent à OTIS avec ses
+environ 19 % ; REV3, quatre voix : 16 %). Les projets et les sons enregistrés d'avant qui jouaient CHIPTUNE ou FORMANT passent à OTIS avec ses
 réglages ; les autres modèles de Plaits sont renumérotés.
 
 **TAURUS** (0.16.20 ; ALGORITHM après OTIS, la banque MIFM1) : une **basse monophonique**, une voix par piste, d'après
@@ -643,6 +647,35 @@ Choisir VOCODER met ses réglages aux siens : MOD sur Off (à tourner vers la pi
 4,5 % d'un bloc avec une voix, 7 % avec quatre, et ses bandes 12 % de plus quand MOD prend une piste (quatre voix
 vocodées : environ 19 %, autant qu'OTIS). Les projets et les sons enregistrés avec la 0.16.20 se relisent : VOCODER
 prend la place 17, SPEECH et les autres modèles de Plaits passent un cran plus loin.
+
+**STATIC** (0.16.24 ; ALGORITHM après VOCODER, la banque MIFM1) : une **machine de bruit**, une voix par piste, pour des
+séquences très contrastées mais musicales. Ses deux sources sont celles de **Ryoji Ikeda** (son album *+/−*, 1996, ne
+fait que du sinus et du bruit blanc : la raison et le chaos) et de **Pan Sonic** : un **sinus** à la note et un
+**bruit** tenu par un sample and hold dont l'horloge suit la note, comme celui que l'**ECHON 6** de Morphor (2025) met
+sur son bruit blanc pour le casser en crépitements.
+
+- **Le bruit** : à chaque coup d'horloge, une nouvelle valeur au hasard, tenue jusqu'au suivant. Lente, l'horloge fait
+  des paliers ; rapide, le bruit blanc. **ANALOG** arrondit les paliers et les assombrit (de 20 kHz à 1,5 kHz) ; à 0,
+  digital, ils restent nets, leur repliement compris. **DENSITY** les éclaircit : sous 1, la plupart des coups
+  d'horloge ne donnent rien et les autres s'éteignent dans leur pas, en un clic : de la poussière, un crépitement ; à
+  1, le sample and hold entier.
+- **VARY** : à 0, chaque trig rejoue exactement le même bruit (la même graine, du même point : un motif sur lequel
+  compter) ; à fond, chaque trig a le sien ; entre les deux, la chance d'en changer.
+- **DECAY** : de 3 ms (un clic) à 4,4 s, puis **Hold** : le son tenu tant que la gate est ouverte (LENGTH du pas,
+  jusqu'au bruit continu).
+- **SPACE** : la part envoyée à la réverbe, selon la hauteur (celle de la note, celle de l'horloge pour la part de
+  bruit), sur une courbe de 80 Hz à 5 kHz : le sub rien, 200 Hz un dixième, 1 kHz les deux tiers, les aigus tout. Un
+  sinus aigu et court part dans l'espace, le sub reste propre et sec. Elle s'ajoute à l'envoi de la piste vers la
+  réverbe du mixer.
+
+| TONE | RATE | ANALOG | DENSITY | VARY | DECAY | SPACE | DRIVE |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **Sine** à **Noise** (à puissance égale) | l'horloge du bruit, de la note /64 à x256 | **Digital** à **Analog** | la part des coups d'horloge qui sonnent (sous 1 : des clics) | **Same** à **New** | 3 ms à 4,4 s, puis **Hold** | la réverbe selon la hauteur | une saturation douce |
+
+Choisir STATIC met ses réglages aux siens : moitié sinus, moitié bruit, l'horloge à quatre fois la note, un peu
+d'analogique, tout le bruit, un nouveau bruit à chaque trig, court, SPACE à 60, un peu de drive. Une voix coûte au
+FM-1 environ 3 % d'un bloc. Les projets enregistrés avec la 0.16.23 et les sons des 0.16.21 à 0.16.23 se
+relisent : STATIC prend la place 18, SPEECH et les autres modèles de Plaits passent un cran plus loin.
 
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
 icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis
@@ -1208,6 +1241,9 @@ Chaque moteur de MIFM1 doit quelque chose à une machine, et le site le raconte,
   U2) et le **Minimoog** (1970) ;
 - VOCODER : le **Vocoder Plus VP-330** de Roland (1979-1980 ; sous Vangelis, Yellow Magic Orchestra, Laurie Anderson,
   Underworld), et avant lui le vocodeur de **Homer Dudley** (Bell Labs, 1937) ;
+- STATIC : **Ryoji Ikeda** (*+/−*, 1996 : des sinus et du bruit blanc, rien d'autre), **Pan Sonic** (Mika Vainio et
+  Ilpo Väisänen, Turku, 1992 : un minimalisme dur et fort, sur des machines construites pour eux), et le sample and
+  hold de l'**ECHON 6** de Morphor (2025) ;
 - les filtres : l'échelle de **Moog**, le Korg 35 du **MS-20**, le **SEM** d'Oberheim ; le circuit bending : le
   **Biscuit** d'OTO et le **Data Bender** de Qu-Bit ; le delay : les potards du **Zen Delay** ; la réverbe et Warps :
   **Clouds** et **Warps** de Mutable Instruments ;
@@ -1251,7 +1287,10 @@ Sources : [Pretty Hate Machine](https://en.wikipedia.org/wiki/Pretty_Hate_Machin
 [Moog Taurus](https://en.wikipedia.org/wiki/Moog_Taurus),
 [Roland VP-330](https://en.wikipedia.org/wiki/Roland_VP-330),
 [Vintage Synth Explorer sur le VP-330](https://www.vintagesynth.com/roland/vocoder.php),
-[Vocoder](https://en.wikipedia.org/wiki/Vocoder) ; les autres sur le site.
+[Vocoder](https://en.wikipedia.org/wiki/Vocoder),
+[le Muziekgebouw sur les sinus et le bruit blanc de Ryoji Ikeda](https://www.muziekgebouw.nl/en/ryoji-ikeda-s-sine-waves-and-white-noise-lz3y),
+[Pan Sonic au CTM](https://archive.ctm-festival.de/index.php?id=3622),
+[MusicTech sur l'ECHON 6](https://musictech.com/reviews/hardware-instruments/morphor-echon-6-review/) ; les autres sur le site.
 
 ## Le dépôt
 

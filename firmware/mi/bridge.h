@@ -246,6 +246,20 @@ void voc_defaults(float *k);
 int voc_knob_steps(int k);               /* MOD's 5, the others 128 */
 void voc_knob_text(int k, float u, char *b, int n);
 
+/* ---- STATIC (0.16.24, mi_static.cc): a noise machine, a voice a track: a sine at the note, a noise held at a clock
+ * that follows it; TONE, RATE, ANALOG, DENSITY, VARY, DECAY, SPACE, DRIVE ---- */
+void static_init(void);
+void static_reset(int t);
+void static_silence(int t);
+void static_set(int t, float note, const float *k);
+void static_gate(int t, int g);
+void static_render(int t, float *out, uint32_t n);
+float static_space(int t);               /* its reverb send's share this block: SPACE times its height, squared */
+const char *static_knob_name(int k);
+void static_defaults(float *k);
+int static_knob_steps(int k);
+void static_knob_text(int k, float u, char *b, int n);
+
 /* ---- the tracks' filters (mi_filter.cc): LADDER (Moog's, D'Angelo and Valimaki's model), MS-20 (Korg 35, its
  * resonance driven), SEM (Oberheim's state variable, noise into it), VOX (three formants); each with a vactrol
  * envelope, a ping, FM from its own output, key tracking ---- */
