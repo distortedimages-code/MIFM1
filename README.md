@@ -126,7 +126,7 @@ sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_
 voiture, des enceintes de studio) ou montrer la machine sans elle. Les potards se tournent en glissant vers le haut
 ou le bas ; sur un ordinateur, des raccourcis clavier jouent les touches. SAVE tenu garde le projet dans le
 navigateur. L'écran du téléphone reste allumé tant que la page joue ; sur iPhone, le son passe même en mode
-silencieux.
+silencieux, celui des exemples aussi, sans avoir allumé la machine (0.16.29).
 
 **Les exemples à jouer** (0.16.25, refaits en 0.16.26). Le long des articles, de petits modules aux couleurs de la page :
 un écran noir comme celui du FM-1, un bouton Play et un à quatre potards (on les tourne en glissant, à la molette ou aux

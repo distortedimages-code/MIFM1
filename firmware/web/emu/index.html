@@ -2993,6 +2993,8 @@ async function labPlay(mod) {
   lab.stat = null;                                    // (the last one's steps and cutoff gone from its screen)
   mod.el.classList.add("on", "wait");
   mod.btn.setAttribute("aria-pressed", "true");
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch { /* (0.16.29: an iPhone's silent
+                                                     switch passed by the examples too, the machine off) */ }
   try { await labOpen(); await lab.ac.resume(); } catch { if (lab.cur === mod) labStop(); return; }
   if (lab.cur !== mod) return;
   const port = lab.node.port;
