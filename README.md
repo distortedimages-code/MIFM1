@@ -126,15 +126,24 @@ ou le bas ; sur un ordinateur, des raccourcis clavier jouent les touches. SAVE t
 navigateur. L'écran du téléphone reste allumé tant que la page joue ; sur iPhone, le son passe même en mode
 silencieux.
 
-**Les exemples à jouer** (0.16.25). Le long des articles, de petits modules : un bouton Play et deux à quatre potards
-(on les tourne en glissant, à la molette ou aux flèches ; leur valeur écrite comme sur l'écran du FM-1). Chacun joue
-le **vrai moteur** : une deuxième copie du firmware compilé, dans son propre worklet audio, jamais démarrée comme
-machine, qui fait tourner le moteur seul sur un petit projet tiré de la démo (`firmware/web.c` lab_*,
-`web/emu/app_worklet.js`). Les quatre filtres sur la basse de la démo (CUTOFF, RESO, ENV), TAURUS (CUTOFF, EMPH,
-CONTOUR), STATIC (TONE, RATE, DENSITY, SPACE), le KICK (WAVE, SWEEP, DECAY), TRAUMA et la dose d'aléatoire sur la
-démo, Warps (ALGO, TIMBRE, MIX, MODE), les ratchets (RATCH, CURVE, CLIMB). Un seul son à la fois sur la page : un
-exemple lancé arrête celui d'avant et met la machine en pause là où elle en est ; toucher la machine, « Essayer » ou
-l'allumer arrête l'exemple et la relance.
+**Les exemples à jouer** (0.16.25, refaits en 0.16.26). Le long des articles, de petits modules aux couleurs de la page :
+un écran noir comme celui du FM-1, un bouton Play et un à quatre potards (on les tourne en glissant, à la molette ou aux
+flèches ; leur valeur écrite comme sur l'écran du FM-1). Chacun joue le **vrai code** : une deuxième copie du firmware
+compilé, dans son propre worklet audio, jamais démarrée comme machine (`firmware/web.c` lab_*, `web/emu/app_worklet.js`).
+Le son dépend de ce qu'on montre :
+- **une forme d'onde pour les filtres** : une dent de scie bien grave (La 1, 55 Hz, sans repliement) passe seule dans le
+  module de filtre du moteur, LADDER, MS-20, SEM ou VOX (CUTOFF, RESO, DRIVE ou TYPE), sans séquence ni enveloppe ;
+- **une boucle là où il faut un rythme** : TAURUS sur le riff de la démo (CUTOFF, EMPH, CONTOUR), STATIC en coups de sub
+  et coups aigus (TONE, RATE, DENSITY, SPACE), le KICK seul (WAVE, SWEEP, DECAY), TRAUMA et la dose d'aléatoire sur la
+  démo, Warps entre les accords et la basse (ALGO, TIMBRE, MIX, MODE), les ratchets sur les charlestons à contretemps
+  (RATCH, CURVE, CLIMB).
+
+L'écran montre ce qu'on entend, en direct : pour les filtres et les sons riches, le **spectre** (30 Hz à 16 kHz), avec
+la coupure du filtre marquée en orange et écrite en Hz (on voit les harmoniques de la dent de scie s'éteindre au-dessus,
+et la résonance en sortir) ; pour les sons percussifs, le **niveau** des dernières secondes (chaque coup, sa chute). Sous
+une boucle, ses **16 pas** : ses trigs en clair, le pas joué en orange. Sur un téléphone ou dans une carte étroite, les
+potards passent sur une ligne à eux. Un seul son à la fois sur la page : un exemple lancé arrête celui d'avant et met la
+machine en pause là où elle en est ; toucher la machine, « Essayer » ou l'allumer arrête l'exemple et la relance.
 
 **La charge affichée est celle du FM-1, estimée.** Un navigateur ne peut pas mesurer le temps que le FM-1 mettrait (son
 horloge avance d'un bloc à la fois, et sa vitesse n'est pas celle du FM-1) : dans cette version, l'horloge du moteur

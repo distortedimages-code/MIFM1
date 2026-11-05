@@ -22,6 +22,7 @@ class Mifm1Lab extends AudioWorkletProcessor {
   constructor() {
     super();
     this.ex = null;
+    this.q = 0;
     this.port.onmessage = (e) => this.message(e.data);
   }
   text(p) {                                           // a C string in its memory
@@ -60,6 +61,10 @@ class Mifm1Lab extends AudioWorkletProcessor {
     if (!this.ex) return true;
     const out = outputs[0], n = out[0].length;
     this.ex.lab_render(n);
+    if (++this.q >= 11) {                             // (~30 times a second: what the module's screen shows)
+      this.q = 0;
+      this.port.postMessage({ op: "stat", step: this.ex.lab_step(), trigs: this.ex.lab_trigs() >>> 0, hz: this.ex.lab_meter() });
+    }
     out[0].set(new Float32Array(this.ex.memory.buffer, this.ex.lab_out_l(), n));
     if (out[1]) out[1].set(new Float32Array(this.ex.memory.buffer, this.ex.lab_out_r(), n));
     return true;

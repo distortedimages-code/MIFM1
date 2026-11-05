@@ -45,7 +45,8 @@ enum { LAB_LADDER, LAB_MS20, LAB_SEM, LAB_VOX, LAB_TAURUS, LAB_STATIC, LAB_KICK,
 #define LAB_P_TRAUMA (-1)
 #define LAB_P_DICE (-2)
 #define LAB_RATCHES 10
-static int lab_on, lab_n, lab_p[4];
+static int lab_on, lab_n, lab_p[4], lab_direct, lab_lane;   /* (direct: a filter on a saw, the engine idle) */
+static float lab_ph;                     /* (the saw's phase) */
 static float lab_l[512], lab_r[512];
 static char lab_txt[32];
 static int lab_ratch[LAB_RATCHES];       /* RATCH's travel here: one step's hits, then hits over steps */
@@ -79,16 +80,27 @@ __attribute__((used, visibility("default"))) uint32_t lab_setup(uint32_t id)
     project_t *p = eng_project();
     eng_play(0);
     eng_groove(p);
-    if (id <= LAB_VOX) {                 /* the bass (the FM, a saw in its chain) through that filter */
-        lab_only(p, 1, 0.5f);
-        p->algo[PG_FILT(1, 0)] = (uint8_t)(MF_LADDER + id);
-        p->val[PG_FILT(1, 0) * 4 + 0] = 0.35f, p->val[PG_FILT(1, 0) * 4 + 1] = 0.55f;
-        p->val[PG_FILT(1, 0) * 4 + 2] = 0.5f;
-        lab_k(3, PG_FILT(1, 0) * 4 + 0, PG_FILT(1, 0) * 4 + 1, PG_FILT(1, 0) * 4 + 2, 0);
+    lab_direct = 0, lab_lane = -1;
+    if (id <= LAB_VOX) {                 /* a low saw (A1) through that filter alone: the filter module, the engine idle */
+        static int mf_ready;
+        if (!mf_ready)
+            mf_init(), mf_ready = 1;
+        mf_reset(0);
+        static const float F[12] = {0.45f, 0.4f, 0.0f, 0.3f, 0.2f, 0.0f, 0.0f, 0.0f, MF_LP, 0.0f, 0.0f, 0.0f};
+        for (int k = 0; k < 12; k++)
+            p->val[PG_FILT(0, k / 4) * 4 + k % 4] = F[k];
+        p->algo[PG_FILT(0, 0)] = (uint8_t)(MF_LADDER + id);
+        lab_direct = 1;
+        if (id == LAB_SEM || id == LAB_VOX)  /* (CUTOFF, RESO; DRIVE, or TYPE: SEM's LP BP HP, VOX's voices) */
+            lab_k(3, PG_FILT(0, 0) * 4 + 0, PG_FILT(0, 0) * 4 + 1, PG_FILT(0, 2) * 4 + 0, 0);
+        else
+            lab_k(3, PG_FILT(0, 0) * 4 + 0, PG_FILT(0, 0) * 4 + 1, PG_FILT(0, 1) * 4 + 0, 0);
+        return (uint32_t)lab_n;
     } else if (id == LAB_TAURUS) {       /* the bass's riff on TAURUS, the filter off (its own ladder) */
         eng_set_model(1, eng_model_find(MK_TAURUS, 0));
         p->algo[PG_FILT(1, 0)] = MF_OFF;
         lab_only(p, 1, 0.5f);
+        lab_lane = 1;
         lab_k(3, lab_mparam(1, 3), lab_mparam(1, 4), lab_mparam(1, 5), 0);
     } else if (id == LAB_STATIC) {       /* STATIC: sub hits and high ones, an octave up, its SPACE into the reverb */
         eng_set_model(1, eng_model_find(MK_STATIC, 0));
@@ -103,24 +115,30 @@ __attribute__((used, visibility("default"))) uint32_t lab_setup(uint32_t id)
                 eng_lock_set(1, s, TP_NOTE, (float)S[s]);
             }
         p->val[lab_mparam(1, 5)] = 0.45f;   /* (its DECAY: 80 ms, the pings heard) */
+        lab_lane = 1;
         lab_k(4, lab_mparam(1, 0), lab_mparam(1, 1), lab_mparam(1, 3), lab_mparam(1, 6));
     } else if (id == LAB_KICK) {         /* the kick alone, a beat and a push */
         lab_only(p, 0, 0.9f);
         eng_trig_set(0, 14, 1);
+        lab_lane = 0;
         lab_k(3, lab_mparam(0, 0), lab_mparam(0, 1), lab_mparam(0, 2), 0);
     } else if (id == LAB_TRAUMA) {       /* the groove; TRAUMA */
+        lab_lane = 0;                    /* (its screen shows the kick's steps: the beat it bends) */
         lab_k(1, LAB_P_TRAUMA, 0, 0, 0);
     } else if (id == LAB_DICE) {         /* the groove; the random dose */
+        lab_lane = 0;
         lab_k(1, LAB_P_DICE, 0, 0, 0);
     } else if (id == LAB_WARPS) {        /* the stabs (its carrier) by the bass (its modulator) */
         static const float W[8] = {(float)WC_T4, 1.0f, 0.4f, 0.8f, 0.5f, 0.6f, 0.6f, (float)WM_WARPS};
         for (int k = 0; k < 8; k++)
             p->val[PG_WARPS(k / 4) * 4 + k % 4] = W[k];
+        lab_lane = 3;                    /* (the stabs' steps) */
         lab_k(4, PG_WARPS(0) * 4 + 2, PG_WARPS(1) * 4 + 0, PG_WARPS(0) * 4 + 3, PG_WARPS(1) * 4 + 3);
     } else if (id == LAB_RATCH) {        /* the hats on four off-beats, their ratchets */
         for (int s = 0; s < 16; s++)
             eng_trig_set(2, s, s % 4 == 2);
         p->val[PG_STEP(2) * 4 + 2] = 3.0f;
+        lab_lane = 2;
         lab_k(3, PG_STEP(2) * 4 + 2, PG_CURVE * 4 + 2, PG_EUC(2) * 4 + 2, 0);
     } else {
         return 0;
@@ -216,7 +234,23 @@ __attribute__((used, visibility("default"))) uint32_t lab_set(uint32_t i, float 
 __attribute__((used, visibility("default"))) void lab_play(uint32_t on)
 {
     lab_on = on != 0;
-    eng_play(lab_on);
+    if (!lab_direct)
+        eng_play(lab_on);
+}
+/* what the module's screen shows: the filter's cutoff now (Hz, 0: none); the lane it shows, its step playing (-1:
+ * none) and its trigs (bit s: step s of 16) */
+__attribute__((used, visibility("default"))) float lab_meter(void) { return lab_direct ? mf_cutoff_hz(0) : 0.0f; }
+__attribute__((used, visibility("default"))) int32_t lab_step(void)
+{
+    return lab_lane < 0 || !lab_on || lab_direct ? -1 : eng_step_now(lab_lane);
+}
+__attribute__((used, visibility("default"))) uint32_t lab_trigs(void)
+{
+    uint32_t m = 0;
+    if (lab_lane >= 0)
+        for (int s = 0; s < 16; s++)
+            m |= (uint32_t)(eng_trig(lab_lane, s) != 0) << s;
+    return m;
 }
 __attribute__((used, visibility("default"))) uint32_t lab_out_l(void) { return (uint32_t)(uintptr_t)lab_l; }
 __attribute__((used, visibility("default"))) uint32_t lab_out_r(void) { return (uint32_t)(uintptr_t)lab_r; }
@@ -224,5 +258,32 @@ __attribute__((used, visibility("default"))) void lab_render(uint32_t n)
 {
     if (n > 512)
         n = 512;
-    eng_render(lab_l, lab_r, n);
+    if (!lab_direct) {
+        eng_render(lab_l, lab_r, n);
+        return;
+    }
+    /* the saw (A1, polyBLEP: no alias heard), through the filter as its knobs have it */
+    project_t *p = eng_project();
+    float k[12];
+    for (int i = 0; i < 12; i++)
+        k[i] = p->val[PG_FILT(0, i / 4) * 4 + i % 4];
+    const int model = p->algo[PG_FILT(0, 0)], type = (int)(k[MF_TYPE] + 0.5f);
+    mf_set(0, model, type < 0 ? 0 : type > 2 ? 2 : type, k, 33.0f);
+    const float dt = 55.0f / 44100.0f;
+    for (uint32_t i = 0; i < n; i++) {
+        float x = 2.0f * lab_ph - 1.0f, t;
+        if (lab_ph < dt) t = lab_ph / dt, x -= t + t - t * t - 1.0f;
+        else if (lab_ph > 1.0f - dt) t = (lab_ph - 1.0f) / dt, x -= t * t + t + t + 1.0f;
+        lab_l[i] = lab_on ? 0.45f * x : 0.0f;
+        lab_ph += dt;
+        if (lab_ph >= 1.0f) lab_ph -= 1.0f;
+    }
+    mf_process(0, lab_l, n);
+    static const float G[4] = {0.45f, 0.23f, 0.18f, 0.36f};   /* (each as loud as the loops: LADDER, MS-20, SEM, VOX) */
+    const float g = G[(unsigned)(model - MF_LADDER) & 3];
+    for (uint32_t i = 0; i < n; i++) {
+        float y = lab_l[i] * g;
+        y = y > 1.2f ? 1.2f : y < -1.2f ? -1.2f : y;
+        lab_l[i] = lab_r[i] = y - 0.13f * y * y * y;
+    }
 }
