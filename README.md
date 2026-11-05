@@ -126,6 +126,16 @@ ou le bas ; sur un ordinateur, des raccourcis clavier jouent les touches. SAVE t
 navigateur. L'écran du téléphone reste allumé tant que la page joue ; sur iPhone, le son passe même en mode
 silencieux.
 
+**Les exemples à jouer** (0.16.25). Le long des articles, de petits modules : un bouton Play et deux à quatre potards
+(on les tourne en glissant, à la molette ou aux flèches ; leur valeur écrite comme sur l'écran du FM-1). Chacun joue
+le **vrai moteur** : une deuxième copie du firmware compilé, dans son propre worklet audio, jamais démarrée comme
+machine, qui fait tourner le moteur seul sur un petit projet tiré de la démo (`firmware/web.c` lab_*,
+`web/emu/app_worklet.js`). Les quatre filtres sur la basse de la démo (CUTOFF, RESO, ENV), TAURUS (CUTOFF, EMPH,
+CONTOUR), STATIC (TONE, RATE, DENSITY, SPACE), le KICK (WAVE, SWEEP, DECAY), TRAUMA et la dose d'aléatoire sur la
+démo, Warps (ALGO, TIMBRE, MIX, MODE), les ratchets (RATCH, CURVE, CLIMB). Un seul son à la fois sur la page : un
+exemple lancé arrête celui d'avant et met la machine en pause là où elle en est ; toucher la machine, « Essayer » ou
+l'allumer arrête l'exemple et la relance.
+
 **La charge affichée est celle du FM-1, estimée.** Un navigateur ne peut pas mesurer le temps que le FM-1 mettrait (son
 horloge avance d'un bloc à la fois, et sa vitesse n'est pas celle du FM-1) : dans cette version, l'horloge du moteur
 est un modèle, où chaque partie avance celle du cœur qui la joue de ce qu'elle coûte au FM-1, et le second cœur est
