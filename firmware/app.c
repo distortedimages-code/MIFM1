@@ -539,6 +539,7 @@ static const char *module_name(int page)
                                                                         : track_kind(ptrack(page)) == MK_PROPHET ? "Rev3"
                                                                         : track_kind(ptrack(page)) == MK_SQ1 ? "Otis"
                                                                         : track_kind(ptrack(page)) == MK_TAURUS ? "Taurus"
+                                                                        : track_kind(ptrack(page)) == MK_VOCODER ? "Vocoder"
                                                                         : "Plaits";
     }
     case PT_LFO: {
@@ -1070,6 +1071,11 @@ static const vop_t ICONS[NICON][IOPS] = {
     {{'C', 16, 19, 7, 0}, {'L', 10, 15, 6, 11}, {'L', 6, 11, 5, 5}, {'L', 22, 15, 26, 11}, {'L', 26, 11, 27, 5},
      {'D', 13, 22, 1, 0}, {'D', 19, 22, 1, 0}},                                                     /* TAURUS: the
                                                                                                      * bull */
+    {{'R', 12, 4, 8, 13}, {'L', 9, 13, 9, 16}, {'L', 9, 16, 12, 20}, {'L', 12, 20, 20, 20}, {'L', 20, 20, 23, 16},
+     {'L', 23, 16, 23, 13}, {'L', 16, 20, 16, 25}, {'L', 4, 28, 8, 25}, {'L', 8, 25, 12, 28}, {'L', 20, 28, 28, 28}},
+                                                                                                     /* VOCODER: a
+                                                                                                     * microphone, a
+                                                                                                     * wave, a line */
     {{'R', 5, 6, 22, 14}, {'L', 10, 20, 8, 27}, {'L', 8, 27, 16, 20}},                              /* SPEECH */
     {{'C', 10, 18, 5, 0}, {'C', 17, 13, 6, 0}, {'C', 23, 19, 5, 0}},                                /* SWARM */
     {{'L', 4, 18, 7, 10}, {'L', 7, 10, 10, 23}, {'L', 10, 23, 13, 8}, {'L', 13, 8, 16, 21}, {'L', 16, 21, 19, 11},

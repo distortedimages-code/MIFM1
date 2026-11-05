@@ -39,6 +39,7 @@ PADS = NAMES.index("PADS")                           # (PADS: its notes, one saw
 POLY = NAMES.index("POLY")                           # (POLY: a voice held, four in unison)
 PRO = NAMES.index("REV3")                            # (REV3, after the Prophet-5: a voice, four in a chord)
 SQ1 = NAMES.index("OTIS")                            # (OTIS, after the SQ-1: a voice, four ringing on; its layers, SPACE)
+VOC = NAMES.index("VOCODER")                         # (VOCODER: a voice, four ringing on, its bands)
 
 
 def build():
@@ -102,6 +103,8 @@ def main():
         jobs[f"pro{x}"] = ("one", PRO, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
     for x, bit in (("one", 65536 | 131072), ("four", 65536)):
         jobs[f"sq{x}"] = ("one", SQ1, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
+    for x, bit in (("one", 0), ("four", 524288), ("bands", 1048576)):
+        jobs[f"voc{x}"] = ("one", VOC, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
     for f in range(1, 5):                                # MF_LADDER..MF_VOX, under the LEAD
         for v, (fm, nz) in enumerate(((0, 0), (0.5, 0), (0, 0.5))):
             jobs[f"filter{f}.{v}"] = ("one", VA, f, fm, nz, 0, 0, -1, 0, SECS)
@@ -149,6 +152,10 @@ def main():
     q1, q4 = res["sqone"]["nv"], res["sqfour"]["nv"]
     sqv = max((sq["four"] - sq["one"]) / max(q4 - q1, 0.5), 0.0)
     sqc = [max(sq["one"] - q1 * sqv, 0.0), sqv]
+    vo = {x: k(res[f"voc{x}"]["voice"] - 3 * rest, K_VOICE) for x in ("one", "four", "bands")}
+    w1, w4, wb = res["vocone"]["nv"], res["vocfour"]["nv"], res["vocbands"]["nv"]
+    vov = max((vo["four"] - vo["one"]) / max(w4 - w1, 0.5), 0.0)
+    vocc = [max(vo["one"] - w1 * vov, 0.0), vov, max(vo["bands"] - vo["one"] - (wb - w1) * vov, 0.0)]
     prep0 = k(res["blank"]["total"] - res["blank"]["tasks"], K_PREP)
     prep1 = k(va["total"] - va["tasks"] - 3 * rest, K_PREP)             # (a track playing: its trigs, its knobs)
     prep_s = k(res["stress"]["total"] - res["stress"]["tasks"], K_PREP)
@@ -182,6 +189,8 @@ def main():
           "static const float kWebPoly[2] = {" + ", ".join(f1(v) for v in polyc) + "};   /* POLY: its floor, a voice */",
           "static const float kWebPro[2] = {" + ", ".join(f1(v) for v in proc) + "};   /* REV3: its floor, a voice */",
           "static const float kWebSq[2] = {" + ", ".join(f1(v) for v in sqc) + "};   /* OTIS: its floor, a voice */",
+          "static const float kWebVoc[3] = {" + ", ".join(f1(v) for v in vocc) + "};   /* VOCODER: its floor, a voice, "
+          "its bands (MOD on) */",
           f"static const float kWebBend = {f1(bend)};   /* the bits, one of their knobs up */",
           f"static const float kWebTrauma = {f1(trauma)};   /* TRAUMA's drive on a track */",
           "static const float kWebGlitch = 9.0f;   /* the glitch, taking or repeating its slice (estimated: a few loads a sample) */",

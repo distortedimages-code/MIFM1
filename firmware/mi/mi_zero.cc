@@ -328,21 +328,6 @@ void zero_defaults(float* k) {          // round pulses of a sine, a breath of F
 
 int zero_knob_steps(int k) { return k == 1 ? kRatios : 128; }
 
-static void put_s(char* b, int n, int* at, const char* s) {
-  while (*s && *at < n - 1) b[(*at)++] = *s++;
-  b[*at] = 0;
-}
-static void put_i(char* b, int n, int* at, int x) {   // x >= 0
-  char t[8];
-  int i = 0;
-  do {
-    t[i++] = static_cast<char>('0' + x % 10);
-    x /= 10;
-  } while (x && i < 7);
-  while (i && *at < n - 1) b[(*at)++] = t[--i];
-  b[*at] = 0;
-}
-
 MI_COLD void zero_knob_text(int k, float u, char* b, int n) {   // u: 0..1 (a bipolar knob from its middle)
   if (n <= 0) return;
   int at = 0;

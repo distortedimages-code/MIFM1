@@ -83,6 +83,14 @@ int main(int argc, char** argv) {
       for (int t = 1; t < ENG_TRACKS; ++t) p->val[PG_DUCK * 4 + t] = 0.3f;
     if (extra & 4) p->val[PG_DELAY(0) * 4 + 2] = -0.15f, p->val[PG_DELAY(0) * 4 + 3] = 0.3f;
     if (extra & 262144) p->val[PG_SPREAD_PARAM(0)] = 1.0f;   // (0.16.19) T1's SPREAD
+    if (eng_model_kind(model) == MK_VOCODER) {   // (0.16.21) VOCODER: its RELEASE short (a voice), 524288 long (its
+      auto vk = [&](int i, float u) {    // voices ringing on, four), 1048576 its MOD on T2 (its bands: T2 silent, its
+        int param = PG_TRACK(0, 0) * 4 + 1 + i;   // bands as busy)
+        p->val[param] = eng_pdef(param)->kind == K_BIP ? 2.0f * u - 1.0f : u;
+      };
+      vk(4, extra & 524288 ? 0.95f : 0.0f);
+      vk(0, extra & 1048576 ? 0.5f : 0.05f);
+    }
     if (extra & 8) p->val[PG_TRACK(0, 1) * 4 + 3] = -0.6f;   // 8 the FM's square (FEEDBACK), 16 its PW, 32 its SYNC
     if (extra & 16) p->val[PG_TRACK(0, 2) * 4 + 0] = -0.5f;  // (MUTATE), on its sixth algorithm (three operators
     if (extra & 32) p->val[PG_TRACK(0, 2) * 4 + 0] = 0.5f;   // heard)
@@ -127,7 +135,8 @@ int main(int argc, char** argv) {
   for (uint32_t b = 0; b < nb; ++b) {
     eng_render(l, r, 128);
     const int kind = eng_model_kind(eng_project()->algo[PG_TRACK(0, 0)]);
-    nv += kind == MK_PROPHET ? pro_voices(0) : kind == MK_SQ1 ? sq_voices(0) : poly_voices(0);
+    nv += kind == MK_PROPHET ? pro_voices(0) : kind == MK_SQ1 ? sq_voices(0) : kind == MK_VOCODER ? voc_voices(0)
+                                                                                                     : poly_voices(0);
   }
   printf("blocks %u\nvoices %.4f\n", nb, nv / static_cast<double>(nb ? nb : 1));
   return 0;

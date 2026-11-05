@@ -117,52 +117,100 @@ inline float poly_blep(float ph, float dt) {
   return 0.0f;
 }
 const float kPw[3] = {0.5f, 0.3f, 0.12f};   // the square, the wide pulse, the narrow one (the Minimoog's: by eye)
-// a wave's sample at phase ph (its step dt): -1..1, its mean 0
-inline float wave(int w, float ph, float dt) {
-  switch (w) {
-    case W_TRI: return ph < 0.5f ? 4.0f * ph - 1.0f : 3.0f - 4.0f * ph;   // (its corners: their alias at -90 dB)
-    case W_SHARK:                       // (a triangle leaning on a saw: up three quarters, down a quarter)
-      return ph < 0.75f ? ph * (8.0f / 3.0f) - 1.0f : 1.0f - (ph - 0.75f) * 8.0f;
-    case W_SAW: return 1.0f - 2.0f * ph + 2.0f * poly_blep(ph, dt);   // (falling: a step up at the wrap)
-    default: {
-      const float pw = kPw[w - W_SQUARE];
-      float ph2 = ph - pw;
-      ph2 += ph2 < 0.0f ? 1.0f : 0.0f;
-      float v = (ph < pw ? 1.0f : -1.0f) + 2.0f * (poly_blep(ph, dt) - poly_blep(ph2, dt));
-      return v - (2.0f * pw - 1.0f);    // (its mean out)
-    }
-  }
-}
 
-// m samples of the oscillators (A, B at bl, C at sl when there) into x: a wave's code its own (no choice a sample)
-template <int W>
-void oscs(float* x, uint32_t m, float& pa, float& pb, float& pc, float da, float db, float dc, float bl, float sl) {
-  if (sl > 0.0f) {                      // (C: the Minimoog's third, its reverse saw where the others' shark tooth is)
-    for (uint32_t i = 0; i < m; ++i) {
-      x[i] = wave(W, pa, da) + bl * wave(W, pb, db) + sl * (W == W_SHARK ? -wave(W_SAW, pc, dc) : wave(W, pc, dc));
-      pa += da;
-      pa -= pa >= 1.0f ? 1.0f : 0.0f;
-      pb += db;
-      pb -= pb >= 1.0f ? 1.0f : 0.0f;
-      pc += dc;
-      pc -= pc >= 1.0f ? 1.0f : 0.0f;
-    }
-  } else {
-    for (uint32_t i = 0; i < m; ++i) {
-      x[i] = wave(W, pa, da) + bl * wave(W, pb, db);
-      pa += da;
-      pa -= pa >= 1.0f ? 1.0f : 0.0f;
-      pb += db;
-      pb -= pb >= 1.0f ? 1.0f : 0.0f;
-    }
+// m samples of the oscillators (A, B at bl, C at sl when there) into x, by family (the code small: the flash's room):
+// the saw; the pulses (their width pw); the triangles (rising over r of the cycle: the triangle a half, the shark tooth
+// three quarters)
+__attribute__((noinline)) void osc_saw(float* x, uint32_t m, float* ph, const float* d, float bl, float sl) {
+  float pa = ph[0], pb = ph[1], pc = ph[2];
+  for (uint32_t i = 0; i < m; ++i) {
+    float v = (1.0f - 2.0f * pa + 2.0f * poly_blep(pa, d[0])) + bl * (1.0f - 2.0f * pb + 2.0f * poly_blep(pb, d[1]));
+    if (sl > 0.0f) v += sl * (1.0f - 2.0f * pc + 2.0f * poly_blep(pc, d[2]));
+    x[i] = v;
+    pa += d[0];
+    pa -= pa >= 1.0f ? 1.0f : 0.0f;
+    pb += d[1];
+    pb -= pb >= 1.0f ? 1.0f : 0.0f;
+    pc += d[2];
+    pc -= pc >= 1.0f ? 1.0f : 0.0f;
   }
+  ph[0] = pa, ph[1] = pb, ph[2] = pc;
 }
-
+inline float pulse(float p, float pw, float dt) {
+  float p2 = p - pw;
+  p2 += p2 < 0.0f ? 1.0f : 0.0f;
+  return (p < pw ? 1.0f : -1.0f) + 2.0f * (poly_blep(p, dt) - poly_blep(p2, dt)) - (2.0f * pw - 1.0f);
+}
+__attribute__((noinline)) void osc_pulse(float* x, uint32_t m, float* ph, const float* d, float bl, float sl, float pw) {
+  float pa = ph[0], pb = ph[1], pc = ph[2];
+  for (uint32_t i = 0; i < m; ++i) {
+    float v = pulse(pa, pw, d[0]) + bl * pulse(pb, pw, d[1]);
+    if (sl > 0.0f) v += sl * pulse(pc, pw, d[2]);
+    x[i] = v;
+    pa += d[0];
+    pa -= pa >= 1.0f ? 1.0f : 0.0f;
+    pb += d[1];
+    pb -= pb >= 1.0f ? 1.0f : 0.0f;
+    pc += d[2];
+    pc -= pc >= 1.0f ? 1.0f : 0.0f;
+  }
+  ph[0] = pa, ph[1] = pb, ph[2] = pc;
+}
+inline float tri(float p, float r, float ir, float ir1) {   // (its corners: their alias at -90 dB)
+  return p < r ? 2.0f * p * ir - 1.0f : 1.0f - 2.0f * (p - r) * ir1;
+}
+__attribute__((noinline)) void osc_tri(float* x, uint32_t m, float* ph, const float* d, float bl, float sl, float r) {
+  const float ir = 1.0f / r, ir1 = 1.0f / (1.0f - r);
+  float pa = ph[0], pb = ph[1], pc = ph[2];
+  for (uint32_t i = 0; i < m; ++i) {
+    float v = tri(pa, r, ir, ir1) + bl * tri(pb, r, ir, ir1);
+    if (sl > 0.0f) v += sl * tri(pc, r, ir, ir1);
+    x[i] = v;
+    pa += d[0];
+    pa -= pa >= 1.0f ? 1.0f : 0.0f;
+    pb += d[1];
+    pb -= pb >= 1.0f ? 1.0f : 0.0f;
+    pc += d[2];
+    pc -= pc >= 1.0f ? 1.0f : 0.0f;
+  }
+  ph[0] = pa, ph[1] = pb, ph[2] = pc;
+}
+// m samples of x through the ladder (g its stages' gain, res its emphasis; V, dV, tV its states), into y at the
+// loudness gliding from e by de: the input (pushed, its bass given back) less the emphasis' loop; four stages, a tanh
+// each (its states in the registers)
+__attribute__((noinline)) void ladder(const float* x, float* y, uint32_t m, float in_gain, float res, float g, float e,
+                                      float de, float* V, float* dV, float* tV) {
+  float v0 = V[0], v1 = V[1], v2 = V[2], v3 = V[3], q0 = dV[0], q1 = dV[1], q2 = dV[2], q3 = dV[3];
+  float t0 = tV[0], t1 = tV[1], t2 = tV[2], t3 = tV[3];
+  for (uint32_t i = 0; i < m; ++i) {
+    const float u = in_gain * x[i] - res * v3;
+    const float d0 = g * (sat(u * kInvVt2) - t0);
+    v0 += d0 + q0;
+    q0 = d0;
+    t0 = sat(v0 * kInvVt2);
+    const float d1 = g * (t0 - t1);
+    v1 += d1 + q1;
+    q1 = d1;
+    t1 = sat(v1 * kInvVt2);
+    const float d2 = g * (t1 - t2);
+    v2 += d2 + q2;
+    q2 = d2;
+    t2 = sat(v2 * kInvVt2);
+    const float d3 = g * (t2 - t3);
+    v3 += d3 + q3;
+    q3 = d3;
+    t3 = sat(v3 * kInvVt2);
+    e += de;
+    y[i] = v3 * e;
+  }
+  V[0] = v0, V[1] = v1, V[2] = v2, V[3] = v3, dV[0] = q0, dV[1] = q1, dV[2] = q2, dV[3] = q3;
+  tV[0] = t0, tV[1] = t1, tV[2] = t2, tV[3] = t3;
+}
 }  // namespace
 
 extern "C" {
 
-void taurus_reset(int t) {
+MI_COLD void taurus_reset(int t) {
   if (t < 0 || t >= MF_TRACKS) return;
   Taurus& p = taurus[t];
   uint8_t* raw = reinterpret_cast<uint8_t*>(&p);
@@ -175,12 +223,12 @@ void taurus_reset(int t) {
   for (int i = 0; i < 3; ++i) p.o[i].ph = 0.5f + 0.5f * bip(p.rnd);   // (free-running: never in phase)
 }
 
-void taurus_init(void) {
+MI_COLD void taurus_init(void) {
   for (int t = 0; t < MF_TRACKS; ++t) taurus_reset(t);
   mf_forget();
 }
 
-void taurus_silence(int t) {
+MI_COLD void taurus_silence(int t) {
   if (t < 0 || t >= MF_TRACKS) return;
   Taurus& p = taurus[t];
   p.trig = 0;
@@ -191,7 +239,7 @@ void taurus_silence(int t) {
   p.dcx = p.dcy = 0.0f;
 }
 
-void taurus_set(int t, float note, const float* k) {
+MI_COLD void taurus_set(int t, float note, const float* k) {
   if (t < 0 || t >= MF_TRACKS) return;
   Taurus& p = taurus[t];
   for (int i = 0; i < 8; ++i) p.k[i] = clampf(k[i], 0.0f, 1.0f);
@@ -199,7 +247,7 @@ void taurus_set(int t, float note, const float* k) {
   if (!p.alive || glide_s(p.k[7]) < 0.001f) p.note = note;   // (from silence, or no glide: there at once)
 }
 
-void taurus_gate(int t, int g) {
+MI_COLD void taurus_gate(int t, int g) {
   if (t < 0 || t >= MF_TRACKS) return;
   Taurus& p = taurus[t];
   if (g && !p.gate) p.trig = 1;
@@ -208,7 +256,7 @@ void taurus_gate(int t, int g) {
 
 int taurus_voice(float u) { return voice_of(u); }
 
-void taurus_render(int t, float* out, uint32_t n) {
+MI_COLD void taurus_render(int t, float* out, uint32_t n) {   // (its glue for size: its samples' loops at -O2)
   if (t < 0 || t >= MF_TRACKS) return;
   Taurus& p = taurus[t];
   if (p.trig) {                         // a trig: both contours from where they are (no click), rising
@@ -286,46 +334,15 @@ void taurus_render(int t, float* out, uint32_t n) {
     hz = clampf(hz, 10.0f, 0.23f * kSr);
     const float wc = 3.14159265f * hz / kSr;
     const float g = 4.0f * 3.14159265f * 0.312f * hz * (1.0f - wc) / (1.0f + wc) * (0.5f / kSr);
-    float e = e0, de = (p.amp - e0) / static_cast<float>(m);
-    float pa = p.o[0].ph, pb = p.o[1].ph, pc = p.o[2].ph;
+    const float e = e0, de = (p.amp - e0) / static_cast<float>(m);
+    float ph[3] = {p.o[0].ph, p.o[1].ph, p.o[2].ph};
+    const float dd[3] = {da, db, dc};
     float x[kSub];
-    switch (w) {
-      case W_TRI: oscs<W_TRI>(x, m, pa, pb, pc, da, db, dc, bl, sl); break;
-      case W_SHARK: oscs<W_SHARK>(x, m, pa, pb, pc, da, db, dc, bl, sl); break;
-      case W_SAW: oscs<W_SAW>(x, m, pa, pb, pc, da, db, dc, bl, sl); break;
-      case W_SQUARE: oscs<W_SQUARE>(x, m, pa, pb, pc, da, db, dc, bl, sl); break;
-      case W_WIDE: oscs<W_WIDE>(x, m, pa, pb, pc, da, db, dc, bl, sl); break;
-      default: oscs<W_NARROW>(x, m, pa, pb, pc, da, db, dc, bl, sl); break;
-    }
-    p.o[0].ph = pa, p.o[1].ph = pb, p.o[2].ph = pc;
-    // the ladder: the input (pushed, its bass given back) less the emphasis' loop; four stages, a tanh each (its
-    // states in the registers)
-    float v0 = V[0], v1 = V[1], v2 = V[2], v3 = V[3], q0 = dV[0], q1 = dV[1], q2 = dV[2], q3 = dV[3];
-    float t0 = tV[0], t1 = tV[1], t2 = tV[2], t3 = tV[3];
-    float* y = out + s0;
-    for (uint32_t i = 0; i < m; ++i) {
-      const float u = in_gain * x[i] - res * v3;
-      const float d0 = g * (sat(u * kInvVt2) - t0);
-      v0 += d0 + q0;
-      q0 = d0;
-      t0 = sat(v0 * kInvVt2);
-      const float d1 = g * (t0 - t1);
-      v1 += d1 + q1;
-      q1 = d1;
-      t1 = sat(v1 * kInvVt2);
-      const float d2 = g * (t1 - t2);
-      v2 += d2 + q2;
-      q2 = d2;
-      t2 = sat(v2 * kInvVt2);
-      const float d3 = g * (t2 - t3);
-      v3 += d3 + q3;
-      q3 = d3;
-      t3 = sat(v3 * kInvVt2);
-      e += de;
-      y[i] = v3 * e;
-    }
-    V[0] = v0, V[1] = v1, V[2] = v2, V[3] = v3, dV[0] = q0, dV[1] = q1, dV[2] = q2, dV[3] = q3;
-    tV[0] = t0, tV[1] = t1, tV[2] = t2, tV[3] = t3;
+    if (w == W_SAW) osc_saw(x, m, ph, dd, bl, sl);
+    else if (w >= W_SQUARE) osc_pulse(x, m, ph, dd, bl, sl, kPw[w - W_SQUARE]);
+    else osc_tri(x, m, ph, dd, bl, sl, w == W_TRI ? 0.5f : 0.75f);
+    p.o[0].ph = ph[0], p.o[1].ph = ph[1], p.o[2].ph = ph[2];
+    ladder(x, out + s0, m, in_gain, res, g, e, de, V, dV, tV);
   }
   if (!p.gate && !p.amp_att && p.amp < 1e-5f) {   // (its sound over: it rests, the ladder's states from rest)
     p.alive = 0;
@@ -333,19 +350,7 @@ void taurus_render(int t, float* out, uint32_t n) {
     for (int i = 0; i < 4; ++i) p.V[i] = p.dV[i] = p.tV[i] = 0.0f;
   }
   // the coupling capacitor (~5 Hz), the level (each voice's: their loudness alike), a soft knee above 0.8 (at most 1.2)
-  const float og = 0.45f * vd.gain;
-  for (uint32_t s = 0; s < n; ++s) {
-    const float yv = og * out[s], yd = yv - p.dcx + 0.9993f * p.dcy;
-    p.dcx = yv;
-    p.dcy = yd;
-    float ay = fm_fabsf(yd), o = yd;
-    if (ay > 0.8f) {
-      const float z = (ay - 0.8f) * 2.5f;
-      ay = 0.8f + 0.4f * z / (1.0f + z);
-      o = yd < 0.0f ? -ay : ay;
-    }
-    out[s] = o;
-  }
+  mi_finish(out, n, 0.45f * vd.gain, &p.dcx, &p.dcy);
   if (!p.alive && fm_fabsf(p.dcy) < 1e-6f) p.dcx = p.dcy = 0.0f;
 }
 
@@ -360,34 +365,6 @@ void taurus_defaults(float* k) {        // the Taurus: B beating a little, as lo
 }
 
 int taurus_knob_steps(int k) { return k == 0 ? kVoicesN : 128; }
-
-static void put_s(char* b, int n, int* at, const char* s) {
-  while (*s && *at < n - 1) b[(*at)++] = *s++;
-  b[*at] = 0;
-}
-static void put_i(char* b, int n, int* at, int x) {
-  char t[8];
-  int i = 0;
-  if (x < 0) put_s(b, n, at, "-"), x = -x;
-  do {
-    t[i++] = static_cast<char>('0' + x % 10);
-    x /= 10;
-  } while (x && i < 7);
-  while (i && *at < n - 1) b[(*at)++] = t[--i];
-  b[*at] = 0;
-}
-static void put_time(char* b, int n, int* at, float s) {
-  if (s < 0.9995f) {
-    put_i(b, n, at, static_cast<int>(s * 1000.0f + 0.5f));
-    put_s(b, n, at, "ms");
-  } else {
-    int x = static_cast<int>(s * 10.0f + 0.5f);
-    put_i(b, n, at, x / 10);
-    put_s(b, n, at, ".");
-    put_i(b, n, at, x % 10);
-    put_s(b, n, at, "s");
-  }
-}
 
 MI_COLD void taurus_knob_text(int k, float u, char* b, int n) {
   if (n <= 0) return;

@@ -4376,7 +4376,7 @@ int main(int argc, char** argv) {
     eng_defaults(p);
     eng_fresh();
     const int sq_m = eng_model_find(MK_SQ1, 0);
-    int ok = sq_m == 15 && ENG_MODELS == 23 && eng_model_find(MK_PLAITS, 7) < 0 && eng_model_find(MK_PLAITS, 11) < 0 &&
+    int ok = sq_m == 15 && ENG_MODELS == 24 && eng_model_find(MK_PLAITS, 7) < 0 && eng_model_find(MK_PLAITS, 11) < 0 &&
              eng_model_bank(sq_m) == 2 && eng_model_own(sq_m) && sq_progs() == 24;
     eng_set_model(0, sq_m);
     float kd[8];
@@ -4964,10 +4964,11 @@ int main(int argc, char** argv) {
     // after its release; TUBA an octave under its note (B at 32'), the Minimoog's waves their sub (C at 32'); its bass
     // given back as EMPHASIS rises (55 Hz under a cutoff at 400 Hz: at 0.9 at least 70 % of it at 0); GLIDE: the
     // pitch 30 ms after a jump of an octave still under it, at once without; a project of 0.16.19 (30) and a sound
-    // (4) renumbered (SPEECH 16 now 17, OTIS 15 kept)
+    // (4) renumbered (SPEECH 16 now where it is, OTIS 15 kept, MODAL the last)
     const int tm = eng_model_find(MK_TAURUS, 0);
-    int ok = tm == 16 && ENG_MODELS == 23 && eng_model_bank(tm) == 2 && eng_model_own(tm) &&
-             eng_model_find(MK_PLAITS, 15) == 17 && eng_model_find(MK_SQ1, 0) == 15;
+    const int speech = eng_model_find(MK_PLAITS, 15), modal = eng_model_find(MK_PLAITS, 20);
+    int ok = tm == 16 && ENG_MODELS >= 23 && eng_model_bank(tm) == 2 && eng_model_own(tm) && speech > tm &&
+             modal == ENG_MODELS - 1 && eng_model_find(MK_SQ1, 0) == 15;
     project_t* p = eng_project();
     eng_defaults(p);
     eng_fresh();
@@ -5063,8 +5064,8 @@ int main(int argc, char** argv) {
     q.algo[PG_TRACK(1, 0)] = 16;
     q.algo[PG_TRACK(2, 0)] = 15;
     q.algo[PG_TRACK(3, 0)] = 21;         // (MODAL then)
-    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(1, 0)] == 17 &&
-                        q.algo[PG_TRACK(2, 0)] == 15 && q.algo[PG_TRACK(3, 0)] == 22;
+    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(1, 0)] == speech &&
+                        q.algo[PG_TRACK(2, 0)] == 15 && q.algo[PG_TRACK(3, 0)] == modal;
     eng_defaults(p);
     eng_fresh();
     eng_set_model(1, eng_model_find(MK_PLAITS, 15));
@@ -5073,7 +5074,7 @@ int main(int argc, char** argv) {
     snd.version = 4;
     snd.algo[0] = 16;                    // (SPEECH's number then)
     eng_set_model(1, eng_model_find(MK_FM, 0));
-    const int snd_ok = eng_sound_set(1, &snd) == 0 && p->algo[PG_TRACK(1, 0)] == 17;
+    const int snd_ok = eng_sound_set(1, &snd) == 0 && p->algo[PG_TRACK(1, 0)] == speech;
     eng_defaults(p);
     eng_fresh();
     printf("TAURUS: at %d of %d, knobs %s, texts %s, CONTOUR from its middle %s; its voices finite %s, levels %.3f .. "
@@ -5087,6 +5088,203 @@ int main(int argc, char** argv) {
         !proj_ok || !snd_ok)
       ++failures, printf("FAIL: TAURUS\n");
     taurus_init();
+  }
+
+  {                                     // 72. VOCODER (0.16.21): after TAURUS (17), Plaits' one further on; its knobs, its
+    // kit, its texts. The carrier alone (MOD Off): four voices for a chord, finite, its level near the others', next to
+    // nothing after its release; TONE: the saws the brightest, the choir the darkest. The vocoder: a voice of a 1 kHz
+    // tone: the carrier heard at 1 kHz as it is, at 250 Hz 15 dB under at least (each band's energy over the carrier's
+    // own); a silent voice: next to nothing; SHIFT up: the
+    // tone heard higher (at 2.8 kHz more than without); AIR: a voice's hiss over 6 kHz let through. Through the engine:
+    // T2's words (SPEECH, its level at 0) on T1's chord, louder than without them; the memory lent and given back
+    // (SPEECH on T1 after it, sounding); a project of 0.16.20 (31) and a sound (5) renumbered (TAURUS 16 kept, SPEECH
+    // 17 now 18, MODAL the last)
+    const int vm = eng_model_find(MK_VOCODER, 0), speech = eng_model_find(MK_PLAITS, 15);
+    int ok = vm == 17 && ENG_MODELS == 24 && eng_model_bank(vm) == 2 && eng_model_own(vm) && speech == 18 &&
+             eng_model_find(MK_TAURUS, 0) == 16;
+    project_t* p = eng_project();
+    eng_defaults(p);
+    eng_fresh();
+    eng_set_model(0, vm);
+    float kd[8];
+    voc_defaults(kd);
+    for (int i = 0; i < 8; ++i) {
+      int param = PG_TRACK(0, 0) * 4 + 1 + i;
+      float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
+      if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), voc_knob_name(i)) != 0) ok = 0;
+    }
+    int centered = 1;
+    for (int i = 0; i < 8; ++i) centered &= eng_param_centered(PG_TRACK(0, 0) * 4 + 1 + i) == (i == 6);
+    char tx[24];
+    struct { int k; float u; const char* want; } kTx[] = {
+        {0, 0.0f, "Off"}, {0, 0.5f, "T2"}, {0, 1.0f, "T4"}, {1, 0.0f, "Saws"}, {1, 0.5f, "Strings"}, {1, 1.0f, "Choir"},
+        {3, 0.0f, "3ms"}, {3, 1.0f, "3.0s"}, {4, 1.0f, "6.0s"}, {5, 0.0f, "10ms"}, {5, 1.0f, "Hold"}, {6, 0.5f, "0"},
+        {6, 1.0f, "+3.0"}, {6, 0.0f, "-3.0"}, {7, 1.0f, "100"}};
+    int texts = 1;
+    for (auto& x : kTx) {
+      voc_knob_text(x.k, x.u, tx, sizeof tx);
+      if (std::strcmp(tx, x.want) != 0) texts = 0, printf("  VOCODER knob %d at %.2f: %s, not %s\n", x.k, x.u, tx, x.want);
+    }
+    // the machine on its own (T1 VOCODER: its memory lent), fed by hand
+    static float buf[44100 * 3], mb[128];
+    const float chord[4] = {48.0f, 52.0f, 55.0f, 59.0f};
+    auto play = [&](const float* k, int len, int on, int mod_kind, float* out) {   // (mod: 0 none, 1 a 1 kHz tone,
+      voc_reset(0);                                                                  // 2 noise)
+      uint32_t r = 12345u;
+      int nv = 0;
+      for (int s = 0; s < len; s += 128) {
+        for (int i = 0; i < 128; ++i) {
+          r = r * 1664525u + 1013904223u;
+          const double ph = 2.0 * M_PI * 1000.0 * (s + i) / 44100.0;
+          mb[i] = mod_kind == 1 ? static_cast<float>(0.3 * std::sin(ph))
+                  : mod_kind == 2 ? (static_cast<float>(r >> 8) / 16777216.0f - 0.5f) * 0.4f : 0.0f;
+        }
+        voc_modulator(0, mb, 128);
+        voc_set(0, chord, 4, k);
+        if (s == 0) voc_gate(0, 1);
+        if (s >= on) voc_gate(0, 0);
+        voc_render(0, out + s, 128);
+        if (s == 22016) nv = voc_voices(0);
+      }
+      return nv;
+    };
+    auto band = [&](const float* x, int a, int b, double lo, double hi) {   // (its energy between lo and hi Hz: a DFT's)
+      double e = 0.0;
+      const int nn = b - a;
+      for (double hz = lo; hz <= hi; hz += 44100.0 / nn) {
+        double c = 0, sn = 0;
+        for (int i = a; i < b; ++i) {
+          const double ph = 2.0 * M_PI * hz * (i - a) / 44100.0;
+          c += x[i] * std::cos(ph), sn += x[i] * std::sin(ph);
+        }
+        e += c * c + sn * sn;
+      }
+      return e;
+    };
+    float k[8];
+    for (int i = 0; i < 8; ++i) k[i] = kd[i];
+    k[0] = 0.05f;                        // (Off)
+    k[4] = 0.1f;                         // (RELEASE 51 ms)
+    const int voices = play(k, 44100 * 3, 44100, 0, buf);
+    int finite = 1;
+    double e = 0.0, pk = 0.0, tail = 0.0;
+    for (int i = 0; i < 44100 * 3; ++i) {
+      finite &= std::isfinite(buf[i]) ? 1 : 0;
+      pk = std::max(pk, static_cast<double>(std::fabs(buf[i])));
+      if (i >= 8820 && i < 35280) e += buf[i] * buf[i];
+      if (i >= 44100 * 3 - 4410) tail = std::max(tail, static_cast<double>(std::fabs(buf[i])));
+    }
+    const double lv = std::sqrt(e / 26460.0);
+    // TONE: the share of the energy over 4 kHz (a 4096-sample window)
+    double hi[3];
+    for (int j = 0; j < 3; ++j) {
+      k[1] = j * 0.5f;
+      play(k, 22050, 22050, 0, buf);
+      const double all = band(buf, 8192, 12288, 100.0, 16000.0), top = band(buf, 8192, 12288, 4000.0, 16000.0);
+      hi[j] = top / (all + 1e-30);
+    }
+    const int tone = hi[0] > hi[1] && hi[1] > hi[2];
+    // the vocoder: MOD on (T2's place: fed here by hand), the saws
+    k[0] = 0.5f;
+    k[1] = 0.0f;
+    k[6] = 0.5f;
+    k[7] = 0.0f;
+    k[0] = 0.05f;                        // (the carrier alone: what each band has to give)
+    play(k, 22050, 22050, 0, buf);
+    const double c1k = band(buf, 8192, 16384, 950.0, 1050.0), c250 = band(buf, 8192, 16384, 225.0, 275.0);
+    k[0] = 0.5f;
+    play(k, 22050, 22050, 1, buf);
+    const double at1k = band(buf, 8192, 16384, 950.0, 1050.0) / (c1k + 1e-30);
+    const double at250 = band(buf, 8192, 16384, 225.0, 275.0) / (c250 + 1e-30);
+    const double at2k8 = band(buf, 8192, 16384, 2650.0, 2950.0);
+    double ev = 0.0;
+    for (int i = 8192; i < 16384; ++i) ev += buf[i] * buf[i];
+    play(k, 22050, 22050, 0, buf);
+    double es = 0.0;
+    for (int i = 8192; i < 16384; ++i) es += buf[i] * buf[i];
+    k[6] = 1.0f;                         // (SHIFT: up an octave and a half)
+    play(k, 22050, 22050, 1, buf);
+    const double at2k8_up = band(buf, 8192, 16384, 2650.0, 2950.0);
+    k[6] = 0.5f;
+    k[7] = 1.0f;                         // (AIR: on the choir, which has no highs of its own)
+    k[1] = 1.0f;
+    play(k, 22050, 22050, 2, buf);
+    const double air_on = band(buf, 8192, 12288, 7000.0, 12000.0);
+    k[7] = 0.0f;
+    play(k, 22050, 22050, 2, buf);
+    const double air_off = band(buf, 8192, 12288, 7000.0, 12000.0);
+    const int vocoder = at1k > 0.3 && at1k > 30.0 * at250 && es < 0.01 * ev && at2k8_up > 3.0 * at2k8 &&
+                        air_on > 3.0 * air_off;
+    // through the engine: T2 SPEECH saying its words on its steps, its level at 0; T1 the vocoder (MOD T2) on a chord
+    static float l[128], rr[128];
+    auto engine_run = [&](int words) {
+      eng_defaults(p);
+      eng_fresh();
+      p->algo[PG_COMP] = MB_OFF;
+      eng_set_model(0, vm);
+      eng_set_model(1, speech);
+      for (int t = 0; t < ENG_TRACKS; ++t)
+        for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(t, st, 0);
+      for (int st = 0; words && st < 16; st += 2) eng_trig_set(1, st, 1);
+      p->val[PG_MIX * 4 + 1] = 0.0f;
+      p->val[PG_TRACK(0, 0) * 4 + 1] = 0.5f;   // (MOD T2)
+      eng_cut();
+      for (int b = 0; b < 8; ++b) eng_render(l, rr, 128);
+      eng_play(1);
+      eng_key(0, 48, 1), eng_key(0, 55, 1), eng_key(0, 60, 1);
+      double en = 0.0;
+      for (int b = 0; b < 600; ++b) {
+        eng_render(l, rr, 128);
+        for (int i = 0; b >= 100 && i < 128; ++i) en += l[i] * l[i] + rr[i] * rr[i];
+      }
+      eng_key_release_all();
+      eng_play(0);
+      return std::sqrt(en / (500.0 * 256.0));
+    };
+    const double with = engine_run(1), without = engine_run(0);
+    // the memory given back: SPEECH on T1 now, a trig: it sounds
+    eng_set_model(0, speech);
+    eng_trig_set(0, 0, 1);
+    eng_play(1);
+    double back = 0.0;
+    int back_finite = 1;
+    for (int b = 0; b < 300; ++b) {
+      eng_render(l, rr, 128);
+      for (int i = 0; i < 128; ++i) back = std::max(back, static_cast<double>(std::fabs(l[i]))), back_finite &= std::isfinite(l[i]);
+    }
+    eng_play(0);
+    // 0.16.20's project (31): TAURUS 16, SPEECH 17, MODAL 22; its sound (5): SPEECH 17
+    static project_t q;
+    eng_defaults(&q);
+    q.version = 31;
+    q.algo[PG_TRACK(0, 0)] = 16;
+    q.algo[PG_TRACK(1, 0)] = 17;
+    q.algo[PG_TRACK(2, 0)] = 22;
+    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == 16 &&
+                        q.algo[PG_TRACK(1, 0)] == speech && q.algo[PG_TRACK(2, 0)] == ENG_MODELS - 1;
+    eng_defaults(p);
+    eng_fresh();
+    eng_set_model(1, speech);
+    static eng_sound_t snd;
+    eng_sound_get(1, &snd);
+    snd.version = 5;
+    snd.algo[0] = 17;
+    eng_set_model(1, eng_model_find(MK_FM, 0));
+    const int snd_ok = eng_sound_set(1, &snd) == 0 && p->algo[PG_TRACK(1, 0)] == speech;
+    eng_defaults(p);
+    eng_fresh();
+    const int carrier = finite && voices == 4 && lv > 0.05 && lv < 0.35 && pk < 1.25 && tail < 1e-4;
+    const int engine = with > 0.005 && with > 3.0 * without && back > 0.01 && back_finite;
+    printf("VOCODER: at %d of %d, knobs %s, texts %s, SHIFT from its middle %s; alone: %d voices, level %.3f, peak "
+           "%.2f, after %.1e (%s); TONE over 4 kHz %.3f %.3f %.3f %s; vocoded: 1 kHz %.2f of the carrier, 250 Hz %.4f, silent voice "
+           "%.1e of it, SHIFT up at 2.8 kHz x%.1f, AIR x%.1f (%s); through the engine: words %.4f, none %.4f, SPEECH "
+           "after it %.2f (%s); 0.16.20's project %s, its sound %s\n", vm, ENG_MODELS, ok ? "ok" : "WRONG",
+           texts ? "ok" : "WRONG", centered ? "ok" : "WRONG", voices, lv, pk, tail, carrier ? "ok" : "WRONG", hi[0],
+           hi[1], hi[2], tone ? "ok" : "WRONG", at1k, at250, es / (ev + 1e-30), at2k8_up / (at2k8 + 1e-30),
+           air_on / (air_off + 1e-30), vocoder ? "ok" : "WRONG", with, without, back, engine ? "ok" : "WRONG",
+           proj_ok ? "ok" : "WRONG", snd_ok ? "ok" : "WRONG");
+    if (!ok || !texts || !centered || !carrier || !tone || !vocoder || !engine || !proj_ok || !snd_ok)
+      ++failures, printf("FAIL: VOCODER\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

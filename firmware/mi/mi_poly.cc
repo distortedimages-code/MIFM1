@@ -570,34 +570,6 @@ int poly_knob_steps(int k) { return k == 6 ? 2 : 128; }
 int poly_chord(float u) { return chord_of(u); }
 const char* poly_chord_name(float u) { return kChordName[chord_of(clampf(u, 0.0f, 1.0f)) + kChords / 2]; }
 
-static void put_s(char* b, int n, int* at, const char* s) {
-  while (*s && *at < n - 1) b[(*at)++] = *s++;
-  b[*at] = 0;
-}
-static void put_i(char* b, int n, int* at, int x) {
-  char t[8];
-  int i = 0;
-  if (x < 0) put_s(b, n, at, "-"), x = -x;
-  do {
-    t[i++] = static_cast<char>('0' + x % 10);
-    x /= 10;
-  } while (x && i < 7);
-  while (i && *at < n - 1) b[(*at)++] = t[--i];
-  b[*at] = 0;
-}
-static void put_time(char* b, int n, int* at, float s) {
-  if (s < 0.9995f) {
-    put_i(b, n, at, static_cast<int>(s * 1000.0f + 0.5f));
-    put_s(b, n, at, "ms");
-  } else {
-    int x = static_cast<int>(s * 10.0f + 0.5f);
-    put_i(b, n, at, x / 10);
-    put_s(b, n, at, ".");
-    put_i(b, n, at, x % 10);
-    put_s(b, n, at, "s");
-  }
-}
-
 MI_COLD void poly_knob_text(int k, float u, char* b, int n) {
   if (n <= 0) return;
   int at = 0;

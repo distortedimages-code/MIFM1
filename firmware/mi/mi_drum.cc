@@ -283,33 +283,6 @@ void drum_defaults(int m, float* k) {
 }
 int drum_knob_steps(int k) { return k >= 0 ? 128 : 128; }   // (each knob its 128 values)
 
-static void put_s(char* b, int n, int* at, const char* s) {
-  while (*s && *at < n - 1) b[(*at)++] = *s++;
-  b[*at] = 0;
-}
-static void put_i(char* b, int n, int* at, int x) {
-  char t[8];
-  int i = 0;
-  if (x < 0) put_s(b, n, at, "-"), x = -x;
-  do {
-    t[i++] = static_cast<char>('0' + x % 10);
-    x /= 10;
-  } while (x && i < 7);
-  while (i && *at < n - 1) b[(*at)++] = t[--i];
-  b[*at] = 0;
-}
-static void put_time(char* b, int n, int* at, float s) {   // 12ms, 340ms, 1.2s
-  if (s < 0.9995f) {
-    put_i(b, n, at, static_cast<int>(s * 1000.0f + 0.5f));
-    put_s(b, n, at, "ms");
-  } else {
-    int x = static_cast<int>(s * 10.0f + 0.5f);
-    put_i(b, n, at, x / 10);
-    put_s(b, n, at, ".");
-    put_i(b, n, at, x % 10);
-    put_s(b, n, at, "s");
-  }
-}
 static void put_hz(char* b, int n, int* at, float hz) {   // 0.5Hz, 85Hz, 2.4k
   if (hz < 9.95f) {
     int x = static_cast<int>(hz * 10.0f + 0.5f);

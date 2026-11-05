@@ -33,6 +33,10 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   battent, l'échelle à transistors du Minimoog, un contour qui retombe, le DECAY, le glide ; ses trois presets TAURUS,
   BASS, TUBA) et le **Minimoog** (ses six formes d'onde, son troisième oscillateur une octave dessous, son mixer qui
   pousse le filtre), ses graves rendus quand la résonance monte (voir plus bas) ;
+- **VOCODER** (0.16.21) : un vocodeur à 12 bandes et son propre synthé, d'après le **Vocoder Plus VP-330** de Roland :
+  la voix est une piste au choix (MOD), la porteuse quatre voix de **scies** grasses qui deviennent des **cordes** puis
+  un **chœur** (TONE), un **ensemble** pour l'épaissir, SHIFT pour déplacer les formants, AIR pour laisser passer les
+  sifflantes ; sans voix, une machine à cordes (voir plus bas) ;
 - **Plaits** sur chaque piste, 6 de ses modèles (ses trois batteries, treize de ses oscillateurs, sa puce 8 bits et ses
   formants ont laissé la place aux moteurs de MIFM1), et un **circuit bending** par piste (0.7, à la place du
   grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
@@ -107,7 +111,7 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
 pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
 en quatre gestes, le chemin du son (un schéma), le panneau (chaque numéro allume son repère sur la machine ;
-« Repères » les montre tous), les 23 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
+« Repères » les montre tous), les 24 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
 et ce qu'ils modélisent, les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le circuit bending,
 les effets, le séquenceur, la dose d'aléatoire, les spécifications, et des jauges de la charge du FM-1. « Essayer »,
 sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_try). Pour écouter MIFM1 sur un autre système (une
@@ -581,8 +585,8 @@ jusqu'à l'auto-oscillation), un **contour** sur la coupure qui monte et retombe
 sustaining », 5 ms d'attaque), un contour de volume et son interrupteur **DECAY** (allumé : le son s'éteint au rythme
 du decay quand on lâche), le **glide** (un retard de condensateur, jusqu'à une demi-seconde). Du Minimoog : ses **six
 formes d'onde** (triangle, triangle-dent de scie, dent de scie, carré, rectangle large, rectangle étroit), son
-**troisième oscillateur** une octave sous les deux autres (la sous-octave ; en dent de scie inversée là où les autres
-font la triangle-dent de scie, comme son oscillateur 3), et son **mixer** qu'on pousse dans le filtre pour le saturer.
+**troisième oscillateur** une octave sous les deux autres (la sous-octave, de la même forme), et son **mixer** qu'on
+pousse dans le filtre pour le saturer.
 
 - **L'échelle** : le modèle de D'Angelo et Välimäki (celui du filtre LADDER de MIFM1) : une paire de transistors, sa
   tangente hyperbolique, à chacun des quatre étages. Une vraie échelle perd ses graves quand sa résonance monte (la
@@ -602,6 +606,41 @@ Choisir TAURUS met ses réglages aux siens : le preset Taurus, B qui bat de 6 ce
 résonance, le contour profond, un decay d'une demi-seconde. Une voix coûte au FM-1 environ 6 % d'un bloc. Les projets
 et les sons enregistrés avec les 0.16.18 et 0.16.19 se relisent : TAURUS prend la place 16, SPEECH et les autres
 modèles de Plaits passent un cran plus loin.
+
+**VOCODER** (0.16.21 ; ALGORITHM après TAURUS, la banque MIFM1) : un **vocodeur à canaux** et son propre synthé,
+d'après le **Vocoder Plus VP-330** de Roland (1979 : un vocodeur à 10 bandes, des cordes, un chœur, un ensemble à
+lignes à retard). La **voix** (le modulateur) est une autre piste, choisie avec MOD (T1 à T4, prise avant le mixer :
+son volume à zéro, on ne l'entend plus qu'à travers le vocodeur ; SPEECH y est à sa place). La **porteuse** est le
+VOCODER lui-même : quatre voix par piste, jouées par les pas, leurs accords ou le clavier.
+
+- **La porteuse** : trois dents de scie par voix (anti-repliées), et TONE qui va des **scies** grasses (désaccordées de
+  18 cents, la troisième dessous) aux **cordes** (6 cents, la troisième une octave au-dessus : le 4 pieds, adoucies)
+  puis au **chœur** (3,5 cents, plus sombre, les formants d'un « a » : 650, 1 080 et 2 650 Hz). ATTACK et RELEASE font
+  son enveloppe.
+- **Le vocodeur** : 12 bandes d'une demi-octave, de 130 Hz à 6,3 kHz (deux filtres d'état de Chamberlin de Q 2,2
+  chacune : l'octave d'à côté 21 dB plus bas). La voix est analysée au huitième ou à la moitié de la fréquence
+  d'échantillonnage selon la bande, la porteuse filtrée à la moitié ou à plein régime : c'est ce qui le rend abordable.
+  Les pôles de chaque filtre sont placés là où ils doivent être pour sa bande et sa fréquence, son gain ramené à 1 en
+  son centre (la formule habituelle ne tient que loin sous la fréquence d'échantillonnage). Le niveau de chaque bande
+  de la voix est suivi (2 ms de montée, FOLLOW pour la retombée, puis **Hold** qui fige le timbre) et donné à la même
+  bande de la porteuse. Un **gain automatique** garde le résultat au niveau de la porteuse : une voix chuchotée ou
+  criée, une boucle de batterie, le même volume, seule leur forme compte. **SHIFT** décale les bandes de la voix
+  jusqu'à trois (une octave et demie) vers le bas ou le haut : une voix plus grave ou plus petite. **AIR** laisse
+  passer les aigus de la voix (au-dessus de 4,5 kHz : les « s » et les « t », plus intelligibles).
+- **L'ensemble** : trois prises sur une ligne de 6 ms balayée par deux LFO (0,63 et 5,9 Hz), décalées d'un tiers de
+  tour, comme les ensembles à lignes à retard des machines à cordes ; ENSEMBLE dose sa profondeur et son mélange.
+
+MOD sur Off : la porteuse seule, une machine à cordes à quatre voix.
+
+| MOD | TONE | ENSEMBLE | ATTACK | RELEASE | FOLLOW | SHIFT | AIR |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **Off**, ou la piste qui parle (**T1** à **T4**) | **Saws**, **Strings**, **Choir**, et entre les deux | la profondeur et le mélange de l'ensemble, 0 à 100 | 3 ms à 3 s | 30 ms à 6 s | la retombée des bandes, 10 ms à 1 s, puis **Hold** | les bandes de la voix décalées, −3,0 à +3,0 | les aigus de la voix, 0 à 100 |
+
+Choisir VOCODER met ses réglages aux siens : MOD sur Off (à tourner vers la piste qui parle), les cordes, l'ensemble à
+70, une attaque de 27 ms, un relâchement d'un tiers de seconde, FOLLOW à 40 ms, AIR à 35. Il coûte au FM-1 environ
+4,5 % d'un bloc avec une voix, 7 % avec quatre, et ses bandes 12 % de plus quand MOD prend une piste (quatre voix
+vocodées : environ 19 %, autant qu'OTIS). Les projets et les sons enregistrés avec la 0.16.20 se relisent : VOCODER
+prend la place 17, SPEECH et les autres modèles de Plaits passent un cran plus loin.
 
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
 icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis
@@ -1130,6 +1169,8 @@ Chaque moteur de MIFM1 doit quelque chose à une machine, et le site le raconte,
   celui du SID du Commodore 64) ;
 - TAURUS : les pédales **Taurus** de Moog (le 205A de David Luce, 1975 ; sous Genesis, Rush, Yes, Pink Floyd, The Police,
   U2) et le **Minimoog** (1970) ;
+- VOCODER : le **Vocoder Plus VP-330** de Roland (1979-1980 ; sous Vangelis, Yellow Magic Orchestra, Laurie Anderson,
+  Underworld), et avant lui le vocodeur de **Homer Dudley** (Bell Labs, 1937) ;
 - les filtres : l'échelle de **Moog**, le Korg 35 du **MS-20**, le **SEM** d'Oberheim ; le circuit bending : le
   **Biscuit** d'OTO et le **Data Bender** de Qu-Bit ; le delay : les potards du **Zen Delay** ; la réverbe et Warps :
   **Clouds** et **Warps** de Mutable Instruments ;
@@ -1170,14 +1211,18 @@ Sources : [Pretty Hate Machine](https://en.wikipedia.org/wiki/Pretty_Hate_Machin
 [le manuel de Wider](https://polyversemusic.com/downloads/manuals/Wider%20Manual.pdf),
 [le manuel du Taurus 205A](https://archive.org/details/Moog_Taurus_Model_205A_Owner_s_Service_Manual),
 [Sound On Sound sur le Taurus](https://www.soundonsound.com/reviews/moog-taurus),
-[Moog Taurus](https://en.wikipedia.org/wiki/Moog_Taurus) ; les autres sur le site.
+[Moog Taurus](https://en.wikipedia.org/wiki/Moog_Taurus),
+[Roland VP-330](https://en.wikipedia.org/wiki/Roland_VP-330),
+[Vintage Synth Explorer sur le VP-330](https://www.vintagesynth.com/roland/vocoder.php),
+[Vocoder](https://en.wikipedia.org/wiki/Vocoder) ; les autres sur le site.
 
 ## Le dépôt
 
 - `firmware/` : le firmware (fm1-base `tools/build.py ../firmware`)
   - `app.c` : l'écran et les contrôles ; `mi/engine.cc` : le son (les pistes, les pas et leurs trigs, les LFO, la
     matrice, le quantiseur, les effets et leurs pistes de pas, le mixer ; les voix et Warps partagés entre les deux
-    cœurs) ; `mi/mi_*.cc` : un pont C par module Mutable ; `mi/mi_reverb.h` : la réverbe de Clouds, ses lignes de
+    cœurs) ; `mi/mi_*.cc` : un pont C par module Mutable, et les machines de MIFM1 (`mi/mi_shared.cc` : ce qu'elles
+    partagent, les textes de leurs potards et leur sortie) ; `mi/mi_reverb.h` : la réverbe de Clouds, ses lignes de
     retard en flottants ; `mi/mi_delay.h` : le delay (le SVF et la saturation de stmlib dans une ligne 16 bits)
   - `third_party/` : le code Mutable Instruments utilisé, copié tel quel ; les retouches sont dans `PATCHES.md` ;
     `third_party/lxr/` : les voix du LXR-02 (leurs retouches dans `MIFM1.md`), `lxr_port.h` / `.cc` ce sur quoi

@@ -991,21 +991,6 @@ int sq_cycle(int t, float* y, int n, int* of) {
   return f + 32 * prog_of(s.k[0]);
 }
 
-static void put_s(char* b, int n, int* at, const char* s) {
-  while (*s && *at < n - 1) b[(*at)++] = *s++;
-  b[*at] = 0;
-}
-static void put_i(char* b, int n, int* at, int x) {
-  char t[8];
-  int i = 0;
-  if (x < 0) put_s(b, n, at, "-"), x = -x;
-  do {
-    t[i++] = static_cast<char>('0' + x % 10);
-    x /= 10;
-  } while (x && i < 7);
-  while (i && *at < n - 1) b[(*at)++] = t[--i];
-  b[*at] = 0;
-}
 static void put_pc(char* b, int n, int* at, float u) {
   put_i(b, n, at, static_cast<int>(u * 100.0f + 0.5f));
   put_s(b, n, at, "%");

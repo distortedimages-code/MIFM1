@@ -678,33 +678,6 @@ float fm4_from_move(float move) {       // 0.10's MOVE (-1 .. 1) as SHAPE (-1 ..
 int fm4_chord(float u) { return voicing_of(u) >= kChords; }
 float fm4_chords_at(void) { return static_cast<float>(kChords) / static_cast<float>(kVoicings); }
 
-static void put_s(char* b, int n, int* at, const char* s) {
-  while (*s && *at < n - 1) b[(*at)++] = *s++;
-  b[*at] = 0;
-}
-static void put_i(char* b, int n, int* at, int x) {
-  char t[8];
-  int i = 0;
-  if (x < 0) put_s(b, n, at, "-"), x = -x;
-  do {
-    t[i++] = static_cast<char>('0' + x % 10);
-    x /= 10;
-  } while (x && i < 7);
-  while (i && *at < n - 1) b[(*at)++] = t[--i];
-  b[*at] = 0;
-}
-static void put_time(char* b, int n, int* at, float s) {   // 12ms, 340ms, 1.2s
-  if (s < 0.9995f) {
-    put_i(b, n, at, static_cast<int>(s * 1000.0f + 0.5f));
-    put_s(b, n, at, "ms");
-  } else {
-    int x = static_cast<int>(s * 10.0f + 0.5f);
-    put_i(b, n, at, x / 10);
-    put_s(b, n, at, ".");
-    put_i(b, n, at, x % 10);
-    put_s(b, n, at, "s");
-  }
-}
 static void put_ratio(char* b, int n, int* at, float r) {   // 1, .5, 3.5, 2.76
   int x = static_cast<int>(r * 100.0f + 0.5f);
   if (x >= 100) put_i(b, n, at, x / 100);

@@ -19,6 +19,15 @@ extern "C" {
 
 #define MI_SR 44100.0f                   /* the FM-1's rate */
 
+/* what the machines share (mi_shared.cc). Their knob texts: a string, an integer, a time (12ms, 340ms, 1.2s) put at *at in b (n bytes,
+ * kept ended) */
+void put_s(char *b, int n, int *at, const char *s);
+void put_i(char *b, int n, int *at, int x);
+void put_time(char *b, int n, int *at, float s);
+/* their output: n samples of y (times g) through the coupling capacitor (~5 Hz: *dcx, *dcy its states) and a soft
+ * knee above 0.8 (at most 1.2) */
+void mi_finish(float *y, uint32_t n, float g, float *dcx, float *dcy);
+
 /* ---- Plaits (Plaits 1.2: 24 models; the kSampleRate of the copy is 44.1 kHz) ---- */
 #define MP_MODELS 24
 uint32_t mp_size(void);                  /* bytes for one voice, its 16 KB engine buffer included */
@@ -216,6 +225,26 @@ const char *taurus_knob_name(int k);
 void taurus_defaults(float *k);
 int taurus_knob_steps(int k);            /* VOICE's 9, the others 128 */
 void taurus_knob_text(int k, float u, char *b, int n);
+
+/* ---- VOCODER (mi_vocoder.cc, 0.16.21): a 16-band channel vocoder and its own carrier, after Roland's VP-330 (its
+ * vocoder, its strings, its choir, its ensemble): four voices a track, each three saws (TONE: fat saws, strings, a
+ * choir's formants), the ensemble over it all; the voice another track's last block (voc_modulator, before the tracks
+ * play), MOD Off: the carrier alone. Its memory the track's Plaits voice's, lent (mf_voice_mem). Its eight knobs (k:
+ * 0..1, SHIFT bipolar from its middle): MOD (Off, T1..T4), TONE, ENSEMBLE, ATTACK, RELEASE, FOLLOW, SHIFT, AIR ---- */
+void voc_init(void);
+void voc_reset(int t);
+void voc_silence(int t);
+void voc_set(int t, const float *notes, int n, const float *k);   /* a chord, 4 notes at most */
+void voc_gate(int t, int g);
+void voc_keys(int t, const int *ids, const float *notes, int n);
+void voc_render(int t, float *out, uint32_t n);
+void voc_modulator(int t, const float *x, uint32_t n);   /* the voice's block (null: none), before voc_render */
+int voc_mod_track(float u);              /* MOD at u: the track it listens to (0..3), -1 Off */
+int voc_voices(int t);
+const char *voc_knob_name(int k);
+void voc_defaults(float *k);
+int voc_knob_steps(int k);               /* MOD's 5, the others 128 */
+void voc_knob_text(int k, float u, char *b, int n);
 
 /* ---- the tracks' filters (mi_filter.cc): LADDER (Moog's, D'Angelo and Valimaki's model), MS-20 (Korg 35, its
  * resonance driven), SEM (Oberheim's state variable, noise into it), VOX (three formants); each with a vactrol
