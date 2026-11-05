@@ -200,6 +200,29 @@ const char *sq_family(float wave);        /* its program's family (DIGITAL BASS,
  * none; of: the Transwave's places (32, a bell's 8) */
 int sq_cycle(int t, float *y, int n, int *of);
 
+/* ---- ROBOVOX (mi_robovox.cc, 0.16.17): a singing speech chip after Kraftwerk's Robovox (a Votrax SC-02 played from a
+ * keyboard: a phoneme a note, its pitch, its tract's length, its articulation), on the SC-01's vocal tract (MAME's,
+ * Olivier Galibert's, BSD-3-Clause), its 64 phonemes the SC-02's; one voice a track. Knobs (0..1): MODE (Phon, Word,
+ * Babble), SAY (the phoneme, the word, the babble), RATE, ARTIC, TRACT, FOLLOW, SOURCE (the pulse, a whisper, a
+ * track's sound), GLIDE ---- */
+void vox_reset(int t);
+void vox_silence(int t);
+void vox_set(int t, float note, const float *k);
+void vox_gate(int t, int g);
+void vox_render(int t, float *out, uint32_t n);
+void vox_carrier(int t, const float *x, uint32_t n);   /* SOURCE's track: its last block, before vox_render (x 0: none) */
+int vox_carrier_track(int t);            /* the track SOURCE takes, -1 none */
+int vox_voices(int t);
+int vox_view(int t, int *word, int *syl, float *f1, float *f2, float *va, float *fa);
+const char *vox_phon_name(int p);
+int vox_words(void);
+const char *vox_word_name(int w);
+int vox_syllables(int w);
+const char *vox_knob_name(int k);
+void vox_defaults(float *k);
+int vox_knob_steps(int k);               /* MODE's 3, the others 128 */
+void vox_knob_text(int k, float u, float mode, char *b, int n);   /* (mode: MODE's knob, SAY's text follows it) */
+
 /* ---- the tracks' filters (mi_filter.cc): LADDER (Moog's, D'Angelo and Valimaki's model), MS-20 (Korg 35, its
  * resonance driven), SEM (Oberheim's state variable, noise into it), VOX (three formants); each with a vactrol
  * envelope, a ping, FM from its own output, key tracking ---- */

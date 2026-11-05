@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: MPL-2.0
+# Copyright (C) 2026 Yoann
+# ROBOVOX's words (0.16.17), in the SC-02's phonemes (tools/robovox/robovox_tables.py): a name (8 letters at most),
+# then its syllables, | between them. A syllable's first vowel is held while the note is; what follows it is sung at
+# the release (a diphthong's second half, the consonants that close it). Words, not lines: sequence them yourself.
+ZERO: Z E | R OU
+ONE: W UH3 N
+TWO: T U1
+THREE: TH R E
+FOUR: F O R
+FIVE: F AH1 E V
+SIX: S I K S
+SEVEN: S EH | V UH3 N
+EIGHT: A Y T
+NINE: N AH1 E N
+TEN: T EH N
+ROBOT: R OU | B AH T
+MACHINE: M UH | SCH E N
+COMPUTER: K UH M | P U | T ER
+NUMBER: N UH3 M | B ER
+DATA: D A | T UH
+SIGNAL: S I KV | N UH LF
+VOICE: V O E S
+NOISE: N O E Z
+MUSIC: M U | Z I K
+ELECTRIC: I | L EH K | T R I K
+POWER: P AH1 OO | ER
+SYSTEM: S I S | T UH M
+CONTROL: K UH N | T R OU LF
+HUMAN: HF U | M UH N
+ENERGY: EH | N ER | D J E
+HELLO: HF EH | L OU
+DANGER: D A Y N | D J ER
+ERROR: EH | R ER
+WARNING: W O R | N I NG
+START: S T AH1 R T
+STOP: S T AH P
+RADIO: R A | D E | OU
+METAL: M EH | T UH LF
+BODY: B AH | D E
+DANCE: D AE N S
+LOVE: L UH1 V
+MEMORY: M EH | M ER | E
+PROGRAM: P R OU | KV R AE M
+TRAUMA: T R AW | M UH
+SYNTH: S I N TH
+OPERATOR: AH | P ER | A | T ER
+STATION: S T A | SCH UH N
+NETWORK: N EH T | W ER K
+INDUSTRY: I N | D UH | S T R E
+AUDIO: AW | D E | OU
+YES: YI EH S
+NO: N OU
+# (SLOGAN: Audiotrauma's, VOUS ÊTES LE BRUIT.) French, with the SC-02's English phonemes and its German and French ones (:UH the u of menu, :OH an eu)
+BRUIT: B R :UH E
+MUSIQUE: M :UH | Z E K
+BONJOUR: B AW NG | J U1 R2
+ENCORE: AW NG | K O R2
+SLOGAN: V U1 | Z EH T | L :OH | B R :UH E

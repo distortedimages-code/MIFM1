@@ -8,7 +8,7 @@
 # a power-off and in a backup, the patterns (SEQ held) and the presets (EDIT held: a factory sound, one saved, one
 # erased, the dark pad on another track), a new project (INIT: GLO, SELECT, REC held), the saved one back, the stress test (on
 # Plaits, then on the FM drums: their pages, a model chosen bringing its kit; ZERO, its knobs; the FM: its three pages,
-# another algorithm (its drawing), a chord, a SHAPE drawn; PADS, its progression playing, SCALE Prog; POLY, its MODE; REV3, its sweep; OTIS, its cycle drawn, a pad), an FM-1 without the
+# another algorithm (its drawing), a chord, a SHAPE drawn; PADS, its progression playing, SCALE Prog; POLY, its MODE; REV3, its sweep; OTIS, its cycle drawn, a pad; ROBOVOX, its vowels' chart), an FM-1 without the
 # module tables, then the tables arriving. Screenshots in the output folder.
 wait 1500
 shot 00_intro.png
@@ -810,6 +810,19 @@ shot 18ze_sq1_2.png
 turn SELECT 1
 wait 400
 shot 18zf_sq1_3.png
+turn SELECT -2
+turn ALGO 1
+wait 900
+shot 18zg_robovox.png
+wav robovox.wav
+wait 5000
+wavstop
+turn SELECT 1
+wait 400
+shot 18zh_robovox_2.png
+turn SELECT 1
+wait 400
+shot 18zi_robovox_3.png
 turn SELECT -2
 tap PLAY
 wait 300

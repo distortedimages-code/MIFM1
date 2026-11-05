@@ -15,6 +15,7 @@ repository, at the commit the package names.
 | MIFM1's changes to them (the USB audio input's 10 channels), applied to `base/` before a build | `patches/`, `tools/patch_base.sh` | MPL-2.0, as the files they change |
 | The browser emulator's page, fm1-base's (Copyright Charles Vestal) in French and with MIFM1's parts; its worklet part and exports | `firmware/web/emu/index.html`, `firmware/web/emu/app_worklet.js`, `firmware/web.c` | MPL-2.0 |
 | The page's photographs (the lab), Yoann's; the historical photographs are not in the repository: the page shows them from Wikimedia Commons, each linked to its page (its author, its licence) | `firmware/web/emu/img/` | Yoann's, for MIFM1's page: not under the code's licences |
+| ROBOVOX's vocal tract (0.16.17): the Votrax SC-01's analog path and timing, ported from MAME's `votrax.cpp` (Copyright Olivier Galibert) | in `firmware/mi/mi_robovox.cc` (MPL-2.0) and `tools/robovox/vox_check.cc` | BSD-3-Clause (`LICENSES/BSD-3-Clause-MAME.txt`) |
 | Mutable Instruments' code (Emilie Gillet) | `firmware/third_party/` (stmlib, Plaits, Clouds, Warps, Tides 2, Marbles) | MIT (`firmware/third_party/LICENSE-eurorack`, `LICENSE-stmlib`) |
 | The LXR-02's drum voices (Copyright Erica Synths), MIFM1's port of them and the code that reuses theirs | `firmware/third_party/lxr/`, `firmware/mi/mi_lxr.cc`, `tools/vendor_lxr.py`, `tools/lxr_check.cc` | GPL-3.0-only with the additional permission and terms of `firmware/third_party/lxr/NOTICE.md` |
 
@@ -31,3 +32,5 @@ The interface's fonts are fm1-base's (Barlow, SIL OFL 1.1).
 Trademarks: Mutable Instruments, Erica Synths, LXR and LXR-02 are their owners'. MIFM1 does not use them as its
 names, nor as its models' (on the screen: FM DRUM, FM SNARE, FM CYMBAL, FM HI-HAT); it names them only to say whose
 code it runs. MIFM1 is not made, approved or supported by Mutable Instruments or Erica Synths.
+ROBOVOX is named after Kraftwerk's device (Florian Schneider's), as a homage; Votrax and Kraftwerk are their owners'
+names, and MIFM1 is not connected to them. ROBOVOX's phonemes are MIFM1's own: no Votrax ROM is in it.

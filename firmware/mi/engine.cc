@@ -198,7 +198,7 @@ const ModelDef kModelDef[ENG_MODELS] = {
   {"ZERO", "ZERO", MK_ZERO, 0, 2},
   {"FM", "FM", MK_FM, 0, 2}, {"PADS", "PADS", MK_PADS, 0, 2}, {"POLY", "POLY", MK_POLY, 0, 2},
   {"REV3", "REV3", MK_PROPHET, 0, 2}, {"OTIS", "OTIS", MK_SQ1, 0, 2},
-  {"SPEECH", "SPCH", MK_PLAITS, 15, 3},
+  {"ROBOVOX", "RVOX", MK_VOX, 0, 2},
   {"SWARM", "SWRM", MK_PLAITS, 16, 4}, {"NOISE", "NOIS", MK_PLAITS, 17, 4}, {"PARTICLES", "PART", MK_PLAITS, 18, 4},
   {"STRING", "STRG", MK_PLAITS, 19, 4}, {"MODAL", "MODL", MK_PLAITS, 20, 4},
 };
@@ -526,6 +526,7 @@ int dice_interval(int m) {              // the parameter (tp) of a model that is
   if (d.kind == MK_POLY) return 7;      // leave the scale; PROPHET's too; SQ-1's WAVE: a program, its Transwave made
   if (d.kind == MK_PROPHET) return 8;   // anew)
   if (d.kind == MK_SQ1) return 1;
+  if (d.kind == MK_VOX) return 1;       // (ROBOVOX's MODE: its SAY a phoneme, a word, a babble as it is)
   if (d.kind != MK_PLAITS) return 0;
   return d.sub == 16 || d.sub == 18 ? 1 : 0;
 }
@@ -1514,7 +1515,7 @@ uint8_t vlent[ENG_TRACKS];
 uint32_t vepoch[ENG_TRACKS];
 void mclaim(int t) {
   const int k = track_kind(t);
-  if (vlent[t] && k != MK_SQ1) {
+  if (vlent[t] && k != MK_SQ1 && k != MK_VOX) {
     mp_init(voice[t]);
     ++vepoch[t];
     vlent[t] = 0;
@@ -1526,6 +1527,7 @@ void mclaim(int t) {
   else if (k == MK_POLY) poly_reset(t);
   else if (k == MK_PROPHET) pro_reset(t);
   else if (k == MK_SQ1) sq_reset(t);
+  else if (k == MK_VOX) vox_reset(t);
   mowner[t] = static_cast<uint8_t>(k);
 }
 uint16_t harmony_mask() {               // the harmony's scale (POLY's chords): PADS' (its chords'), else the project's
@@ -1551,6 +1553,7 @@ MI_COLD void kit_of(int m, float* k) {          // a model's knobs as its kit ha
   else if (d.kind == MK_POLY) poly_defaults(k);
   else if (d.kind == MK_PROPHET) pro_defaults(k);
   else if (d.kind == MK_SQ1) sq_defaults(k);
+  else if (d.kind == MK_VOX) vox_defaults(k);
   else if (d.kind == MK_LXR) lx_defaults(d.sub, k);
   else
     for (int i = 0; i < LX_KNOBS; ++i) k[i] = 0.5f;
@@ -1705,6 +1708,8 @@ void set_voice(int t) {
     } else if (kind == MK_SQ1) {
       float sc[4];
       sq_set(t, sc, step_chord(t, note, sc), k);
+    } else if (kind == MK_VOX) {
+      vox_set(t, note, k);
     }
     else lx_set(t, sub, note, k);
     if (kind == MK_POLY || kind == MK_PROPHET || kind == MK_SQ1) keys_to_voices(t, kind);
@@ -2063,6 +2068,7 @@ void render_voice(int t, uint32_t n) {
     if (track_kind(t) == MK_POLY) own = kWebPoly[0] + static_cast<float>(poly_voices(t)) * kWebPoly[1];   // (its voices)
     if (track_kind(t) == MK_PROPHET) own = kWebPro[0] + static_cast<float>(pro_voices(t)) * kWebPro[1];
     if (track_kind(t) == MK_SQ1) own = kWebSq[0] + static_cast<float>(sq_voices(t)) * kWebSq[1];
+    if (track_kind(t) == MK_VOX) own = static_cast<float>(vox_voices(t)) * kWebVox;
     web_spend((own + fm + (bend[t].on ? kWebBend : 0.0f) +
                (glitch[t].on || glitch[t].mix > 0.0f ? kWebGlitch : 0.0f) +
                (proj.trauma || tdrv[t].m > 0.0f ? kWebTrauma : 0.0f)) * static_cast<float>(n) / 128.0f);
@@ -2071,7 +2077,7 @@ void render_voice(int t, uint32_t n) {
   int kind = track_kind(t);             // an FM drum: a rise triggers it, its own envelope does the rest; ZERO, a
   int lx = kind == MK_LXR, ac = kind == MK_ZERO, dr = kind == MK_DRUM, fm = kind == MK_FM;   // drum, the FM, PADS:
   int pd = kind == MK_PADS, pd_on = pd && t == pad_track;   // their gate, their own render (PADS: one track's)
-  int po = kind == MK_POLY, px = kind == MK_PROPHET, sq1 = kind == MK_SQ1;
+  int po = kind == MK_POLY, px = kind == MK_PROPHET, sq1 = kind == MK_SQ1, vx = kind == MK_VOX;
   uint32_t step = n / kFrames, pos = 0;
   for (uint32_t k = 0; k < kFrames; ++k) {
     int g = fg[t][k];
@@ -2085,6 +2091,7 @@ void render_voice(int t, uint32_t n) {
       else if (po) poly_render(t, &vbuf[t][pos], at - pos);
       else if (px) pro_render(t, &vbuf[t][pos], at - pos);
       else if (sq1) sq_render(t, &vbuf[t][pos], at - pos);
+      else if (vx) vox_render(t, &vbuf[t][pos], at - pos);
       else if (pd) {
         if (pd_on) pads_render(&vbuf[t][pos], at - pos);
         else for (uint32_t i = pos; i < at; ++i) vbuf[t][i] = 0.0f;
@@ -2105,6 +2112,7 @@ void render_voice(int t, uint32_t n) {
     else if (po) poly_gate(t, g);
     else if (px) pro_gate(t, g);
     else if (sq1) sq_gate(t, g);
+    else if (vx) vox_gate(t, g);
     else if (pd) {
       if (pd_on) pads_gate(g);
     }
@@ -2120,6 +2128,7 @@ void render_voice(int t, uint32_t n) {
     else if (po) poly_render(t, &vbuf[t][pos], n - pos);
     else if (px) pro_render(t, &vbuf[t][pos], n - pos);
     else if (sq1) sq_render(t, &vbuf[t][pos], n - pos);
+    else if (vx) vox_render(t, &vbuf[t][pos], n - pos);
     else if (pd) {
       if (pd_on) pads_render(&vbuf[t][pos], n - pos);
       else for (uint32_t i = pos; i < n; ++i) vbuf[t][i] = 0.0f;
@@ -2718,6 +2727,7 @@ const char* eng_param_name(int param) {
                                            : track_kind(t) == MK_POLY ? poly_knob_name(lk)
                                            : track_kind(t) == MK_PROPHET ? pro_knob_name(lk)
                                            : track_kind(t) == MK_SQ1 ? sq_knob_name(lk)
+                                           : track_kind(t) == MK_VOX ? vox_knob_name(lk)
                                                                      : lx_knob_name(lx_model(t), lk);
   }
   if (param >= 0 && param < 12 * 4 && (param / 4) % 3 == 0 && param % 4 >= 1) {
@@ -2729,7 +2739,7 @@ const char* eng_param_name(int param) {
 
 // (0.16.16) a knob drawn from its middle (its - +): a bipolar parameter's, a negative range's; a machine's own knobs say
 // where theirs start (PADS' TEXTURE, OTIS' SHAPE, STACK and SPACE from the left on a bipolar place; OTIS' SWEEP and
-// COLOR from the middle on a plain one)
+// COLOR from the middle on a plain one; ROBOVOX's TRACT from the middle, the rest from the left)
 int eng_param_centered(int param) {
   const eng_pdef_t* d = eng_pdef(param);
   const int c = d->kind == K_BIP || (d->kind == K_INT && d->lo < 0);
@@ -2738,6 +2748,7 @@ int eng_param_centered(int param) {
   const int k = track_kind(param / 12);
   if (k == MK_PADS && lk == 7) return 0;
   if (k == MK_SQ1) return lk == 2 || lk == 4;
+  if (k == MK_VOX) return lk == 4;      // (ROBOVOX: TRACT, - and + an octave)
   return c;
 }
 
@@ -2867,7 +2878,8 @@ extern "C" void mf_forget(void) {
 }
 extern "C" void* mf_voice_mem(int t, uint32_t* bytes, uint32_t* epoch) {
   t = t < 0 ? 0 : t >= ENG_TRACKS ? ENG_TRACKS - 1 : t;
-  if (track_kind(t) != MK_SQ1 || !voice[t]) {   // (only the machine on the track)
+  if ((track_kind(t) != MK_SQ1 && track_kind(t) != MK_VOX) || !voice[t]) {   // (only the machine on the track: OTIS,
+                                        // ROBOVOX its source's block)
     *bytes = 0;
     *epoch = vepoch[t];
     return nullptr;
@@ -2890,6 +2902,15 @@ const char* eng_sq_family(int t) {
   if (t < 0 || t >= ENG_TRACKS || track_kind(t) != MK_SQ1) return "";
   return sq_family(lx_u(lx_param(t, 0), E(t, 1)));
 }
+// (0.16.17) ROBOVOX on a track: the phoneme sung (-1 silent, -2 not ROBOVOX), the word and its next syllable, F1's and
+// F2's codes, the levels
+const char* eng_vox_word(int w) { return vox_word_name(w); }
+int eng_vox_syllables(int w) { return vox_syllables(w); }
+const char* eng_vox_phon(int p) { return vox_phon_name(p); }
+int eng_vox_view(int t, int* word, int* syl, float* f1, float* f2, float* va, float* fa) {
+  if (t < 0 || t >= ENG_TRACKS || track_kind(t) != MK_VOX || mowner[t] != MK_VOX) return -2;
+  return vox_view(t, word, syl, f1, f2, va, fa);
+}
 int eng_model_own(int m) { return mdef(m).kind != MK_PLAITS; }
 int eng_model_find(int kind, int sub) {
   for (int m = 0; m < ENG_MODELS; ++m)
@@ -2907,6 +2928,7 @@ float eng_lx_step(int param, float v, int detents) {
                                             : track_kind(t) == MK_POLY ? poly_knob_steps(lk)
                                             : track_kind(t) == MK_PROPHET ? pro_knob_steps(lk)
                                             : track_kind(t) == MK_SQ1 ? sq_knob_steps(lk)
+                                            : track_kind(t) == MK_VOX ? vox_knob_steps(lk)
                                                                       : lx_knob_steps(lx_model(t), lk);
   float u = bip ? (v + 1.0f) * 0.5f : v;
   int i;
@@ -2959,8 +2981,8 @@ MI_COLD void eng_sound_get(int t, eng_sound_t* s) {
   sound_name(s, mdef(proj.algo[PG_TRACK(t, 0)]).name);
 }
 int eng_sound_check(const eng_sound_t* s, int bytes) {
-  if (bytes < static_cast<int>(sizeof *s) || s->magic != SND_MAGIC || (s->version != SND_VERSION && s->version != 1) ||
-      s->size != sizeof *s)             // (1: before 0.16.14, read as this one)
+  if (bytes < static_cast<int>(sizeof *s) || s->magic != SND_MAGIC || s->version < 1 || s->version > SND_VERSION ||
+      s->size != sizeof *s)             // (1, 2: before 0.16.14, before 0.16.17, read as this one)
     return 0;
   for (int i = 0; i < SND_PAGES * 4; ++i)
     if (!(s->val[i] > -1000.0f && s->val[i] < 1000.0f)) return 0;   // (a NaN fails both)
@@ -2970,8 +2992,10 @@ MI_COLD int eng_sound_set(int t, const eng_sound_t* s) {
   if (t < 0 || t >= ENG_TRACKS || !eng_sound_check(s, sizeof *s)) return -1;
   int m = s->algo[0], was_plaits = 0;
   if (s->version == 1 && m >= 15) {     // (before 0.16.14: CHIPTUNE 15, FORMANT 16 now SQ-1 from its kit; the others one
-    was_plaits = m <= 16;               // lower)
-    m = was_plaits ? eng_model_find(MK_SQ1, 0) : m - 1;
+    was_plaits = m <= 17;               // lower, SPEECH 17 ROBOVOX from its kit)
+    m = m <= 16 ? eng_model_find(MK_SQ1, 0) : m - 1;
+  } else if (s->version == 2 && m == 16) {   // (0.16.14 to 0.16.16: SPEECH 16 now ROBOVOX, from its kit)
+    was_plaits = 1;
   }
   m = m >= 0 && m < ENG_MODELS ? m : 0;
   if (!eng_model_free(t, m)) return -2;   // (PADS: once a project)
@@ -3089,6 +3113,9 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
   } else if (lk >= 0 && track_kind(param / 12) == MK_SQ1) {   // SQ-1's (a program, %, its layers, its SPACE)
     const int t = param / 12;
     sq_knob_text(lk, lx_u(param, v), lx_u(lx_param(t, 0), proj.val[lx_param(t, 0)]), b, n);
+  } else if (lk >= 0 && track_kind(param / 12) == MK_VOX) {   // ROBOVOX's (a mode, a phoneme or a word, x, st, %)
+    const int t = param / 12;
+    vox_knob_text(lk, lx_u(param, v), lx_u(lx_param(t, 0), E(t, 1)), b, n);
   } else if (lk >= 0) {                   // an FM drum's: as the LXR-02 shows it (0..127, a wave)
     lx_knob_text(lx_model(param / 12), lk, lx_u(param, v), b, n);
   } else if (pt == PT_WARPS1 && k == 0 && i_of(v) >= WC_OSC1) {   // the oscillator's shape, as the algorithm uses it
@@ -4222,8 +4249,9 @@ void eng_rnd_redraw(project_t* p, int lane, int tp) {
 // a Plaits engine's model now (0.10: thirteen gone to the FM, on its own knobs, the nearest algorithm: *algo; -1:
 // still Plaits')
 int plaits_now(int sub, int* algo) {
-  int m = sub == 7 || sub == 11 ? eng_model_find(MK_SQ1, 0) : eng_model_find(MK_PLAITS, sub);   // (0.16.14: CHIPTUNE,
-  *algo = -1;                                                                                   // FORMANT SQ-1)
+  int m = sub == 7 || sub == 11 ? eng_model_find(MK_SQ1, 0)                                     // (0.16.14: CHIPTUNE,
+          : sub == 15 ? eng_model_find(MK_VOX, 0) : eng_model_find(MK_PLAITS, sub);              // FORMANT SQ-1;
+  *algo = -1;                                                                                   // 0.16.17: SPEECH ROBOVOX)
   if (m >= 0) return m;
   //                      VCF PD 6OP 6OP 6OP TERR SMCH CHIP VA SHPR FM2 FRMT HARM WTBL CHRD
   static const int8_t kTo[15] = {1, 1, 4, 4, 4, 5, 5, -1, 1, 0, 0, -1, 7, 5, 5};
@@ -4239,10 +4267,11 @@ int plaits_now(int sub, int* algo) {
 int plaits_at(int i) {                  // (the eight of Plaits' left since 0.10, in their order; 0.16.14: the first
   static const uint8_t kSub8[8] = {7, 11, 15, 16, 17, 18, 19, 20};   // two, CHIPTUNE and FORMANT, SQ-1)
   const int sub = kSub8[i < 0 ? 0 : i > 7 ? 7 : i];
-  return sub == 7 || sub == 11 ? eng_model_find(MK_SQ1, 0) : eng_model_find(MK_PLAITS, sub);
+  return sub == 7 || sub == 11 ? eng_model_find(MK_SQ1, 0)
+         : sub == 15 ? eng_model_find(MK_VOX, 0) : eng_model_find(MK_PLAITS, sub);   // (0.16.17: SPEECH ROBOVOX)
 }
 // 0.16.14: CHIPTUNE and FORMANT gone, SQ-1 in their place: a track that played one plays SQ-1 from its kit, its locks
-// on its eight knobs (Plaits' meanings) gone
+// on its eight knobs (Plaits' meanings) gone; 0.16.17: SPEECH gone, ROBOVOX in its place, the same way
 MI_COLD void sq_from_plaits(project_t* p, int t) {
   lx_kit(p, t);
   for (int i = 0; i < ENG_PLOCKS; ++i) {
@@ -4257,10 +4286,16 @@ MI_COLD void models_v27(project_t* p) {   // (0.13 to 0.16.13's numbers: ..., PR
     if (o <= 16) {
       p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(eng_model_find(MK_SQ1, 0));
       sq_from_plaits(p, t);
+    } else if (o == 17) {               // (SPEECH: 0.16.14 to 0.16.16's 16, ROBOVOX's now: models_v28)
+      p->algo[PG_TRACK(t, 0)] = 16;
     } else {
       p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(o - 1 < ENG_MODELS ? o - 1 : 0);
     }
   }
+}
+MI_COLD void models_v28(project_t* p) {   // (0.16.14 to 0.16.16: SPEECH 16, ROBOVOX's place now: from its kit)
+  for (int t = 0; t < ENG_TRACKS; ++t)
+    if (p->algo[PG_TRACK(t, 0)] == 16) sq_from_plaits(p, t);
 }
 MI_COLD void models_renumbered(project_t* p, int from) {
   for (int t = 0; t < ENG_TRACKS; ++t) {
@@ -4285,7 +4320,7 @@ MI_COLD void models_renumbered(project_t* p, int from) {
       else m = eng_model_find(MK_ZERO, 0);
     }
     p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(m < 0 ? 0 : m);
-    if (mdef(m).kind == MK_SQ1) sq_from_plaits(p, t);
+    if (mdef(m).kind == MK_SQ1 || mdef(m).kind == MK_VOX) sq_from_plaits(p, t);
     else if (kit || algo >= 0) lx_kit(p, t);
     if (algo >= 0) p->val[PG_TRACK(t, 0) * 4 + 1] = (static_cast<float>(algo) + 0.5f) / 8.0f;
   }
@@ -4455,14 +4490,15 @@ int upgrade_any(project_t* p, int bytes);
 MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them, sizeof(project_t) >= the largest)
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   const int v = p->magic == PROJECT_MAGIC ? static_cast<int>(p->version) : 0;
-  if (v == 27 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
-    p->version = PROJECT_VERSION;       // (0.16.7 to 0.16.13: their layout this one, their models one more)
-    models_v27(p);
+  if ((v == 27 || v == 28) && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+    p->version = PROJECT_VERSION;       // (0.16.7 to 0.16.16: their layout this one; 0.16.13's models one more)
+    if (v == 27) models_v27(p);
+    models_v28(p);
     return 1;
   }
   if (!upgrade_any(p, bytes)) return 0;
   climb_off_all(p);
-  if (v >= 22) models_v27(p);           // (0.13 to 0.16.6: their numbers 0.16.13's; before, made this one's)
+  if (v >= 22) models_v27(p), models_v28(p);   // (0.13 to 0.16.6: their numbers 0.16.13's; before, made this one's)
   return 1;
 }
 MI_COLD int upgrade_any(project_t* p, int bytes) {
@@ -4630,6 +4666,7 @@ void cut_now() {
     else if (k == MK_POLY) poly_silence(t);
     else if (k == MK_PROPHET) pro_silence(t);
     else if (k == MK_SQ1) sq_silence(t);
+    else if (k == MK_VOX) vox_silence(t);
   }
   pads_silence();
   for (int t = 0; t < ENG_TRACKS; ++t) mf_reset(t);   // (the filters' rings)
@@ -4870,6 +4907,11 @@ void eng_render(float* l, float* r, uint32_t n) {
     if (voice_rests(t)) rest |= 1u << t;
     else v |= 1u << t;
   }
+  for (int t = 0; t < ENG_TRACKS; ++t)   // (0.16.17) ROBOVOX's SOURCE on a track: that track's last block, before any
+    if (track_kind(t) == MK_VOX) {       // voice is rendered (whichever core plays which)
+      const int u = vox_carrier_track(t);
+      vox_carrier(t, u >= 0 && u != t ? vbuf[u] : nullptr, n);
+    }
   for (int t = 0; t < ENG_TRACKS; ++t)
     if ((rest >> t) & 1u) render_voice(t, n);   // (silence: nothing to share)
   last_voices = v;

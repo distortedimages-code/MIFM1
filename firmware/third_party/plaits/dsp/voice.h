@@ -34,6 +34,7 @@
 #include "stmlib/dsp/filter.h"
 #include "stmlib/dsp/limiter.h"
 #include "stmlib/utils/buffer_allocator.h"
+#include "stmlib/dsp/hysteresis_quantizer.h"
 
 // MIFM1 (0.16.14): the six engines its models play (SPEECH 15, SWARM 16, NOISE 17, PARTICLES 18, STRING 19, MODAL
 // 20), each at its number; the eighteen others (gone from MIFM1's models in 0.9; CHIPTUNE 7 and the grain's FORMANT 11
@@ -42,7 +43,6 @@
 #include "plaits/dsp/engine/modal_engine.h"
 #include "plaits/dsp/engine/noise_engine.h"
 #include "plaits/dsp/engine/particle_engine.h"
-#include "plaits/dsp/engine/speech_engine.h"
 #include "plaits/dsp/engine/string_engine.h"
 #include "plaits/dsp/engine/swarm_engine.h"
 
@@ -203,7 +203,6 @@ class Voice {
   }
 
   NullEngine null_engine_;              // (MIFM1: in the sixteen engines' places)
-  SpeechEngine speech_engine_;
 
   SwarmEngine swarm_engine_;
   NoiseEngine noise_engine_;

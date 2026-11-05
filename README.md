@@ -29,8 +29,12 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   quatre voix par piste : des **Transwaves** (32 cycles qui changent peu à peu, lus entiers et par marches ; depuis
   0.16.16, huit classiques et sept plus granuleuses), les filtres sans résonance de la puce, trois couches, un petit
   effet ; 24 programmes en huit familles, huit potards (voir plus bas) ;
-- **Plaits** sur chaque piste, 6 de ses modèles (ses trois batteries, treize de ses oscillateurs, sa puce 8 bits et ses
-  formants ont laissé la place aux moteurs de MIFM1), et un **circuit bending** par piste (0.7, à la place du
+- **ROBOVOX** (0.16.17, à la place de SPEECH) : une puce de parole qui chante, d'après le **Robovox** de Kraftwerk (un
+  Votrax SC-02 joué au clavier) : le conduit vocal du **Votrax SC-01** simulé d'après son silicium (celui de MAME),
+  joué comme un SC-02 (sa hauteur à lui, la longueur du conduit, l'articulation), ses 64 phonèmes, des mots, un
+  babil à la Q\*bert, et une autre piste comme source (voir plus bas) ;
+- **Plaits** sur chaque piste, 5 de ses modèles (ses trois batteries, treize de ses oscillateurs, sa puce 8 bits, ses
+  formants et sa parole ont laissé la place aux moteurs de MIFM1), et un **circuit bending** par piste (0.7, à la place du
   grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
   allumés, inversés ou coupés, des formes numériques) et son **glitch** à la manière du Data Bender de Qu-Bit (des
   répétitions calées au tempo, ralenties ou accélérées, des accidents) ;
@@ -513,7 +517,7 @@ parallèles sortiraient de la gamme).
 
 Choisir REV3 met ces réglages aux siens (deux dents de scie un peu écartées, un filtre de cuivre, une voix par
 trig) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 4,5 % d'un bloc (quatre : 15 %). Les projets d'avant se
-lisent, leurs modèles de Plaits renumérotés. Depuis la 0.13, ZERO, les batteries, la FM, POLY, REV3 et OTIS partagent la
+lisent, leurs modèles de Plaits renumérotés. Depuis la 0.13, ZERO, les batteries, la FM, POLY, REV3, OTIS et ROBOVOX partagent la
 mémoire d'une piste (une piste ne joue qu'une machine à la fois) : passer d'une machine à l'autre la refait à neuf.
 
 **OTIS** (0.16.14 sous le nom SQ-1, renommé en 0.16.16 ; ALGORITHM après REV3, la banque MIFM1, à la place de
@@ -566,6 +570,65 @@ sa touche ; les pas de la piste se taisent tant qu'une touche est tenue ; depuis
 d'un bloc avec ses trois couches, SPACE à fond et le reste environ 5,5 % (quatre voix, trois couches, SPACE à fond :
 environ 19 % ; REV3, quatre voix : 15 %). Les projets et les sons enregistrés d'avant qui jouaient CHIPTUNE ou FORMANT passent à OTIS avec ses
 réglages ; les autres modèles de Plaits sont renumérotés.
+
+**ROBOVOX** (0.16.17 ; ALGORITHM après OTIS, la banque MIFM1, à la place de SPEECH, la parole de Plaits) : une puce
+de parole qui **chante**, d'après le **Robovox** de Kraftwerk. Florian Schneider, Gert Joachim Ott et Gert Jalass en
+ont déposé le principe en 1990 (« System for and method of synthesizing singing in real time », EP 0 396 141, demande
+retirée en 1992 : libre) : un **Votrax SC-02** joué depuis un clavier MIDI, une note un phonème, la hauteur dans son
+registre d'inflexion (12 bits, accordé sur le la 440), la vélocité son amplitude, la molette de pitch la fréquence de
+ses filtres (la longueur du conduit vocal), celle de modulation son articulation (la vitesse des transitions), une
+syllabe séquencée en autant de tranches que de phonèmes. Aucun SC-02 n'est simulé nulle part ; son aîné, le **SC-01**
+(Votrax, 1980), l'est, d'après son silicium : le `votrax.cpp` de MAME (Olivier Galibert, BSD-3-Clause). ROBOVOX en
+prend le conduit vocal et le joue comme le SC-02.
+
+- **Le conduit** (celui de MAME, à 44,1 kHz) : l'onde glottale de la puce (une échelle de transistors : 9 marches de
+  0,4 ms, puis 0 jusqu'à la fin de la période) fois le niveau de la voix, à travers F1 et F2 ; le bruit (un registre à
+  décalage de 15 bits, laissé passer la moitié de chaque période) fois son niveau, par son filtre, dans F2 ou après F3 ;
+  F3, F4, la **fermeture** (une occlusive : son silence, en 1,4 ms), un dernier passe-bas. Chaque filtre comme la puce
+  le fait : des condensateurs commutés, leur H(s) tirée des rapports des condensateurs et de l'horloge, numérisée par
+  la transformée bilinéaire (les formes d'ordre 3 de Galibert, ici des biquads : le même filtre, vérifié code par code
+  contre celui de MAME). Les codes vont vers ceux d'un phonème comme la puce les y mène (un huitième du chemin à chaque
+  tic : les formants 416 fois par seconde, les niveaux 1 250), **un code à la fois : les marches du Votrax**.
+- **Trois écarts à MAME**, dits dans le code : son filtre de bruit multiplie par l'horloge là où ses condensateurs
+  commutés divisent (son k1 un million de fois trop grand : un filtre plat) ; relu, c'est un passe-bande autour de
+  2,9 kHz (Q 0,63), le souffle d'un S, à son niveau. Le bruit, l'autre moitié de la période, reste à 0 (chez MAME à -1 :
+  un carré à la hauteur de la note sous chaque S). Et après la puce, le **rayonnement d'une bouche** (+6 dB par
+  octave) : seul, son son est sourd, ses consonnes perdues (un logiciel de reconnaissance vocale y reconnaissait 5 mots
+  sur 46 ; avec, 16).
+- **Les phonèmes** : les 64 du SC-02 (ses noms et leur ordre, ceux de sa fiche technique : PA, E, E1, Y, YI, AY…, et
+  ses allemands et français, :A, :OH, :U, :UH), leurs sons ceux de MIFM1 : la ROM de la puce est à Votrax, pas à nous.
+  Chacun écrit comme un phonéticien le mesure (ses trois premiers formants, d'après Peterson et Barney, 1952, et
+  Hillenbrand et al., 1995 ; les consonnes d'après Klatt, 1980), puis mis dans les codes du SC-01 : le code de F1, F2 et
+  F3 dont le filtre (les condensateurs de la puce) tombe au plus près (`tools/robovox/robovox_tables.py`). Les
+  voyelles rendues tombent sur leurs formants (vérifié à chaque `make test`).
+- **Les mots** (`tools/robovox/words.txt`) : 53, en phonèmes du SC-02, syllabe par syllabe : les chiffres de ZERO à
+  TEN, ROBOT, MACHINE, COMPUTER, NUMBER, DATA, SIGNAL, VOICE, NOISE, MUSIC, ELECTRIC, POWER, SYSTEM, CONTROL, HUMAN,
+  ENERGY, HELLO, DANGER, ERROR, WARNING, START, STOP, RADIO, METAL, BODY, DANCE, LOVE, MEMORY, PROGRAM, TRAUMA,
+  SYNTH, OPERATOR, STATION, NETWORK, INDUSTRY, AUDIO, YES, NO ; en français avec l'accent de la puce, BRUIT,
+  MUSIQUE, BONJOUR, ENCORE et SLOGAN (VOUS ÊTES LE BRUIT). Des mots, pas des phrases : à toi de les enchaîner.
+
+**Joué** : chaque trig chante, selon **MODE** : un phonème (**Phon** : SAY le choisit, un lock par pas en fait une
+suite ; une voyelle tient tant que la note, une occlusive fait sa fermeture puis son explosion), la **syllabe suivante
+d'un mot** (**Word** : SAY le mot ; un autre mot repart de sa première syllabe), ou un **babil** (**Babble** : comme
+Q\*bert, dont David Thiel, faute de phrases, a fini par envoyer des phonèmes au hasard dans le SC-01 ; SAY Random, un
+autre à chaque trig, sinon une graine : le même à chaque fois). La première voyelle d'une syllabe tient tant que la
+note ; ce qui la suit (la deuxième moitié d'une diphtongue, les consonnes qui la ferment) se chante au relâchement, ou
+vite avant la syllabe suivante si elle arrive avant (legato). La hauteur est celle de la note, la sienne (comme sur le
+SC-02), glissée par **GLIDE** ; l'horloge des filtres, celle de **TRACT** (une octave de chaque côté) et, avec
+**FOLLOW**, une part de la note (à fond : la manière du SC-01, l'horloge pour tout, la voix de canard à l'aigu).
+**SOURCE** : l'impulsion de la puce, un **chuchotement** (du bruit à sa place), ou **le son d'une autre piste**
+(Track 1 à 4 : son dernier bloc, ses voyelles et ses consonnes par-dessus : une basse qui parle).
+
+| 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **MODE** (Phon, Word, Babble) | **SAY** (un phonème, un mot, un babil) | **RATE** (x0,5 à x2 : la durée des phonèmes) | **ARTIC** (x0,25 à x4 : la vitesse des transitions) | **TRACT** (- 12 à + 12 demi-tons : le conduit) | **FOLLOW** (0 à 100 % : les formants suivent la note) | **SOURCE** (Pulse, Whisper, Track 1 à 4) | **GLIDE** (Off à 600 ms) |
+
+Le premier écran dessine **le triangle des voyelles** (F2 en travers, les voyelles d'avant à gauche ; F1 en bas, les
+ouvertes en bas) et le point de ses formants, qui y saute un code à la fois, sa taille le niveau de la voix, un anneau
+quand il y a du bruit ; dessous le mot, sa syllabe et le phonème chanté. Choisir ROBOVOX met ses réglages aux siens
+(ROBOT, des transitions un peu lentes : plus clair), et sa voix coûte au FM-1 environ 8 % d'un bloc (une voix par
+piste). La dose d'aléatoire ne touche pas MODE. Les projets et les sons de 0.16.14 à 0.16.16 qui jouaient SPEECH
+jouent ROBOVOX avec ses réglages.
 
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
 icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis
@@ -1069,6 +1132,8 @@ Chaque moteur de MIFM1 doit quelque chose à une machine, et le site le raconte,
   elles étaient le seul moyen d'en avoir une), la puce **OTIS** (ES5505) ; avant eux, le **Mirage** (1984, un
   échantillonneur 8 bits à 1 695 dollars) et l'**ESQ-1** (trois oscillateurs par voix sur la puce DOC de Robert Yannes,
   celui du SID du Commodore 64) ;
+- ROBOVOX : le **Robovox** de Kraftwerk (le brevet de Florian Schneider, 1990 : un **Votrax SC-02** joué au clavier),
+  le **Votrax SC-01** (1980) tel que MAME le simule d'après son silicium, et **Q\*bert** (Gottlieb, 1982) et son babil ;
 - les filtres : l'échelle de **Moog**, le Korg 35 du **MS-20**, le **SEM** d'Oberheim ; le circuit bending : le
   **Biscuit** d'OTO et le **Data Bender** de Qu-Bit ; le delay : les potards du **Zen Delay** ; la réverbe et Warps :
   **Clouds** et **Warps** de Mutable Instruments ;
@@ -1130,7 +1195,9 @@ sources sont ce dépôt. Le code propre à MIFM1 reste sous
 MPL-2.0, comme fm1-base (la MPL-2.0 permet de le combiner à du code GPL : sa section 3.3). Le code de Mutable
 Instruments (Émilie Gillet) est sous licence MIT (`firmware/third_party/LICENSE-eurorack`). Les voix du LXR-02
 (`firmware/third_party/lxr/`, et ce qui en reprend du code : `mi/mi_lxr.cc`, `tools/vendor_lxr.py`,
-`tools/lxr_check.cc`) sont sous GPL-3.0-only (Copyright Erica Synths), avec les conditions de son `NOTICE.md`.
+`tools/lxr_check.cc`) sont sous GPL-3.0-only (Copyright Erica Synths), avec les conditions de son `NOTICE.md`. Le
+conduit vocal de ROBOVOX est porté du `votrax.cpp` de MAME (Copyright Olivier Galibert), sous BSD-3-Clause
+(`LICENSES/BSD-3-Clause-MAME.txt`) ; ses phonèmes sont à MIFM1 (aucune ROM de Votrax).
 Mutable Instruments est une marque déposée, de même qu'Erica Synths, LXR et LXR-02 : ce projet n'utilise pas ces
 noms comme les siens (à l'écran, les modèles s'appellent FM DRUM, FM SNARE…) et ne les cite que pour dire de qui est
 le code qu'il fait tourner.
