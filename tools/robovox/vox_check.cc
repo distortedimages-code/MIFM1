@@ -91,8 +91,10 @@ static void wav(const char* path, const float* x, int n) {
   auto u16 = [&](uint16_t v) { fwrite(&v, 2, 1, f); };
   fwrite("RIFF", 1, 4, f), u32(36 + n * 2), fwrite("WAVEfmt ", 1, 8, f), u32(16), u16(1), u16(1), u32(44100),
       u32(88200), u16(2), u16(16), fwrite("data", 1, 4, f), u32(n * 2);
+  float pk = 1e-6f;                     // (normalized: its peak at -1 dB)
+  for (int i = 0; i < n; ++i) pk = fmaxf(pk, fabsf(x[i]));
   for (int i = 0; i < n; ++i) {
-    float v = x[i] * 3.0f;
+    float v = x[i] * 0.89f / pk;
     v = v > 1 ? 1 : v < -1 ? -1 : v;
     u16(static_cast<uint16_t>(static_cast<int16_t>(v * 32767)));
   }
