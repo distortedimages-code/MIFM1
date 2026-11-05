@@ -41,7 +41,7 @@ __attribute__((used, visibility("default"))) void web_try(uint32_t kind, uint32_
  * project an example, made from the demo groove; up to four knobs, each on a parameter of that project (or TRAUMA's,
  * the random dose's), their texts the machine's own ---- */
 enum { LAB_LADDER, LAB_MS20, LAB_SEM, LAB_VOX, LAB_TAURUS, LAB_STATIC, LAB_KICK, LAB_TRAUMA, LAB_DICE, LAB_WARPS,
-       LAB_RATCH, LAB_N };
+       LAB_RATCH, LAB_PLOCK, LAB_EUCLID, LAB_N };   /* (0.16.30: the P-locks' kick, the Euclidean rhythm) */
 #define LAB_P_TRAUMA (-1)
 #define LAB_P_DICE (-2)
 #define LAB_RATCHES 10
@@ -52,6 +52,20 @@ static char lab_txt[32];
 static int lab_ratch[LAB_RATCHES];       /* RATCH's travel here: one step's hits, then hits over steps */
 
 static int lab_mparam(int t, int i) { return PG_TRACK(t, 0) * 4 + 1 + i; }   /* a machine's knob i */
+static float lab_value(int param, float u);
+static int lab_tp(int param)             /* a track parameter's tp (a lock's) */
+{
+    int lane;
+    return eng_param_tp(param, &lane);
+}
+static void lab_euclid_set(int fills, int rot)   /* (0.16.30) T1's Euclidean rhythm over 16, its trigs written again */
+{
+    project_t *p = eng_project();
+    p->val[PG_EUC(0) * 4] = (float)fills;
+    p->val[PG_EUC(0) * 4 + 1] = (float)rot;
+    for (int s = 0; s < 16; s++)
+        eng_trig_set(0, s, eng_euclid(16, fills, rot, s));
+}
 static void lab_only(project_t *p, int keep, float kick)   /* that track alone, the kick under it (or not) */
 {
     for (int t = 0; t < ENG_TRACKS; t++)
@@ -156,12 +170,33 @@ __attribute__((used, visibility("default"))) uint32_t lab_setup(uint32_t id)
             p->val[PG_WARPS(k / 4) * 4 + k % 4] = W[k];
         lab_lane = 3;                    /* (the stabs' steps) */
         lab_k(4, PG_WARPS(0) * 4 + 2, PG_WARPS(1) * 4 + 0, PG_WARPS(0) * 4 + 3, PG_WARPS(1) * 4 + 3);
-    } else if (id == LAB_RATCH) {        /* the hats on four off-beats, their ratchets */
+    } else if (id == LAB_RATCH) {        /* the hats alone on four off-beats, their ratchets */
+        lab_only(p, 2, 0.0f);
         for (int s = 0; s < 16; s++)
             eng_trig_set(2, s, s % 4 == 2);
         p->val[PG_STEP(2) * 4 + 2] = 3.0f;
         lab_lane = 2;
         lab_k(3, PG_STEP(2) * 4 + 2, PG_CURVE * 4 + 2, PG_EUC(2) * 4 + 2, 0);
+    } else if (id == LAB_PLOCK) {        /* (0.16.30) a kick alone, seven trigs, three of them locked */
+        lab_only(p, 0, 0.9f);
+        eng_steps_clear(0);
+        static const int8_t T[7] = {0, 4, 7, 8, 10, 12, 14};
+        for (int i = 0; i < 7; i++)
+            eng_trig_set(0, T[i], 1);
+        eng_lock_set(0, 7, TP_NOTE, 7.0f);
+        eng_lock_set(0, 10, TP_NOTE, -5.0f);
+        eng_lock_set(0, 14, TP_NOTE, 12.0f);
+        eng_lock_set(0, 12, lab_tp(lab_mparam(0, 2)), lab_value(lab_mparam(0, 2), 0.85f));
+        lab_lane = 0;
+        lab_k(1, lab_mparam(0, 2), 0, 0, 0);
+    } else if (id == LAB_EUCLID) {       /* (0.16.30) a percussion alone, its Euclidean rhythm (5 over 16) */
+        eng_set_model(0, eng_model_find(MK_DRUM, 5));
+        p->algo[PG_FILT(0, 0)] = MF_OFF;
+        lab_only(p, 0, 0.9f);
+        eng_steps_clear(0);
+        lab_lane = 0;
+        lab_k(0, 0, 0, 0, 0);
+        lab_euclid_set(5, 0);
     } else {
         return 0;
     }
@@ -276,6 +311,89 @@ __attribute__((used, visibility("default"))) uint32_t lab_trigs(void)
 }
 __attribute__((used, visibility("default"))) uint32_t lab_out_l(void) { return (uint32_t)(uintptr_t)lab_l; }
 __attribute__((used, visibility("default"))) uint32_t lab_out_r(void) { return (uint32_t)(uintptr_t)lab_r; }
+
+/* (0.16.30) what the page's second copy (the one that draws, on the page itself: it never plays) asks: a knob's text
+ * at a travel without moving it; the filter's impulse response as its knobs have it (a small one: its curve, its
+ * nonlinearities asleep); the example from its start, rendered (a frozen hit); the P-locks; the Euclidean rhythm */
+static float lab_buf[32768];
+__attribute__((used, visibility("default"))) uint32_t lab_buf_at(void) { return (uint32_t)(uintptr_t)lab_buf; }
+__attribute__((used, visibility("default"))) uint32_t lab_text(uint32_t i, float u)
+{
+    if (i >= (uint32_t)lab_n || lab_p[i] < 0)
+        return 0;
+    u = u < 0.0f ? 0.0f : u > 1.0f ? 1.0f : u;
+    eng_param_text(lab_p[i], lab_value(lab_p[i], u), lab_txt, sizeof lab_txt);
+    return (uint32_t)(uintptr_t)lab_txt;
+}
+__attribute__((used, visibility("default"))) uint32_t lab_ir(uint32_t n)
+{
+    if (!lab_direct)
+        return 0;
+    if (n > 32768)
+        n = 32768;
+    project_t *p = eng_project();
+    float k[12];
+    for (int i = 0; i < 12; i++)
+        k[i] = p->val[PG_FILT(0, i / 4) * 4 + i % 4];
+    const int model = p->algo[PG_FILT(0, 0)], type = (int)(k[MF_TYPE] + 0.5f), ty = type < 0 ? 0 : type > 2 ? 2 : type;
+    mf_reset(1);
+    static float blk[128];
+    for (int b = 0; b < 64; b++) {       /* (its cutoff settled where its knobs put it, in silence) */
+        mf_set(1, model, ty, k, 33.0f);
+        for (int i = 0; i < 128; i++)
+            blk[i] = 0.0f;
+        mf_process(1, blk, 128);
+    }
+    for (uint32_t at = 0; at < n; at += 128) {
+        mf_set(1, model, ty, k, 33.0f);
+        for (int i = 0; i < 128; i++)
+            blk[i] = at == 0 && i == 0 ? 0.001f : 0.0f;
+        mf_process(1, blk, 128);
+        for (int i = 0; i < 128 && at + (uint32_t)i < n; i++)
+            lab_buf[at + i] = blk[i] * 1000.0f;
+    }
+    return n;
+}
+__attribute__((used, visibility("default"))) uint32_t lab_snap(uint32_t n)
+{
+    if (lab_direct)
+        return 0;
+    if (n > 32768)
+        n = 32768;
+    eng_cut();                           /* (the last one's tails gone, the effects' too: a block faded, a block that */
+    for (int i = 0; i < 2; i++)          /*  makes the modules new; then the start, its first trig heard) */
+        eng_render(lab_l, lab_r, 128);
+    eng_play(1);
+    for (uint32_t at = 0; at < n; at += 128) {
+        eng_render(lab_l, lab_r, 128);
+        for (int i = 0; i < 128 && at + (uint32_t)i < n; i++)
+            lab_buf[at + i] = 0.5f * (lab_l[i] + lab_r[i]);
+    }
+    eng_play(0);
+    return n;
+}
+__attribute__((used, visibility("default"))) void lab_lock(uint32_t step, uint32_t which, float v)
+{                                        /* which 0: NOTE (semitones); 1: the knob's (its travel, 0..1) */
+    if (lab_lane < 0 || step >= 16)
+        return;
+    const int param = lab_mparam(lab_lane, 2);
+    if (which == 0)
+        eng_lock_set(lab_lane, (int)step, TP_NOTE, v);
+    else
+        eng_lock_set(lab_lane, (int)step, lab_tp(param), lab_value(param, v));
+}
+__attribute__((used, visibility("default"))) void lab_unlock(uint32_t step, uint32_t which)
+{
+    if (lab_lane < 0 || step >= 16)
+        return;
+    const int tps[2] = {TP_NOTE, lab_tp(lab_mparam(lab_lane, 2))};
+    float keep = 0.0f;
+    const int other = tps[which ? 0 : 1], had = eng_lock(lab_lane, (int)step, other, &keep);
+    eng_lock_clear(lab_lane, (int)step);
+    if (had)
+        eng_lock_set(lab_lane, (int)step, other, keep);
+}
+__attribute__((used, visibility("default"))) void lab_euclid(uint32_t fills, uint32_t rot) { lab_euclid_set((int)fills, (int)rot); }
 __attribute__((used, visibility("default"))) void lab_render(uint32_t n)
 {
     if (n > 512)

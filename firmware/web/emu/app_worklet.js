@@ -55,6 +55,12 @@ class Mifm1Lab extends AudioWorkletProcessor {
       this.port.postMessage({ op: "text", id: m.id, i: m.i, text: this.text(this.ex.lab_set(m.i >>> 0, m.u)) });
     } else if (m.op === "play") {
       this.ex.lab_play(m.on ? 1 : 0);
+    } else if (m.op === "lock") {                     // (0.16.30) the drawn examples': a step's lock, the Euclidean rhythm
+      this.ex.lab_lock(m.step >>> 0, m.which >>> 0, m.v);
+    } else if (m.op === "unlock") {
+      this.ex.lab_unlock(m.step >>> 0, m.which >>> 0);
+    } else if (m.op === "euclid") {
+      this.ex.lab_euclid(m.f >>> 0, m.r >>> 0);
     }
   }
   process(inputs, outputs) {

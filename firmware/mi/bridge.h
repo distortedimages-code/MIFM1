@@ -286,6 +286,7 @@ void mf_guard(int level);                /* the CPU guard: its FM's coefficients
 void mf_stop(int t);                     /* the transport stopped: its envelope closed, faded out (~23 ms), then silent
                                           * (a self-oscillation, a ring, its noise) until its next trig */
 float mf_cutoff_hz(int t);               /* (the screen) the cutoff now, all modulations in */
+float ladder_g(float hz, float *kc);     /* (0.16.30) the ladder's stages' g at a cutoff, its feedback's scale */
 float mf_env(int t);                     /* its envelope now, 0..1 */
 const char *mf_model_name(int m);
 const char *mf_type_name(int m, int type);

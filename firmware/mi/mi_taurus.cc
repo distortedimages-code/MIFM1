@@ -277,7 +277,7 @@ MI_COLD void taurus_render(int t, float* out, uint32_t n) {   // (its glue for s
   const float sl = vd.sub;
   const float lvl = 0.55f / (1.0f + 0.5f * (bl + sl));   // (the oscillators' sum: A alone +/-0.55 into the ladder)
   const float res = emph_k(p.k[4]);
-  const float in_gain = lvl * push * vd.drive * (1.0f + 0.75f * res);   // (its bass given back: most of what it takes)
+  const float in_gain = lvl * push * vd.drive;   // (times 1 + 0.75 res: its bass given back, most of what it takes)
   const float c = 2.0f * p.k[5] - 1.0f;   // CONTOUR: + its depth, - a swell
   const float depth = c >= 0.0f ? 7.0f * c : 3.0f * -c;   // (octaves)
   const float swell = c < 0.0f ? 1.5f * c * c : 0.0f;
@@ -329,11 +329,10 @@ MI_COLD void taurus_render(int t, float* out, uint32_t n) {   // (its glue for s
       const float to = p.gate ? vd.cont_sus : 0.0f;
       p.cont = to + (p.cont - to) * kd;
     }
-    // the ladder's g at this cutoff (the knob, the note at kt, the contour), held under 0.23 sr (D'Angelo's warping)
-    float hz = fc0 * fm_exp2f((p.note - 36.0f) * (vd.kt / 12.0f) + depth * p.cont);
-    hz = clampf(hz, 10.0f, 0.23f * kSr);
-    const float wc = 3.14159265f * hz / kSr;
-    const float g = 4.0f * 3.14159265f * 0.312f * hz * (1.0f - wc) / (1.0f + wc) * (0.5f / kSr);
+    // the ladder's g at this cutoff (the knob, the note at kt, the contour), its loop's ring there (0.16.30: ladder_g)
+    float hz = fc0 * fm_exp2f((p.note - 36.0f) * (vd.kt / 12.0f) + depth * p.cont), kc;
+    hz = clampf(hz, 10.0f, 20000.0f);
+    const float g = ladder_g(hz, &kc);
     const float e = e0, de = (p.amp - e0) / static_cast<float>(m);
     float ph[3] = {p.o[0].ph, p.o[1].ph, p.o[2].ph};
     const float dd[3] = {da, db, dc};
@@ -342,7 +341,7 @@ MI_COLD void taurus_render(int t, float* out, uint32_t n) {   // (its glue for s
     else if (w >= W_SQUARE) osc_pulse(x, m, ph, dd, bl, sl, kPw[w - W_SQUARE]);
     else osc_tri(x, m, ph, dd, bl, sl, w == W_TRI ? 0.5f : 0.75f);
     p.o[0].ph = ph[0], p.o[1].ph = ph[1], p.o[2].ph = ph[2];
-    ladder(x, out + s0, m, in_gain, res, g, e, de, V, dV, tV);
+    ladder(x, out + s0, m, in_gain * (1.0f + 0.75f * res * kc), res * kc, g, e, de, V, dV, tV);
   }
   if (!p.gate && !p.amp_att && p.amp < 1e-5f) {   // (its sound over: it rests, the ladder's states from rest)
     p.alive = 0;

@@ -2111,6 +2111,49 @@ int main(int argc, char** argv) {
       printf("filter %s pinged: peak %.2f\n", mf_model_name(m), pk);
       if (pk < 0.05f) ok = 0;
     }
+    {   // (0.16.30) the ladder tuned on its loop: at RESO 90 % it rings at its cutoff (to 4 kHz) and dies away, at 100 %
+        // it sings, at every cutoff; its low pass open at the top (its old g: rang at 2.7 kHz for 6.4, sang at 50 %,
+        // closed up past 6 kHz)
+      auto ring = [&](float u, float reso, float* hz, float* cut) {   // its impulse's tail over its peak, its pitch
+        mf_init();
+        float k[MF_KNOBS] = {u, reso, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f}, buf[128], pk = 0.0f, tail = 0.0f;
+        int zc = 0, z0 = -1, z1 = -1;
+        float last = 0.0f;
+        for (int b = 0; b < 64; ++b) {
+          mf_set(0, MF_LADDER, MF_LP, k, 60.0f);
+          for (int i = 0; i < 128; ++i) buf[i] = 0.0f;
+          mf_process(0, buf, 128);
+        }
+        *cut = mf_cutoff_hz(0);
+        for (int b = 0; b < 256; ++b) {
+          mf_set(0, MF_LADDER, MF_LP, k, 60.0f);
+          for (int i = 0; i < 128; ++i) buf[i] = b == 0 && i == 0 ? 0.001f : 0.0f;
+          mf_process(0, buf, 128);
+          for (int i = 0; i < 128; ++i) {
+            const int at = b * 128 + i;
+            pk = std::max(pk, std::fabs(buf[i]));
+            if (b >= 248) tail = std::max(tail, std::fabs(buf[i]));
+            if (at >= 64 && at < 4096 && last < 0.0f && buf[i] >= 0.0f) {
+              if (z0 < 0) z0 = at;
+              z1 = at, ++zc;
+            }
+            last = buf[i];
+          }
+        }
+        *hz = zc > 1 ? 44100.0f * static_cast<float>(zc - 1) / static_cast<float>(z1 - z0) : 0.0f;
+        return pk > 0.0f ? tail / pk : 0.0f;
+      };
+      float worst_c = 0.0f, dies = 0.0f, sings = 1.0f, hz, cut;
+      for (float u : {0.35f, 0.5f, 0.62f, 0.72f, 0.78f, 0.85f, 0.92f, 1.0f}) {
+        dies = std::max(dies, ring(u, 0.9f, &hz, &cut));
+        if (cut <= 4000.0f) worst_c = std::max(worst_c, std::fabs(1200.0f * std::log2(hz / cut)));
+        sings = std::min(sings, ring(u, 1.0f, &hz, &cut));
+      }
+      const double open = tone_db(MF_LADDER, MF_LP, 5000.0f, 1.0f), lo = tone_db(MF_LADDER, MF_LP, 150.0f, 1.0f);
+      printf("the ladder: at RESO 90 %% it rings at its cutoff within %.0f cents (to 4 kHz), %.0e of it left after 0.72 "
+             "s; at 100 %% %.2f left; its top 5 kHz %.1f dB from 150 Hz\n", worst_c, dies, sings, open - lo);
+      if (worst_c > 60.0f || dies > 0.01f || sings < 0.3f || open < lo - 3.0) ok = 0;
+    }
     uint32_t rs = 12345u;
     auto rnd = [&]() { rs ^= rs << 13; rs ^= rs >> 17; rs ^= rs << 5; return static_cast<float>(rs >> 8) / 16777216.0f; };
     int nan = 0;
@@ -2165,7 +2208,8 @@ int main(int argc, char** argv) {
         for (int g = 1; g < 4; ++g) lvd = std::max(lvd, std::fabs(lv[m][g] - lv[m][0]));
       printf("the CPU guard on the filters' FM (strong, on a saw): its levels %.1f dB from the FM's at most%s\n", lvd,
              gnan ? ", NaN" : "");
-      if (gnan || lvd > 6.0f) ok = 0;
+      if (gnan || lvd > 8.0f) ok = 0;   // (0.16.30: 6 dB before; the ladder open at the top now, its self-FM at
+                                       // every sample reaches higher, 3 dB louder than when it closed up there)
     }
     {                                                    // the envelope opens it at a trig
       mf_init();

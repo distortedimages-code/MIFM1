@@ -55,6 +55,7 @@ struct Filter {
   float now_oct;                         // (the screen: the cutoff as it is)
   // the coefficients, made every 8 samples (each sample with FM): a model's own
   float g, G, a0, b2, b3, K, iK;         // (LADDER: g; MS-20: g, G, a0, b2, b3, K, 1 / K; SEM: g, a0, rho in b2)
+  float kc;                              // (LADDER: its feedback's scale at that cutoff, ladder_g's)
   float vg[3], va0[3], vrho[3];          // VOX's three formants
   // LADDER
   float V[4], dV[4], tV[4];
@@ -126,12 +127,9 @@ void coefs(Filter& f, float c) {
   f.now_oct = c;
   float hz = hz_of(c);
   switch (f.model) {
-    case MF_LADDER: {                    // D'Angelo and Valimaki's g (its warping is for cutoffs well under sr / pi),
-      if (hz > 0.23f * kSr) hz = 0.23f * kSr;   // over 2 sr: the trapezoidal steps
-      float w = kPi * hz * kInvSr;
-      f.g = 4.0f * kPi * 0.312f * hz * (1.0f - w) / (1.0f + w) * (0.5f * kInvSr);
+    case MF_LADDER:
+      f.g = ladder_g(hz, &f.kc);
       break;
-    }
     case MF_MS20: {                      // Pirkle's KORG35 (its alpha0 and betas)
       if (hz > 0.42f * kSr) hz = 0.42f * kSr;
       float g = tan_pade(kPi * hz * kInvSr), G = g / (1.0f + g), K = f.K, ig = 1.0f / (1.0f + g);
@@ -304,7 +302,7 @@ inline float out(Filter& f, Run& r, float y) {   // its output kept within 2, a 
 }
 
 void run_ladder(Filter& f, Run& r, float* x, uint32_t n) {
-  const float res = 4.2f * f.reso, drive = 1.0f + 15.0f * f.drive * f.drive;
+  const float r4 = 4.2f * f.reso, drive = 1.0f + 15.0f * f.drive * f.drive, res = r4 * f.kc;
   const float lc = 1.0f / (1.0f + 1.4f * f.drive + 1.6f * f.drive * f.drive);   // (louder a little, then squashed)
   // its outputs mixed: the input, then its four stages (LP: the last, its passband given back a third; HP, BP: the
   // Xpander's mixes)
@@ -321,7 +319,7 @@ void run_ladder(Filter& f, Run& r, float* x, uint32_t n) {
       if (r.fm_on && !(i & r.skip)) fm_coefs(f, r);
       float in = x[i] + (i == ping_at ? r.ping : 0.0f);
       if (r.nv != 0.0f) in += r.nv * cnoise(f);
-      float g = f.g, u = drive * in - res * V[3];
+      float g = f.g, u = drive * in - r4 * f.kc * V[3];   // (f.kc: FM's too)
       float d0 = g * (sat(u * kInvVt2) - tV[0]);
       V[0] += d0 + dV[0];
       dV[0] = d0;
@@ -478,6 +476,21 @@ void process(Filter& f, float* x, uint32_t n) {
 }  // namespace
 
 extern "C" {
+
+// (0.16.30) the ladder's stages' g for a cutoff (Hz), and in *kc its feedback's scale (LADDER's, TAURUS'). Its loop,
+// a sample late (each stage's own last state, the feedback the last output: Huovilainen's), rings lower than its
+// stages' cutoff and sings sooner as it rises: D'Angelo and Valimaki's g put it at 2.7 kHz singing at RESO 50 % for a
+// CUTOFF of 6.4 kHz, and closed it past that (1.3 kHz at 9 kHz). Here a, its stages' gain (g / 2 Vt), is the one
+// whose loop rings at that cutoff (a fit: within a cent from 15 Hz to 4 kHz), then eases to 0.3 (the ring at 4.8 kHz,
+// the low pass open to 6.8 kHz without emphasis, its stages still a decibel or two from flat); kc the loop's gain
+// there over its gain at rest, so that it sings past 4 at every cutoff, as the real one does
+__attribute__((noinline)) float ladder_g(float hz, float* kc) {
+  const float w = kPi * hz * kInvSr, wk = 0.284952f, ak = 0.250230f;
+  const float a = w <= wk ? w * (0.999615f + w * (-0.973237f + w * (2.37433f - 1.59619f * w)))
+                          : 0.3f - (0.3f - ak) * fm_exp2f(-25.3813f * (w - wk));
+  *kc = 0.998467f + a * (-1.84811f + a * (-10.4595f + a * (32.3894f - 21.0662f * a)));
+  return a * (2.0f * 0.312f);
+}
 
 void mf_init(void) {
   for (int t = 0; t < MF_TRACKS; ++t) {

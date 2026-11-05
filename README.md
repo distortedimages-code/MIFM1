@@ -128,24 +128,34 @@ ou le bas ; sur un ordinateur, des raccourcis clavier jouent les touches. SAVE t
 navigateur. L'écran du téléphone reste allumé tant que la page joue ; sur iPhone, le son passe même en mode
 silencieux, celui des exemples aussi, sans avoir allumé la machine (0.16.29).
 
-**Les exemples à jouer** (0.16.25, refaits en 0.16.26). Le long des articles, de petits modules aux couleurs de la page :
-un écran noir comme celui du FM-1, un bouton Play et un à quatre potards (on les tourne en glissant, à la molette ou aux
-flèches ; leur valeur écrite comme sur l'écran du FM-1). Chacun joue le **vrai code** : une deuxième copie du firmware
-compilé, dans son propre worklet audio, jamais démarrée comme machine (`firmware/web.c` lab_*, `web/emu/app_worklet.js`).
-Le son dépend de ce qu'on montre :
-- **une forme d'onde pour les filtres** : une dent de scie bien grave (La 1, 55 Hz, sans repliement) passe seule dans le
-  module de filtre du moteur, LADDER, MS-20, SEM ou VOX (CUTOFF, RESO, DRIVE ou TYPE), sans séquence ni enveloppe ;
-- **une boucle là où il faut un rythme** : TAURUS sur le riff de la démo (CUTOFF, EMPH, CONTOUR), STATIC sur trois
-  pistes, les trois lanes d'ARC/01 (INDEX et FEEDBACK d'ARC, DENSITY de SPARK, PITCH de BODY), le KICK seul (WAVE, SWEEP, DECAY), TRAUMA et la dose d'aléatoire sur la
-  démo, Warps entre les accords et la basse (ALGO, TIMBRE, MIX, MODE), les ratchets sur les charlestons à contretemps
-  (RATCH, CURVE, CLIMB).
+**Les exemples à jouer** (0.16.25 ; dessinés en 0.16.30). Le long des articles, de petits modules : un bouton Play, et
+**le schéma est le potard** : chacun dessine ce qu'il explique, et on le joue en tirant ce dessin (au doigt, à la
+souris ou aux flèches, le dessin pris au clavier). Papier et encre, la poignée en orange, ce qui est mesuré en
+bleu-vert ; un son simple à chaque fois (une forme d'onde, un kick seul, un charleston seul), jamais une séquence à
+plusieurs pistes. Chacun joue le **vrai code** : une deuxième copie du firmware compilé, dans son propre worklet audio,
+jamais démarrée comme machine (`firmware/web.c` lab_*, `web/emu/app_worklet.js`) ; et ce qu'il dessine vient d'une
+troisième, sur la page elle-même, qui ne joue jamais : réglée comme l'exemple, elle mesure le filtre, rend le coup,
+écrit les valeurs comme l'écran du FM-1. Le dessin est donc là sans avoir rien allumé, et il suit le son quand il joue.
+- **LADDER, MS-20, SEM** : la courbe du filtre, mesurée sur sa réponse impulsionnelle (son module du moteur, réglé
+  comme les potards), et sous elle les harmoniques d'une dent de scie grave (La 1, 55 Hz, sans repliement) qui passent
+  ou non ; on tire le point de coupure (à gauche, à droite : CUTOFF ; vers le haut : RESO), une barre à gauche pour
+  DRIVE (le SEM : passe-bas, bande, passe-haut). Quand la résonance dépasse le seuil, le filtre **chante tout seul** :
+  une sinusoïde à lui, marquée à sa hauteur.
+- **VOX** : la carte des voyelles (F2 de gauche à droite, F1 de haut en bas, celles de Peterson et Barney), le chemin
+  a, e, i, o, u que suit CUTOFF ; on glisse le point le long du chemin, RESO à droite, la voix en dessous.
+- **KICK** : un coup figé, rendu par le moteur : son onde qui s'éteint et sa hauteur qui tombe (mesurée à ses passages
+  par zéro, de 379 à 56 Hz) ; on tire SWEEP et DECAY dans le temps, WAVE à gauche.
+- **P-locks** (nouveau) : un kick seul sur 16 pas, la ligne pointillée le potard, et chaque pas qui garde sa valeur à
+  lui (sa note, ou son DECAY) ; on tire la barre d'un pas, double-clic pour l'enlever.
+- **Euclide** (nouveau) : un cercle de 16 pas et N coups répartis au mieux (le calcul du séquenceur) ; au centre on en
+  met plus ou moins, sur l'anneau on le tourne.
+- **Ratchets** : les charlestons seuls sur les contretemps, un pas agrandi : où tombent ses coups (CURVE les
+  rapproche ou les écarte), à quel volume, à quelle hauteur (CLIMB).
 
-L'écran montre ce qu'on entend, en direct : pour les filtres et les sons riches, le **spectre** (30 Hz à 16 kHz), avec
-la coupure du filtre marquée en orange et écrite en Hz (on voit les harmoniques de la dent de scie s'éteindre au-dessus,
-et la résonance en sortir) ; pour les sons percussifs, le **niveau** des dernières secondes (chaque coup, sa chute). Sous
-une boucle, ses **16 pas** : ses trigs en clair, le pas joué en orange. Sur un téléphone ou dans une carte étroite, les
-potards passent sur une ligne à eux. Un seul son à la fois sur la page : un exemple lancé arrête celui d'avant et met la
-machine en pause là où elle en est ; toucher la machine, « Essayer » ou l'allumer arrête l'exemple et la relance.
+TAURUS, STATIC, TRAUMA, la dose d'aléatoire et Warps gardent pour l'instant leur écran noir (spectre ou niveau en
+direct, leurs 16 pas dessous) et leurs potards : ils seront dessinés à leur tour. Un seul son à la fois sur la page : un
+exemple lancé arrête celui d'avant et met la machine en pause là où elle en est ; toucher la machine, « Essayer » ou
+l'allumer arrête l'exemple et la relance.
 
 **La charge affichée est celle du FM-1, estimée.** Un navigateur ne peut pas mesurer le temps que le FM-1 mettrait (son
 horloge avance d'un bloc à la fois, et sa vitesse n'est pas celle du FM-1) : dans cette version, l'horloge du moteur
@@ -616,7 +626,7 @@ formes d'onde** (triangle, triangle-dent de scie, dent de scie, carré, rectangl
 pousse dans le filtre pour le saturer.
 
 - **L'échelle** : le modèle de D'Angelo et Välimäki (celui du filtre LADDER de MIFM1) : une paire de transistors, sa
-  tangente hyperbolique, à chacun des quatre étages. Une vraie échelle perd ses graves quand sa résonance monte (la
+  tangente hyperbolique, à chacun des quatre étages, accordée sur sa propre boucle depuis 0.16.30 (voir LADDER, plus bas). Une vraie échelle perd ses graves quand sa résonance monte (la
   boucle les retranche) : ici l'entrée est poussée d'autant, presque tout est **rendu** (à 90 % d'EMPHASIS, la
   fondamentale d'un la 1 sous une coupure à 400 Hz garde 82 % de son niveau, et la saturation fait le reste).
   La coupure suit la note à moitié (TUBA un tiers, les ondes du Minimoog deux tiers).
@@ -1061,7 +1071,7 @@ modèle (GLO tenu : sur les quatre pistes). OFF par défaut : il ne coûte alors
 
 | Modèle | D'où il vient | Types (TYPE) | Ce que DRIVE y fait |
 | --- | --- | --- | --- |
-| **LADDER** | l'échelle à transistors du Moog, d'après le modèle « amélioré » de Stefano D'Angelo et Vesa Välimäki (2013 ; leur code de référence, licence ISC) : la saturation de chaque paire de transistors à chacun des quatre étages, l'auto-oscillation du circuit | LP 24 dB ; HP 24 et BP pris sur ses étages (les mélanges de l'Oberheim Xpander) | ce qui entre dans les transistors (un peu plus fort, puis tassé : le niveau tenu) |
+| **LADDER** | l'échelle à transistors du Moog, d'après le modèle « amélioré » de Stefano D'Angelo et Vesa Välimäki (2013 ; leur code de référence, licence ISC) : la saturation de chaque paire de transistors à chacun des quatre étages, l'auto-oscillation du circuit. **Accordé sur sa boucle** (0.16.30) : sa boucle, en retard d'un échantillon, résonnait plus bas que sa coupure et chantait plus tôt à mesure qu'elle montait (avec le g de D'Angelo et Välimäki : une résonance à 2,7 kHz pour une coupure à 6,4 kHz, l'auto-oscillation dès 50 % de RESO, et le filtre qui se refermait au-delà, 1,3 kHz à 9 kHz) ; maintenant ses étages sont réglés pour que la boucle résonne sur CUTOFF (à un cent près de 15 Hz à 4 kHz, puis jusqu'à 4,8 kHz, le passe-bas ouvert jusqu'à 6,8 kHz), et sa rétroaction pour qu'il chante au-delà de 95 % à toutes les coupures. Le même accord dans TAURUS | LP 24 dB ; HP 24 et BP pris sur ses étages (les mélanges de l'Oberheim Xpander) | ce qui entre dans les transistors (un peu plus fort, puis tassé : le niveau tenu) |
 | **MS-20** | le Korg 35 (MS-10, premiers MS-20), d'après Will Pirkle (note AN-5) sur les filtres à rétroaction sans délai de Vadim Zavalishin, la saturation **dans** la boucle de résonance : elle drive et chante | LP 12 dB, HP 6 dB, BP (un passe-haut puis le passe-bas, comme les deux filtres du MS-20 en série) | la saturation de la boucle (son niveau rendu) |
 | **SEM** | le filtre d'état 12 dB de l'Oberheim SEM (Pirkle, Zavalishin) : il résonne sans s'auto-osciller, comme le vrai | LP, BP, HP | un étage d'entrée à transistor un peu décentré (des harmoniques paires avec les impaires, sa courbe anti-repliée), puis ses deux intégrateurs (des OTA) poussés : la résonance s'épaissit et se tasse |
 | **VOX** | trois formants, les trois premières résonances des voyelles (moyennes mesurées de Peterson et Barney, 1952) : CUTOFF passe de A à E, I, O, U, la résonance les aiguise | voix basse, moyenne, haute | le même étage d'entrée, et ses trois résonateurs poussés, plus doucement (les voyelles restent) |

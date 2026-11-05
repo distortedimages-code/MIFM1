@@ -21,7 +21,7 @@ static const float kWebModel[25] = {   /* a voice playing, by model */
     305.5f,  /* 13 POLY */
     419.3f,  /* 14 REV3 */
     440.2f,  /* 15 OTIS */
-    176.4f,  /* 16 TAURUS */
+    180.5f,  /* 16 TAURUS */
     172.2f,  /* 17 VOCODER */
     121.6f,  /* 18 STATIC */
     298.2f,  /* 19 SPEECH */
@@ -33,10 +33,10 @@ static const float kWebModel[25] = {   /* a voice playing, by model */
 };
 static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, VOX): plain, its FM's extra, its NOISE's */
     {0.0f, 0.0f, 0.0f},
-    {134.2f, 61.9f, 28.5f},
-    {80.1f, 78.2f, 28.5f},
-    {53.8f, 73.2f, 28.5f},
-    {112.1f, 155.1f, 30.2f},
+    {135.7f, 87.1f, 27.6f},
+    {80.5f, 78.9f, 28.5f},
+    {55.4f, 73.2f, 30.2f},
+    {113.8f, 155.1f, 32.0f},
 };
 static const float kWebFm[3] = {37.1f, 81.8f, 22.2f};   /* the FM's extra: its square, PW, SYNC */
 static const float kWebPads[4] = {119.7f, 11.9f, 21.2f, 71.0f};   /* PADS: its floor, a note (one saw, three), its bell */
@@ -54,6 +54,6 @@ static const float kWebWarps[2][6] = {   /* Warps, its algorithm's mark (Eco, HQ
 };
 static const float kWebFx[3] = {551.3f, 575.2f, 721.3f};   /* the effects, the mix and the master bus (OFF, COMP, OTT) */
 static const float kWebFxEq = 37.3f, kWebFxDuck = 6.9f, kWebFxDelay = 15.9f;   /* a track's EQ (playing), the duck on a track, the delay's filter and drive */
-static const float kWebFxWarps = 75.6f;   /* Warps in the mix (the rest of the stress test's effects) */
+static const float kWebFxWarps = 75.5f;   /* Warps in the mix (the rest of the stress test's effects) */
 static const float kWebFxSpread = 75.7f;   /* (0.16.19) a track's SPREAD */
-static const float kWebPrep = 363.9f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.9f;   /* the preparation: its floor, a track playing, a cable */
+static const float kWebPrep = 365.0f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.9f;   /* the preparation: its floor, a track playing, a cable */
