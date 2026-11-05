@@ -15,13 +15,13 @@ static const float kWebModel[25] = {   /* a voice playing, by model */
     187.9f,  /*  7 FM SNARE */
     227.2f,  /*  8 FM CYMBAL */
     235.8f,  /*  9 FM HI-HAT */
-    312.2f,  /* 10 ZERO */
+    312.3f,  /* 10 ZERO */
     373.7f,  /* 11 FM */
     211.4f,  /* 12 PADS */
     305.5f,  /* 13 POLY */
     419.3f,  /* 14 REV3 */
     440.2f,  /* 15 OTIS */
-    176.3f,  /* 16 TAURUS */
+    176.4f,  /* 16 TAURUS */
     172.2f,  /* 17 VOCODER */
     121.6f,  /* 18 STATIC */
     298.2f,  /* 19 SPEECH */
@@ -42,7 +42,7 @@ static const float kWebFm[3] = {37.1f, 81.8f, 22.2f};   /* the FM's extra: its s
 static const float kWebPads[4] = {119.7f, 11.9f, 21.2f, 71.0f};   /* PADS: its floor, a note (one saw, three), its bell */
 static const float kWebPoly[2] = {28.0f, 76.6f};   /* POLY: its floor, a voice */
 static const float kWebPro[2] = {28.4f, 108.4f};   /* REV3: its floor, a voice */
-static const float kWebSq[2] = {161.5f, 94.2f};   /* OTIS: its floor, a voice */
+static const float kWebSq[2] = {161.6f, 94.2f};   /* OTIS: its floor, a voice */
 static const float kWebVoc[3] = {106.0f, 23.4f, 352.5f};   /* VOCODER: its floor, a voice, its bands (MOD on) */
 static const float kWebStatic[3] = {121.6f, 125.9f, 107.6f};   /* STATIC: BODY, ARC, SPARK (held) */
 static const float kWebBend = 77.4f;   /* the bits, one of their knobs up */

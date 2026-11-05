@@ -268,6 +268,7 @@ int pads_progs(void) { return kProgs + 1; }
 int pads_prog(float u) { return prog_of(u); }
 int pads_prog_len(int prog) { return prog >= 1 && prog <= kProgs ? kProg[prog - 1].n : 1; }
 int pads_prog_mode(int prog) { return prog >= 1 && prog <= kProgs ? kProg[prog - 1].mode : M_MAJOR; }
+const char* pads_prog_name(int prog) { return prog >= 1 && prog <= kProgs ? kProg[prog - 1].name : "Manual"; }
 
 int pads_chord(int prog, int pos, int degree, uint16_t mask, float color_u, int* out, int* raised) {
   int s[12], n = scale_notes(mask, s), color = color_of(color_u);
@@ -655,7 +656,7 @@ MI_COLD void pads_knob_text(int k, float u, char* b, int n) {
   switch (k) {
     case 0: {
       int p = prog_of(u);
-      return put_s(b, n, &at, p ? kProg[p - 1].name : "Manual");
+      return put_s(b, n, &at, pads_prog_name(p));
     }
     case 1: return put_s(b, n, &at, kColorName[color_of(u)]);
     case 2: {

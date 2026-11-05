@@ -66,7 +66,7 @@ struct VVoice {
 struct Voc {
   float k[8];
   float notes[kVoices];
-  int n, gate, trig;
+  int n, gate, trig, mono;              // (mono: 0.16.28's PLAY Mono, one voice: its last again)
   uint32_t clock, rnd;
   VVoice v[kVoices];
   float lfo[2];                         // the ensemble's LFOs (cycles)
@@ -152,6 +152,7 @@ MI_COLD void take(Voc& s) {
       const VVoice& v = s.v[i];
       float score = v.alive ? v.env + 1.0f - static_cast<float>(s.clock - v.age) * 1e-6f : 0.0f;
       if (v.alive && v.key >= 0) score += 2.0f;
+      if (s.mono) score = v.alive ? -static_cast<float>(v.age) : 0.0f;   // (Mono: the voice playing, again)
       if (score < bs) bs = score, best = i;
     }
     used |= 1 << best;
@@ -434,9 +435,10 @@ MI_COLD void voc_modulator(int t, const float* x, uint32_t n) {
   s.has_mod = 1;
 }
 
-MI_COLD void voc_set(int t, const float* notes, int n, const float* k) {
+MI_COLD void voc_set(int t, const float* notes, int n, int mono, const float* k) {
   if (t < 0 || t >= MF_TRACKS) return;
   Voc& s = voc[t];
+  s.mono = mono;
   for (int i = 0; i < 8; ++i) s.k[i] = clampf(k[i], 0.0f, 1.0f);
   n = n < 1 ? 1 : n > kVoices ? kVoices : n;
   for (int i = 0; i < n; ++i) s.notes[i] = notes[i];

@@ -5195,7 +5195,7 @@ int main(int argc, char** argv) {
                   : mod_kind == 2 ? (static_cast<float>(r >> 8) / 16777216.0f - 0.5f) * 0.4f : 0.0f;
         }
         voc_modulator(0, mb, 128);
-        voc_set(0, chord, 4, k);
+        voc_set(0, chord, 4, 0, k);
         if (s == 0) voc_gate(0, 1);
         if (s >= on) voc_gate(0, 0);
         voc_render(0, out + s, 128);
@@ -5709,6 +5709,101 @@ int main(int argc, char** argv) {
            snd_ok ? "ok" : "WRONG");
     if (!ok || !hook || !steps || !texts || !body || !arc || !spark || !hold || !bounded || !proj_ok || !snd_ok)
       ++failures, printf("FAIL: STATIC\n");
+  }
+
+  // 76. (0.16.28) VOCODER's PLAY, in FREQ's place: its name and texts (Mono, Poly, Manual, PADS' progressions), a
+  // choice a detent (Mono at the left end, Poly at noon); on the first progression each trig the next chord, voiced
+  // near the last (each voice moving little), round again after its length, from its first at a new start; Mono: one
+  // voice at a time
+  {
+    project_t* p = eng_project();
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    eng_set_model(0, eng_model_find(MK_VOCODER, 0));
+    const int fq = PG_TRACK(0, 0) * 4;
+    char tx[24];
+    int texts = eng_voc_play(fq) && !eng_voc_play(PG_TRACK(1, 0) * 4) && !eng_voc_play(fq + 1) &&
+                std::strcmp(eng_param_name(fq), "Play") == 0;
+    struct { float v; const char* want; } kTx[] = {{0.0f, "Poly"}, {-1.0f, "Mono"}, {1.0f / 27.0f, "Manual"},
+                                                   {2.0f / 27.0f, pads_prog_name(1)}, {1.0f, pads_prog_name(26)}};
+    for (auto& x : kTx) {
+      eng_param_text(fq, x.v, tx, sizeof tx);
+      if (std::strcmp(tx, x.want) != 0) texts = 0, printf("  PLAY at %.3f: %s, not %s\n", x.v, tx, x.want);
+    }
+    const int steps = eng_lx_step(fq, 0.0f, -1) == -1.0f && eng_lx_step(fq, -1.0f, 1) == 0.0f &&
+                      std::fabs(eng_lx_step(fq, 0.0f, 1) - 1.0f / 27.0f) < 1e-6f && eng_lx_step(fq, 1.0f, 5) == 1.0f &&
+                      eng_lx_step(fq, -1.0f, -3) == -1.0f;
+    eng_steps_clear(0);
+    for (int st = 0; st < 16; st += 4) eng_trig_set(0, st, 1);
+    p->val[PG_TRACK(0, 0) * 4 + 1] = 0.0f;   // (MOD Off: the carrier alone)
+    p->val[fq] = 2.0f / 27.0f;
+    static float l[128], r[128];
+    const int len = pads_prog_len(1);
+    float got[40][4];
+    int gn[40], nc = 0;
+    auto run = [&](float secs, int* most) {   // the chords as they come (a new one: another trig), the voices at most
+      float last[4] = {0, 0, 0, 0};
+      int ln = -1;
+      *most = 0;
+      for (int b = 0; b < static_cast<int>(secs * 44100.0f / 128.0f); ++b) {
+        eng_render(l, r, 128);
+        float ch[4];
+        const int n = eng_voc_chord(0, ch);
+        int diff = n != ln;
+        for (int i = 0; i < n && !diff; ++i) diff = ch[i] != last[i];
+        if (n && diff && nc < 40) {
+          for (int i = 0; i < n; ++i) got[nc][i] = last[i] = ch[i];
+          gn[nc++] = n;
+        }
+        ln = n;
+        *most = std::max(*most, voc_voices(0));
+      }
+    };
+    int most;
+    eng_play(1);
+    run(2.0f * static_cast<float>(len + 1) * 0.5f + 0.2f, &most);   // (a trig every half a beat's... 4 a bar)
+    eng_play(0);
+    const int first_n = gn[0];
+    float first[4];
+    for (int i = 0; i < first_n; ++i) first[i] = got[0][i];
+    // each voice moving little; the chords changing; after its length its first chord's notes (pitch classes) again
+    int lead = nc > len, moved = 0, worst = 0;
+    for (int c = 1; c < nc; ++c) {
+      int d = 0;
+      for (int i = 0; i < gn[c] && gn[c] == gn[c - 1]; ++i) d = std::max(d, static_cast<int>(std::fabs(got[c][i] - got[c - 1][i])));
+      worst = std::max(worst, d);
+      moved += d > 0;
+    }
+    lead &= gn[0] >= 3 && worst <= 9 && moved >= 1;
+    int round = nc > len && gn[len] == gn[0];
+    for (int i = 0; round && i < gn[0]; ++i) {
+      int pc = ((static_cast<int>(got[len][i]) % 12) + 12) % 12, have = 0;
+      for (int j = 0; j < gn[0]; ++j) have |= ((static_cast<int>(got[0][j]) % 12) + 12) % 12 == pc;
+      round &= have;
+    }
+    const int n_all = nc;
+    nc = 0;                              // a new start: its first chord again
+    eng_play(1);
+    run(0.3f, &most);
+    eng_play(0);
+    int again = nc >= 1 && gn[0] == first_n;
+    for (int i = 0; again && i < first_n; ++i) again &= got[0][i] == first[i];
+    // Mono: one voice at a time (RELEASE long: the last one's tail its next note)
+    voc_silence(0);                      // (the progression's voices gone)
+    p->val[fq] = -1.0f;
+    p->val[PG_TRACK(0, 0) * 4 + 5] = 0.8f;   // (RELEASE long)
+    eng_play(1);
+    run(3.0f, &most);
+    eng_play(0);
+    const int mono = most == 1 && eng_voc_chord(0, first) == 0;
+    eng_defaults(p);
+    eng_fresh();
+    printf("VOCODER PLAY: texts %s, a choice a detent %s; %d-note chords over %d trigs (%s's %d), each voice at most %d "
+           "semitones on, round again after %d %s, from its first at a new start %s; Mono %d voice at most (%s)\n",
+           texts ? "ok" : "WRONG", steps ? "ok" : "WRONG", first_n, n_all, pads_prog_name(1), len, worst, len,
+           round ? "ok" : "WRONG", again ? "ok" : "WRONG", most, mono ? "ok" : "WRONG");
+    if (!texts || !steps || !lead || !round || !again || !mono) ++failures, printf("FAIL: VOCODER PLAY\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

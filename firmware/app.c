@@ -4914,7 +4914,7 @@ static float step_value(int param, float v, int32_t e)
 {
     const eng_pdef_t *d = eng_pdef(param);
     int32_t a = e > 1 || e < -1 ? e * 3 : e;
-    if (eng_lx_knob(param) >= 0)         /* an FM drum's: its own values, one a detent */
+    if (eng_lx_knob(param) >= 0 || eng_voc_play(param))   /* an FM drum's (VOCODER's PLAY): its values, one a detent */
         return eng_lx_step(param, v, (int)a);
     if (d->kind == K_UNI)
         return fm_clampf(v + 0.01f * (float)a, 0.0f, 1.0f);

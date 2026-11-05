@@ -125,6 +125,7 @@ int pads_progs(void);                    /* MANUAL and the progressions */
 int pads_prog(float u);                  /* PROG at u: 0 MANUAL, 1.. a progression */
 int pads_prog_len(int prog);             /* its chords */
 int pads_prog_mode(int prog);            /* its own mode (the engine's scale: 1 major, 2 minor...) */
+const char *pads_prog_name(int prog);    /* (0.16.28) its name, 0 "Manual" (VOCODER's PLAY too) */
 /* a chord: the prog's pos-th (MANUAL: the triad on the scale's degree), COLOR its colour (POWER, TRIAD, SUS2, 7TH,
  * SUS4, 9TH, ADD9, 11TH, ADD6); its notes (semitones over the scale's root, the root first) in out (6 at most), how
  * many; raised: a note the scale lacks (a raised third, 0..11), -1 none (a root off the scale: its notes in the
@@ -234,7 +235,7 @@ void taurus_knob_text(int k, float u, char *b, int n);
 void voc_init(void);
 void voc_reset(int t);
 void voc_silence(int t);
-void voc_set(int t, const float *notes, int n, const float *k);   /* a chord, 4 notes at most */
+void voc_set(int t, const float *notes, int n, int mono, const float *k);   /* (mono: one voice, its last) */   /* a chord, 4 notes at most */
 void voc_gate(int t, int g);
 void voc_keys(int t, const int *ids, const float *notes, int n);
 void voc_render(int t, float *out, uint32_t n);

@@ -36,7 +36,8 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
 - **VOCODER** (0.16.21) : un vocodeur à 12 bandes et son propre synthé, d'après le **Vocoder Plus VP-330** de Roland :
   la voix est une piste au choix (MOD), la porteuse quatre voix de **scies** grasses qui deviennent des **cordes** puis
   un **chœur** (TONE), un **ensemble** pour l'épaissir, SHIFT pour déplacer les formants, AIR pour laisser passer les
-  sifflantes ; sans voix, une machine à cordes (voir plus bas) ;
+  sifflantes ; sans voix, une machine à cordes ; depuis la 0.16.28, **PLAY** le joue en Mono, en Poly ou sur les
+  **progressions de PADS** (voir plus bas) ;
 - **STATIC** (0.16.24, refaite en 0.16.27 d'après **ARC/01**, le cahier des charges de Yoann) : une machine
   d'**événements électriques** pour des séquences minimales, percussives et instables, d'après **Pan Sonic** et **Ryoji
   Ikeda** ; trois générateurs, un par piste ou un par pas : **BODY** (un sinus sub, sa hauteur qui tombe, pur ou
@@ -637,7 +638,20 @@ modèles de Plaits passent un cran plus loin.
 d'après le **Vocoder Plus VP-330** de Roland (1979 : un vocodeur à 10 bandes, des cordes, un chœur, un ensemble à
 lignes à retard). La **voix** (le modulateur) est une autre piste, choisie avec MOD (T1 à T4, prise avant le mixer :
 son volume à zéro, on ne l'entend plus qu'à travers le vocodeur ; SPEECH y est à sa place). La **porteuse** est le
-VOCODER lui-même : quatre voix par piste, jouées par les pas, leurs accords ou le clavier.
+VOCODER lui-même : quatre voix par piste, jouées par les pas, leurs accords, le clavier ou une progression (PLAY).
+
+- **PLAY** (0.16.28, à la place de FREQ, le premier potard de la page : sur le VOCODER, il ne transpose plus, TRANSP
+  et OCTAVE le font) : un sélecteur qui part du milieu. À **gauche**, **Mono** : une seule voix, la dernière reprise à
+  chaque trig (sa fin tenue par RELEASE devient l'attaque de la suivante), le clavier joue une note. Au **milieu**,
+  **Poly** (le réglage d'avant, celui d'un projet ou d'un son enregistré avant la 0.16.28) : la note du trig et
+  l'accord du pas, ou les touches tenues, quatre voix. À **droite**, un cran par accord : **Manual** (la touche ou la
+  note du pas choisit l'accord de la gamme, son degré, comme PADS) puis les **26 progressions de PADS** : à chaque
+  trig (ou chaque touche) l'**accord suivant**, construit comme PADS le construit (dans la gamme du projet, ou dans le
+  mode de la progression si SCALE est sur Off ou Prog ; sa triade et les notes que la progression ajoute, quatre au
+  plus) et **placé au plus près du précédent**, chaque voix bougeant le moins possible, autour de la note jouée.
+  Chaque piste a sa place dans sa progression : deux VOCODER, ou un VOCODER et PADS, peuvent jouer la même ou une
+  autre. Un nouveau départ (PLAY du séquenceur) repart du premier accord. La dose d'aléatoire ne touche pas à PLAY,
+  un lock ou un câble oui (une progression par pas, si on veut).
 
 - **La porteuse** : trois dents de scie par voix (anti-repliées), et TONE qui va des **scies** grasses (désaccordées de
   18 cents, la troisième dessous) aux **cordes** (6 cents, la troisième une octave au-dessus : le 4 pieds, adoucies)
@@ -658,9 +672,9 @@ VOCODER lui-même : quatre voix par piste, jouées par les pas, leurs accords ou
 
 MOD sur Off : la porteuse seule, une machine à cordes à quatre voix.
 
-| MOD | TONE | ENSEMBLE | ATTACK | RELEASE | FOLLOW | SHIFT | AIR |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| **Off**, ou la piste qui parle (**T1** à **T4**) | **Saws**, **Strings**, **Choir**, et entre les deux | la profondeur et le mélange de l'ensemble, 0 à 100 | 3 ms à 3 s | 30 ms à 6 s | la retombée des bandes, 10 ms à 1 s, puis **Hold** | les bandes de la voix décalées, −3,0 à +3,0 | les aigus de la voix, 0 à 100 |
+| PLAY | MOD | TONE | ENSEMBLE | ATTACK | RELEASE | FOLLOW | SHIFT | AIR |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **Mono**, **Poly**, **Manual**, puis les 26 progressions de PADS | **Off**, ou la piste qui parle (**T1** à **T4**) | **Saws**, **Strings**, **Choir**, et entre les deux | la profondeur et le mélange de l'ensemble, 0 à 100 | 3 ms à 3 s | 30 ms à 6 s | la retombée des bandes, 10 ms à 1 s, puis **Hold** | les bandes de la voix décalées, −3,0 à +3,0 | les aigus de la voix, 0 à 100 |
 
 Choisir VOCODER met ses réglages aux siens : MOD sur Off (à tourner vers la piste qui parle), les cordes, l'ensemble à
 70, une attaque de 27 ms, un relâchement d'un tiers de seconde, FOLLOW à 40 ms, AIR à 35. Il coûte au FM-1 environ
@@ -711,7 +725,7 @@ salve de SPARK qui ouvre l'INDEX d'ARC, un S&H de LFO qui fait sauter son MOD.
 Tourner **MODE** met les sept autres potards au **point de départ** de ce générateur, les trois presets de test
 d'ARC/01 : BODY, *PURE IMPACT* (+18 demi-tons en 28 ms, 15 % de drive, un clic léger, 240 ms) ; ARC, *COPPER ARC* (MOD
 247 Hz, INDEX 3 rad, FEEDBACK 0,18, un drive moyen, 450 ms) ; SPARK, *RELAY ROOM* (S/H à 1,6 kHz, un passe-bande à 2,8
-kHz, Q 4, un coup par trig, 12 ms). Un lock de MODE sur un pas ne touche pas aux potards. Choisir STATIC le met en BODY.
+kHz, Q 4, un coup par trig, 12 ms). Un lock de MODE sur un pas ne touche pas aux potards. La dose d'aléatoire ne touche pas à MODE (0.16.28). Choisir STATIC le met en BODY.
 Son hasard est une graine fixe : le même projet joué de la même façon rejoue les mêmes événements. Une voix coûte au
 FM-1 environ 4,2 % d'un bloc en BODY, 4,3 % en ARC, 3,7 % en SPARK (tenue). SPACE (0.16.24) n'existe plus : l'envoi
 de la piste vers la réverbe reste sur la page du mixer. Les projets enregistrés avec la 0.16.23 et les sons des

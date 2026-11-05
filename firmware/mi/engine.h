@@ -167,6 +167,8 @@ int eng_pads_track(void);                /* the track PADS is on, -1 none */
 void eng_pads_chord(char *b, int n);     /* its chord now, named (Am7, F, Gsus4...); its place: eng_pads_pos */
 int eng_pads_pos(void);                  /* the progression's chord now (0..), -1 before its first trig */
 void eng_pads_line(char *b, int n);      /* the progression, its place, the chord: "Tintin 3/8 Am" */
+int eng_voc_play(int param);
+int eng_voc_chord(int t, float *out);   /* its chord now (PLAY on Manual or a progression), its notes: how many, 0 none */             /* (0.16.28) 1: VOCODER's PLAY (FREQ's place): its choices a detent each */
 void eng_static_mode(int param, float before);   /* (0.16.27) a knob turned from before: STATIC's MODE to another
                                          * generator, its other knobs that one's */
 void eng_set_model(int t, int model);    /* a track's model (an FM drum new to it: its kit on those knobs) */

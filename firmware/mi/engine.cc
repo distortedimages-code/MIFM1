@@ -539,7 +539,8 @@ int dice_interval(int m) {              // the parameter (tp) of a model that is
   if (d.kind == MK_PROPHET) return 8;   // anew)
   if (d.kind == MK_SQ1) return 1;
   if (d.kind == MK_TAURUS) return 1;    // (TAURUS' VOICE: a preset, a wave)
-  if (d.kind == MK_VOCODER) return 1;   // (VOCODER's MOD: which track it listens to, kept)
+  if (d.kind == MK_VOCODER) return 1;   // (VOCODER's MOD: which track it listens to, kept; its PLAY too, below)
+  if (d.kind == MK_STATIC) return 1;    // (0.16.28: STATIC's MODE, its other knobs another generator's)
   if (d.kind != MK_PLAITS) return 0;
   return d.sub == 16 || d.sub == 18 ? 1 : 0;
 }
@@ -717,6 +718,11 @@ float loop01(int lane, int step, int tp) {   // the looped random: the same for 
 // scale (SCALE Prog: every pitch in it)
 int pad_track = -1, pad_pos = -1, pad_n = 0, pad_raised = -1;
 int pad_chord[6];
+// (0.16.28) VOCODER's chords (PLAY on Manual or a progression): each track its progression's place, its chord voiced
+// (its notes; 0: the trig's own, Poly's and Mono's)
+int8_t vc_pos[4] = {-1, -1, -1, -1};
+uint8_t vc_n[4];
+float vc_ch[4][4];
 uint16_t pad_mask = 0;                  // the chord's scale (over the root)
 int quantize_mask(int n, uint32_t m, int root) {   // the nearest note of the scale (a tie: the lower)
   if (!m) return n;
@@ -1069,9 +1075,9 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
     dice_climb[lane] = 0;
     if (proj.dice) {
       float a = dice_curve(), d = static_cast<float>(proj.dice > 100 ? 100 : proj.dice) * 0.01f;
-      int iv = dice_interval(proj.algo[PG_TRACK(lane, 0)]);
+      int iv = dice_interval(proj.algo[PG_TRACK(lane, 0)]), vk = mdef(proj.algo[PG_TRACK(lane, 0)]).kind == MK_VOCODER;
       for (int tp = 0; tp < ENG_NTP; ++tp) {
-        if (!tp_dice[lane][tp] || tp == iv) continue;
+        if (!tp_dice[lane][tp] || tp == iv || (vk && !tp)) continue;   // (VOCODER: FREQ's place its PLAY)
         if (dice_keeps_off && dice_costly(tp) &&
             fm_fabsf(fin[eng_track_param(lane, tp)] + tdelta[lane][tp]) < 0.005f) continue;
         float off = a * 0.05f * static_cast<float>(tp_dice[lane][tp]) * (2.0f * rand01() - 1.0f);   // (in 0.05s)
@@ -1352,7 +1358,8 @@ void sequence(uint32_t n) {
     tick = -1;
     for (int l = 0; l < ENG_LANES; ++l) lane_cnt[l] = lane_grid[l] = -1, lane_spd[l] = static_cast<int8_t>(lane_speed(l));
     climb_fresh();
-    pad_pos = -1;                       // (PADS: its first trig its first chord)
+    pad_pos = -1;                       // (PADS: its first trig its first chord; VOCODER's too)
+    vc_pos[0] = vc_pos[1] = vc_pos[2] = vc_pos[3] = -1;
     for (int t = 0; t < ENG_TRACKS; ++t) {
       e_clk[t] = 1e9f;
       e_pos[t] = -1;
@@ -1617,6 +1624,15 @@ int lx_model(int t) { return track_kind(t) == MK_LXR ? track_sub(t) : -1; }
 inline int own_knobs(int t) { return track_kind(t) != MK_PLAITS; }
 inline int zero_on(int t) { return track_kind(t) == MK_ZERO; }
 
+int note_degree(float note, int root, uint16_t m) {   // the scale's note at the note or under it: its degree (MANUAL)
+  int rel = ((static_cast<int>(note + 0.5f) - root) % 12 + 12) % 12, deg = 0;
+  for (int i = 0, d = 0; i < 12; ++i)
+    if ((m >> i) & 1u) {
+      if (i <= rel) deg = d;
+      ++d;
+    }
+  return deg;
+}
 // PADS: its chord now (each block, each of its trigs): the progression's (at its place), MANUAL's (the note's degree),
 // built in the scale (the progression's own mode when SCALE is Off or Prog), COLOR's extensions; the chord's scale
 // (SCALE Prog: every track's notes in it)
@@ -1628,19 +1644,59 @@ void pads_now(float note) {
   }
   const int sc = Pi(PG_GLOBAL, 1), root = Pi(PG_GLOBAL, 2), prog = pads_prog(E(t, 1));
   const uint16_t m = base_mask(sc) ? base_mask(sc) : base_mask(pads_prog_mode(prog));
-  int deg = 0;
-  if (prog == 0) {                      // MANUAL: the scale's note at the note or under it, its degree
-    int rel = ((static_cast<int>(note + 0.5f) - root) % 12 + 12) % 12;
-    for (int i = 0, d = 0; i < 12; ++i)
-      if ((m >> i) & 1u) {
-        if (i <= rel) deg = d;
-        ++d;
-      }
-  }
   const int len = pads_prog_len(prog);
   if (pad_pos >= len) pad_pos %= len;
-  pad_n = pads_chord(prog, pad_pos < 0 ? 0 : pad_pos, deg, m, E(t, 2), pad_chord, &pad_raised);
+  pad_n = pads_chord(prog, pad_pos < 0 ? 0 : pad_pos, prog ? 0 : note_degree(note, root, m), m, E(t, 2), pad_chord,
+                     &pad_raised);
   pad_mask = pads_chord_scale(pad_chord, pad_n, m, pad_raised);
+}
+// (0.16.28) VOCODER's PLAY, in FREQ's place (its knob from the middle): to the left Mono, at noon Poly (the trig's
+// chord, the keys), to the right Manual (the key picks the scale's chord, as PADS'), then PADS' 26 progressions
+inline int voc_play(float v) { return v < -1.0f / 54.0f ? -1 : iround(clampf(v, 0.0f, 1.0f) * 27.0f); }
+__attribute__((noinline)) MI_COLD int voc_pl(int t) { return voc_play(E(t, 0)); }   // (a track's, now)
+inline int voc_play_param(int param) {
+  const int t = param / 12;
+  return param >= 0 && param < ENG_TRACKS * 12 && param == PG_TRACK(t, 0) * 4 && track_kind(t) == MK_VOCODER;
+}
+// (0.16.28) VOCODER on Manual or a progression, at a trig: the next chord (PADS' own, its triad and the notes its
+// progression adds: four at most), voiced near the last one (each voice moving the least it can), around the note
+__attribute__((noinline)) MI_COLD void voc_chord_now(int t, float note) {
+  const int pl = voc_pl(t);
+  if (pl <= 0) {
+    vc_n[t] = 0;
+    return;
+  }
+  const int prog = pl - 1, sc = Pi(PG_GLOBAL, 1), root = Pi(PG_GLOBAL, 2), len = pads_prog_len(prog);
+  const uint16_t m = base_mask(sc) ? base_mask(sc) : base_mask(pads_prog_mode(prog));
+  vc_pos[t] = static_cast<int8_t>((vc_pos[t] + 1) % len);
+  int c[6], raised;
+  int n = pads_chord(prog, vc_pos[t], prog ? 0 : note_degree(note, root, m), m, 1.5f / 9.0f, c, &raised);
+  n = n > 4 ? 4 : n;
+  float r = static_cast<float>(root + c[0]);   // (its root at the note or under it)
+  while (r > note + 0.5f) r -= 12.0f;
+  while (r + 12.0f <= note + 0.5f) r += 12.0f;
+  const int had = vc_n[t] == n;
+  float best[4], bc = 1e9f;
+  for (int inv = 0; inv < n; ++inv)     // (its inversions, an octave down or not)
+    for (int sh = -12; sh <= 0; sh += 12) {
+      float q[4], lo = 1e9f, cost = 0.0f;
+      for (int i = 0; i < n; ++i) {
+        q[i] = r + static_cast<float>(c[i] - c[0] + (i < inv ? 12 : 0) + sh);
+        lo = q[i] < lo ? q[i] : lo;
+      }
+      for (int i = 1; i < n; ++i)       // (low to high, as the last one was kept)
+        for (int j = i; j > 0 && q[j] < q[j - 1]; --j) {
+          const float x = q[j];
+          q[j] = q[j - 1], q[j - 1] = x;
+        }
+      for (int i = 0; i < n; ++i) cost += had ? fm_fabsf(q[i] - vc_ch[t][i]) : 0.0f;
+      if (!had) cost = fm_fabsf(lo - note);
+      if (lo < note - 7.0f || lo > note + 9.0f) cost += 100.0f;   // (not too far from where the note puts it)
+      if (cost < bc)
+        for (int i = 0; i < n; ++i) best[i] = q[i], bc = cost;
+    }
+  for (int i = 0; i < n; ++i) vc_ch[t][i] = best[i];
+  vc_n[t] = static_cast<uint8_t>(n);
 }
 // the machines' state on the tracks (0.13): ZERO's, a drum's, the FM's, POLY's share a track's, one a track at a time;
 // its owner, the machine whose state it holds (0xFF: none yet), made again when another comes (its _reset)
@@ -1677,9 +1733,10 @@ uint16_t harmony_mask() {               // the harmony's scale (POLY's chords): 
 inline int lx_param(int t, int i) { return PG_TRACK(t, 0) * 4 + 1 + i; }
 inline float lx_u(int param, float v) { return eng_pdef(param)->kind == K_BIP ? (v + 1.0f) * 0.5f : v; }
 inline float static_mode_u(int t) { return lx_u(lx_param(t, 0), proj.val[lx_param(t, 0)]); }   // (STATIC's MODE)
-int kb_poly(int t) {                    // (0.16.15) POLY in MODE Poly, PROPHET with CHORD Off, SQ-1
+int kb_poly(int t) {                    // (0.16.15) POLY in MODE Poly, PROPHET with CHORD Off, SQ-1, VOCODER in Poly
   const int k = track_kind(t);
-  if (k == MK_SQ1 || k == MK_VOCODER) return 1;
+  if (k == MK_VOCODER) return voc_pl(t) == 0;
+  if (k == MK_SQ1) return 1;
   if (k == MK_POLY) return lx_u(lx_param(t, 6), E(t, 7)) >= 0.5f;
   if (k == MK_PROPHET) return poly_chord(lx_u(lx_param(t, 7), E(t, 8))) == 0;
   return 0;
@@ -1793,7 +1850,7 @@ void keys_to_voices(int t, int kind) {
     const int kn = kb_n[t];
     for (int i = kn > 4 ? kn - 4 : 0; i < kn; ++i) ids[n++] = kb_note[t][i];
     if (!n && key_hold[t] > 0) ids[n++] = key_note[t];
-    const float fq = 24.0f * E(t, 0);
+    const float fq = kind == MK_VOCODER ? 0.0f : 24.0f * E(t, 0);   // (VOCODER: FREQ's place its PLAY)
     for (int i = 0; i < n; ++i) {
       float nn = static_cast<float>(quantize(ids[i] + 12 * iround(E(t, TP_OCTAVE)) + iround(E(t, TP_TRANSPOSE)))) + fq;
       if (scale_on()) nn = static_cast<float>(quantize(iround(nn)));
@@ -1832,9 +1889,9 @@ void set_voice(int t) {
   if (own_knobs(t)) {
     float k[LX_KNOBS];
     for (int i = 0; i < LX_KNOBS; ++i) k[i] = lx_u(lx_param(t, i), E(t, 1 + i));
-    float note = vnote[t] + 24.0f * E(t, 0);
-    if (scale_on()) note = static_cast<float>(quantize(iround(note)));
     int kind = track_kind(t), sub = track_sub(t);
+    float note = vnote[t] + (kind == MK_VOCODER ? 0.0f : 24.0f * E(t, 0));   // (VOCODER: FREQ's place its PLAY)
+    if (scale_on()) note = static_cast<float>(quantize(iround(note)));
     if (kind == MK_ZERO) zero_set(t, note, k);
     else if (kind == MK_DRUM) drum_set(t, sub, note, k);
     else if (kind == MK_FM) fm4_set(t, note, k);
@@ -1855,9 +1912,13 @@ void set_voice(int t) {
       taurus_set(t, note, k);
     } else if (kind == MK_STATIC) {
       static_set(t, note, k);
-    } else if (kind == MK_VOCODER) {
+    } else if (kind == MK_VOCODER) {    // (0.16.28: Mono a voice; Poly the step's chord; a progression's, Manual's)
       float sc[4];
-      voc_set(t, sc, step_chord(t, note, sc), k);
+      const int pl = voc_pl(t);
+      int cn = pl > 0 ? vc_n[t] : 0;
+      for (int i = 0; i < cn; ++i) sc[i] = vc_ch[t][i];
+      if (!cn) cn = step_chord(t, note, sc);
+      voc_set(t, sc, cn, pl < 0, k);
     }
     else lx_set(t, sub, note, k);
     if (kind == MK_POLY || kind == MK_PROPHET || kind == MK_SQ1 || kind == MK_VOCODER) keys_to_voices(t, kind);
@@ -2255,6 +2316,7 @@ void render_voice(int t, uint32_t n) {
     }
     if (g) {
       vnote[t] = fnote[t][k];
+      if (vc) voc_chord_now(t, vnote[t]);   // (0.16.28: Manual's, a progression's)
       set_voice(t);
       ++vrises[t];
       set_filter(t);                    // (its KEY on the new note)
@@ -3003,7 +3065,15 @@ int eng_lx_knob(int param) {            // an FM drum's knob (lx_knob): which, -
   return own_knobs(t) && i >= 0 && i < LX_KNOBS ? i : -1;
 }
 
+int eng_voc_play(int param) { return voc_play_param(param); }
+int eng_voc_chord(int t, float* out) {  // (0.16.28) VOCODER's chord now (Manual's, a progression's): its notes
+  if (t < 0 || t >= ENG_TRACKS || track_kind(t) != MK_VOCODER || voc_pl(t) <= 0) return 0;
+  for (int i = 0; i < vc_n[t]; ++i) out[i] = vc_ch[t][i];
+  return vc_n[t];
+}
+
 const char* eng_param_name(int param) {
+  if (voc_play_param(param)) return "Play";
   int lk = eng_lx_knob(param);
   if (lk >= 0) {
     int t = param / 12;
@@ -3202,6 +3272,11 @@ int eng_model_find(int kind, int sub) {
 }
 
 float eng_lx_step(int param, float v, int detents) {
+  if (voc_play_param(param)) {          // (VOCODER's PLAY: a choice a detent; Mono at the left end)
+    int c = voc_play(v) + detents;
+    c = c < -1 ? -1 : c > 27 ? 27 : c;
+    return c < 0 ? -1.0f : static_cast<float>(c) * (1.0f / 27.0f);
+  }
   int lk = eng_lx_knob(param), bip = eng_pdef(param)->kind == K_BIP;
   if (lk < 0) return v;
   int t = param / 12;
@@ -3400,7 +3475,10 @@ static void put_end(char* b, int n, const char* s) {   // s after what b holds
 MI_COLD void eng_param_text(int param, float v, char* b, int n) {
   const eng_pdef_t* d = eng_pdef(param);
   int pt = page_type(param / 4), k = param % 4, lk = eng_lx_knob(param);
-  if (lk >= 0 && zero_on(param / 12)) {   // ZERO's: as it writes them (an index, a ratio, Hz, %)
+  if (voc_play_param(param)) {          // (0.16.28) VOCODER's PLAY: Mono, Poly, Manual, a progression's name
+    const int c = voc_play(v);
+    put(b, n, c < 0 ? "Mono" : c ? pads_prog_name(c - 1) : "Poly");
+  } else if (lk >= 0 && zero_on(param / 12)) {   // ZERO's: as it writes them (an index, a ratio, Hz, %)
     zero_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0 && track_kind(param / 12) == MK_DRUM) {   // a drum's (times, Hz, semitones)
     drum_knob_text(track_sub(param / 12), lk, lx_u(param, v), b, n);
@@ -5165,6 +5243,7 @@ void take_pattern(const project_t* c) {   // the machine's settings stay (the FM
   for (int l = 0; l < ENG_LANES; ++l) lane_fresh(l);
   ++lock_gen;
   pad_pos = -1;
+  vc_pos[0] = vc_pos[1] = vc_pos[2] = vc_pos[3] = -1;
   for (int t = 0; t < ENG_TRACKS; ++t) {
     e_clk[t] = 1e9f;
     e_pos[t] = -1;
