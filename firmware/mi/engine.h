@@ -90,7 +90,9 @@ enum { MB_OFF, MB_COMP, MB_OTT };       /* the master bus's mode (PG_COMP's ALGO
 enum { WC_OFF, WC_T1, WC_T2, WC_T3, WC_T4, WC_OSC1, WC_OSC2, WC_OSC3 };
 enum { WM_WARPS, WM_DRY, WM_SHIFT };    /* Warps' MODE: the modulator's track silenced as Warps opens, heard too, the
                                          * frequency shifter (the module's easter egg) */
-enum { LW_SINE, LW_TRI, LW_SAW, LW_RAMP, LW_SQUARE, LW_SH, LW_SMOOTH, LW_N };   /* an LFO's waves */
+enum { LW_SINE, LW_TRI, LW_SAW, LW_RAMP, LW_SQUARE, LW_SH, LW_SMOOTH,   /* an LFO's waves; (0.16.22) the rhythmic */
+       LW_PUMP, LW_STAIRS, LW_CLAVE, LW_BOUNCE, LW_RISES, LW_FALLS, LW_ZIGZAG,   /* ones, their figures on a cycle cut */
+       LW_CHAOS, LW_N };                 /* in eight, and Chaos (Lorenz's attractor) */
 enum { LM_FREE, LM_SYNC, LM_T1 };       /* an LFO's MODE: free, synced to the tempo, started at T1's (..T4's) trigs */
 enum { DL_SYNC, DL_FREE };              /* the delay's ALGORITHM: its time in divisions of the tempo, or in ms */
 

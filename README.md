@@ -56,8 +56,9 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   chaque piste de pas ;
 - un **quantiseur global** (15 gammes et la tonique, et Prog : les accords de PADS) : aucune fausse note, sur toutes
   les pistes et au clavier, FREQ, la transposition et l'oscillateur de Warps compris ;
-- **trois LFO** comme modulateurs (sinus, triangle, dent de scie, rampe, carré, S&H, aléatoire lissé), chacun libre,
-  calé sur le tempo ou relancé par les trigs d'une piste, avec un **slew** ;
+- **trois LFO** comme modulateurs (sinus, triangle, dent de scie, rampe, carré, S&H, aléatoire lissé ; depuis
+  0.16.22, sept formes rythmiques et le chaos de Lorenz), chacun libre, calé sur le tempo ou relancé par les trigs d'une
+  piste, avec un **slew** ;
 - une **matrice de câbles** : les 3 LFO vers presque tous les paramètres, 8 câbles par piste et 8 globaux, posés en
   tenant la touche d'un LFO et en tournant un potard (en atténuverteur) ;
 - une **dose d'aléatoire** cachée (OCT− tenu, SELECT), sur son propre écran, qui relance tout le son à chaque trig
@@ -898,12 +899,29 @@ potard montre en pointillé jusqu'où le câble l'emmène, le LFO écrit dessous
 cible, K4 sa profondeur.
 
 **Les LFO** (LFO, trois faces : LFO 1, 2, 3) : **WAVE** (Sine, Triangle, Saw qui monte, Ramp qui descend, Square,
-S&H : une valeur au hasard par cycle, Smooth : un aléatoire lissé), **RATE**, **MODE** et **SLEW**. MODE : Free
+S&H : une valeur au hasard par cycle, Smooth : un aléatoire lissé, puis les formes de la 0.16.22, plus bas), **RATE**,
+**MODE** et **SLEW**. MODE : Free
 (RATE de 0,02 à 20 Hz), Sync (calé sur la mesure, RATE devient un rapport : 4 par temps à 1 pour 16 mesures) ou
 T1 à T4 (relancé au début à chaque trig de la piste : une rampe qui descend fait une enveloppe à chaque note). SLEW
 lisse la sortie (1 ms à 2 s : un carré arrondi, un S&H qui glisse). L'écran trace ce que le LFO a fait ces 1,4
 dernières secondes ; en bas, les trois LFO, chacun dans sa couleur, allumés à leur hauteur. Les LFO remplacent les
 deux Tides des 0.3 : ils coûtent à peu près pareil (presque rien), mais se règlent d'un coup d'œil.
+
+**Les formes rythmiques et le chaos** (0.16.22). Les rythmiques dessinent une figure sur un cycle coupé en huit : en
+Sync à « 1 / 2 beats », chaque huitième est une double croche, à « 1 / bar » une croche (et le swing du GLOBAL s'y
+applique) ; en T1 à T4, la figure repart à chaque trig de la piste.
+
+- **Pump** : le creux du sidechain et sa remontée (tenu un instant, revenu aux deux tiers du cycle). En T1 sur la
+  piste du kick, vers un LEVEL : le pompage.
+- **Stairs** : quatre marches qui montent. Vers la hauteur avec le quantiseur : des arpèges.
+- **Clave** : les trois coups du tresillo (3 + 3 + 2), chacun qui retombe.
+- **Bounce** : les arcs d'une balle qui rebondit, chacun plus court (0,6 du précédent) et plus bas ; le cycle les
+  contient tous.
+- **Rises** et **Falls** : des rampes qui montent, ou qui descendent, sur le 3 + 3 + 2.
+- **Zigzag** : monte sur trois huitièmes, retombe sur un, remonte sur deux, redescend sur deux.
+- **Chaos** : l'attracteur de **Lorenz** (1963 ; σ 10, ρ 28, β 8/3), sa coordonnée x : il tourne autour d'une de
+  ses deux ailes, puis de l'autre, sans jamais refaire le même chemin. Ni périodique ni aléatoire : déterministe et
+  imprévisible. RATE règle sa vitesse (un tour d'aile par cycle, à peu près).
 
 **Le son** (EDIT), première page : FREQ, puis HARMONICS, TIMBRE et MORPH sous le nom (court) que leur donne le manuel de Plaits pour
 le modèle choisi (le SWARM : DETUNE, DENSITY, GRAIN ; le MODAL : STRUCT, BRIGHT, DECAY…) ; sur une batterie, une

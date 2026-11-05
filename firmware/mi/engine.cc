@@ -78,7 +78,8 @@ uint32_t plat_cpu2_stack(void) { return 0; }
 namespace {
 
 // ---------------------------------------------------------------- parameters ---
-const char* const kLfoWaves[LW_N] = {"Sine", "Triangle", "Saw", "Ramp", "Square", "S&H", "Smooth"};
+const char* const kLfoWaves[LW_N] = {"Sine",  "Triangle", "Saw",   "Ramp",   "Square", "S&H",    "Smooth", "Pump",
+                                     "Stairs", "Clave",   "Bounce", "Rises", "Falls",  "Zigzag", "Chaos"};
 const char* const kLfoModes[6] = {"Free", "Sync", "T1", "T2", "T3", "T4"};
 const char* const kOnOff[2] = {"Off", "On"};
 const char* const kScaleNames[18] = {"Off", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
@@ -766,11 +767,64 @@ float six_len(float sl) {               // the sixteenth playing's length, swung
 // phase from the bar, in time with the steps); MODE, free, synced, or started again at a track's trigs (a block
 // after, the trig seen); SLEW, a glide on what comes out (none, up to 2 s). S&H takes a random value a cycle, Smooth
 // glides from one to the next. Out: -1..1, the cables' sources L1..L3
+// (0.16.22) The rhythmic waves, their figures on the cycle cut in eight (synced, at 1 / 2 beats: sixteenths; at 1 /
+// bar: eighths; on a track's trigs: from each): PUMP the sidechain's duck and its swell back; STAIRS four steps up;
+// CLAVE the tresillo's three hits (3 + 3 + 2), each falling back; BOUNCE a ball's arcs, quicker and lower each time
+// (0.6 the last's length: the cycle holds them all); RISES and FALLS ramps on the tresillo's 3 + 3 + 2, up or down;
+// ZIGZAG up 3, down 1, up 2, down 2. CHAOS: Lorenz's attractor (sigma 10, rho 28, beta 8/3), its x, run at the
+// rate (a turn around one of its two wings a cycle, about), neither periodic nor random
 struct Lfo {
   float phase, out, a, b;               // its phase (0..1), what comes out, the random's last value and the next
   uint32_t rises, seed;                 // its track's trigs seen; its own random (the steps' stays theirs)
+  float cx, cy, cz;                     // (CHAOS: where it is)
 };
 Lfo lfo[3];
+
+float lfo_hit(float x) {                // a hit x units ago (0..1.5 its fall), then the floor
+  if (x >= 1.5f) return -1.0f;
+  const float d = 1.0f - x * (1.0f / 1.5f);
+  return -1.0f + 2.0f * d * d;
+}
+float lfo_figure(int wave, float ph) {   // the rhythmic waves at their phase, -1..1
+  const float u = 8.0f * ph;            // (the eighths of the cycle)
+  const float s = u < 3.0f ? 0.0f : u < 6.0f ? 3.0f : 6.0f, len = u < 6.0f ? 3.0f : 2.0f;   // (3 + 3 + 2)
+  switch (wave) {
+    case LW_PUMP: {                     // down at once, held a moment, swelling back over 70 % of the cycle
+      const float x = ph < 0.7f ? ph * (1.0f / 0.7f) : 1.0f;
+      return -1.0f + 2.0f * x * x * (3.0f - 2.0f * x);
+    }
+    case LW_STAIRS: return -1.0f + (2.0f / 3.0f) * fm_floorf(ph * 4.0f > 3.0f ? 3.0f : ph * 4.0f);
+    case LW_CLAVE: return lfo_hit(u - s);
+    case LW_BOUNCE: {                   // the arcs: 0.4 of the cycle, then 0.6 of each before, their heights squared
+      float t = 0.0f, len_k = 0.4f, h = 1.0f;
+      for (int k = 0; k < 12 && ph >= t + len_k; ++k) t += len_k, len_k *= 0.6f, h *= 0.36f;
+      const float x = (ph - t) / len_k;
+      return -1.0f + 8.0f * h * x * (1.0f - x);
+    }
+    case LW_RISES: return -1.0f + 2.0f * (u - s) / len;
+    case LW_FALLS: return 1.0f - 2.0f * (u - s) / len;
+    default: {                          // ZIGZAG: through (0, -1) (3, 1) (4, -0.2) (6, 0.6) (8, -1)
+      static const float kX[5] = {0.0f, 3.0f, 4.0f, 6.0f, 8.0f}, kY[5] = {-1.0f, 1.0f, -0.2f, 0.6f, -1.0f};
+      int i = u < 3.0f ? 0 : u < 4.0f ? 1 : u < 6.0f ? 2 : 3;
+      return kY[i] + (kY[i + 1] - kY[i]) * (u - kX[i]) / (kX[i + 1] - kX[i]);
+    }
+  }
+}
+float lfo_chaos(Lfo& o, float inc) {    // Lorenz's attractor run inc of a cycle on (~0.8 of its time a cycle)
+  if (o.cx == 0.0f && o.cy == 0.0f && o.cz == 0.0f) o.cx = 1.0f, o.cy = 1.0f + 0.5f * (o.seed & 3u), o.cz = 20.0f;
+  float dt = (inc < 0.0f ? 0.0f : inc > 0.25f ? 0.25f : inc) * 0.8f;
+  int n = 1 + static_cast<int>(dt * 125.0f);   // (steps of 0.008 at most: Euler holds there)
+  dt /= static_cast<float>(n);
+  float x = o.cx, y = o.cy, z = o.cz;
+  for (int i = 0; i < n; ++i) {
+    const float dx = 10.0f * (y - x), dy = x * (28.0f - z) - y, dz = x * y - (8.0f / 3.0f) * z;
+    x += dx * dt, y += dy * dt, z += dz * dt;
+  }
+  if (!(fm_fabsf(x) < 100.0f && fm_fabsf(y) < 100.0f && z > -10.0f && z < 100.0f)) x = 1.0f, y = 1.0f, z = 20.0f;
+  o.cx = x, o.cy = y, o.cz = z;
+  const float v = x * (1.0f / 19.0f);
+  return v < -1.0f ? -1.0f : v > 1.0f ? 1.0f : v;
+}
 
 float lfo_rand(Lfo& o) {
   o.seed = o.seed * 1664525u + 1013904223u;
@@ -782,18 +836,19 @@ void run_lfos(uint32_t n) {
   for (int i = 0; i < 3; ++i) {
     Lfo& o = lfo[i];
     int wave = Pi(PG_LFO(i), 0), mode = Pi(PG_LFO(i), 2), cycle = 0;
-    float rate = P(PG_LFO(i), 1);
+    float rate = P(PG_LFO(i), 1), inc;        // (inc: a block's share of a cycle)
     if (!o.seed) o.seed = 0x9E3779B9u * static_cast<uint32_t>(i + 1);
     if (mode == LM_SYNC) {
       int r = static_cast<int>(rate * 8.999f);
       float ratio = kLfoRatios[r < 0 ? 0 : r > 8 ? 8 : r];
+      inc = beat_hz * ratio / block_hz;
       if (playing) {                    // the phase from the bar: the beats since PLAY (the sixteenth, swung)
         float beats = (static_cast<float>(tick) + step_clk / six_len(step_len_now())) * 0.25f * ratio;
         float ph = beats - fm_floorf(beats);
         cycle = ph < o.phase;           // (wrapped)
         o.phase = ph;
       } else {
-        o.phase += beat_hz * ratio / block_hz;
+        o.phase += inc;
       }
     } else {
       if (mode >= LM_T1 && mode < LM_T1 + ENG_TRACKS) {
@@ -804,7 +859,8 @@ void run_lfos(uint32_t n) {
           cycle = 1;
         }
       }
-      o.phase += lfo_hz(rate) / block_hz;
+      inc = lfo_hz(rate) / block_hz;
+      o.phase += inc;
     }
     if (o.phase >= 1.0f) {
       o.phase -= fm_floorf(o.phase);
@@ -822,7 +878,9 @@ void run_lfos(uint32_t n) {
       case LW_RAMP: v = 1.0f - 2.0f * ph; break;
       case LW_SQUARE: v = ph < 0.5f ? 1.0f : -1.0f; break;
       case LW_SH: v = o.b; break;
-      default: v = o.a + (o.b - o.a) * (0.5f - 0.5f * fm_cosf(3.14159265f * ph)); break;
+      case LW_SMOOTH: v = o.a + (o.b - o.a) * (0.5f - 0.5f * fm_cosf(3.14159265f * ph)); break;
+      case LW_CHAOS: v = lfo_chaos(o, inc); break;
+      default: v = lfo_figure(wave, ph); break;
     }
     float slew = P(PG_LFO(i), 3);
     if (slew < 0.005f) o.out = v;

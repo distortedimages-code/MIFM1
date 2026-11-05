@@ -5287,6 +5287,93 @@ int main(int argc, char** argv) {
       ++failures, printf("FAIL: VOCODER\n");
   }
 
+  // 73. (0.16.22) the LFOs' rhythmic waves and CHAOS: on LFO 1, free, slow, read with its phase: each its figure
+  // (PUMP down at the cycle's start and back up by 70 %, STAIRS four steps, CLAVE its hits at 0, 3 and 6 eighths, BOUNCE
+  // on the floor at 0.4 and its first arc's top at 0.2, RISES and FALLS their ramps on 3 + 3 + 2, ZIGZAG at 1 on the
+  // third eighth); CHAOS bounded, on both wings, never twice the same cycle
+  {
+    project_t* p = eng_project();
+    eng_play(0);
+    eng_blank(p);
+    eng_fresh();
+    const uint32_t nb = 128;
+    static float l[128], r[128];
+    p->val[PG_LFO(0) * 4 + 1] = 0.45f;                    // (~0.45 Hz: ~770 values a cycle)
+    p->val[PG_LFO(0) * 4 + 2] = static_cast<float>(LM_FREE);
+    p->val[PG_LFO(0) * 4 + 3] = 0.0f;
+    auto at = [&](int wave, float ph0, float ph1, float* lo, float* hi) {   // its values between two phases
+      p->val[PG_LFO(0) * 4 + 0] = static_cast<float>(wave);
+      *lo = 2.0f, *hi = -2.0f;
+      for (int b = 0; b < 2400; ++b) {
+        eng_render(l, r, nb);
+        const float ph = eng_lfo_phase(0), v = eng_src(SRC_L1);
+        if (!std::isfinite(v) || v < -1.0001f || v > 1.0001f) *lo = -9.0f;
+        if (ph >= ph0 && ph < ph1) *lo = std::fmin(*lo, v), *hi = std::fmax(*hi, v);
+      }
+    };
+    float a0, a1, b0, b1, c0, c1;
+    at(LW_PUMP, 0.0f, 0.02f, &a0, &a1);
+    at(LW_PUMP, 0.72f, 1.0f, &b0, &b1);
+    const int pump = a1 < -0.98f && b0 > 0.999f;
+    int steps = 0;
+    {
+      float seen[8];
+      p->val[PG_LFO(0) * 4 + 0] = static_cast<float>(LW_STAIRS);
+      for (int b = 0; b < 2400; ++b) {
+        eng_render(l, r, nb);
+        const float v = eng_src(SRC_L1);
+        if (b < 4) continue;                              // (the wave before it, a block)
+        int k = 0;
+        while (k < steps && std::fabs(seen[k] - v) > 1e-3f) ++k;
+        if (k == steps && steps < 8) seen[steps++] = v;
+      }
+    }
+    float h0, h1, h2, q0, q1;
+    at(LW_CLAVE, 0.0f, 0.01f, &q0, &h0);
+    at(LW_CLAVE, 3.0f / 8.0f, 3.08f / 8.0f, &q0, &h1);
+    at(LW_CLAVE, 6.0f / 8.0f, 6.08f / 8.0f, &q0, &h2);
+    at(LW_CLAVE, 2.0f / 8.0f, 2.9f / 8.0f, &q1, &q0);     // (between the hits: the floor)
+    const int clave = h0 > 0.95f && h1 > 0.95f && h2 > 0.95f && q0 < -0.99f;
+    at(LW_BOUNCE, 0.395f, 0.405f, &a0, &a1);
+    at(LW_BOUNCE, 0.19f, 0.21f, &b0, &b1);
+    at(LW_BOUNCE, 0.51f, 0.53f, &c0, &c1);                // (its second arc's top, 0.4 + 0.24 / 2: lower, 0.36)
+    const int bounce = a1 < -0.9f && b1 > 0.99f && c1 > -0.4f && c1 < -0.2f;
+    at(LW_RISES, 2.85f / 8.0f, 3.0f / 8.0f, &a0, &a1);
+    at(LW_RISES, 3.0f / 8.0f, 3.15f / 8.0f, &b0, &b1);
+    at(LW_FALLS, 5.85f / 8.0f, 6.0f / 8.0f, &c0, &c1);
+    float d0, d1;
+    at(LW_FALLS, 6.0f / 8.0f, 6.1f / 8.0f, &d0, &d1);
+    const int ramps = a1 > 0.85f && b0 < -0.85f && c0 < -0.85f && d1 > 0.85f;
+    at(LW_ZIGZAG, 2.96f / 8.0f, 3.04f / 8.0f, &a0, &a1);
+    at(LW_ZIGZAG, 3.96f / 8.0f, 4.04f / 8.0f, &b0, &b1);
+    const int zig = a1 > 0.95f && b0 < -0.1f && b1 < 0.0f;
+    // CHAOS: 40 s, a cycle's values against the one before (the same figure: periodic)
+    p->val[PG_LFO(0) * 4 + 0] = static_cast<float>(LW_CHAOS);
+    p->val[PG_LFO(0) * 4 + 1] = 0.6f;
+    float cmin = 2.0f, cmax = -2.0f;
+    int cfinite = 1, wings = 0, last_wing = 0;
+    for (int b = 0; b < 44100 * 40 / static_cast<int>(nb); ++b) {
+      eng_render(l, r, nb);
+      const float v = eng_src(SRC_L1);
+      if (!std::isfinite(v)) cfinite = 0;
+      cmin = std::fmin(cmin, v), cmax = std::fmax(cmax, v);
+      const int w = v > 0.3f ? 1 : v < -0.3f ? -1 : 0;
+      if (w && w != last_wing) ++wings, last_wing = w;
+    }
+    const int chaos = cfinite && cmin >= -1.0f && cmax <= 1.0f && cmin < -0.5f && cmax > 0.5f && wings >= 6;
+    char t[16];
+    eng_param_text(PG_LFO(0) * 4, static_cast<float>(LW_CHAOS), t, sizeof t);
+    const int names = !strcmp(t, "Chaos") && LW_N == 15;
+    eng_defaults(p);
+    eng_fresh();
+    printf("LFO waves: PUMP %s, STAIRS %d steps, CLAVE its hits %.2f %.2f %.2f (%s), BOUNCE %s, RISES and FALLS %s, "
+           "ZIGZAG %s, CHAOS %.2f..%.2f, its wings swapped %d times (%s), names %s\n", pump ? "ok" : "WRONG", steps, h0,
+           h1, h2, clave ? "ok" : "WRONG", bounce ? "ok" : "WRONG", ramps ? "ok" : "WRONG", zig ? "ok" : "WRONG", cmin,
+           cmax, wings, chaos ? "ok" : "WRONG", names ? "ok" : "WRONG");
+    if (!pump || steps != 4 || !clave || !bounce || !ramps || !zig || !chaos || !names)
+      ++failures, printf("FAIL: the LFOs' new waves\n");
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

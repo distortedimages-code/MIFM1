@@ -126,6 +126,17 @@ shot 07_lfo2.png
 tap LFO
 wait 400
 shot 08_lfo3.png
+turn K1 1
+wait 1600
+shot 08a_lfo3_pump.png
+turn K1 3
+wait 1600
+shot 08b_lfo3_bounce.png
+turn K1 4
+wait 1600
+shot 08c_lfo3_chaos.png
+turn K1 -8
+wait 300
 tap SEQ
 wait 300
 shot 09_steps_t2.png
