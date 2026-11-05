@@ -189,7 +189,8 @@ static void pat_name(int slot, char *b)  /* A1 .. K16 */
                                           * RATCH's place), an effect's (its last) SPEED, DIRECTION, PROB, LENGTH */
 #define VP_ARP2(t) (ENG_NPAGES + 28 + (t))   /* (0.16.2) Endless' second face: STRIDE, REST, HOLES, LEAP */
 #define VP_CLIMB(t) (ENG_NPAGES + 32 + (t))  /* (0.16.7) a track's steps' third face: CLIMB, NOTES, ON, SHAPE */
-enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS, PT_PLAY, PT_ARP2, PT_CLIMB };
+#define VP_ARP3(t) (ENG_NPAGES + 36 + (t))   /* (0.16.13) Endless' third face, ARP: MODE, OCTAVES, LATCH, ORDER */
+enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS, PT_PLAY, PT_ARP2, PT_CLIMB, PT_ARP3 };
 /* a track's pages in four sets: EDIT goes from one to the next of the first three (its sound, its bending: the bits
  * and the glitch, its filter),
  * ENV to the envelopes; SELECT through a set's pages; ALGO changes what the page shows (the sound's model, the
@@ -245,11 +246,13 @@ static struct {
 /* ------------------------------------------------------------ the pages --- */
 static int ptype(int page)
 {
-    return page >= VP_CLIMB(0) ? PT_CLIMB : page >= VP_ARP2(0) ? PT_ARP2 : page >= VP_PLAY(0) ? PT_PLAY : page >= VP_SYS ? PT_SYS : page >= ENG_NPAGES ? PT_RND + (page - ENG_NPAGES) / 4
+    return page >= VP_ARP3(0) ? PT_ARP3 : page >= VP_CLIMB(0) ? PT_CLIMB : page >= VP_ARP2(0) ? PT_ARP2 : page >= VP_PLAY(0) ? PT_PLAY : page >= VP_SYS ? PT_SYS : page >= ENG_NPAGES ? PT_RND + (page - ENG_NPAGES) / 4
                                                                                         : eng_page_type(page);
 }
 static int ptrack(int page)              /* the track a page belongs to, -1: none */
 {
+    if (page >= VP_ARP3(0))
+        return page - VP_ARP3(0);
     if (page >= VP_CLIMB(0))
         return page - VP_CLIMB(0);
     if (page >= VP_ARP2(0))
@@ -260,6 +263,8 @@ static int ptrack(int page)              /* the track a page belongs to, -1: non
 }
 static int plane(int page)               /* a lane's page (its steps', its effect's), the lane: -1 none */
 {
+    if (page >= VP_ARP3(0))
+        return -1;
     if (page >= VP_CLIMB(0))
         return page - VP_CLIMB(0);
     if (page >= VP_ARP2(0))
@@ -347,7 +352,7 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
         f[3] = VP_RND(t);
         f[4] = PG_EUC(t);
         return 5;
-    case PT_ARP: case PT_ARP2: f[0] = PG_ARP(t); f[1] = VP_ARP2(t); return 2;
+    case PT_ARP: case PT_ARP2: case PT_ARP3: f[0] = PG_ARP(t); f[1] = VP_ARP2(t); f[2] = VP_ARP3(t); return 3;
     case PT_DELAY1: case PT_DELAY2: case PT_DSEND: case PT_LANE: case PT_REVERB: case PT_RSEND:
     case PT_WARPS1: case PT_WARPS2: {    /* an effect: its knobs, the tracks' sends, its steps */
         int l = eng_page_lane(page);
@@ -425,6 +430,7 @@ static int track_page(int page, int t)   /* the same page on track t (a track's 
     case PT_STEP: return PG_STEP(t);
     case PT_ARP: return PG_ARP(t);
     case PT_ARP2: return VP_ARP2(t);
+    case PT_ARP3: return VP_ARP3(t);
     case PT_CLIMB: return VP_CLIMB(t);
     case PT_RND: return VP_RND(t);
     case PT_PLAY: return ptrack(page) >= 0 ? VP_PLAY(t) : page;
@@ -473,8 +479,8 @@ static int knob_param(int page, int k)
     }
     if (ptype(page) == PT_RND)
         return eng_track_param(ptrack(page), RND_TP[k]);
-    if (ptype(page) == PT_ARP2)          /* (Endless' options: the project's bytes, byte_knob; its page's knobs
-                                          * stand for them here) */
+    if (ptype(page) == PT_ARP2 || ptype(page) == PT_ARP3)   /* (Endless' options, its ARP's: the project's bytes,
+                                          * byte_knob; its page's knobs stand for them here) */
         return PG_ARP(ptrack(page)) * 4 + k;
     if (ptype(page) == PT_CLIMB)         /* (0.16.7) CLIMB, its parameter (in the Euclidean page's third place); the
                                           * others the project's bytes (byte_knob): it stands for them */
@@ -533,7 +539,7 @@ static const char *module_name(int page)
         int l = eng_page_lane(page);
         return l < ENG_TRACKS ? "Steps" : l == LANE_DELAY ? "Delay" : l == LANE_REVERB ? "Reverb" : "Warps";
     }
-    case PT_ARP: case PT_ARP2: return "Endless";
+    case PT_ARP: case PT_ARP2: case PT_ARP3: return "Endless";
     case PT_CLIMB: return "Steps";
     case PT_PLAY: {
         int l = plane(page);
@@ -576,7 +582,7 @@ static uint16_t page_accent(int page)
 {
     project_t *p = eng_project();
     switch (ptype(page)) {
-    case PT_STEP: case PT_RND: case PT_ARP: case PT_ARP2: case PT_CLIMB: return track_accent(ptrack(page));
+    case PT_STEP: case PT_RND: case PT_ARP: case PT_ARP2: case PT_ARP3: case PT_CLIMB: return track_accent(ptrack(page));
     case PT_PAN: case PT_GLOBAL: case PT_SYS: case PT_MIX: case PT_EQ: return AC1;
     case PT_DUCK: return track_accent(0);    /* T1's: it ducks the others */
     case PT_COMP: return AC2;
@@ -2044,6 +2050,26 @@ static void panel_endless(int t)         /* Endless: recording, or how many note
     hero_line(y, s);
 }
 
+static void panel_arp(int t)             /* (0.16.13) Endless' ARP: what it walks, over how many octaves */
+{
+    char s[48], n[8];
+    int m = eng_arp_opt(t, AO_MODE), oct = eng_arp_opt(t, AO_OCT);
+    hero_icon(IC_ENDLESS, track_accent(t));
+    int y = hero_title("ARP");
+    s[0] = 0;
+    if (m == AM_LOOP) {
+        text_cat(s, "OFF|THE RECORDED NOTES", sizeof s);
+    } else {
+        text_cat(s, m == AM_KEYS ? "THE KEYS|" : "PADS' CHORD|", sizeof s);
+        int_text(oct, n);
+        text_cat(s, n, sizeof s);
+        text_cat(s, oct > 1 ? " OCTAVES" : " OCTAVE", sizeof s);
+        if (m == AM_KEYS && eng_arp_opt(t, AO_LATCH))
+            text_cat(s, "|LATCHED", sizeof s);
+    }
+    hero_line(y, s);
+}
+
 static void panel_global(void)           /* the tempo, the scale, the swing */
 {
     project_t *p = eng_project();
@@ -2225,6 +2251,9 @@ static void draw_panel(void)
         s[2] = (int)p->val[PG_DELAY(0) * 4] | (int)p->val[PG_DELAY(1) * 4 + 1] << 5 |
                (int)(eng_final(PG_DELAY(0) * 4 + 1) * 100.0f) << 6;
         break;
+    case PT_ARP3:
+        s[2] = p->arp_opt[tr];
+        break;
     case PT_ARP:
         s[2] = p->endless_len[tr] | (p->endless_key[tr] + 64) << 7 | (ui.erec == tr) << 14;
         for (int i = 0; i < p->endless_len[tr]; i++)
@@ -2327,6 +2356,7 @@ static void draw_panel(void)
     case PT_CLIMB: panel_climb(tr); break;
     case PT_RND: panel_random(tr); break;
     case PT_ARP: case PT_ARP2: panel_endless(tr); break;
+    case PT_ARP3: panel_arp(tr); break;
     case PT_GLOBAL: panel_global(); break;
     case PT_WARPS1: case PT_WARPS2: panel_warps(); break;
     case PT_DELAY1: case PT_DELAY2: case PT_DSEND: panel_delay(); break;
@@ -2499,7 +2529,7 @@ static int play_byte(int page, int k)    /* 0 SPEED, 1 DIRECTION, -1 neither */
 }
 static int byte_knob(int page, int k)
 {
-    return play_byte(page, k) >= 0 || ptype(page) == PT_ARP2 || (ptype(page) == PT_CLIMB && k > 0);
+    return play_byte(page, k) >= 0 || ptype(page) == PT_ARP2 || ptype(page) == PT_ARP3 || (ptype(page) == PT_CLIMB && k > 0);
 }
 static int byte_value(int page, int k, int *n, char *txt, uint32_t max, const char **name)   /* its value (a choice's
                                                                                                * index) */
@@ -2518,6 +2548,21 @@ static int byte_value(int page, int k, int *n, char *txt, uint32_t max, const ch
             label_text(eng_dir_name(v), txt, max);
         *name = b == 0 ? "Speed" : "Dir";
         return v;
+    }
+    if (ptype(page) == PT_ARP3) {        /* (0.16.13) the ARP: MODE, OCTAVES, LATCH, ORDER */
+        static const char *const N3[4] = {"Mode", "Octaves", "Latch", "Order"};
+        int o = eng_arp_opt(ptrack(page), k);
+        *name = N3[k];
+        if (k == 1) {
+            char d[4];
+            *n = 4;
+            int_text(o, d);
+            text_cat(txt, d, max);
+            return o - 1;
+        }
+        *n = k == 0 ? AM_N : 2;
+        label_text(k == 0 ? eng_arp_mode_name(o) : k == 2 ? (o ? "On" : "Off") : (o ? "Played" : "Pitch"), txt, max);
+        return o;
     }
     if (ptype(page) == PT_CLIMB) {       /* (0.16.7) CLIMB's options: NOTES (2..16), ON, SHAPE */
         int t = ptrack(page), o = eng_climb_opt(t, k - 1);
@@ -2703,7 +2748,14 @@ static void play_turn(int k, int32_t e)  /* a byte knob turned (byte_knob): the 
 {
     project_t *p = eng_project();
     int d = e > 0 ? 1 : -1;
-    if (ptype(ui.page) == PT_CLIMB) {    /* (0.16.7) CLIMB's options: a step each, the track's (GLO held: the four's) */
+    if (ptype(ui.page) == PT_ARP3) {     /* (0.16.13) the ARP's: a step each, the track's (GLO held: the four's) */
+        int t = ptrack(ui.page), v = eng_arp_opt(t, k) + d;
+        v = k == 0 ? clamp(v, 0, AM_N - 1) : k == 1 ? clamp(v, 1, 4) : clamp(v, 0, 1);
+        for (int m = 0; m < ENG_TRACKS; m++)
+            if (m == t || held(B_GLO))
+                eng_arp_opt_set(p, m, k, v);
+    } else if (ptype(ui.page) == PT_CLIMB) {   /* (0.16.7) CLIMB's options: a step each, the track's (GLO held: the
+                                          * four's) */
         int t = ptrack(ui.page), o = k - 1, v = eng_climb_opt(t, o) + d;
         v = o == CL_TIMES ? clamp(v, 2, 16) : clamp(v, 0, (o == CL_ON ? CLON_N : CLSH_N) - 1);
         for (int m = 0; m < ENG_TRACKS; m++)
@@ -3087,7 +3139,8 @@ static int foot_mode(void)
 {
     if (ui.matrix || ui.page == VP_SYS)
         return 0;
-    if (ui.erec >= 0 || ((ptype(ui.page) == PT_ARP || ptype(ui.page) == PT_ARP2) && !ui.grid))
+    if (ui.erec >= 0 || ((ptype(ui.page) == PT_ARP || ptype(ui.page) == PT_ARP2 || ptype(ui.page) == PT_ARP3) &&
+                         !ui.grid))
         return 6;
     if (foot_lane() >= 0)
         return 5;
@@ -3166,21 +3219,26 @@ static int gcd(int a, int b)
 static void foot_endless(int t)
 {
     project_t *p = eng_project();
-    int len = p->endless_len[t], pos = eng_endless_pos(t), first, lo = 127, hi = 0, st = eng_endless_state(t);
+    static uint8_t arp[32];
+    int am = ui.erec == t ? AM_LOOP : eng_arp_opt(t, AO_MODE);   /* (0.16.13: an ARP's notes as they are now) */
+    const uint8_t *src = am == AM_LOOP ? p->endless[t] : arp;
+    int len = am == AM_LOOP ? p->endless_len[t] : eng_arp_list(t, arp, 32);
+    int pos = eng_endless_pos(t), first, lo = 127, hi = 0, st = eng_endless_state(t);
     int sd = eng_endless_opt(t, EO_STRIDE), dir = (int)p->val[PG_ARP(t) * 4 + 2], g = len ? gcd(sd, len) : 1;
     uint16_t ac = ui.erec == t ? AC3 : track_accent(t);
     if (!len) {
-        cv_text(10, 11, &FONT_XS, ui.erec == t ? "PLAY THE NOTES, ONE BY ONE" : "NO NOTES YET", DIM);
+        cv_text(10, 11, &FONT_XS, ui.erec == t ? "PLAY THE NOTES, ONE BY ONE" : am == AM_KEYS ? "HOLD KEYS: THEIR ARPEGGIO" :
+                am == AM_CHORD ? "NO PADS: NO CHORD" : "NO NOTES YET", DIM);
         return;
     }
     first = ui.erec == t ? (len > 16 ? len - 16 : 0) : pos >= 0 ? pos / 16 * 16 : 0;
     for (int i = 0; i < len; i++)
-        if (p->endless[t][i] != ENDLESS_REST) {
-            lo = p->endless[t][i] < lo ? p->endless[t][i] : lo;
-            hi = p->endless[t][i] > hi ? p->endless[t][i] : hi;
+        if (src[i] != ENDLESS_REST) {
+            lo = src[i] < lo ? src[i] : lo;
+            hi = src[i] > hi ? src[i] : hi;
         }
     for (int i = 0; i < 16 && first + i < len; i++) {
-        int x = 9 + i * 13, nt = p->endless[t][first + i], on = first + i == pos, idx = first + i;
+        int x = 9 + i * 13, nt = src[first + i], on = first + i == pos, idx = first + i;
         int reach = ui.erec == t || g <= 1 || dir >= 2 || (dir == 1 ? (len - 1 - idx) % g == 0 : idx % g == 0);
         if (nt == ENDLESS_REST) {
             disc((float)x + 5.0f, 24.0f, 1.6f, on ? HI : DIM);
@@ -3396,6 +3454,13 @@ static void draw_footer(void)
              (int)p->val[PG_ARP(ui.track) * 4 + 2] * 10000000;
         for (int i = 0; i < p->endless_len[ui.track]; i++)
             lh = lh * 31 + p->endless[ui.track][i];
+        if (p->arp_opt[ui.track] & 3u) {   /* (0.16.13: an ARP's mode and what it walks now) */
+            uint8_t a[32];
+            int an = eng_arp_list(ui.track, a, 32);
+            lh = lh * 7 + p->arp_opt[ui.track];
+            for (int i = 0; i < an; i++)
+                lh = lh * 31 + a[i];
+        }
     }
     int fl = foot_lane(), sys = ui.page == VP_SYS && !ui.matrix;
     if (sys) {                           /* the machine: the worst block of the last second, what made it */
@@ -4817,7 +4882,7 @@ static void module_button(int b)
             go_page(PG_STEP(ui.lane));
         break;
     case B_ARP:                          /* Endless, the active track's (again: its second face, 0.16.2) */
-        go_page(here && (pt == PT_ARP || pt == PT_ARP2) ? next : PG_ARP(ui.track));
+        go_page(here && (pt == PT_ARP || pt == PT_ARP2 || pt == PT_ARP3) ? next : PG_ARP(ui.track));
         break;
     case B_HOME:
         go_page(here && (pt == PT_MIX || pt == PT_PAN || pt == PT_EQ || pt == PT_DUCK || pt == PT_COMP || pt == PT_OTT)
@@ -5276,6 +5341,16 @@ static void poll_keys(void)
                 app_say("ENDLESS", "64 STEPS, FULL");
             eng_key(ui.erec, note, down);
             dirty = 1;
+        } else if (eng_arp_opt(ui.track, AO_MODE) == AM_KEYS && ui.erec < 0) {   /* (0.16.13) the ARP: the keys held
+                                          * its notes; stopped, a key held plays it */
+            eng_arp_key(ui.track, note, down);
+            if (down && !eng_playing())
+                eng_endless_free(ui.track, 1);
+            dirty = 1;
+        } else if (eng_arp_opt(ui.track, AO_MODE) == AM_CHORD && ui.erec < 0) {   /* PADS' chord: stopped, a key held
+                                          * plays it */
+            if (down && !eng_playing())
+                eng_endless_free(ui.track, 1);
         } else if (eng_endless_on(ui.track) && eng_playing()) {   /* Endless playing: a key transposes it */
             if (down) {
                 eng_endless_key(ui.track, note);
@@ -5291,6 +5366,8 @@ static void poll_keys(void)
             eng_key(ui.track, note, down);
         }
     }
+    if (!keys)                           /* (0.16.13: every key let go, the ARPs' not latched too) */
+        eng_arp_release_all();
     if (!keys || eng_playing())          /* (every key let go, or PLAY: Endless by the keys stops) */
         eng_endless_free(-1, 0);
     ui.keys = keys;
@@ -5494,7 +5571,7 @@ static void input(void)
      * TRAUMA;
      * the keys: the steps (the one playing blinks), or held; MOD mode: the LFOs' keys blinking at their rates */
     {
-        static const uint8_t PAGE_BTN[PT_CLIMB + 1] = {
+        static const uint8_t PAGE_BTN[PT_ARP3 + 1] = {
             [PT_PLAITS1] = B_EDIT, [PT_PLAITS2] = B_ENV, [PT_PLAITS3] = B_EDIT, [PT_LFO] = B_LFO,
             [PT_MIX] = B_HOME, [PT_PAN] = B_HOME, [PT_REVERB] = B_FX, [PT_RSEND] = B_FX, [PT_DELAY1] = B_FX,
             [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
@@ -5502,7 +5579,7 @@ static void input(void)
             [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_BEND] = B_EDIT, [PT_GLITCH] = B_EDIT, [PT_EUC] = B_SEQ, [PT_RND] = B_SEQ,
             [PT_FILT1] = B_EDIT, [PT_FILT2] = B_EDIT, [PT_FILT3] = B_EDIT, [PT_SON2] = B_EDIT, [PT_VFLT1] = B_EDIT,
             [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO, [PT_PLAY] = B_SEQ, [PT_ARP2] = B_ARP,
-            [PT_CLIMB] = B_SEQ};
+            [PT_CLIMB] = B_SEQ, [PT_ARP3] = B_ARP};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
         uint32_t bb = ui.dice ? 1u << B_OCTDN : ui.trauma ? 1u << B_OCTUP : 0, kk = ui.keys;
         int pt = ptype(ui.page);

@@ -92,7 +92,8 @@ const uint16_t kScaleMasks[17] = {0xFFF, 0xAB5, 0x5AD, 0x6AD, 0x5AB, 0xAD5, 0x6B
 const char* const kNoteName[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 const char* const kArpRates[6] = {"1/32", "1/16T", "1/16", "1/8T", "1/8", "1/4"};
 const float kArpMult[6] = {0.5f, 2.0f / 3.0f, 1.0f, 4.0f / 3.0f, 2.0f, 4.0f};   // in sixteenths
-const char* const kArpDir[4] = {"Forward", "Backward", "Ping-pong", "Random"};
+const char* const kArpDir[6] = {"Forward", "Backward", "Ping-pong", "Random", "+2-1", "Converge"};   // (0.16.13: two
+                                        // on one back; from both ends to the middle)
 const char* const kWarpsCarrier[8] = {"Off", "T1", "T2", "T3", "T4", "Osc 1", "Osc 2", "Osc 3"};
 const char* const kTrackNames[4] = {"T1", "T2", "T3", "T4"};
 const char* const kWarpsMode[3] = {"Warps", "+ Dry", "Freq shift"};
@@ -132,7 +133,7 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Decay", K_UNI, 0, 0, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Depth", K_UNI, 0, 0, 0}, {"Length", K_INT, 1, 64, 0}},
   {{"Tempo", K_UNI, 0, 0, 0}, {"Scale", K_ENUM, 0, kScales - 1, kScaleNames}, {"Root", K_ENUM, 0, 11, kNoteName},
    {"Swing", K_UNI, 0, 0, 0}},
-  {{"Rate", K_ENUM, 0, 5, kArpRates}, {"Gate", K_UNI, 0, 0, 0}, {"Dir", K_ENUM, 0, 3, kArpDir},
+  {{"Rate", K_ENUM, 0, 5, kArpRates}, {"Gate", K_UNI, 0, 0, 0}, {"Dir", K_ENUM, 0, 5, kArpDir},
    {"Transp", K_INT, -24, 24, 0}},
   {{"Carrier", K_ENUM, 0, 7, kWarpsCarrier}, {"Mod", K_ENUM, 0, 3, kTrackNames}, {"Algo", K_UNI, 0, 0, 0},
    {"Mix", K_UNI, 0, 0, 0}},
@@ -1096,6 +1097,41 @@ void ratchet_layout(int t) {
   rat_lvl[t] = tdelta[t][TP_LEVEL];
 }
 
+// (0.16.13) Endless' ARP: KEYS walks the keys held (an arpeggiator: by pitch or as played, over OCTAVES; LATCH keeps
+// them once let go, the next key after all let go anew), CHORD walks PADS' chord as it goes; both with Endless' DIR,
+// STRIDE, REST, HOLES, LEAP, RATE and GATE, played with the sequencer or (a key held, LATCH's notes) without it
+uint8_t arp_held[ENG_TRACKS][8];        // (KEYS: the keys, as pressed; written by the main loop, its count last)
+volatile int arp_n[ENG_TRACKS], arp_down[ENG_TRACKS];
+uint8_t arp_list[ENG_TRACKS][32];       // (what it walks, built at each of its steps)
+int arp_len[ENG_TRACKS];
+int arp_mode(int t) { return eng_arp_opt(t, AO_MODE); }
+int arp_has(int t) {                    // (something to walk)
+  int m = arp_mode(t);
+  return m == AM_KEYS ? arp_n[t] > 0 : m == AM_CHORD ? pad_track >= 0 && pad_n > 0 : 0;
+}
+int arp_build(int t, uint8_t* out, int max) {
+  int base[8], n = 0, m = arp_mode(t);
+  if (m == AM_KEYS) {
+    int c = arp_n[t];
+    for (int i = 0; i < c && i < 8; ++i) base[n++] = arp_held[t][i];
+    if (!eng_arp_opt(t, AO_ORDER))      // (by pitch)
+      for (int i = 1; i < n; ++i)
+        for (int j = i; j > 0 && base[j] < base[j - 1]; --j) { int x = base[j]; base[j] = base[j - 1]; base[j - 1] = x; }
+  } else if (m == AM_CHORD && pad_track >= 0) {
+    int root = Pi(PG_GLOBAL, 2);
+    for (int i = 0; i < pad_n && n < 8; ++i) base[n++] = 48 + root + pad_chord[i];
+    for (int i = 1; i < n; ++i)
+      for (int j = i; j > 0 && base[j] < base[j - 1]; --j) { int x = base[j]; base[j] = base[j - 1]; base[j - 1] = x; }
+  }
+  int k = 0, oct = eng_arp_opt(t, AO_OCT);
+  for (int o = 0; o < oct; ++o)
+    for (int i = 0; i < n && k < max; ++i) {
+      int v = base[i] + 12 * o;
+      if (v >= 0 && v <= 127) out[k++] = static_cast<uint8_t>(v);
+    }
+  return k;
+}
+
 // (0.16.7) CLIMB: a step's trig a little higher (or lower) each time it plays, CLIMB semitones (SCALE on: its notes)
 // a time, back to its note after TIMES of them (RAMP; BOUNCE: up, then back down; RANDOM: any of them); ON: each play
 // of the trig (its ratchets on its note), each hit of its ratchets (from the trig's note), or both (each hit on from
@@ -1165,7 +1201,8 @@ void sequence(uint32_t n) {
   int endless[ENG_TRACKS];
   float el[ENG_TRACKS];
   for (int t = 0; t < ENG_TRACKS; ++t) {
-    endless[t] = proj.endless_len[t] > 0 && proj.endless_len[t] <= ENG_ENDLESS && !e_rec[t];
+    endless[t] = (arp_mode(t) == AM_LOOP ? proj.endless_len[t] > 0 && proj.endless_len[t] <= ENG_ENDLESS : arp_has(t)) &&
+                 !e_rec[t];
     int r = Pi(PG_ARP(t), 0);
     el[t] = sl * kArpMult[r < 0 ? 0 : r > 5 ? 5 : r];
     gate_seen[t] = 0;
@@ -1223,9 +1260,24 @@ void sequence(uint32_t n) {
         e_dir[t] = 1;
         e_cnt[t] = 0;
       }
-      int e_run = playing || (e_free[t] && endless[t]);
+      int e_run = playing || (e_free[t] && endless[t]), am = arp_mode(t);
+      if (am != AM_LOOP && endless[t] && !arp_len[t]) {   // (ARP: something to walk again: from its first, at once)
+        e_clk[t] = 1e9f;
+        e_pos[t] = -1;
+        e_dir[t] = 1;
+        e_cnt[t] = 0;
+      }
+      if (am != AM_LOOP && !endless[t]) arp_len[t] = 0;
       if (endless[t] && e_run && (e_clk[t] += fl) >= el[t]) {   // Endless: its next note (or rest)
-        int len = proj.endless_len[t], d = Pi(PG_ARP(t), 2), sd = eng_endless_opt(t, EO_STRIDE);
+        const uint8_t* src = proj.endless[t];
+        if (am != AM_LOOP) {            // (ARP: the keys or the chord now, its place kept within them)
+          arp_len[t] = arp_build(t, arp_list[t], 32);
+          src = arp_list[t];
+          if (e_pos[t] >= arp_len[t]) e_pos[t] = arp_len[t] - 1;
+        }
+        int len = am != AM_LOOP ? arp_len[t] : proj.endless_len[t], d = Pi(PG_ARP(t), 2);
+        int sd = eng_endless_opt(t, EO_STRIDE);
+        if (len < 1) len = 1;
         int rn = eng_endless_opt(t, EO_REST), pause = rn >= 2 && e_cnt[t] % rn == rn - 1;
         e_clk[t] = e_clk[t] >= 2.0f * el[t] ? 0.0f : e_clk[t] - el[t];
         ++e_cnt[t];
@@ -1247,10 +1299,16 @@ void sequence(uint32_t n) {
           }
         } else if (d == 3) {
           e_pos[t] = static_cast<int>(rand_u32() % static_cast<uint32_t>(len));
+        } else if (d == 4) {            // (0.16.13) +2-1: two on, one back (by STRIDE)
+          int c = e_cnt[t] - 1, q = c / 2 * sd + (c % 2 ? 2 * sd : 0);
+          e_pos[t] = (q % len + len) % len;
+        } else if (d == 5) {            // (0.16.13) CONVERGE: the first, the last, the second, the one before...
+          int c = (e_cnt[t] - 1) % len;
+          e_pos[t] = c % 2 ? len - 1 - c / 2 : c / 2;
         } else {
           e_pos[t] = e_pos[t] < 0 ? 0 : (e_pos[t] + sd) % len;
         }
-        int nt = pause ? ENDLESS_REST : proj.endless[t][e_pos[t]];
+        int nt = pause ? ENDLESS_REST : src[e_pos[t]];
         int holes = eng_endless_opt(t, EO_HOLES), leap = eng_endless_opt(t, EO_LEAP);
         e_state[t] = pause ? ES_PAUSE : nt == ENDLESS_REST ? ES_REST : ES_NOTE;
         if (nt != ENDLESS_REST && holes && rand_u32() % 100u < static_cast<uint32_t>(holes))   // HOLES
@@ -1259,7 +1317,7 @@ void sequence(uint32_t n) {
           nt += 12, e_state[t] = ES_LEAP;
         if (nt != ENDLESS_REST) {
           int rests = 0;                // (PADS held: to its next note, over the rests after it, forward)
-          if (held_pad(t) && d == 0)
+          if (held_pad(t) && d == 0 && am == AM_LOOP)
             while (rests < len - 1 && proj.endless[t][(e_pos[t] + 1 + rests) % len] == ENDLESS_REST) ++rests;
           raw_left[t] = fm_maxf(fl * 2.0f, held_pad(t) ? el[t] * (static_cast<float>(rests) + 1.5f)
                                                       : el[t] * clampf(P(PG_ARP(t), 1), 0.05f, 1.0f) * 0.98f);
@@ -1303,7 +1361,7 @@ void sequence(uint32_t n) {
           ratchet_layout(t);
           lane_sl[t] = keep;
         }
-        tnote[t] = static_cast<float>(quantize(e_note[t] + proj.endless_key[t] + Pi(PG_ARP(t), 3) +
+        tnote[t] = static_cast<float>(quantize(e_note[t] + (am == AM_LOOP ? proj.endless_key[t] : 0) + Pi(PG_ARP(t), 3) +
                                                12 * iround(E(t, TP_OCTAVE)) + iround(E(t, TP_TRANSPOSE)) +
                                                iround(tdelta[t][TP_NOTE])));
       }
@@ -4993,10 +5051,67 @@ void eng_endless_key(int t, int note) {   // from its first note
       return;
     }
 }
-int eng_endless_pos(int t) { return eng_endless_on(t) && (playing || e_free[t]) ? e_pos[t] : -1; }
-void eng_endless_free(int t, int on) {   // (0.16.11) the sequencer stopped: Endless by a key held (-1: all let go)
-  for (int i = 0; i < ENG_TRACKS; ++i) {
+int eng_endless_pos(int t) {
+  if (t < 0 || t >= ENG_TRACKS) return -1;
+  if (arp_mode(t) != AM_LOOP) return arp_has(t) && arp_len[t] && (playing || e_free[t]) ? e_pos[t] : -1;
+  return eng_endless_on(t) && (playing || e_free[t]) ? e_pos[t] : -1;
+}
+const char* const kArpModes[AM_N] = {"Loop", "Keys", "Chord"};
+int eng_arp_opt(int t, int o) {
+  if (t < 0 || t >= ENG_TRACKS) return 0;
+  unsigned b = proj.arp_opt[t];
+  if (o == AO_MODE) { int v = static_cast<int>(b & 3u); return v >= AM_N ? AM_LOOP : v; }
+  if (o == AO_OCT) return static_cast<int>((b >> 2) & 3u) + 1;
+  if (o == AO_LATCH) return static_cast<int>((b >> 4) & 1u);
+  if (o == AO_ORDER) return static_cast<int>((b >> 5) & 1u);
+  return 0;
+}
+void eng_arp_opt_set(project_t* p, int t, int o, int v) {
+  if (t < 0 || t >= ENG_TRACKS) return;
+  unsigned b = p->arp_opt[t];
+  if (o == AO_MODE) b = (b & ~3u) | static_cast<unsigned>(v < 0 ? 0 : v >= AM_N ? AM_N - 1 : v);
+  else if (o == AO_OCT) b = (b & ~0x0Cu) | static_cast<unsigned>((v < 1 ? 1 : v > 4 ? 4 : v) - 1) << 2;
+  else if (o == AO_LATCH) b = (b & ~0x10u) | (v ? 0x10u : 0u);
+  else if (o == AO_ORDER) b = (b & ~0x20u) | (v ? 0x20u : 0u);
+  p->arp_opt[t] = static_cast<uint8_t>(b);
+  if (p == &proj && o == AO_LATCH && !v && !arp_down[t]) arp_n[t] = 0;   // (LATCH off, no key down: let go)
+}
+const char* eng_arp_mode_name(int v) { return kArpModes[v < 0 || v >= AM_N ? 0 : v]; }
+void eng_arp_key(int t, int note, int on) {
+  if (t < 0 || t >= ENG_TRACKS) return;
+  int n = arp_n[t], latch = eng_arp_opt(t, AO_LATCH);
+  if (on) {
+    if (latch && !arp_down[t]) n = 0;   // (latched: a new chord the keys after all were let go)
+    int at = -1;
+    for (int i = 0; i < n; ++i)
+      if (arp_held[t][i] == note) at = i;
+    if (at < 0 && n < 8) arp_held[t][n++] = static_cast<uint8_t>(note & 127);
+    ++arp_down[t];
+  } else {
+    if (arp_down[t] > 0) --arp_down[t];
+    if (!latch) {
+      int k = 0;
+      for (int i = 0; i < n; ++i)
+        if (arp_held[t][i] != note) arp_held[t][k++] = arp_held[t][i];
+      n = k;
+    }
+  }
+  arp_n[t] = n;
+}
+void eng_arp_release_all(void) {        // (every key let go: the ARPs not latched empty, no key down anywhere)
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    arp_down[t] = 0;
+    if (!eng_arp_opt(t, AO_LATCH)) arp_n[t] = 0;
+  }
+}
+int eng_arp_list(int t, uint8_t* out, int max) {
+  if (t < 0 || t >= ENG_TRACKS || arp_mode(t) == AM_LOOP) return 0;
+  return arp_build(t, out, max);
+}
+void eng_endless_free(int t, int on) {   // (0.16.11) the sequencer stopped: Endless by a key held (-1: all let go;
+  for (int i = 0; i < ENG_TRACKS; ++i) { // 0.16.13: an ARP's latched notes go on)
     if (t >= 0 && i != t) continue;
+    if (!on && t < 0 && arp_mode(i) == AM_KEYS && eng_arp_opt(i, AO_LATCH) && arp_n[i] > 0) continue;
     if (on && !e_free[i]) e_free_go[i] = 1;
     e_free[i] = on;
   }

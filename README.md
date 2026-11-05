@@ -812,7 +812,8 @@ nouveau : la piste joue ces notes en boucle sur le tempo, à la place de ses pas
 touche transpose** la boucle depuis sa première note (la transposition reste). **Le séquenceur à l'arrêt** (0.16.11),
 une touche tenue la joue : depuis sa première note, transposée par la touche, au tempo et à sa RATE ; on lâche, elle
 s'arrête (une autre touche pendant qu'on tient : la transposition suit). Ses potards : RATE (1/32 à 1/4, avec
-les triolets), GATE (la longueur des notes), DIRECTION (avant, arrière, aller-retour, au hasard), TRANSPOSE. **REC
+les triolets), GATE (la longueur des notes), DIRECTION (avant, arrière, aller-retour, au hasard ; depuis 0.16.13,
++2-1 : deux en avant, une en arrière, et CONVERGE : la première, la dernière, la deuxième, l'avant-dernière…), TRANSPOSE. **REC
 tenu** efface la boucle (la piste retrouve ses pas). Probabilité, ratchets, aléatoire et quantiseur s'appliquent aussi
 à ses notes. En bas, ses notes en barres, la note jouée en blanc. **Sa deuxième face** (0.16.2 ; ARP à nouveau, ou
 SELECT) choisit ce qui joue : **STRIDE**, une note sur combien (ALL : toutes ; 1/2 : une sur deux, les autres sautées ;
@@ -822,6 +823,17 @@ silences au hasard (0 à 100 %), **LEAP**, des notes une octave plus haut au has
 (0.16.3), la frise le montre : les notes que STRIDE n'atteint jamais en gris, la note en cours encadrée et vide
 pendant un silence de REST (en gris) ou un trou de HOLES (en blanc), relevée avec une marque au-dessus quand LEAP la
 monte d'une octave.
+
+**L'ARP** (0.16.13 : la troisième face d'Endless, ARP encore ou SELECT) : **MODE** choisit ce qu'Endless parcourt :
+*Loop*, la boucle enregistrée (comme avant) ; *Keys*, **les touches tenues** (un arpégiateur) ; *Chord*, **l'accord que
+joue PADS**, qui change avec la progression. **OCTAVES** (1 à 4) les répète plus haut ; **LATCH** garde les notes une
+fois lâchées (la touche suivante, après avoir tout lâché, recommence un nouvel accord ; LATCH remis à Off : tout
+s'arrête) ; **ORDER** les range par hauteur (*Pitch*) ou dans l'ordre où on les a jouées (*Played*). Tout le reste
+d'Endless s'y applique : RATE, GATE, DIRECTION (montée, descente, aller-retour, au hasard, +2-1, CONVERGE), STRIDE
+(des sauts), REST, HOLES, LEAP, les ratchets, l'aléatoire et le quantiseur. Il joue avec le séquenceur et **sans lui** :
+séquenceur arrêté, une touche tenue le lance (en *Keys*, les touches elles-mêmes ; en *Chord*, n'importe laquelle),
+on lâche, il s'arrête, sauf ce que LATCH garde. Les touches n'y transposent pas : en *Keys* elles sont les notes. En bas,
+les notes qu'il parcourt, la jouée en blanc.
 
 **Warps** (FX, troisième effet) : le module de modulation croisée de Mutable, entre deux pistes. Sa première page
 suffit pour jouer : **CARRIER**, la porteuse (Off : Warps éteint ; une piste T1-T4 ; ou son oscillateur interne,

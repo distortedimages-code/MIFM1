@@ -249,7 +249,9 @@ typedef struct {
                                           * 1) and REST (bits 3..6: 0 none, 2..8) a byte; HOLES, LEAP (0..100 %);
                                           * then (0.16.7, its spare byte) CLIMB's: TIMES (bits 0..3: 0 as 4, else
                                           * 1 + them, 2..16), ON (bits 4, 5: CLON_*), SHAPE (bits 6, 7: CLSH_*) */
-    uint8_t rsv[8];                      /* (0.16.7) spare, 0: the project at the patterns' record's size */
+    uint8_t arp_opt[ENG_TRACKS];         /* (0.16.13, in the spare) Endless' ARP: MODE (bits 0, 1: AM_*), OCTAVES (bits
+                                          * 2, 3: 1 + them), LATCH (bit 4), ORDER (bit 5: 0 by pitch, 1 as played) */
+    uint8_t rsv[4];                      /* (0.16.7) spare, 0: the project at the patterns' record's size */
 } project_t;
 #define PROJECT_SIZE_24 3804u            /* (0.16.0's and 0.16.1's project, version 24) */
 #define PROJECT_SIZE_26 3820u            /* (0.16.2's to 0.16.6's, versions 25, 26) */
@@ -263,6 +265,15 @@ void eng_climb_opt_set(project_t *p, int t, int o, int v);
 const char *eng_climb_on_name(int v);
 const char *eng_climb_shape_name(int v);
 int eng_climb_now(int t, int step);      /* the transposition that step plays now (its last), 0 none */
+enum { AO_MODE, AO_OCT, AO_LATCH, AO_ORDER };   /* (0.16.13) Endless' ARP face: what it walks (its DIR, STRIDE, REST,
+                                          * HOLES, LEAP, RATE, GATE as ever), */
+enum { AM_LOOP, AM_KEYS, AM_CHORD, AM_N };   /* its recorded notes, the keys held (an arpeggiator), PADS' chord */
+int eng_arp_opt(int t, int o);           /* MODE AM_*, OCTAVES 1..4, LATCH 0/1, ORDER 0 (by pitch) / 1 (as played) */
+void eng_arp_opt_set(project_t *p, int t, int o, int v);
+const char *eng_arp_mode_name(int v);
+void eng_arp_key(int t, int note, int on);   /* KEYS: a key down or up (LATCH: kept; the first after all let go: anew) */
+int eng_arp_list(int t, uint8_t *out, int max);   /* what KEYS or CHORD walks now (its octaves in), how many */
+void eng_arp_release_all(void);          /* every key let go (a key let go on another track meanwhile: nothing stuck) */
 enum { EO_STRIDE, EO_REST, EO_HOLES, EO_LEAP, EO_N };   /* Endless' options as the screen reads and writes them */
 int eng_endless_opt(int t, int o);       /* STRIDE 1..7, REST 0 or 2..8, HOLES and LEAP 0..100 */
 void eng_endless_opt_set(project_t *p, int t, int o, int v);

@@ -4254,6 +4254,109 @@ int main(int argc, char** argv) {
     eng_fresh();
   }
 
+  {                                     // 64. Endless' ARP (0.16.13): the keys held, by pitch or as played, over
+    // octaves; +2-1 and CONVERGE; stopped by a key, let go: silent, latched: on; PADS' chord, playing
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    int got[24], n = 0, last = 0;
+    auto listen = [&](int blocks) {
+      int c = 0;
+      for (int b = 0; b < blocks; ++b) {
+        eng_render(l, r, 128);
+        int g = (eng_gates() & 1u) != 0;
+        if (g && !last) {
+          if (n < 24) got[n++] = eng_note(0);
+          ++c;
+        }
+        last = g;
+      }
+      return c;
+    };
+    auto setup = [&](int order, int oct, int dir, int latch) {
+      eng_blank(p);
+      eng_fresh();
+      eng_set_model(0, eng_model_find(MK_DRUM, 0));
+      p->val[PG_GLOBAL * 4 + 0] = 0.60206f;
+      p->val[PG_GLOBAL * 4 + 1] = 0.0f;
+      p->val[PG_ARP(0) * 4 + 2] = static_cast<float>(dir);
+      eng_arp_opt_set(p, 0, AO_MODE, AM_KEYS);
+      eng_arp_opt_set(p, 0, AO_OCT, oct);
+      eng_arp_opt_set(p, 0, AO_ORDER, order);
+      eng_arp_opt_set(p, 0, AO_LATCH, latch);
+      eng_arp_release_all();
+      eng_play(0);
+      eng_render(l, r, 128);
+      n = last = 0;
+      eng_arp_key(0, 64, 1), eng_arp_key(0, 60, 1), eng_arp_key(0, 67, 1);
+      eng_endless_free(0, 1);
+    };
+    auto same = [&](const int* want, int k) {
+      for (int i = 0; i < k; ++i)
+        if (got[i] != want[i]) return 0;
+      return n >= k ? 1 : 0;
+    };
+    setup(0, 2, 0, 0);
+    listen(6 * 43 + 10);
+    const int kPitch[6] = {60, 64, 67, 72, 76, 79};
+    int pitch = same(kPitch, 6);
+    setup(1, 2, 0, 0);
+    listen(6 * 43 + 10);
+    const int kPlayed[6] = {64, 60, 67, 76, 72, 79};
+    int played = same(kPlayed, 6);
+    setup(0, 1, 4, 0);
+    listen(6 * 43 + 10);
+    const int kTwoOne[6] = {60, 67, 64, 60, 67, 64};
+    int twoone = same(kTwoOne, 6);
+    setup(0, 2, 5, 0);
+    listen(6 * 43 + 10);
+    const int kConv[6] = {60, 79, 64, 76, 67, 72};
+    int conv = same(kConv, 6);
+    setup(0, 1, 0, 0);                  // (let go: silent)
+    listen(3 * 43);
+    eng_arp_key(0, 64, 0), eng_arp_key(0, 60, 0), eng_arp_key(0, 67, 0);
+    eng_arp_release_all();
+    eng_endless_free(-1, 0);
+    listen(30);
+    int gone = listen(200) == 0;
+    setup(0, 1, 0, 1);                  // (latched: on once let go)
+    listen(2 * 43);
+    eng_arp_key(0, 64, 0), eng_arp_key(0, 60, 0), eng_arp_key(0, 67, 0);
+    eng_arp_release_all();
+    eng_endless_free(-1, 0);
+    int latched = listen(4 * 43 + 10) >= 3;
+    eng_arp_opt_set(p, 0, AO_LATCH, 0);  // (LATCH off: let go)
+    listen(30);
+    int unlatched = listen(200) == 0;
+    // PADS' chord, playing: Static in C major (C E G) on T4, T1 walking it
+    eng_blank(p);
+    eng_fresh();
+    p->val[PG_GLOBAL * 4 + 0] = 0.60206f;
+    p->val[PG_GLOBAL * 4 + 1] = 1.0f;
+    p->val[PG_GLOBAL * 4 + 2] = 0.0f;
+    eng_set_model(0, eng_model_find(MK_DRUM, 0));
+    eng_set_model(3, eng_model_find(MK_PADS, 0));
+    for (int c = 0; c < ENG_CABLES; ++c) p->cable[3][c].depth = 0;
+    p->val[PG_TRACK(3, 0) * 4 + 1] = 26.5f / 27.0f;   // (Static, the last)
+    eng_trig_set(3, 0, 1);
+    eng_arp_opt_set(p, 0, AO_MODE, AM_CHORD);
+    eng_arp_opt_set(p, 0, AO_OCT, 1);
+    n = last = 0;
+    eng_play(1);
+    listen(6 * 43 + 20);
+    eng_play(0);
+    const int kChord[6] = {48, 52, 55, 48, 52, 55};
+    int chord = same(kChord, 6);
+    int ok = pitch && played && twoone && conv && gone && latched && unlatched && chord;
+    printf("the ARP: by pitch %s, as played %s, +2-1 %s, CONVERGE %s; let go %s, latched %s, unlatched %s; PADS' chord %s"
+           " (%d %d %d %d)\n", pitch ? "ok" : "WRONG", played ? "ok" : "WRONG", twoone ? "ok" : "WRONG",
+           conv ? "ok" : "WRONG", gone ? "silent" : "STILL", latched ? "on" : "OFF", unlatched ? "silent" : "STILL",
+           chord ? "ok" : "WRONG", got[0], got[1], got[2], got[3]);
+    if (!ok) ++failures, printf("FAIL: the ARP\n");
+    eng_arp_opt_set(p, 0, AO_MODE, AM_LOOP);
+    eng_defaults(p);
+    eng_fresh();
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }
