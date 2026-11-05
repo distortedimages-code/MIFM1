@@ -29,6 +29,10 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   quatre voix par piste : des **Transwaves** (32 cycles qui changent peu à peu, lus entiers et par marches ; depuis
   0.16.16, huit classiques et sept plus granuleuses), les filtres sans résonance de la puce, trois couches, un petit
   effet ; 24 programmes en huit familles, huit potards (voir plus bas) ;
+- **TAURUS** (0.16.20) : une basse monophonique très grasse d'après les pédales **Taurus** de Moog (deux scies qui
+  battent, l'échelle à transistors du Minimoog, un contour qui retombe, le DECAY, le glide ; ses trois presets TAURUS,
+  BASS, TUBA) et le **Minimoog** (ses six formes d'onde, son troisième oscillateur une octave dessous, son mixer qui
+  pousse le filtre), ses graves rendus quand la résonance monte (voir plus bas) ;
 - **Plaits** sur chaque piste, 6 de ses modèles (ses trois batteries, treize de ses oscillateurs, sa puce 8 bits et ses
   formants ont laissé la place aux moteurs de MIFM1), et un **circuit bending** par piste (0.7, à la place du
   grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
@@ -103,7 +107,7 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
 pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
 en quatre gestes, le chemin du son (un schéma), le panneau (chaque numéro allume son repère sur la machine ;
-« Repères » les montre tous), les 22 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
+« Repères » les montre tous), les 23 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
 et ce qu'ils modélisent, les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le circuit bending,
 les effets, le séquenceur, la dose d'aléatoire, les spécifications, et des jauges de la charge du FM-1. « Essayer »,
 sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_try). Pour écouter MIFM1 sur un autre système (une
@@ -568,6 +572,36 @@ sa touche ; les pas de la piste se taisent tant qu'une touche est tenue ; depuis
 d'un bloc avec ses trois couches, SPACE à fond et le reste environ 5,5 % (quatre voix, trois couches, SPACE à fond :
 environ 19 % ; REV3, quatre voix : 15 %). Les projets et les sons enregistrés d'avant qui jouaient CHIPTUNE ou FORMANT passent à OTIS avec ses
 réglages ; les autres modèles de Plaits sont renumérotés.
+
+**TAURUS** (0.16.20 ; ALGORITHM après OTIS, la banque MIFM1) : une **basse monophonique**, une voix par piste, d'après
+les pédales **Taurus** de Moog (le modèle 205A, 1975-1981, dessiné par David Luce) telles que leur manuel les décrit, et
+le **Minimoog** (1970). Du Taurus : deux oscillateurs en dent de scie, B contre A (son intervalle, un battement de
+quelques cents, leur dosage), l'**échelle à transistors** brevetée par Moog (24 dB/octave, sa résonance, EMPHASIS,
+jusqu'à l'auto-oscillation), un **contour** sur la coupure qui monte et retombe quoi que fasse la note (« non
+sustaining », 5 ms d'attaque), un contour de volume et son interrupteur **DECAY** (allumé : le son s'éteint au rythme
+du decay quand on lâche), le **glide** (un retard de condensateur, jusqu'à une demi-seconde). Du Minimoog : ses **six
+formes d'onde** (triangle, triangle-dent de scie, dent de scie, carré, rectangle large, rectangle étroit), son
+**troisième oscillateur** une octave sous les deux autres (la sous-octave ; en dent de scie inversée là où les autres
+font la triangle-dent de scie, comme son oscillateur 3), et son **mixer** qu'on pousse dans le filtre pour le saturer.
+
+- **L'échelle** : le modèle de D'Angelo et Välimäki (celui du filtre LADDER de MIFM1) : une paire de transistors, sa
+  tangente hyperbolique, à chacun des quatre étages. Une vraie échelle perd ses graves quand sa résonance monte (la
+  boucle les retranche) : ici l'entrée est poussée d'autant, presque tout est **rendu** (à 90 % d'EMPHASIS, la
+  fondamentale d'un la 1 sous une coupure à 400 Hz garde 82 % de son niveau, et la saturation fait le reste).
+  La coupure suit la note à moitié (TUBA un tiers, les ondes du Minimoog deux tiers).
+- **Les oscillateurs** tournent librement (jamais en phase) et dérivent d'un ou deux cents, chacun le sien ; leurs
+  fronts sont anti-repliés (polyBLEP). Dans TAURUS, B est une octave au-dessus : la fondamentale n'est qu'à A, solide,
+  et B bat avec la deuxième harmonique d'A (le tourbillon lent, sans que les graves se creusent). Dans BASS, les deux
+  sont à 16 pieds ; dans TUBA, B est une octave dessous.
+
+| VOICE | BEAT | MIX | CUTOFF | EMPH | CONTOUR | DECAY | GLIDE |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| les trois presets du Taurus (**Taurus** : le rugissement qui retombe en ronronnement, tenu ; **Bass** : pincé, le volume retombe avec DECAY ; **Tuba** : les graves remplis, B une octave dessous, une attaque douce), puis les six ondes du Minimoog (**Tri**, **Shark**, **Saw**, **Square**, **Wide**, **Narrow**), son troisième oscillateur dessous | B contre A, de 0 (Locked) à 50 cents | jusqu'au milieu B monte au niveau d'A (A=B), au-delà les deux sont poussés dans l'échelle (Hot : elle sature) | 30 Hz à 11 kHz | la résonance, chante seule au bout | à droite sa profondeur (jusqu'à 7 octaves), à gauche une montée lente du volume et du filtre ensemble (Sw) | les deux contours et le relâchement, 50 ms à 2,8 s | 0 (Off) à 0,5 s |
+
+Choisir TAURUS met ses réglages aux siens : le preset Taurus, B qui bat de 6 cents, A=B, la coupure basse, un peu de
+résonance, le contour profond, un decay d'une demi-seconde. Une voix coûte au FM-1 environ 6 % d'un bloc. Les projets
+et les sons enregistrés avec les 0.16.18 et 0.16.19 se relisent : TAURUS prend la place 16, SPEECH et les autres
+modèles de Plaits passent un cran plus loin.
 
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
 icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis
@@ -1094,6 +1128,8 @@ Chaque moteur de MIFM1 doit quelque chose à une machine, et le site le raconte,
   elles étaient le seul moyen d'en avoir une), la puce **OTIS** (ES5505) ; avant eux, le **Mirage** (1984, un
   échantillonneur 8 bits à 1 695 dollars) et l'**ESQ-1** (trois oscillateurs par voix sur la puce DOC de Robert Yannes,
   celui du SID du Commodore 64) ;
+- TAURUS : les pédales **Taurus** de Moog (le 205A de David Luce, 1975 ; sous Genesis, Rush, Yes, Pink Floyd, The Police,
+  U2) et le **Minimoog** (1970) ;
 - les filtres : l'échelle de **Moog**, le Korg 35 du **MS-20**, le **SEM** d'Oberheim ; le circuit bending : le
   **Biscuit** d'OTO et le **Data Bender** de Qu-Bit ; le delay : les potards du **Zen Delay** ; la réverbe et Warps :
   **Clouds** et **Warps** de Mutable Instruments ;
@@ -1131,7 +1167,10 @@ Sources : [Pretty Hate Machine](https://en.wikipedia.org/wiki/Pretty_Hate_Machin
 [VFX](https://en.wikipedia.org/wiki/Ensoniq_VFX),
 [le pseudo-stéréo, de Lauridsen à Kendall](https://csoundjournal.com/issue14/PseudoStereo.html),
 [le brevet d'Orban](https://patents.google.com/patent/US3670106A/en),
-[le manuel de Wider](https://polyversemusic.com/downloads/manuals/Wider%20Manual.pdf) ; les autres sur le site.
+[le manuel de Wider](https://polyversemusic.com/downloads/manuals/Wider%20Manual.pdf),
+[le manuel du Taurus 205A](https://archive.org/details/Moog_Taurus_Model_205A_Owner_s_Service_Manual),
+[Sound On Sound sur le Taurus](https://www.soundonsound.com/reviews/moog-taurus),
+[Moog Taurus](https://en.wikipedia.org/wiki/Moog_Taurus) ; les autres sur le site.
 
 ## Le dépôt
 

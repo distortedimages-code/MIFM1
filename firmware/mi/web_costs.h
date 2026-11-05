@@ -4,7 +4,7 @@
  * (2902 us), from the instructions it runs (tools/web/calibrate.py writes this file: see there how). */
 #pragma once
 static const float kWebRest = 2.6f;   /* a resting voice */
-static const float kWebModel[22] = {   /* a voice playing, by model */
+static const float kWebModel[23] = {   /* a voice playing, by model */
     196.6f,  /*  0 KICK */
     194.5f,  /*  1 SNARE */
     195.5f,  /*  2 CLAP */
@@ -21,12 +21,13 @@ static const float kWebModel[22] = {   /* a voice playing, by model */
     305.5f,  /* 13 POLY */
     405.1f,  /* 14 REV3 */
     440.1f,  /* 15 OTIS */
-    298.2f,  /* 16 SPEECH */
-    486.1f,  /* 17 SWARM */
-    396.5f,  /* 18 NOISE */
-    610.2f,  /* 19 PARTICLES */
-    510.6f,  /* 20 STRING */
-    776.1f,  /* 21 MODAL */
+    175.1f,  /* 16 TAURUS */
+    298.2f,  /* 17 SPEECH */
+    486.1f,  /* 18 SWARM */
+    396.5f,  /* 19 NOISE */
+    610.2f,  /* 20 PARTICLES */
+    510.6f,  /* 21 STRING */
+    776.1f,  /* 22 MODAL */
 };
 static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, VOX): plain, its FM's extra, its NOISE's */
     {0.0f, 0.0f, 0.0f},
@@ -47,8 +48,8 @@ static const float kWebWarps[2][6] = {   /* Warps, its algorithm's mark (Eco, HQ
     {569.6f, 567.0f, 637.7f, 538.2f, 585.4f, 605.8f},
     {983.6f, 978.4f, 1119.7f, 920.9f, 1015.1f, 1056.0f},
 };
-static const float kWebFx[3] = {548.9f, 572.7f, 718.9f};   /* the effects, the mix and the master bus (OFF, COMP, OTT) */
+static const float kWebFx[3] = {551.3f, 575.2f, 721.3f};   /* the effects, the mix and the master bus (OFF, COMP, OTT) */
 static const float kWebFxEq = 37.3f, kWebFxDuck = 6.9f, kWebFxDelay = 15.9f;   /* a track's EQ (playing), the duck on a track, the delay's filter and drive */
 static const float kWebFxWarps = 75.6f;   /* Warps in the mix (the rest of the stress test's effects) */
-static const float kWebFxSpread = 74.1f;   /* (0.16.19) a track's SPREAD */
-static const float kWebPrep = 360.3f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.9f;   /* the preparation: its floor, a track playing, a cable */
+static const float kWebFxSpread = 75.7f;   /* (0.16.19) a track's SPREAD */
+static const float kWebPrep = 360.2f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.9f;   /* the preparation: its floor, a track playing, a cable */

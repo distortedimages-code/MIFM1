@@ -134,8 +134,8 @@ int eng_model_enveloped(int model);      /* 1: a Plaits model with its own envel
  * ZERO, the FM) takes its eight parameters from the knobs after FREQ: HARMONICS, TIMBRE, MORPH, the envelope page's
  * four, the pitch envelope's. Its kind says what plays it, its sub its index there (Plaits' engine, the LXR's voice,
  * the drum, the FM's kit) */
-enum { MK_PLAITS, MK_LXR, MK_ZERO, MK_DRUM, MK_FM, MK_PADS, MK_POLY, MK_PROPHET, MK_SQ1 };
-#define ENG_MODELS 22
+enum { MK_PLAITS, MK_LXR, MK_ZERO, MK_DRUM, MK_FM, MK_PADS, MK_POLY, MK_PROPHET, MK_SQ1, MK_TAURUS };
+#define ENG_MODELS 23                    /* (0.16.20: TAURUS, MIFM1's last, at 16; Plaits' from 17) */
 #define ENG_BANKS 5
 int eng_model_kind(int m);
 int eng_model_sub(int m);
@@ -161,8 +161,10 @@ void eng_set_model(int t, int model);    /* a track's model (an FM drum new to i
  * knobs' randoms, a name. Saved by the screen (app.c, pat_store.h), read onto any track */
 #define SND_PAGES 8
 #define SND_MAGIC 0x31444E53u            /* "SND1" */
-#define SND_VERSION 4                    /* (3: 0.16.17's, ROBOVOX (16) read as SPEECH from noon; 2: 0.16.14 to 0.16.16's,
-                                          * this one; 1: before 0.16.14: CHIPTUNE, FORMANT read as SQ-1) */
+#define SND_VERSION 5                    /* (4: 0.16.18's and 0.16.19's, TAURUS (0.16.20) not yet at 16: read, the models
+                                          * from 16 one further on, as 1 to 3's after theirs; 3: 0.16.17's, ROBOVOX (16)
+                                          * read as SPEECH from noon; 2: 0.16.14 to 0.16.16's, as 4; 1: before 0.16.14:
+                                          * CHIPTUNE, FORMANT read as SQ-1) */
 typedef struct {
     uint32_t magic;
     uint16_t version, size;
@@ -203,8 +205,10 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 30u              /* (29: 0.16.17's, ROBOVOX (16, withdrawn) there: read, SPEECH back from noon
-                                          * (its locks on its knobs gone); 28: 0.16.14's to 0.16.16's: this one;
+#define PROJECT_VERSION 31u              /* (30: 0.16.18's and 0.16.19's: TAURUS (0.16.20) not yet at 16, the
+                                          * models from there one lower: read, one further on;
+                                          * 29: 0.16.17's, ROBOVOX (16, withdrawn) there: read, SPEECH back from noon
+                                          * (its locks on its knobs gone); 28: 0.16.14's to 0.16.16's: as 30;
                                           * 27: 0.16.7's to 0.16.13's, CHIPTUNE (15) and FORMANT (16) there: read,
                                           * both SQ-1 (its kit, their locks on its knobs gone), the others one lower;
                                           * 26: 0.16.4's to 0.16.6's, without CLIMB (42 parameters a lane, 384 locks,

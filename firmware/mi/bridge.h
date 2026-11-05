@@ -200,6 +200,23 @@ const char *sq_family(float wave);        /* its program's family (DIGITAL BASS,
  * none; of: the Transwave's places (32, a bell's 8) */
 int sq_cycle(int t, float *y, int n, int *of);
 
+/* ---- TAURUS (mi_taurus.cc, 0.16.20): a monophonic bass after Moog's Taurus bass pedals (the 205A: two saws, B's beat
+ * and balance, the transistor ladder, a non-sustaining contour on it, the loudness' DECAY switch, glide; its presets
+ * TAURUS, BASS, TUBA) and the Minimoog (its six waves, its third oscillator an octave under, its mixer driving the
+ * ladder), one voice a track. Its eight knobs (k: 0..1, CONTOUR bipolar from its middle): VOICE (the three presets,
+ * then the six waves), BEAT, MIX, CUTOFF, EMPHASIS, CONTOUR, DECAY, GLIDE ---- */
+void taurus_init(void);
+void taurus_reset(int t);
+void taurus_silence(int t);
+void taurus_set(int t, float note, const float *k);
+void taurus_gate(int t, int g);
+void taurus_render(int t, float *out, uint32_t n);
+int taurus_voice(float u);               /* VOICE at u: 0..8 (TAURUS, BASS, TUBA, then the waves) */
+const char *taurus_knob_name(int k);
+void taurus_defaults(float *k);
+int taurus_knob_steps(int k);            /* VOICE's 9, the others 128 */
+void taurus_knob_text(int k, float u, char *b, int n);
+
 /* ---- the tracks' filters (mi_filter.cc): LADDER (Moog's, D'Angelo and Valimaki's model), MS-20 (Korg 35, its
  * resonance driven), SEM (Oberheim's state variable, noise into it), VOX (three formants); each with a vactrol
  * envelope, a ping, FM from its own output, key tracking ---- */

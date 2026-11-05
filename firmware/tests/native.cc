@@ -4376,7 +4376,7 @@ int main(int argc, char** argv) {
     eng_defaults(p);
     eng_fresh();
     const int sq_m = eng_model_find(MK_SQ1, 0);
-    int ok = sq_m == 15 && ENG_MODELS == 22 && eng_model_find(MK_PLAITS, 7) < 0 && eng_model_find(MK_PLAITS, 11) < 0 &&
+    int ok = sq_m == 15 && ENG_MODELS == 23 && eng_model_find(MK_PLAITS, 7) < 0 && eng_model_find(MK_PLAITS, 11) < 0 &&
              eng_model_bank(sq_m) == 2 && eng_model_own(sq_m) && sq_progs() == 24;
     eng_set_model(0, sq_m);
     float kd[8];
@@ -4832,6 +4832,7 @@ int main(int argc, char** argv) {
     static eng_sound_t snd;
     eng_sound_get(1, &snd);
     snd.version = 3;
+    snd.algo[0] = 16;                    // (ROBOVOX's number then)
     snd.val[1] = 0.9f;                   // (its first page's HARMONICS)
     const int set = eng_sound_set(1, &snd);
     const int snd_ok = set == 0 && p->algo[PG_TRACK(1, 0)] == eng_model_find(MK_PLAITS, 15) &&
@@ -4956,6 +4957,136 @@ int main(int argc, char** argv) {
     if (!mono || !lows || !highs || !sides || !knob || !usb || !rest) ++failures, printf("FAIL: SPREAD\n");
     eng_defaults(p);
     eng_fresh();
+  }
+
+  {                                     // 71. TAURUS (0.16.20): after OTIS (16), Plaits' one further on; its knobs, its
+    // kit; each VOICE sounding, finite, bounded, its level near the others' machines (riff's rms 0.08 .. 0.25), silent
+    // after its release; TUBA an octave under its note (B at 32'), the Minimoog's waves their sub (C at 32'); its bass
+    // given back as EMPHASIS rises (55 Hz under a cutoff at 400 Hz: at 0.9 at least 70 % of it at 0); GLIDE: the
+    // pitch 30 ms after a jump of an octave still under it, at once without; a project of 0.16.19 (30) and a sound
+    // (4) renumbered (SPEECH 16 now 17, OTIS 15 kept)
+    const int tm = eng_model_find(MK_TAURUS, 0);
+    int ok = tm == 16 && ENG_MODELS == 23 && eng_model_bank(tm) == 2 && eng_model_own(tm) &&
+             eng_model_find(MK_PLAITS, 15) == 17 && eng_model_find(MK_SQ1, 0) == 15;
+    project_t* p = eng_project();
+    eng_defaults(p);
+    eng_fresh();
+    eng_set_model(0, tm);
+    float kd[8];
+    taurus_defaults(kd);
+    for (int i = 0; i < 8; ++i) {
+      int param = PG_TRACK(0, 0) * 4 + 1 + i;
+      float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
+      if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), taurus_knob_name(i)) != 0) ok = 0;
+    }
+    const int centered = eng_param_centered(PG_TRACK(0, 0) * 4 + 1 + 5) && !eng_param_centered(PG_TRACK(0, 0) * 4 + 1 + 6) &&
+                         !eng_param_centered(PG_TRACK(0, 0) * 4 + 1 + 7);
+    char tx[24];
+    struct { int k; float u; const char* want; } kTx[] = {
+        {0, 0.0f, "Taurus"}, {0, 1.5f / 9.0f, "Bass"}, {0, 2.5f / 9.0f, "Tuba"}, {0, 4.5f / 9.0f, "Shark"},
+        {0, 1.0f, "Narrow"}, {1, 0.0f, "Locked"}, {1, 1.0f, "50c"}, {2, 0.5f, "A=B"}, {2, 0.25f, "B 50%"},
+        {2, 1.0f, "Hot 100%"}, {3, 0.0f, "30Hz"}, {5, 0.5f, "Off"}, {5, 1.0f, "+7.0oct"}, {6, 0.0f, "50ms"},
+        {6, 1.0f, "2.8s"}, {7, 0.0f, "Off"}, {7, 1.0f, "500ms"}};
+    int texts = 1;
+    for (auto& x : kTx) {
+      taurus_knob_text(x.k, x.u, tx, sizeof tx);
+      if (std::strcmp(tx, x.want) != 0) texts = 0, printf("  TAURUS knob %d at %.2f: %s, not %s\n", x.k, x.u, tx, x.want);
+    }
+    eng_defaults(p);
+    eng_fresh();
+    taurus_init();                      // (its state on track 1 the machine's own, here; the others' made again later)
+    static float buf[44100 * 2];
+    auto play = [&](const float* k, int note1, int note2, int len, int on, float* out) {
+      taurus_reset(1);
+      for (int s = 0; s < len; s += 64) {
+        const int nt = s < len / 2 ? note1 : note2;
+        taurus_set(1, static_cast<float>(nt), k);
+        if (s == 0) taurus_gate(1, 1);
+        if (s >= on) taurus_gate(1, 0);
+        taurus_render(1, out + s, 64);
+      }
+    };
+    auto tone = [&](const float* x, int a, int b, double hz) {
+      double c = 0, sn = 0;
+      for (int i = a; i < b; ++i) {
+        const double ph = 2.0 * M_PI * hz * i / 44100.0;
+        c += x[i] * std::cos(ph), sn += x[i] * std::sin(ph);
+      }
+      return 2.0 * std::sqrt(c * c + sn * sn) / (b - a);
+    };
+    int finite = 1, quiet = 1, levels = 1, subs = 1;
+    double lv[9], pk = 0.0;
+    for (int v = 0; v < 9; ++v) {
+      float k[8];
+      for (int i = 0; i < 8; ++i) k[i] = kd[i];
+      k[0] = (v + 0.5f) / 9.0f;
+      play(k, 33, 33, 44100 * 2, 22050, buf);
+      double e = 0.0;
+      for (int i = 0; i < 44100 * 2; ++i) {
+        finite &= std::isfinite(buf[i]) ? 1 : 0;
+        pk = std::max(pk, static_cast<double>(std::fabs(buf[i])));
+        if (i < 22050) e += buf[i] * buf[i];
+      }
+      lv[v] = std::sqrt(e / 22050.0);
+      levels &= lv[v] > 0.06 && lv[v] < 0.3;
+      if (v == 2 || v >= 3) {           // (TUBA: B an octave under; the Minimoog's: C)
+        const double sub = tone(buf, 2205, 22050, 27.5), fund = tone(buf, 2205, 22050, 55.0);
+        if (!(sub > 0.15 * fund)) subs = 0, printf("  TAURUS voice %d: 27.5 Hz %.4f, 55 Hz %.4f\n", v, sub, fund);
+      }
+      k[6] = 0.2f;                      // (its release 112 ms: over 1.4 s after it, then nothing)
+      play(k, 33, 33, 44100 * 2, 22050, buf);
+      for (int i = 44100 * 2 - 4410; i < 44100 * 2; ++i) quiet &= buf[i] == 0.0f;
+    }
+    // the bass given back: a saw alone (B out), its cutoff 400 Hz, no contour
+    double bass[2];
+    for (int j = 0; j < 2; ++j) {
+      float k[8] = {5.5f / 9.0f, 0.0f, 0.0f, std::log2(400.0f / 30.0f) / 8.5f, j ? 0.9f : 0.0f, 0.5f, 0.6f, 0.0f};
+      play(k, 33, 33, 44100, 40000, buf);
+      bass[j] = tone(buf, 8820, 39690, 55.0);
+    }
+    // GLIDE: a triangle (its fundamental alone, B and C out), the filter open: its period 30 ms after A1 -> A2
+    auto pitch_at = [&](float glide) {
+      float k[8] = {3.5f / 9.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.5f, 0.8f, glide};
+      play(k, 33, 45, 44100, 44100, buf);
+      const int a = 22050 + 1323, b = a + 1764;   // (30 ms .. 70 ms after the jump)
+      int z = 0;
+      for (int i = a + 1; i < b; ++i) z += (buf[i - 1] < 0.0f) != (buf[i] < 0.0f);
+      return z * 0.5 / ((b - a) / 44100.0);
+    };
+    const double hz_off = pitch_at(0.0f), hz_on = pitch_at(0.6f);
+    const int glide = hz_off > 100.0 && hz_off < 120.0 && hz_on > 50.0 && hz_on < 95.0;
+    const int bass_ok = bass[1] > 0.7 * bass[0] && bass[0] > 0.01;
+    // a project of 0.16.19 (30): SPEECH (16) on T2, OTIS (15) on T3; a sound of 0.16.19 (4) with SPEECH
+    static project_t q;
+    eng_defaults(&q);
+    q.version = 30;
+    q.algo[PG_TRACK(1, 0)] = 16;
+    q.algo[PG_TRACK(2, 0)] = 15;
+    q.algo[PG_TRACK(3, 0)] = 21;         // (MODAL then)
+    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(1, 0)] == 17 &&
+                        q.algo[PG_TRACK(2, 0)] == 15 && q.algo[PG_TRACK(3, 0)] == 22;
+    eng_defaults(p);
+    eng_fresh();
+    eng_set_model(1, eng_model_find(MK_PLAITS, 15));
+    static eng_sound_t snd;
+    eng_sound_get(1, &snd);
+    snd.version = 4;
+    snd.algo[0] = 16;                    // (SPEECH's number then)
+    eng_set_model(1, eng_model_find(MK_FM, 0));
+    const int snd_ok = eng_sound_set(1, &snd) == 0 && p->algo[PG_TRACK(1, 0)] == 17;
+    eng_defaults(p);
+    eng_fresh();
+    printf("TAURUS: at %d of %d, knobs %s, texts %s, CONTOUR from its middle %s; its voices finite %s, levels %.3f .. "
+           "%.3f (%s), peak %.2f, silent after %s, their subs %s; its bass at EMPHASIS 0.9 %.0f %% of 0's %s; GLIDE: "
+           "30 ms after the octave %.0f Hz (none: %.0f) %s; 0.16.19's project %s, its sound %s\n", tm, ENG_MODELS,
+           ok ? "ok" : "WRONG", texts ? "ok" : "WRONG", centered ? "ok" : "WRONG", finite ? "yes" : "NO",
+           *std::min_element(lv, lv + 9), *std::max_element(lv, lv + 9), levels ? "ok" : "WRONG", pk,
+           quiet ? "yes" : "NO", subs ? "ok" : "WRONG", 100.0 * bass[1] / (bass[0] + 1e-12), bass_ok ? "ok" : "WRONG",
+           hz_on, hz_off, glide ? "ok" : "WRONG", proj_ok ? "ok" : "WRONG", snd_ok ? "ok" : "WRONG");
+    if (!ok || !texts || !centered || !finite || !levels || pk > 1.25 || !quiet || !subs || !bass_ok || !glide ||
+        !proj_ok || !snd_ok)
+      ++failures, printf("FAIL: TAURUS\n");
+    taurus_init();
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
