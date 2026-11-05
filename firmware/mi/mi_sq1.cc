@@ -136,6 +136,7 @@ struct SVoice {
   uint8_t fr[3];                        // the cycles (loops) they read, another taken at their wraps; the one before,
   uint8_t was[3], xf[3];                // the samples left of its fade (8 at a change: the step's edge, not a morph)
   uint8_t alive, let_go, trig;
+  int8_t key;                           // (0.16.15) the key it plays (the keyboard's chords), -1 a trig's
   float note;
   float env, a0, att, dec;              // the envelope: its level, where its attack began, its progress, the fall's
   float swe, t;                         // the sweep's envelope; the time since the trig (s)
@@ -439,12 +440,14 @@ void take(Sq& s) {
   float bs = 1e9f;
   for (int i = 0; i < kVoices; ++i) {
     const SVoice& v = s.v[i];
-    const float score = v.alive ? v.env + 1.0f - static_cast<float>(s.clock - v.age) * 1e-6f : 0.0f;
+    float score = v.alive ? v.env + 1.0f - static_cast<float>(s.clock - v.age) * 1e-6f : 0.0f;
+    if (v.alive && v.key >= 0) score += 2.0f;   // (a key held: the last taken)
     if (score < bs) bs = score, best = i;
   }
   for (int i = 0; i < kVoices; ++i)
-    if (i != best && s.v[i].alive && !s.v[i].let_go) s.v[i].let_go = 1, s.v[i].dec = s.v[i].env;
+    if (i != best && s.v[i].alive && !s.v[i].let_go && s.v[i].key < 0) s.v[i].let_go = 1, s.v[i].dec = s.v[i].env;
   SVoice& v = s.v[best];
+  v.key = -1;
   v.note = s.note;
   if (!v.alive) {                       // from silence: its poles at rest, its layers' phases anywhere
     for (int l = 0; l < 3; ++l) v.ph[l] = xs(s.rnd);
@@ -507,7 +510,7 @@ void sq_reset(int t) {
   sq_defaults(d);
   for (int i = 0; i < 8; ++i) s.k[i] = d[i];
   s.note = 48.0f;
-  for (int i = 0; i < kVoices; ++i) s.v[i].att = 1.0f;
+  for (int i = 0; i < kVoices; ++i) s.v[i].att = 1.0f, s.v[i].key = -1;
 }
 
 void sq_init(void) {
@@ -536,17 +539,61 @@ void sq_set(int t, float note, const float* k) {
   s.note = note;
   if (s.gate)                           // (the note held follows: a lock, FREQ's modulations)
     for (int i = 0; i < kVoices; ++i)
-      if (s.v[i].alive && !s.v[i].let_go && s.v[i].age == s.clock) s.v[i].note = note;
+      if (s.v[i].alive && !s.v[i].let_go && s.v[i].age == s.clock && s.v[i].key < 0) s.v[i].note = note;
 }
 
 void sq_gate(int t, int g) {
   if (t < 0 || t >= MF_TRACKS) return;
   Sq& s = sq[t];
   if (g && !s.gate) s.trig = 1;
-  if (!g && s.gate)                     // let go: its release
+  if (!g && s.gate)                     // let go: its release (a key's voice: when its key is)
     for (int i = 0; i < kVoices; ++i)
-      if (s.v[i].alive && !s.v[i].let_go) s.v[i].let_go = 1, s.v[i].dec = s.v[i].env;
+      if (s.v[i].alive && !s.v[i].let_go && s.v[i].key < 0) s.v[i].let_go = 1, s.v[i].dec = s.v[i].env;
   s.gate = g;
+}
+
+// (0.16.15) the keys held: a voice each (a free one, else a trig's, the quietest, else the oldest key's), its pitch
+// following FREQ; a key let go, its voice released
+void sq_keys(int t, const int* ids, const float* notes, int n) {
+  if (t < 0 || t >= MF_TRACKS) return;
+  Sq& s = sq[t];
+  n = n < 0 ? 0 : n > kVoices ? kVoices : n;
+  for (int i = 0; i < kVoices; ++i) {
+    SVoice& v = s.v[i];
+    if (v.key < 0) continue;
+    int j = 0;
+    while (j < n && ids[j] != v.key) ++j;
+    if (j < n && (v.alive || v.trig)) {
+      v.note = notes[j];
+      continue;
+    }
+    if (v.alive && !v.let_go) v.let_go = 1, v.dec = v.env;
+    v.key = -1;
+  }
+  for (int j = 0; j < n; ++j) {
+    int have = 0;
+    for (int i = 0; i < kVoices; ++i) have |= s.v[i].key == ids[j];
+    if (have) continue;
+    int best = 0;
+    float bs = 1e9f;
+    for (int i = 0; i < kVoices; ++i) {
+      const SVoice& v = s.v[i];
+      float score = v.alive ? v.env + 1.0f - static_cast<float>(s.clock - v.age) * 1e-6f : 0.0f;
+      if (v.key >= 0) score += 2.0f;
+      if (score < bs) bs = score, best = i;
+    }
+    SVoice& v = s.v[best];
+    if (!v.alive) {
+      for (int l = 0; l < 3; ++l) v.ph[l] = xs(s.rnd);
+      v.s1 = v.s2 = v.s3 = v.s4 = v.h1 = 0.0f;
+      v.env = 0.0f;
+    }
+    v.note = notes[j];
+    v.key = static_cast<int8_t>(ids[j]);
+    v.sign = (s.clock & 1u) ? 1.0f : -1.0f;
+    v.trig = 1;
+    v.age = ++s.clock;
+  }
 }
 
 int sq_voices(int t) {

@@ -340,6 +340,11 @@ int eng_lane_has_trigs(int lane);        /* 0: its effect stays open (no steps) 
 int eng_lock(int lane, int step, int tp, float *v);   /* 1: that step locks tp (its value in v) */
 int eng_lock_set(int lane, int step, int tp, float v);   /* 0 ok, -1 no room */
 void eng_lock_clear(int lane, int step); /* all its locks */
+/* (0.16.15) a track's trig held over the steps after it (the step held, another pressed further): its steps more
+ * (0: its own; 63 at most), a lock of its own kind (cleared with the step's others) */
+int eng_step_tie(int lane, int step);
+int eng_step_tie_set(int lane, int step, int steps);   /* 0 ok, -1 no room */
+void eng_step_ties(int lane, uint8_t *out);   /* all ENG_STEPS of them, one look */
 void eng_steps_clear(int lane);          /* the lane's pattern: every trig and lock (its knobs and randoms stay) */
 void eng_fresh(void);                    /* another project loaded: the last one's trigs' locks and randoms gone */
 int eng_step_locked(int lane, int step); /* how many locks it has */
@@ -387,7 +392,10 @@ int eng_pattern_pos(void);               /* its sixteenth now, -1 stopped */
 void eng_back_at_bar(const float *val, const uint8_t *algo, const int8_t *rnd);
 int eng_back_pending(void);
 void eng_back_cancel(void);
-void eng_key(int track, int note, int on);   /* the keyboard plays a track (note: MIDI number) */
+void eng_key(int track, int note, int on);   /* the keyboard plays a track (note: MIDI number); 0.16.15: the keys
+                                              * held kept, the newest plays (back to the one before when let go); POLY
+                                              * in MODE Poly, PROPHET with CHORD Off and SQ-1 play them all */
+void eng_key_release_all(void);          /* every key let go (none down any more) */
 void eng_core1(int on);                  /* the second core takes its share when it runs (1, the default) */
 
 /* what the screen shows */

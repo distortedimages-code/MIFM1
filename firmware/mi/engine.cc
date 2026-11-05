@@ -295,6 +295,12 @@ volatile int playing, use_core1 = 1;
 volatile int key_note[ENG_TRACKS], key_on[ENG_TRACKS];
 
 volatile int key_retrig[ENG_TRACKS], key_hold[ENG_TRACKS];   // a key pressed since the last block; its frames left
+// (0.16.15) the keys held on a track, in the order pressed (the newest last): a voice of one plays the newest, back
+// to the one before when it is let go; POLY (MODE Poly), PROPHET (CHORD Off) and SQ-1 play them all, a voice each
+const int kKeys = 8;
+volatile int kb_note[ENG_TRACKS][kKeys], kb_n[ENG_TRACKS];
+volatile int key_new[ENG_TRACKS];       // a key pressed since the last block (the keys' chords: the filter's envelope)
+int kb_poly(int t);                     // 1: the track's machine plays the keys' chords
 
 int vgate[ENG_TRACKS];                  // each voice's gate as last set
 float vnote[ENG_TRACKS];                // its note (latched at the gate's rise)
@@ -866,14 +872,21 @@ void dice_ratch(int t, float d) {
     dice_climb[t] = ((rand_u32() & 1u) ? 1 : -1) * (1 + static_cast<int>(rand_u32() % 3u));
 }
 
+// (0.16.15) a trig's length over the steps after it: a lock of its own (tp kTpTie, beyond the lane's parameters: no
+// knob, no random), its value the steps it holds over (1..63); the step held and another one pressed further
+const int kTpTie = ENG_NTP;
+uint8_t trig_tie[ENG_LANES];            // the trig playing's
 void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_param, lane_lockable, the bounds)
   int16_t at[ENG_NTP];
   for (int tp = 0; tp < ENG_NTP; ++tp) at[tp] = -1;
   if (lock_gen_seen != lock_gen) make_lock_steps();
+  trig_tie[lane] = 0;
   if (locks && step >= 0 && step < ENG_STEPS && ((lock_steps[lane][step / 32] >> (step % 32)) & 1u))
     for (int i = 0; i < ENG_PLOCKS; ++i)
-      if (proj.lock[i].lane == lane && proj.lock[i].step == step && proj.lock[i].tp < ENG_NTP)
-        at[proj.lock[i].tp] = static_cast<int16_t>(i);
+      if (proj.lock[i].lane == lane && proj.lock[i].step == step) {
+        if (proj.lock[i].tp < ENG_NTP) at[proj.lock[i].tp] = static_cast<int16_t>(i);
+        else if (proj.lock[i].tp == kTpTie) trig_tie[lane] = proj.lock[i].v;
+      }
   for (int tp = 0; tp < ENG_NTP; ++tp) {
     tdelta[lane][tp] = 0.0f;
     if (!((lane_lockable[lane][tp >> 5] >> (tp & 31)) & 1u)) continue;
@@ -1212,6 +1225,8 @@ void sequence(uint32_t n) {
   for (int t = 0; t < ENG_TRACKS; ++t) gl_at[t] = -1;
   gl_six = sl;
   if (!playing) glitch_stop_all();
+  int kbp_t[ENG_TRACKS];
+  for (int t = 0; t < ENG_TRACKS; ++t) kbp_t[t] = kb_poly(t);
   for (uint32_t k = 0; k < kFrames; ++k) {
     int fresh[ENG_TRACKS] = {0, 0, 0, 0};   // a step's trig in this frame
     int fhit[ENG_TRACKS] = {0, 0, 0, 0}, fdn[ENG_TRACKS] = {0, 0, 0, 0};   // the dose's fills: a hit, its note
@@ -1334,7 +1349,10 @@ void sequence(uint32_t n) {
           ++fill_trigs[t];
         }
         raw_left[t] = fm_maxf(fl * 2.0f, held_pad(t) ? lane_sl[t] * (static_cast<float>(steps_to_next(t, cur_step[t])) + 0.5f)
-                                                      : lane_sl[t] * gate_frac(E(t, TP_LENGTH)));
+                                                      : lane_sl[t] * (static_cast<float>(trig_tie[t]) +
+                                                                      gate_frac(E(t, TP_LENGTH))));   // (0.16.15: its
+                                                                                                     // length over
+                                                                                                     // the steps)
         ratchet_layout(t);
         tnote[t] = static_cast<float>(quantize(iround(48.0f + 12.0f * static_cast<float>(iround(E(t, TP_OCTAVE))) +
                                                       static_cast<float>(iround(E(t, TP_TRANSPOSE))) +
@@ -1392,7 +1410,10 @@ void sequence(uint32_t n) {
       }
       if ((fresh[t] || rise) && last_g[t]) g = 0;   // a trig on a gate still high (swung, legato): low for a frame
       fnote[t][k] = tnote[t];
-      if (key_on[t] || key_hold[t] > 0) {   // the keyboard plays over; a new key, a new trig
+      if ((key_on[t] || key_hold[t] > 0) && kbp_t[t]) {   // the keys' chords: the machine plays them (set_voice), the
+        g = 0;                          // steps silent meanwhile
+        if (key_hold[t] > 0) --key_hold[t];
+      } else if (key_on[t] || key_hold[t] > 0) {   // the keyboard plays over; a new key, a new trig
         g = !(key_retrig[t] && k == 0);
         fnote[t][k] = static_cast<float>(quantize(key_note[t] + 12 * iround(E(t, TP_OCTAVE)) +
                                                   iround(E(t, TP_TRANSPOSE))));   // (OCTAVE too, as the steps)
@@ -1498,6 +1519,13 @@ uint16_t harmony_mask() {               // the harmony's scale (POLY's chords): 
 }
 inline int lx_param(int t, int i) { return PG_TRACK(t, 0) * 4 + 1 + i; }
 inline float lx_u(int param, float v) { return eng_pdef(param)->kind == K_BIP ? (v + 1.0f) * 0.5f : v; }
+int kb_poly(int t) {                    // (0.16.15) POLY in MODE Poly, PROPHET with CHORD Off, SQ-1
+  const int k = track_kind(t);
+  if (k == MK_SQ1) return 1;
+  if (k == MK_POLY) return lx_u(lx_param(t, 6), E(t, 7)) >= 0.5f;
+  if (k == MK_PROPHET) return poly_chord(lx_u(lx_param(t, 7), E(t, 8))) == 0;
+  return 0;
+}
 MI_COLD void kit_of(int m, float* k) {          // a model's knobs as its kit has them, 0..1 (Plaits': at noon)
   const ModelDef& d = mdef(m);
   if (d.kind == MK_ZERO) zero_defaults(k);
@@ -1593,6 +1621,36 @@ const FactorySound kFactory[ENG_FACTORY] = {
 #undef NO_BITS
 #undef NO_GLITCH
 
+// (0.16.15) the keys held on a track to its machine's voices (POLY in MODE Poly, PROPHET with CHORD Off, SQ-1): the
+// newest four, each its pitch as the keyboard's (OCTAVE, TRANSPOSE, the scale, FREQ); a key tapped and let go within
+// a block: the last one, its few blocks
+void set_filter(int t);
+void keys_to_voices(int t, int kind) {
+  int ids[4], n = 0;
+  float nt[4];
+  if (kb_poly(t)) {
+    const int kn = kb_n[t];
+    for (int i = kn > 4 ? kn - 4 : 0; i < kn; ++i) ids[n++] = kb_note[t][i];
+    if (!n && key_hold[t] > 0) ids[n++] = key_note[t];
+    const float fq = 24.0f * E(t, 0);
+    for (int i = 0; i < n; ++i) {
+      float nn = static_cast<float>(quantize(ids[i] + 12 * iround(E(t, TP_OCTAVE)) + iround(E(t, TP_TRANSPOSE)))) + fq;
+      if (scale_on()) nn = static_cast<float>(quantize(iround(nn)));
+      nt[i] = nn;
+    }
+    if (n) vnote[t] = nt[n - 1];
+    if (key_new[t]) {                   // (a key: the filter's envelope and ping, the trig's)
+      key_new[t] = 0;
+      set_filter(t);
+      mf_trigger(t, 0);
+      ++vrises[t];
+    }
+  }
+  if (kind == MK_POLY) poly_keys(t, ids, nt, n);
+  else if (kind == MK_PROPHET) pro_keys(t, ids, nt, n);
+  else sq_keys(t, ids, nt, n);
+}
+
 void set_voice(int t) {
   mclaim(t);
   if (own_knobs(t)) {
@@ -1606,16 +1664,15 @@ void set_voice(int t) {
     else if (kind == MK_FM) fm4_set(t, note, k);
     else if (kind == MK_PADS) {
       if (t == pad_track) pads_set(note, k, pad_chord, pad_n, Pi(PG_GLOBAL, 2));
-    } else if (kind == MK_POLY) {       // its chord: a chord memory's, or the harmony's (PADS', else the scale's)
-      float nn[4];
-      int cn = poly_notes(k[6], note, pad_chord, pad_track >= 0 ? pad_n : 0, harmony_mask(), Pi(PG_GLOBAL, 2), nn);
-      poly_set(t, nn, cn, k);
+    } else if (kind == MK_POLY) {       // (0.16.15: one note; its chords the keys')
+      poly_set(t, &note, 1, k);
     } else if (kind == MK_PROPHET) {    // (its chord: POLY's, CHORD its eighth knob)
       float nn[4];
       int cn = poly_notes(k[7], note, pad_chord, pad_track >= 0 ? pad_n : 0, harmony_mask(), Pi(PG_GLOBAL, 2), nn);
       pro_set(t, nn, cn, k);
     } else if (kind == MK_SQ1) sq_set(t, note, k);
     else lx_set(t, sub, note, k);
+    if (kind == MK_POLY || kind == MK_PROPHET || kind == MK_SQ1) keys_to_voices(t, kind);
     return;
   }
   // the models whose MORPH is their decay (string, modal, the drums: their own envelope, no LPG) take DECAY too, around
@@ -1634,7 +1691,7 @@ void set_voice(int t) {
 const int kQuiet = 4;                   // the silent blocks before it rests
 int quiet[ENG_TRACKS];
 int voice_rests(int t) {
-  if (vgate[t] || quiet[t] < kQuiet || gl_busy[t]) return 0;
+  if (vgate[t] || quiet[t] < kQuiet || gl_busy[t] || kb_n[t] || key_hold[t] > 0) return 0;
   for (uint32_t k = 0; k < kFrames; ++k)
     if (fg[t][k]) return 0;
   return 1;
@@ -4432,6 +4489,7 @@ MI_COLD int eng_init(void) {
     vgate[t] = 0;
     vnote[t] = 48.0f;
     key_on[t] = 0;
+    kb_n[t] = 0;
   }
   lx_init();                            // (the FM drums: static, one of each a track)
   zero_init();                          // (ZERO's: its loops)
@@ -4592,14 +4650,34 @@ int eng_pattern_pos(void) { return playing && tick >= 0 ? static_cast<int>(tick 
 
 void eng_key(int track, int note, int on) {
   if (track < 0 || track >= ENG_TRACKS) return;
+  int n = kb_n[track], j = 0;           // (0.16.15) the keys held: this one out, then on top if pressed
+  for (int i = 0; i < n; ++i)
+    if (kb_note[track][i] != note) kb_note[track][j++] = kb_note[track][i];
+  n = j;
   if (on) {
+    if (n == kKeys) {                   // (the oldest forgotten)
+      for (int i = 1; i < n; ++i) kb_note[track][i - 1] = kb_note[track][i];
+      --n;
+    }
+    kb_note[track][n++] = note;
+    kb_n[track] = n;
     key_note[track] = note;
     key_on[track] = 1;
     key_retrig[track] = 1;              // a new key: a new trig, even played legato
+    key_new[track] = 1;
     key_hold[track] = static_cast<int>(kFrames) * 3;   // and at least three blocks, however short the press
-  } else if (key_note[track] == note) {
-    key_on[track] = 0;
+  } else {
+    kb_n[track] = n;
+    if (!n) {
+      key_on[track] = 0;
+    } else if (key_note[track] == note) {   // the one playing let go, others held: back to the newest of them, a
+      key_note[track] = kb_note[track][n - 1];   // new trig
+      key_retrig[track] = 1;
+    }
   }
+}
+void eng_key_release_all(void) {        // (no key down any more: none held anywhere, whatever the track then)
+  for (int t = 0; t < ENG_TRACKS; ++t) kb_n[t] = 0, key_on[t] = 0;
 }
 
 void eng_core1(int on) { use_core1 = on; }
@@ -5088,6 +5166,36 @@ void eng_steps_clear(int lane) {        // a lane's pattern: its trigs and its l
 void eng_fresh(void) {                   // another project: no trig's lock or random left from the last one
   for (int l = 0; l < ENG_LANES; ++l) lane_fresh(l);
   ++lock_gen;
+}
+int eng_step_tie(int lane, int step) {  // (0.16.15) a trig's length over the steps after it (0: its own step)
+  for (int i = 0; i < ENG_PLOCKS; ++i)
+    if (proj.lock[i].lane == lane && proj.lock[i].step == step && proj.lock[i].tp == kTpTie) return proj.lock[i].v;
+  return 0;
+}
+int eng_step_tie_set(int lane, int step, int steps) {   // 0 ok, -1 no room; steps 0: none
+  if (lane < 0 || lane >= ENG_TRACKS || step < 0 || step >= ENG_STEPS) return -1;
+  steps = steps < 0 ? 0 : steps > 63 ? 63 : steps;
+  int i = lock_find(lane, step, kTpTie);
+  if (!steps) {
+    if (i >= 0) proj.lock[i].lane = 0xFF, ++lock_gen;
+    return 0;
+  }
+  if (i < 0)
+    for (int j = 0; j < ENG_PLOCKS && i < 0; ++j)
+      if (proj.lock[j].lane == 0xFF) i = j;
+  if (i < 0) return -1;
+  proj.lock[i].v = static_cast<uint8_t>(steps);
+  proj.lock[i].step = static_cast<uint8_t>(step);
+  proj.lock[i].tp = static_cast<uint8_t>(kTpTie);
+  proj.lock[i].lane = static_cast<uint8_t>(lane);
+  ++lock_gen;
+  return 0;
+}
+void eng_step_ties(int lane, uint8_t* out) {   // every step's (ENG_STEPS), one look
+  for (int s = 0; s < ENG_STEPS; ++s) out[s] = 0;
+  for (int i = 0; i < ENG_PLOCKS; ++i)
+    if (proj.lock[i].lane == lane && proj.lock[i].tp == kTpTie && proj.lock[i].step < ENG_STEPS)
+      out[proj.lock[i].step] = proj.lock[i].v;
 }
 int eng_step_locked(int lane, int step) {
   int n = 0;

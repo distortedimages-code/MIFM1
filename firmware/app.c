@@ -215,6 +215,7 @@ static struct {
     uint32_t anim_at;                    /* a page changed: its names written again, letters at random first */
     int anim;
     int held_step, step_new, step_edit;  /* a step held (-1: none), made by this press, locked meanwhile */
+    int ekeys[8], ekn;                   /* (0.16.15) the keys held on Endless, the newest last (its transposition) */
     int erec;                            /* the track Endless records (-1: none) */
     int used[NB];                        /* a knob turned while that button was held: no tap when it is let go */
     int mod;                             /* MOD mode */
@@ -3234,6 +3235,20 @@ static void foot_steps(int t)            /* the steps of a page: a trig lit, a l
         if (!(i & 3))
             cv_rect(x, 28, 11, 1, DIM);  /* the beats */
     }
+    if (t < ENG_TRACKS) {                /* (0.16.15) a trig held over the steps after it: a bar through them */
+        uint8_t tie[ENG_STEPS];
+        eng_step_ties(t, tie);
+        for (int s0 = 0; s0 < len && s0 < ENG_STEPS; s0++) {
+            if (!tie[s0] || !eng_trig(t, s0))
+                continue;
+            for (int q = s0 + 1; q <= s0 + tie[s0]; q++) {
+                int i = q % len - ui.spage * 16;
+                if (i < 0 || i >= 16)
+                    continue;
+                cv_rect(9 + i * 13 - 2, 14, i ? 15 : 13, 6, q % len == ui.held_step ? HI : ac);
+            }
+        }
+    }
     for (int j = 0; j < 4; j++)          /* the pages */
         if (j * 16 < len)
             cv_rect(222, 9 + j * 5, 6, 3, j == ui.spage ? TXT : DIM);
@@ -3513,6 +3528,12 @@ static void draw_footer(void)
         for (int i = 0; i < 16; i++)
             lh = lh * 3 + eng_trig(fl, ui.spage * 16 + i) + (eng_step_locked(fl, ui.spage * 16 + i) ? 2 : 0);
         lh = lh * 67 + (int)p->val[PG_STEP(fl) * 4 + 3];
+        if (fl < ENG_TRACKS) {           /* (its trigs' lengths) */
+            uint8_t tie[ENG_STEPS];
+            eng_step_ties(fl, tie);
+            for (int i = 0; i < ENG_STEPS; i++)
+                lh = lh * 7 + tie[i] * eng_trig(fl, i);
+        }
         if (fl >= ENG_TRACKS)
             lh = lh * 19 + (int)(eng_lane_open(fl) * 18.0f + 0.5f);
     }
@@ -5313,6 +5334,40 @@ static void select_lane(int l)
 
 /* the keys: the active track's notes; MOD's sources; STEP mode: the white keys are the 16 steps of a page (held: its
  * locks on the knobs), the first seven black keys the lanes */
+/* (0.16.15) a trig held (a), another step pressed (b): its length up to b (b before it: its own step again); with
+ * ratchets, their span instead (its hits over those steps) */
+static void step_span(int l, int a, int b)
+{
+    project_t *p = eng_project();
+    float rv;
+    char m[24], n[8];
+    int sp, steps = b > a ? b - a + 1 : 1;
+    int r = (int)((eng_lock(l, a, TP_RATCHET, &rv) ? rv : p->val[PG_STEP(l) * 4 + 2]) + 0.5f);
+    int hits = eng_ratch_hits(r, &sp);
+    m[0] = 0;
+    if (hits > 1) {
+        eng_lock_set(l, a, TP_RATCHET, (float)eng_ratch_join(hits, steps));
+        int_text(hits, n);
+        text_cat(m, n, sizeof m);
+        text_cat(m, steps > 1 ? " OVER " : " ON 1 STEP", sizeof m);
+        if (steps > 1) {
+            int_text(steps, n);
+            text_cat(m, n, sizeof m);
+            text_cat(m, " STEPS", sizeof m);
+        }
+        app_say("RATCH", m);
+    } else if (eng_step_tie_set(l, a, steps - 1) == 0) {
+        int_text(steps, n);
+        text_cat(m, n, sizeof m);
+        text_cat(m, steps > 1 ? " STEPS" : " STEP", sizeof m);
+        app_say("LENGTH", m);
+    } else {
+        app_say("LENGTH", "NO ROOM");
+    }
+    ui.step_edit = 1;                    /* (let go, the trig stays) */
+    dirty = 1;
+}
+
 static void grid_key(int k, int down)
 {
     static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
@@ -5327,6 +5382,10 @@ static void grid_key(int k, int down)
         int st = ui.spage * 16 + w;
         if (st >= len)
             return;
+        if (down && ui.held_step >= 0 && st != ui.held_step && ln < ENG_TRACKS && eng_trig(ln, ui.held_step)) {
+            step_span(ln, ui.held_step, st);   /* (0.16.15) a step held, another pressed: its length to there */
+            return;
+        }
         if (down) {
             ui.held_step = st;
             ui.step_edit = 0;
@@ -5346,6 +5405,27 @@ static void grid_key(int k, int down)
     } else if (bl >= 0 && bl < ENG_LANES && down) {
         select_lane(bl);
     }
+}
+
+/* (0.16.15) Endless' keys: the note to transpose it to (-1: none), the newest held; a key let go, the one before it
+ * (none held: the transposition stays) */
+static int endless_keys(int note, int down)
+{
+    int j = 0, was = ui.ekn ? ui.ekeys[ui.ekn - 1] : -1;
+    for (int i = 0; i < ui.ekn; i++)
+        if (ui.ekeys[i] != note)
+            ui.ekeys[j++] = ui.ekeys[i];
+    ui.ekn = j;
+    if (down) {
+        if (ui.ekn == 8) {
+            for (int i = 1; i < 8; i++)
+                ui.ekeys[i - 1] = ui.ekeys[i];
+            ui.ekn = 7;
+        }
+        ui.ekeys[ui.ekn++] = note;
+        return note;
+    }
+    return ui.ekn && was == note ? ui.ekeys[ui.ekn - 1] : -1;
 }
 
 static void poll_keys(void)
@@ -5391,23 +5471,26 @@ static void poll_keys(void)
                                           * plays it */
             if (down && !eng_playing())
                 eng_endless_free(ui.track, 1);
-        } else if (eng_endless_on(ui.track) && eng_playing()) {   /* Endless playing: a key transposes it */
-            if (down) {
-                eng_endless_key(ui.track, note);
-                dirty = 1;
-            }
-        } else if (eng_endless_on(ui.track)) {   /* (0.16.11) stopped: a key plays Endless from it, while held */
-            if (down) {
-                eng_endless_key(ui.track, note);
-                eng_endless_free(ui.track, 1);
+        } else if (eng_endless_on(ui.track)) {   /* Endless: a key transposes it (0.16.11: stopped, it plays it from
+                                          * there, while held); 0.16.15: the newest key held, back to the one
+                                          * before when it is let go */
+            int top = endless_keys(note, down);
+            if (top >= 0) {
+                eng_endless_key(ui.track, top);
+                if (!eng_playing())
+                    eng_endless_free(ui.track, 1);
                 dirty = 1;
             }
         } else {
             eng_key(ui.track, note, down);
         }
     }
-    if (!keys)                           /* (0.16.13: every key let go, the ARPs' not latched too) */
+    if (!keys) {                         /* (0.16.13: every key let go, the ARPs' not latched too; 0.16.15: the keys
+                                          * held, on every track) */
         eng_arp_release_all();
+        eng_key_release_all();
+        ui.ekn = 0;
+    }
     if (!keys || eng_playing())          /* (every key let go, or PLAY: Endless by the keys stops) */
         eng_endless_free(-1, 0);
     ui.keys = keys;

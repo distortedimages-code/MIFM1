@@ -3015,8 +3015,8 @@ int main(int argc, char** argv) {
     }
     char tx[24];
     struct { int k; float u; const char* want; } kTx[] = {
-        {0, 0.0f, "Saw"}, {0, 0.5f, "Square"}, {6, 7.5f / 15.0f, "Off"}, {6, 14.5f / 15.0f, "Min9"},
-        {6, 6.5f / 15.0f, "Triad"}, {6, 0.0f, "Root"}, {3, 1.0f, "Hold"}, {7, 0.25f, "50% VINTAGE"},
+        {0, 0.0f, "Saw"}, {0, 0.5f, "Square"}, {6, 0.25f, "Mono"}, {6, 0.75f, "Poly"},
+        {3, 1.0f, "Hold"}, {7, 0.25f, "50% VINTAGE"},
         {7, 0.75f, "50% UNISON"}, {5, 0.25f, "50% SWELL"}, {4, 0.0f, "Off"}, {4, 1.0f, "-2 25%"}};
     for (const auto& x : kTx) {
       poly_knob_text(x.k, x.u, tx, sizeof tx);
@@ -3038,9 +3038,9 @@ int main(int argc, char** argv) {
     // the voices
     float k[8], buf[32];
     auto blocks = [&](int nb) { for (int b = 0; b < nb; ++b) poly_render(0, buf, 32); };
-    auto trig = [&](const float* kk, float note) {
+    auto trig = [&](const float* kk, float note, float chord = 7.5f / 15.0f) {   // (0.16.15: its chords PROPHET's)
       float v4[4];
-      int c = poly_notes(kk[6], note, nullptr, 0, 0, 0, v4);
+      int c = poly_notes(chord, note, nullptr, 0, 0, 0, v4);
       poly_set(0, v4, c, kk);
       poly_gate(0, 1);
       blocks(20);
@@ -3053,13 +3053,19 @@ int main(int argc, char** argv) {
     trig(k, 48.0f);
     trig(k, 55.0f);
     int two = poly_voices(0);
+    k[6] = 0.25f;                       // (0.16.15) MODE Mono: one voice, the next trig its
+    poly_init();
+    trig(k, 48.0f);
+    trig(k, 55.0f);
+    int one = poly_voices(0);
+    k[6] = 0.75f;
     k[7] = 0.9f;                        // UNISON
     poly_init();
     trig(k, 48.0f);
     int four = poly_voices(0);
-    k[7] = 0.35f, k[6] = 11.5f / 15.0f;   // Major
+    k[7] = 0.35f;                       // a major chord
     poly_init();
-    trig(k, 48.0f);
+    trig(k, 48.0f, 11.5f / 15.0f);
     int three = poly_voices(0);
     // held, let go
     poly_init();
@@ -3161,11 +3167,11 @@ int main(int argc, char** argv) {
               q20.algo[PG_TRACK(1, 0)] == eng_model_find(MK_PADS, 0) &&
               q20.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 20) &&
               q20.algo[PG_TRACK(3, 0)] == eng_model_find(MK_FM, 0);
-    printf("POLY: knobs %s; chords %s; voices: a trig each %d, unison %d, a major chord %d; held %.2f %.2f, let go "
+    printf("POLY: knobs %s; chords %s; voices: a trig each %d, Mono %d, unison %d, a major chord %d; held %.2f %.2f, let go "
            "%.5f; its alias at C6 %.0f dB; 300 settings: peak %.2f%s; after PADS: peak %.2f%s; version 20 %s\n",
-           ok ? "ok" : "WRONG", chords_ok ? "ok" : "WRONG", two, four, three, held_a, held_b, after, alias, pk_any,
+           ok ? "ok" : "WRONG", chords_ok ? "ok" : "WRONG", two, one, four, three, held_a, held_b, after, alias, pk_any,
            nan_any ? ", NaN" : "", epk, enan ? ", NaN" : "", v20 ? "read" : "WRONG");
-    if (!ok || !chords_ok || two != 2 || four != 4 || three != 3 || held_a < 0.1 || std::fabs(held_b / held_a - 1.0) > 0.2 ||
+    if (!ok || !chords_ok || two != 2 || one != 1 || four != 4 || three != 3 || held_a < 0.1 || std::fabs(held_b / held_a - 1.0) > 0.2 ||
         after > 1e-3 || alias > -55.0 || nan_any || pk_any > 1.2f || enan || epk < 0.02f || !v20)
       ++failures, printf("FAIL: POLY\n");
   }
@@ -4543,6 +4549,126 @@ int main(int argc, char** argv) {
     if (!ok || sounds != 24 || !finite || !quiet || pk_all > 1.0f || hi / lo > 2.0 || moves < 22 || i1 / i0 < 2.0 ||
         !steps || pk_any > 1.2f || nan_any || !shared_ok || !v27 || !v26 || !snd)
       ++failures, printf("FAIL: SQ-1\n");
+  }
+
+  {                                     // 66. the keys (0.16.15): a voice of one plays the newest key held, back to
+    // the one before when it is let go (a new trig); POLY in MODE Poly, PROPHET with CHORD Off and SQ-1 play the keys
+    // held, a voice each, the one let go falling (DECAY at Hold), the steps silent meanwhile; MODE Mono one voice; a
+    // trig's length over the steps after it (its own lock), the gate that long
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    auto blocks = [&](int nb) { for (int b = 0; b < nb; ++b) eng_render(l, r, 128); };
+    auto knob = [&](int t, int i, float u) {
+      int param = PG_TRACK(t, 0) * 4 + 1 + i;
+      p->val[param] = eng_pdef(param)->kind == K_BIP ? 2.0f * u - 1.0f : u;
+    };
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    for (int l2 = 0; l2 < ENG_LANES; ++l2)
+      for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(l2, st, 0);
+    // a voice of one (the FM): 60, 64 over it, 64 let go: 60 again, a new trig
+    eng_set_model(0, eng_model_find(MK_FM, 0));
+    eng_key(0, 60, 1);
+    blocks(10);
+    int n1 = eng_note(0);
+    eng_key(0, 64, 1);
+    blocks(10);
+    int n2 = eng_note(0);
+    uint32_t r0 = eng_rises(0);
+    eng_key(0, 64, 0);
+    blocks(10);
+    int n3 = eng_note(0), back = eng_rises(0) > r0 && (eng_gates() & 1u);
+    eng_key(0, 60, 0);
+    blocks(20);
+    int mono = n2 > n1 && n3 == n1 && back && !(eng_gates() & 1u);   // (64 in the project's scale)
+    // the keys' chords: POLY (Poly, DECAY Hold), PROPHET (CHORD Off, DECAY Hold), SQ-1
+    auto silent = [&]() {               // (a voice resting keeps its count: the track's sound tells)
+      float pk = 0.0f;
+      for (int b = 0; b < 20; ++b) {
+        eng_render(l, r, 128);
+        pk = std::max(pk, eng_meter(0));
+      }
+      return pk < 1e-3f;
+    };
+    auto chord = [&](int kind, int* held3, int* after1, int* none) {
+      eng_set_model(0, eng_model_find(kind, 0));
+      if (kind != MK_SQ1) knob(0, 3, 1.0f);
+      eng_key(0, 60, 1);
+      blocks(2);
+      eng_key(0, 64, 1);
+      blocks(2);
+      eng_key(0, 67, 1);
+      blocks(20);
+      auto voices = [&]() { return kind == MK_POLY ? poly_voices(0) : kind == MK_PROPHET ? pro_voices(0) : sq_voices(0); };
+      *held3 = voices();
+      eng_key(0, 64, 0);
+      blocks(700);
+      *after1 = voices();
+      eng_key(0, 60, 0);
+      eng_key(0, 67, 0);
+      blocks(1500);
+      *none = silent() ? 0 : voices();
+    };
+    int ph3, ph1, ph0, xh3, xh1, xh0, sh3, sh1, sh0;
+    chord(MK_POLY, &ph3, &ph1, &ph0);
+    chord(MK_PROPHET, &xh3, &xh1, &xh0);
+    chord(MK_SQ1, &sh3, &sh1, &sh0);
+    int chords = ph3 == 3 && ph1 == 2 && ph0 == 0 && xh3 == 3 && xh1 == 2 && xh0 == 0 && sh3 == 3 && sh1 == 2 && sh0 == 0;
+    // POLY in MODE Mono: one voice, the newest key
+    eng_set_model(0, eng_model_find(MK_POLY, 0));
+    knob(0, 3, 1.0f);
+    knob(0, 6, 0.25f);
+    eng_key(0, 60, 1);
+    blocks(2);
+    const int p60 = eng_note(0);
+    eng_key(0, 64, 1);
+    blocks(250);
+    int pmono = poly_voices(0), pnote = eng_note(0);
+    eng_key(0, 64, 0);
+    blocks(10);
+    int pback = pnote > p60 && eng_note(0) == p60;
+    eng_key_release_all();
+    blocks(600);
+    const int mono_v = pmono, mono_quiet = silent();
+    pmono = mono_v == 1 && pback && mono_quiet;
+    if (!pmono) printf("the keys: POLY Mono: %d voices, back %d, then silent %d\n", mono_v, pback, mono_quiet);
+    // a trig's length: the FM on step 0, its gate's blocks as it is, then held over 3 steps more
+    eng_defaults(p);
+    eng_fresh();
+    for (int l2 = 0; l2 < ENG_LANES; ++l2)
+      for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(l2, st, 0);
+    eng_set_model(0, eng_model_find(MK_FM, 0));
+    eng_trig_set(0, 0, 1);
+    auto gate_blocks = [&]() {
+      eng_play(1);
+      int on = 0;
+      for (int b = 0; b < 300; ++b) {
+        eng_render(l, r, 128);
+        on += (eng_gates() & 1u) != 0;
+      }
+      eng_play(0);
+      blocks(50);
+      return on;
+    };
+    int g1 = gate_blocks();
+    int set = eng_step_tie_set(0, 0, 3) == 0 && eng_step_tie(0, 0) == 3;
+    int g4 = gate_blocks();
+    uint8_t ties[ENG_STEPS];
+    eng_step_ties(0, ties);
+    set &= ties[0] == 3 && ties[1] == 0;
+    eng_lock_clear(0, 0);
+    set &= eng_step_tie(0, 0) == 0;
+    const float bpm = 30.0f * std::pow(2.0f, p->val[PG_GLOBAL * 4] * 3.321928f);
+    const float six = 44100.0f * 60.0f / (4.0f * bpm) / 128.0f;   // (a sixteenth's blocks)
+    int tie_ok = set && g4 > g1 + static_cast<int>(2.5f * six) && g4 < g1 + static_cast<int>(3.5f * six);
+    eng_defaults(p);
+    eng_fresh();
+    printf("the keys: one voice %s (%d %d %d, back with a trig %s); the chords held 3, 64 let go, all: POLY %d %d %d, "
+           "PROPHET %d %d %d, SQ-1 %d %d %d; POLY Mono %s; a trig's length: %d blocks, held over 3 steps more %d %s\n",
+           mono ? "ok" : "WRONG", n1, n2, n3, back ? "yes" : "NO", ph3, ph1, ph0, xh3, xh1, xh0, sh3, sh1, sh0,
+           pmono ? "ok" : "WRONG", g1, g4, tie_ok ? "ok" : "WRONG");
+    if (!mono || !chords || !pmono || !tie_ok) ++failures, printf("FAIL: the keys\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

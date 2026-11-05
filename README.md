@@ -16,11 +16,12 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   lamentation, Bach, Satie…) joués par une nappe de cordes, sur une piste ; ses accords suivent la gamme du projet, et
   la gamme **Prog** fait suivre l'accord joué à toutes les autres pistes, en temps réel (voir plus bas) ;
 - **POLY** (0.12) : un petit synthé analogique polyphonique d'après le SH-101 de Roland et le S-1, quatre voix par
-  piste, chacune son filtre à quatre pôles et son enveloppe ; une mémoire d'accords, ou des accords qui suivent
-  l'harmonie (celle de PADS, ou la gamme), et un mode **VINTAGE** qui écarte un peu chaque voix (voir plus bas) ;
+  piste, chacune son filtre à quatre pôles et son enveloppe ; **MODE** Mono ou Poly (0.16.15 : en Poly, les accords
+  se jouent à la main au clavier), et un mode **VINTAGE** qui écarte un peu chaque voix (voir plus bas) ;
 - **PROPHET** (0.13) : le grand polyphonique d'après le Prophet-5 de Sequential Circuits, quatre voix par piste, deux
   oscillateurs (treize réglages du panneau), son filtre, ses deux enveloppes, sa **Poly-Mod** (le balayage de la sync,
-  la FM), un bouton **VINTAGE** comme celui de la Rev 4 et les accords de POLY (voir plus bas) ;
+  la FM), un bouton **VINTAGE** comme celui de la Rev 4, une mémoire d'accords ou des accords qui suivent l'harmonie
+  (celle de PADS, ou la gamme), et sans accord, ceux qu'on joue au clavier (voir plus bas) ;
 - **SQ-1** (0.16.14) : un Ensoniq de poche d'après le SQ-1 et sa puce OTIS, quatre voix par piste : des **Transwaves**
   (32 cycles qui changent peu à peu, lus entiers et par marches), les filtres sans résonance de la puce, trois couches,
   un petit effet ; 24 programmes en huit familles, huit potards (voir plus bas) ;
@@ -435,14 +436,12 @@ moitié est rendue). Une seule **enveloppe** sur le filtre et le volume : **ENV*
 (jusqu'à cinq octaves : le squelch des lignes acides), à gauche une **montée** (jusqu'à 2 s, le filtre s'ouvrant avec
 elle) ; **DECAY** de 50 ms à 20 s, Hold au bout (tenu tant que la note l'est).
 
-**CHORD** : à droite la **mémoire d'accords** du S-1, des accords parallèles sur la note (Oct, 5th, Sus4, Major,
-Minor, Min7, Min9 : les accords de la dub techno) ; à gauche l'**harmonie** : l'accord que joue PADS quand une piste la
-joue (la note choisit le registre ; à chaque accord de PADS, POLY suit), sinon celui de la gamme du projet sur la note
-(une gamme majeure si elle est Off) : **Triad**, **7th**, **9th** (sans sa quinte), **Open** (fondamentale, quinte,
-dixième), **Sus**, **Root5** (la fondamentale et sa quinte), **Root** (la fondamentale seule, sous la note : une basse
-qui suit la progression). Au milieu **Off** : une voix par trig, les précédentes résonnent sous la nouvelle (quatre au
-plus, la plus discrète cédée la première). La dose d'aléatoire ne touche pas CHORD (ses accords parallèles
-sortiraient de la gamme).
+**MODE** (0.16.15, à la place de CHORD) : **Mono**, une seule voix (un trig la relance, le clavier joue la dernière
+touche, revient à la précédente encore tenue quand on la lâche) ; **Poly**, une voix par trig, les précédentes
+résonnent sous la nouvelle (quatre au plus, la plus discrète cédée la première), et **les accords se jouent à la main
+au clavier** : chaque touche tenue a sa voix (quatre au plus, les plus récentes), lâchée elle retombe comme un trig
+(DECAY à Hold : elle se relâche) ; les pas de la piste se taisent tant qu'une touche est tenue. Les accords de la
+mémoire du S-1 et de l'harmonie sont passés à PROPHET (son CHORD). La dose d'aléatoire ne touche pas MODE.
 
 **VOICE** : à gauche **VINTAGE**, comme sur un vieux polyphonique : chaque voix sa propre justesse (quelques cents),
 une dérive lente qui lui est propre, son filtre et son enveloppe un peu à part, de plus en plus vers la gauche ; au
@@ -454,7 +453,7 @@ quatre voix sonnent toujours). De même dans PROPHET et PADS.
 
 | 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **WAVE** (Saw, Square, PW, PWM) | **CUTOFF** (20 Hz à 20 kHz) | **RESO** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **SUB** (−1 oct., −2, −2 à 25 %) | **ENV** (− : une montée, + : sa profondeur) | **CHORD** (− : l'harmonie, + : une mémoire d'accords) | **VOICE** (− : VINTAGE, + : UNISON) |
+| **WAVE** (Saw, Square, PW, PWM) | **CUTOFF** (20 Hz à 20 kHz) | **RESO** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **SUB** (−1 oct., −2, −2 à 25 %) | **ENV** (− : une montée, + : sa profondeur) | **MODE** (Mono, Poly) | **VOICE** (− : VINTAGE, + : UNISON) |
 
 Choisir POLY met ces réglages aux siens (une dent de scie sur sa sous-octave, un squelch, une voix par trig, un peu
 de vintage) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 3 % d'un bloc (quatre : 11 %). Les projets
@@ -482,12 +481,19 @@ Sync, le balayage qui hurle des leads des années 80 ; ailleurs, des zaps) ; à 
 de A (une FM linéaire : avec Bell, des cloches et du métal). **VINTAGE** (0 : Clean) fait ce que fait le bouton Vintage
 du Prophet-5 Rev 4 (2020) : des voix exactes d'aujourd'hui aux premières révisions instables, A et B de plus en plus
 écartés (jusqu'à 14 cents), chaque voix sa justesse, sa dérive lente, sa coupure et ses enveloppes un peu à part.
-**CHORD** : les accords de POLY (à droite la mémoire d'accords, à gauche l'harmonie : PADS, ou la gamme ; Off, une voix
-par trig, les précédentes résonnant dessous ; leur niveau glisse quand l'une s'éteint, depuis 0.16.5, comme dans POLY).
+**CHORD** : à droite la **mémoire d'accords** du S-1, des accords parallèles sur la note (Oct, 5th, Sus4, Major,
+Minor, Min7, Min9 : les accords de la dub techno) ; à gauche l'**harmonie** : l'accord que joue PADS quand une piste la
+joue (la note choisit le registre ; à chaque accord de PADS, PROPHET suit), sinon celui de la gamme du projet sur la
+note (une gamme majeure si elle est Off) : **Triad**, **7th**, **9th** (sans sa quinte), **Open** (fondamentale,
+quinte, dixième), **Sus**, **Root5** (la fondamentale et sa quinte), **Root** (la fondamentale seule, sous la note :
+une basse qui suit la progression). Au milieu **Off** : une voix par trig, les précédentes résonnant dessous (leur
+niveau glisse quand l'une s'éteint, depuis 0.16.5, comme dans POLY), et depuis 0.16.15 **les accords joués à la main
+au clavier**, une voix par touche tenue, comme POLY en Poly. La dose d'aléatoire ne touche pas CHORD (ses accords
+parallèles sortiraient de la gamme).
 
 | 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **OSC** (13 réglages) | **CUTOFF** (20 Hz à 20 kHz) | **RESO** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **VINTAGE** (Clean, puis les premières révisions) | **ENV** (− : avec une attaque, + : pincée) | **POLY-MOD** (− : l'enveloppe sur A, + : B sur A) | **CHORD** (ceux de POLY) |
+| **OSC** (13 réglages) | **CUTOFF** (20 Hz à 20 kHz) | **RESO** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **VINTAGE** (Clean, puis les premières révisions) | **ENV** (− : avec une attaque, + : pincée) | **POLY-MOD** (− : l'enveloppe sur A, + : B sur A) | **CHORD** (− : l'harmonie, + : une mémoire d'accords ; Off : le clavier) |
 
 Choisir PROPHET met ces réglages aux siens (deux dents de scie un peu écartées, un filtre de cuivre, une voix par
 trig) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 4,5 % d'un bloc (quatre : 15 %). Les projets d'avant se
@@ -526,7 +532,9 @@ Vox Keys, Hollow), **nappe évolutive** (Pad, Vox Pad, Sweeper), **industriel** 
 (une pincée retombe vers INDEX, une nappe monte depuis), ses pôles et son effet ; leurs niveaux sont égalisés. Le
 premier écran dessine **le cycle que la voix lit**, en direct, et sa place (« Electric · 13 / 32 »).
 
-Choisir SQ-1 met ses réglages aux siens (E.Piano, un peu de balayage, un chorus). Une voix coûte au FM-1 environ 3 %
+Au clavier, SQ-1 joue les accords à la main (0.16.15) : une voix par touche tenue, quatre au plus, chacune relâchée avec
+sa touche ; les pas de la piste se taisent tant qu'une touche est tenue. Choisir SQ-1 met ses réglages aux siens
+(E.Piano, un peu de balayage, un chorus). Une voix coûte au FM-1 environ 3 %
 d'un bloc avec ses trois couches, SPACE à fond et le reste environ 5,5 % (quatre voix, trois couches, SPACE à fond :
 environ 19 % ; PROPHET, quatre voix : 15 %). Les projets et les sons enregistrés d'avant qui jouaient CHIPTUNE ou FORMANT passent à SQ-1 avec ses
 réglages ; les autres modèles de Plaits sont renumérotés.
@@ -631,8 +639,12 @@ réverbe, 7 Warps (l'écran passe sur la piste ou l'effet choisi) ; OCT− et OC
 jusqu'à 64). Appuyer sur un pas pose un trig ; appuyer sur un trig l'enlève (avec ses locks). **Tenir un pas et
 tourner un potard pose un P-lock** sur ce pas : pour une piste, sur n'importe quelle page qui est la sienne (Plaits,
 son niveau, ses envois, son pan, sa note…) ; pour un effet, sur ses potards. Le potard montre alors la valeur du pas
-(LOCK dessous). Tenir un pas et taper SEL efface ses locks. La piste de pas suit la page : aller sur le delay (FX)
-montre les pas du delay. **REC** à nouveau : retour au mode KEY.
+(LOCK dessous). Tenir un pas et taper SEL efface ses locks. **Tenir un trig et appuyer sur un pas plus loin**
+(0.16.15) lui donne sa **longueur** : la note tient jusqu'à ce pas (sur ce pas, la part qu'en donne GATE), une barre
+la montre sur les pas qu'elle couvre ; un trig qui a des **ratchets** les étale sur ces pas à la place (ses coups sur
+autant de pas, SPAN ; l'écran dit lequel). Un pas avant le trig le ramène à son seul pas. La longueur est un lock du
+pas (effacée avec les autres). La piste de pas suit la page : aller sur le delay (FX) montre les pas du delay.
+**REC** à nouveau : retour au mode KEY.
 
 Les pages d'une section se suivent sous SELECT (ou en retapant son bouton) ; depuis 0.16.6, une barre sous l'en-tête
 les montre, une part par page, celle qu'on regarde allumée.
@@ -993,6 +1005,10 @@ une seule lumière, orange, comme le Machinedrum d'Elektron : celui de la démo 
 qualité de Warps, le thème reste quand on charge un autre projet ; il est gardé avec le projet sauvegardé.
 
 **Le clavier** relance la note à chaque touche, même jouée legato, et une touche tapée très vite sonne quand même.
+Depuis 0.16.15, il **garde les touches tenues** : une voix seule (la FM, ZERO, Plaits, les batteries, POLY en Mono…)
+joue la **dernière** touche appuyée, et quand on la lâche alors qu'une autre est encore tenue, **elle revient sur
+celle-ci** (un nouveau trig) ; Endless fait de même avec sa transposition. POLY en Poly, PROPHET sans accord et SQ-1
+jouent toutes les touches tenues, une voix chacune : des accords à la main.
 
 Un projet sauvegardé avec les 0.1.4 à 0.2.6 se recharge : ses réglages, ses modèles, ses câbles (sauf ceux qui
 partaient de Marbles), ses pas, ses locks et Endless ; le tempo de Marbles devient le tempo, et les effets nouveaux

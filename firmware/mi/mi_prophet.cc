@@ -75,6 +75,7 @@ struct XVoice {
   float tol[4];                         // its tolerances (-1..1): A's pitch, B's, the cutoff, the envelopes
   uint32_t nz;                          // its noise
   int slot, alive, trig, let_go;
+  int key;                              // (0.16.15) the key it plays (CHORD Off, the keyboard), -1 a trig's
   uint32_t age;
 };
 struct Pro {
@@ -140,6 +141,7 @@ void pro_reset(int t) {
     v.note = 48.0f;
     v.fatt = v.aatt = 1.0f;
     for (int j = 0; j < 4; ++j) v.tol[j] = bip(p.rnd);   // (each voice its own, for good)
+    v.key = -1;
     v.nz = xs(p.rnd) | 1u;
   }
 }
@@ -184,6 +186,52 @@ void pro_gate(int t, int g) {
   p.gate = g;
 }
 
+// (0.16.15) the keys held (CHORD Off): a voice each, as POLY's (poly_keys)
+void pro_keys(int t, const int* ids, const float* notes, int n) {
+  if (t < 0 || t >= MF_TRACKS) return;
+  Pro& p = pro[t];
+  n = n < 0 ? 0 : n > kVoices ? kVoices : n;
+  for (int i = 0; i < kVoices; ++i) {
+    XVoice& v = p.v[i];
+    if (v.key < 0) continue;
+    int j = 0;
+    while (j < n && ids[j] != v.key) ++j;
+    if (j < n && v.alive) {
+      v.note = notes[j];
+      continue;
+    }
+    if (v.alive && !v.let_go && p.k[3] > 0.98f) v.let_go = 1, v.fdec = v.fenv, v.adec = v.aenv, v.fatt = v.aatt = 1.0f;
+    v.key = -1;
+  }
+  for (int j = 0; j < n; ++j) {
+    int have = 0;
+    for (int i = 0; i < kVoices; ++i) have |= p.v[i].key == ids[j];
+    if (have) continue;
+    int best = 0;
+    float bs = 1e9f;
+    for (int i = 0; i < kVoices; ++i) {
+      const XVoice& v = p.v[i];
+      float score = v.alive ? v.aenv + 1.0f - static_cast<float>(p.clock - v.age) * 1e-6f : 0.0f;
+      if (v.key >= 0) score += 2.0f;
+      if (score < bs) bs = score, best = i;
+    }
+    XVoice& v = p.v[best];
+    p.group &= ~(1 << best);
+    if (!v.alive) {
+      v.pa = 0.5f + 0.5f * bip(p.rnd);
+      v.pb = 0.5f + 0.5f * bip(p.rnd);
+      v.p1 = v.p2 = v.carry = v.bprev = 0.0f;
+      v.s1 = v.s2 = v.s3 = v.s4 = 0.0f;
+      v.fenv = v.aenv = 0.0f;
+    }
+    v.note = notes[j];
+    v.slot = 0;
+    v.key = ids[j];
+    v.trig = 1;
+    v.age = ++p.clock;
+  }
+}
+
 int pro_voices(int t) {
   if (t < 0 || t >= MF_TRACKS) return 0;
   int n = 0;
@@ -205,6 +253,7 @@ void take(Pro& p) {                     // a trig's notes to voices: the free fi
       if ((used >> i) & 1) continue;
       const XVoice& v = p.v[i];
       float score = v.alive ? v.aenv + 1.0f - static_cast<float>(p.clock - v.age) * 1e-6f : 0.0f;
+      if (v.alive && v.key >= 0) score += 2.0f;   // (a key held: the last taken)
       if (score < bs) bs = score, best = i;
     }
     used |= 1 << best;
@@ -219,6 +268,7 @@ void take(Pro& p) {                     // a trig's notes to voices: the free fi
       v.fenv = v.aenv = 0.0f;
     }
     v.trig = 1;
+    v.key = -1;
     v.age = p.clock;
   }
   for (int i = 0; i < kVoices; ++i) {   // (the last trig's voices not taken again: held, let go; else ringing on)
@@ -431,7 +481,7 @@ void pro_render(int t, float* out, uint32_t n) {
     float adkb = adk, fdkb = fdk;       // (a sub-block's: ^16)
     for (int q = 0; q < 4; ++q) adkb *= adkb, fdkb *= fdkb;
     const float ainc = 1.0f / (aA * tt * kSr), finc = 1.0f / (fA * tt * kSr);
-    const int sustain = held && p.gate && !v.let_go && ((p.group >> i) & 1);
+    const int sustain = held && !v.let_go && (v.key >= 0 || (p.gate && ((p.group >> i) & 1)));
     const float kt = (v.note - 60.0f) * (0.7f / 12.0f) + v.tol[2] * 0.3f * vint;   // (the keyboard: 70 %)
     for (uint32_t s0 = 0; s0 < n; s0 += kSub) {
       const int m = n - s0 < static_cast<uint32_t>(kSub) ? static_cast<int>(n - s0) : kSub;
@@ -543,7 +593,7 @@ MI_COLD void pro_knob_text(int k, float u, char* b, int n) {
       if (u < 0.004f) return put_s(b, n, &at, "Clean");
       break;
     case 7:
-      return poly_knob_text(6, u, b, n);   // (CHORD: POLY's)
+      return put_s(b, n, &at, poly_chord_name(u));   // (CHORD: POLY's chords)
     case 5: case 6: {                   // bipolar: ENV (- with an attack, + a pluck), POLY-MOD (- the sweep, + FM)
       float w = 2.0f * u - 1.0f;
       int x = static_cast<int>(w * 100.0f + (w < 0.0f ? -0.5f : 0.5f));

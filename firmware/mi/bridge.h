@@ -134,10 +134,10 @@ int pads_knob_steps(int k);              /* PROG's 17, COLOR's and VOICING's 4, 
 void pads_knob_text(int k, float u, char *b, int n);
 
 /* ---- POLY (mi_poly.cc, 0.12): a small polyphonic analog synthesizer after Roland's SH-101 and S-1, four voices a
- * track: its oscillator (saw, pulse, PWM, its sub), the IR3109's four poles, one envelope; chords (a chord memory's,
- * or the harmony's: PADS' chord, the scale's). Its eight knobs (k: 0..1, a bipolar knob from its middle): WAVE,
- * CUTOFF, RESO, DECAY, SUB, ENV (- swell, + its depth), CHORD (-: the harmony's, +: a chord memory's), VOICE
- * (- VINTAGE, + UNISON) ---- */
+ * track: its oscillator (saw, pulse, PWM, its sub), the IR3109's four poles, one envelope. Its eight knobs (k: 0..1, a
+ * bipolar knob from its middle): WAVE, CUTOFF, RESO, DECAY, SUB, ENV (- swell, + its depth), MODE (0.16.15, in CHORD's
+ * place: Mono, one voice; Poly, a voice a trig and the keys' chords), VOICE (- VINTAGE, + UNISON). Its chords
+ * (poly_notes) are PROPHET's now ---- */
 /* a trig's notes (4 at most) in out, how many: CHORD at u over the note; pc, pn: PADS' chord (semitones over the
  * scale's root, its root first; pn 0: none), the scale (bit i: i semitones over root; 0 or 0xFFF: major) */
 int poly_notes(float u, float note, const int *pc, int pn, uint16_t mask, int root, float *out);
@@ -148,10 +148,16 @@ void poly_set(int t, const float *notes, int n, const float *k);
 void poly_gate(int t, int g);
 void poly_render(int t, float *out, uint32_t n);
 int poly_voices(int t);                  /* its voices sounding */
-int poly_chord(float u);                 /* CHORD at u: -7 .. 7 (0 Off) */
+int poly_chord(float u);                 /* PROPHET's CHORD at u: -7 .. 7 (0 Off) */
+const char *poly_chord_name(float u);    /* its name (Off, Triad, 7th...) */
+/* (0.16.15) the keys held on the track (ids: the keys, notes: their pitches, n: 4 at most), a voice each; called
+ * every block (an empty list lets them go). POLY's in MODE Poly, PROPHET's with CHORD Off, SQ-1's */
+void poly_keys(int t, const int *ids, const float *notes, int n);
+void pro_keys(int t, const int *ids, const float *notes, int n);
+void sq_keys(int t, const int *ids, const float *notes, int n);
 const char *poly_knob_name(int k);
 void poly_defaults(float *k);
-int poly_knob_steps(int k);              /* CHORD's 15, the others 128 */
+int poly_knob_steps(int k);              /* MODE's 2 (0.16.15: Mono, Poly; CHORD's place), the others 128 */
 void poly_knob_text(int k, float u, char *b, int n);
 
 /* ---- PROPHET (mi_prophet.cc, 0.13): a five-voice classic after Sequential Circuits' Prophet-5 (its third revision),

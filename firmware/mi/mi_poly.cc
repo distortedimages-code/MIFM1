@@ -60,6 +60,7 @@ inline int chord_of(float u) {
   int i = static_cast<int>(u * static_cast<float>(kChords));
   return (i < 0 ? 0 : i > kChords - 1 ? kChords - 1 : i) - kChords / 2;
 }
+inline int poly_mono(float u) { return u < 0.5f; }   // (0.16.15) MODE: Mono to the left, Poly to the right
 
 struct PVoice {
   float note;                           // its pitch (MIDI)
@@ -72,6 +73,7 @@ struct PVoice {
   float tol[3];                         // its own tolerances (-1..1): pitch, cutoff, envelope
   float uni;                            // UNISON's place (-1..1)
   int slot;                             // its note in its trig's chord
+  int key;                              // (0.16.15) the key it plays (MODE Poly, the keyboard), -1 a trig's
   int alive, trig, let_go;
   uint32_t age;                         // (the oldest stolen first)
 };
@@ -196,6 +198,7 @@ void poly_reset(int t) {
     for (int j = 0; j < 3; ++j) v.tol[j] = bip(p.rnd);   // (each voice its own, for good)
     v.lfo = 0.25f * static_cast<float>(i);
     v.uni = -1.0f + 2.0f * static_cast<float>(i) / static_cast<float>(kVoices - 1);
+    v.key = -1;
   }
 }
 
@@ -242,6 +245,53 @@ int poly_voices(int t) {
   return n;
 }
 
+// (0.16.15) the keys held (MODE Poly): a voice each (a free one, else a trig's, the quietest, else the oldest key's),
+// its pitch following FREQ; a key let go, its voice falls as a trig's does (held: let go)
+void poly_keys(int t, const int* ids, const float* notes, int n) {
+  if (t < 0 || t >= MF_TRACKS) return;
+  Poly& p = poly[t];
+  n = n < 0 ? 0 : n > kVoices ? kVoices : n;
+  for (int i = 0; i < kVoices; ++i) {
+    PVoice& v = p.v[i];
+    if (v.key < 0) continue;
+    int j = 0;
+    while (j < n && ids[j] != v.key) ++j;
+    if (j < n && v.alive) {
+      v.note = notes[j];
+      continue;
+    }
+    if (v.alive && !v.let_go && p.k[3] > 0.98f) v.let_go = 1, v.dec = v.env, v.att = 1.0f;
+    v.key = -1;
+  }
+  for (int j = 0; j < n; ++j) {
+    int have = 0;
+    for (int i = 0; i < kVoices; ++i) have |= p.v[i].key == ids[j];
+    if (have) continue;
+    int best = 0;
+    float bs = 1e9f;
+    for (int i = 0; i < kVoices; ++i) {
+      const PVoice& v = p.v[i];
+      float score = v.alive ? v.env + 1.0f - static_cast<float>(p.clock - v.age) * 1e-6f : 0.0f;
+      if (v.key >= 0) score += 2.0f;
+      if (score < bs) bs = score, best = i;
+    }
+    PVoice& v = p.v[best];
+    p.group &= ~(1 << best);
+    if (!v.alive) {
+      v.ph = 0.5f + 0.5f * bip(p.rnd);
+      v.subn = static_cast<int>(xs(p.rnd) & 3u);
+      v.p1 = v.p2 = v.carry = 0.0f;
+      v.s1 = v.s2 = v.s3 = v.s4 = 0.0f;
+      v.env = 0.0f;
+    }
+    v.note = notes[j];
+    v.slot = 0;
+    v.key = ids[j];
+    v.trig = 1;
+    v.age = ++p.clock;
+  }
+}
+
 }  // extern "C"
 
 namespace {
@@ -249,9 +299,12 @@ namespace {
 // a trig: its notes to voices (the free ones first, then the quietest, the oldest); UNISON: all four on one note
 void take(Poly& p) {
   const float vo = 2.0f * p.k[7] - 1.0f;
-  const int unison = p.n == 1 && vo > 0.02f;
+  const int unison = p.n == 1 && vo > 0.02f, mono = poly_mono(p.k[6]);
   const int want = unison ? kVoices : p.n;
-  int used = 0;
+  int used = 0, last = -1;
+  uint32_t newest = 0;
+  for (int i = 0; i < kVoices; ++i)     // (MODE Mono: the voice the last trig took, again)
+    if (p.v[i].alive && p.v[i].key < 0 && p.v[i].age >= newest) newest = p.v[i].age, last = i;
   ++p.clock;
   for (int j = 0; j < want; ++j) {
     int best = -1;
@@ -260,6 +313,8 @@ void take(Poly& p) {
       if ((used >> i) & 1) continue;
       const PVoice& v = p.v[i];
       float score = v.alive ? v.env + 1.0f - static_cast<float>(p.clock - v.age) * 1e-6f : 0.0f;
+      if (v.alive && v.key >= 0) score += 2.0f;   // (a key held: the last taken)
+      if (mono && !unison && i == last) score = -1.0f;
       if (score < bs) bs = score, best = i;
     }
     used |= 1 << best;
@@ -274,10 +329,12 @@ void take(Poly& p) {
       v.env = 0.0f;
     }
     v.trig = 1;
+    v.key = -1;
     v.age = p.clock;
   }
-  for (int i = 0; i < kVoices; ++i)     // (the last trig's voices not taken again: held, let go; else ringing on)
-    if (p.k[3] > 0.98f && ((p.group >> i) & 1) && !((used >> i) & 1) && p.v[i].alive && !p.v[i].let_go)
+  for (int i = 0; i < kVoices; ++i)     // (the last trig's voices not taken again: held, let go; else ringing on;
+    if ((p.k[3] > 0.98f || mono) && !((used >> i) & 1) && p.v[i].alive && !p.v[i].let_go &&   // Mono: let go)
+        (((p.group >> i) & 1) || (mono && p.v[i].key < 0)))
       p.v[i].let_go = 1, p.v[i].dec = p.v[i].env, p.v[i].att = 1.0f;
   p.group = used;
 }
@@ -412,7 +469,9 @@ void poly_render(int t, float* out, uint32_t n) {
     p.dcx = p.dcy = 0.0f;
     return;
   }
-  const int chord = p.n > 1, unison = !chord && uni > 0.02f;
+  int keys = 0;
+  for (int i = 0; i < kVoices; ++i) keys += p.v[i].alive && p.v[i].key >= 0;
+  const int chord = p.n > 1 || keys > 1, unison = !chord && uni > 0.02f;
   // the voices' level: 0.6 / sqrt(those sounding), glided over ~8 ms (0.16.5: a voice ringing on under the next one,
   // then gone, moved it at once, a click on the one playing); from silence at once
   const float norm = 0.6f / fm_sqrtf(static_cast<float>(active > 1 ? active : 1));
@@ -439,7 +498,7 @@ void poly_render(int t, float* out, uint32_t n) {
     float dkb = dk;                     // (a sub-block's: dk^16)
     for (int q = 0; q < 4; ++q) dkb *= dkb;
     const float ainc = 1.0f / (A * tt * kSr);
-    const int sustain = held && p.gate && !v.let_go && ((p.group >> i) & 1);
+    const int sustain = held && !v.let_go && (v.key >= 0 || (p.gate && ((p.group >> i) & 1)));
     const float kt = (v.note - 60.0f) * (0.7f / 12.0f) + v.tol[1] * 0.25f * vint;   // (the keyboard: 70 %)
     float* y = out;
     for (uint32_t s0 = 0; s0 < n; s0 += kSub) {
@@ -498,17 +557,18 @@ void poly_render(int t, float* out, uint32_t n) {
 }
 
 const char* poly_knob_name(int k) {
-  static const char* const kN[8] = {"Wave", "Cutoff", "Reso", "Decay", "Sub", "Env", "Chord", "Voice"};
+  static const char* const kN[8] = {"Wave", "Cutoff", "Reso", "Decay", "Sub", "Env", "Mode", "Voice"};
   return k >= 0 && k < 8 ? kN[k] : "";
 }
 
-void poly_defaults(float* k) {          // a saw over its sub, a squelch, a voice a trig, a little vintage
-  static const float kD[8] = {0.0f, 0.5f, 0.35f, 0.45f, 0.3f, 0.75f, 0.5f, 0.35f};
+void poly_defaults(float* k) {          // a saw over its sub, a squelch, Poly (a voice a trig), a little vintage
+  static const float kD[8] = {0.0f, 0.5f, 0.35f, 0.45f, 0.3f, 0.75f, 0.75f, 0.35f};
   for (int i = 0; i < 8; ++i) k[i] = kD[i];
 }
 
-int poly_knob_steps(int k) { return k == 6 ? kChords : 128; }
+int poly_knob_steps(int k) { return k == 6 ? 2 : 128; }
 int poly_chord(float u) { return chord_of(u); }
+const char* poly_chord_name(float u) { return kChordName[chord_of(clampf(u, 0.0f, 1.0f)) + kChords / 2]; }
 
 static void put_s(char* b, int n, int* at, const char* s) {
   while (*s && *at < n - 1) b[(*at)++] = *s++;
@@ -580,8 +640,8 @@ MI_COLD void poly_knob_text(int k, float u, char* b, int n) {
       }
       return put_s(b, n, &at, u < 0.625f ? "-1 Oct" : u < 0.875f ? "-2 Oct" : "-2 25%");
     }
-    case 6:
-      return put_s(b, n, &at, kChordName[chord_of(u) + kChords / 2]);
+    case 6:                             // MODE: one voice, or a voice a trig and the keys' chords
+      return put_s(b, n, &at, poly_mono(u) ? "Mono" : "Poly");
     case 5: case 7: {                   // bipolar: ENV (- SWELL, + its depth), VOICE (- VINTAGE, + UNISON)
       float wv = 2.0f * u - 1.0f;
       int x = static_cast<int>(wv * 100.0f + (wv < 0.0f ? -0.5f : 0.5f));
