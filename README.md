@@ -127,8 +127,8 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
 pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
 en quatre gestes, le chemin du son (un schéma), le panneau (chaque numéro allume son repère sur la machine ;
-« Repères » les montre tous), les 25 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
-et ce qu'ils modélisent, les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le circuit bending,
+« Repères » les montre tous), les 23 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
+et ce qu'ils modélisent, leur histoire et des photos d'archives (Wikimedia Commons), les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le circuit bending,
 les effets, le séquenceur, la dose d'aléatoire, les spécifications, et des jauges de la charge du FM-1. « Essayer »,
 sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_try). Pour écouter MIFM1 sur un autre système (une
 voiture, des enceintes de studio) ou montrer la machine sans elle. Les potards se tournent en glissant vers le haut
@@ -161,7 +161,18 @@ troisième, sur la page elle-même, qui ne joue jamais : réglée comme l'exempl
   rapproche ou les écarte), à quel volume, à quelle hauteur (CLIMB).
 
 TAURUS, STATIC, TRAUMA, la dose d'aléatoire et Warps gardent pour l'instant leur écran noir (spectre ou niveau en
-direct, leurs 16 pas dessous) et leurs potards : ils seront dessinés à leur tour. Un seul son à la fois sur la page : un
+direct, leurs 16 pas dessous) et leurs potards : ils seront dessinés à leur tour. Depuis la 0.16.44, trois de plus,
+sur le même écran :
+- **CHOIR** : la soprano seule sur une ligne lente en fa mineur (un pas par croche), chaque note tenue jusqu'à la
+  suivante : elle glisse de l'une à l'autre ; VOICES, VOWEL, TIMBRE, BREATH. Mesuré : ses notes à 5 dB près l'une de
+  l'autre seule, à 2,5 dB en chœur ;
+- **VOCODER** : SPEECH dit ses mots sur T3, muette, le VOCODER de T4 les chante (MOD T3) sur la progression Lament,
+  un accord par mesure, le kick dessous ; TONE, ENSEMBLE, SHIFT, AIR ;
+- **METAL** : les stabs de la démo, ouverts et une octave plus haut, envoyés loin dans la réverbe ; DECAY (jusqu'à
+  Freeze), SIZE, TONE, et MODE pour passer à SHIMMER.
+
+Les histoires des machines récentes (POLY, REV3, TAURUS, VOCODER, CHOIR, STATIC) ont leurs photos d'archives depuis la
+0.16.44, et METAL la sienne : la plaque EMT 140 (1957), puis l'Erbe-Verb de Tom Erbe et Make Noise (2014). Un seul son à la fois sur la page : un
 exemple lancé arrête celui d'avant et met la machine en pause là où elle en est ; toucher la machine, « Essayer » ou
 l'allumer arrête l'exemple et la relance.
 
@@ -1463,6 +1474,8 @@ Sources : [Pretty Hate Machine](https://en.wikipedia.org/wiki/Pretty_Hate_Machin
 [son opcode fof, d'après CHANT](https://csound.com/manual/opcodes/fof/),
 [les articles de CHANT à l'IRCAM](https://support.ircam.fr/docs/om-libraries/om-chant/co/Resources.html),
 [Landon Morrison sur Saariaho et CHANT](https://mtosmt.org/issues/mto.21.27.3/mto.21.27.3.morrison.pdf),
+[l'histoire de l'EMT 140](https://www.uaudio.com/blogs/ua/emt-reverb-history),
+[l'Erbe-Verb retirée](https://synthanatomy.com/2024/05/make-noise-discontinued-erbe-verb.html),
 [le Muziekgebouw sur les sinus et le bruit blanc de Ryoji Ikeda](https://www.muziekgebouw.nl/en/ryoji-ikeda-s-sine-waves-and-white-noise-lz3y),
 [Pan Sonic au CTM](https://archive.ctm-festival.de/index.php?id=3622),
 [MusicTech sur l'ECHON 6](https://musictech.com/reviews/hardware-instruments/morphor-echon-6-review/) ; les autres sur le site.

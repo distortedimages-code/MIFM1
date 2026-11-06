@@ -41,9 +41,11 @@ __attribute__((used, visibility("default"))) void web_try(uint32_t kind, uint32_
  * project an example, made from the demo groove; up to four knobs, each on a parameter of that project (or TRAUMA's,
  * the random dose's), their texts the machine's own ---- */
 enum { LAB_LADDER, LAB_MS20, LAB_SEM, LAB_VOX, LAB_TAURUS, LAB_STATIC, LAB_KICK, LAB_TRAUMA, LAB_DICE, LAB_WARPS,
-       LAB_RATCH, LAB_PLOCK, LAB_EUCLID, LAB_N };   /* (0.16.30: the P-locks' kick, the Euclidean rhythm) */
+       LAB_RATCH, LAB_PLOCK, LAB_EUCLID, LAB_CHOIR, LAB_VOCODER, LAB_METAL, LAB_N };
+       /* (0.16.30: the P-locks' kick, the Euclidean rhythm; 0.16.44: CHOIR, VOCODER, METAL) */
 #define LAB_P_TRAUMA (-1)
 #define LAB_P_DICE (-2)
+#define LAB_P_RVMODE (-3)                /* (0.16.44) the reverb's algorithm: METAL or SHIMMER */
 #define LAB_RATCHES 10
 static int lab_on, lab_n, lab_p[4], lab_direct, lab_lane;   /* (direct: a filter on a saw, the engine idle) */
 static float lab_ph;                     /* (the saw's phase) */
@@ -73,6 +75,11 @@ static void lab_only(project_t *p, int keep, float kick)   /* that track alone, 
     for (int g = 0; g <= ENG_TRACKS; g++)    /* (the LFOs' cables off: the knobs heard as they are) */
         for (int c = 0; c < ENG_CABLES; c++)
             p->cable[g][c].depth = 0;
+}
+static void lab_unduck(project_t *p)    /* (the kick silent: nothing ducked by its trigs) */
+{
+    for (int k = 1; k < 4; k++)
+        p->val[PG_DUCK * 4 + k] = 0.0f;
 }
 static void lab_k(int n, int p0, int p1, int p2, int p3)
 {
@@ -189,6 +196,60 @@ __attribute__((used, visibility("default"))) uint32_t lab_setup(uint32_t id)
         eng_lock_set(0, 12, lab_tp(lab_mparam(0, 2)), lab_value(lab_mparam(0, 2), 0.85f));
         lab_lane = 0;
         lab_k(1, lab_mparam(0, 2), 0, 0, 0);
+    } else if (id == LAB_CHOIR) {        /* (0.16.44) CHOIR on T2 alone, the soprano on a slow line in F minor, a step
+                                          * an eighth (SPEED x1/2), each note held into the next: she glides */
+        static const int8_t N[7][3] = {{0, 0, 2}, {3, 1, 0}, {4, 0, 1}, {6, -4, 1}, {8, -2, 2}, {11, 0, 0}, {12, -7, 3}};
+        eng_set_model(1, eng_model_find(MK_CHOIR, 0));   /* (step, note over C3 in the scale, the steps it ties) */
+        p->algo[PG_FILT(1, 0)] = MF_OFF;
+        lab_only(p, 1, 0.0f);
+        lab_unduck(p);
+        p->val[PG_TRACK(1, 2) * 4 + 1] = 1.0f;   /* (LENGTH: the gate to the next note) */
+        p->val[PG_TRACK(1, 2) * 4 + 3] = 0.0f;   /* (OCTAVE 0: C5 sung on C3) */
+        p->val[eng_track_param(1, TP_SEND)] = 0.35f, p->val[eng_track_param(1, TP_DSEND)] = 0.0f;
+        p->speed[1] = -2;
+        p->rnd[1][TP_RATCHET] = 0;       /* (the groove's bass ratchets now and then: not a held note) */
+        eng_steps_clear(1);
+        for (int i = 0; i < 7; i++) {
+            eng_trig_set(1, N[i][0], 1);
+            eng_lock_set(1, N[i][0], TP_NOTE, (float)N[i][1]);
+            if (N[i][2])
+                eng_step_tie_set(1, N[i][0], N[i][2]);
+        }
+        lab_lane = 1;
+        lab_k(4, lab_mparam(1, 0), lab_mparam(1, 1), lab_mparam(1, 2), lab_mparam(1, 3));
+    } else if (id == LAB_VOCODER) {      /* (0.16.44) T3 SPEECH, its words, silent; T4 the VOCODER (MOD T3) on Lament, a
+                                          * chord a bar; the kick under them */
+        static const float W[8] = {0.1f, 0.6f, 0.35f, 0.85f, 0.2f, 0.7f, 0.45f, 0.95f};   /* (MORPH: its words) */
+        eng_set_model(2, eng_model_find(MK_PLAITS, 15));
+        eng_set_model(3, eng_model_find(MK_VOCODER, 0));
+        p->algo[PG_FILT(2, 0)] = p->algo[PG_FILT(3, 0)] = MF_OFF;
+        lab_only(p, 3, 0.5f);
+        eng_steps_clear(2);
+        p->val[PG_STEP(2) * 4 + 1] = 1.0f;   /* (every word: the groove leaves 10 % of the hats out) */
+        for (int st = 0; st < 16; st += 2) {
+            eng_trig_set(2, st, 1);
+            eng_lock_set(2, st, lab_tp(lab_mparam(2, 2)), W[st / 2]);
+        }
+        p->val[PG_TRACK(3, 0) * 4 + 0] = 9.0f / 27.0f;   /* (PLAY: Lament) */
+        p->val[lab_mparam(3, 0)] = 0.7f;                  /* (MOD: T3) */
+        p->val[PG_TRACK(3, 2) * 4 + 1] = 1.0f;
+        p->val[eng_track_param(3, TP_SEND)] = 0.3f, p->val[eng_track_param(3, TP_DSEND)] = 0.0f;
+        eng_steps_clear(3);
+        eng_trig_set(3, 0, 1);
+        eng_step_tie_set(3, 0, 15);
+        lab_lane = 2;
+        lab_k(4, lab_mparam(3, 1), lab_mparam(3, 2), lab_mparam(3, 6), lab_mparam(3, 7));
+    } else if (id == LAB_METAL) {        /* (0.16.44) the stabs alone into METAL, much of them sent */
+        p->algo[PG_REVERB] = RV_METAL;
+        p->algo[PG_FILT(3, 0)] = MF_OFF;     /* (the stabs open, an octave up: the lines' ring heard) */
+        p->val[PG_TRACK(3, 2) * 4 + 3] = 1.0f;
+        lab_only(p, 3, 0.0f);
+        lab_unduck(p);
+        p->val[PG_REVERB * 4 + 0] = 0.55f, p->val[PG_REVERB * 4 + 1] = 0.6f;   /* (DECAY ~4 s, SIZE) */
+        p->val[PG_REVERB * 4 + 2] = 0.7f, p->val[PG_REVERB * 4 + 3] = 1.0f;    /* (TONE toward the metal, RETURN) */
+        p->val[eng_track_param(3, TP_SEND)] = 0.85f, p->val[eng_track_param(3, TP_DSEND)] = 0.0f;
+        lab_lane = 3;
+        lab_k(4, PG_REVERB * 4 + 0, PG_REVERB * 4 + 1, PG_REVERB * 4 + 2, LAB_P_RVMODE);
     } else if (id == LAB_EUCLID) {       /* (0.16.30) a percussion alone, its Euclidean rhythm (5 over 16) */
         eng_set_model(0, eng_model_find(MK_DRUM, 5));
         p->algo[PG_FILT(0, 0)] = MF_OFF;
@@ -226,6 +287,8 @@ static float lab_travel(int param)       /* where a knob is now, 0..1 */
         return p->trauma / 100.0f;
     if (param == LAB_P_DICE)
         return p->dice / 100.0f;
+    if (param == LAB_P_RVMODE)
+        return p->algo[PG_REVERB] == RV_SHIMMER ? 1.0f : 0.0f;
     const eng_pdef_t *d = eng_pdef(param);
     float v = p->val[param];
     if (param == PG_STEP(2) * 4 + 2) {
@@ -246,7 +309,8 @@ __attribute__((used, visibility("default"))) uint32_t lab_name(uint32_t i)
     if (i >= (uint32_t)lab_n)
         return 0;
     const int param = lab_p[i];
-    const char *s = param == LAB_P_TRAUMA ? "Trauma" : param == LAB_P_DICE ? "Dose" : eng_param_name(param);
+    const char *s = param == LAB_P_TRAUMA ? "Trauma" : param == LAB_P_DICE ? "Dose" : param == LAB_P_RVMODE ? "Mode"
+                                                                                       : eng_param_name(param);
     int k = 0;
     while (s[k] && k < (int)sizeof lab_txt - 1)
         lab_txt[k] = s[k], k++;
@@ -264,7 +328,15 @@ __attribute__((used, visibility("default"))) uint32_t lab_set(uint32_t i, float 
     project_t *p = eng_project();
     const int param = lab_p[i];
     u = u < 0.0f ? 0.0f : u > 1.0f ? 1.0f : u;
-    if (param == LAB_P_TRAUMA || param == LAB_P_DICE) {
+    if (param == LAB_P_RVMODE) {         /* (METAL or SHIMMER: the same lines, the octave fed back or not) */
+        const int sh = u >= 0.5f;
+        p->algo[PG_REVERB] = (uint8_t)(sh ? RV_SHIMMER : RV_METAL);
+        const char *t = sh ? "Shimmer" : "Metal";
+        int k = 0;
+        while (t[k])
+            lab_txt[k] = t[k], k++;
+        lab_txt[k] = 0;
+    } else if (param == LAB_P_TRAUMA || param == LAB_P_DICE) {
         const int pc = (int)(u * 100.0f + 0.5f);
         if (param == LAB_P_TRAUMA) {
             p->trauma = (uint8_t)pc;
