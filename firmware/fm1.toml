@@ -59,7 +59,8 @@ ble = false                    # no radio: its RAM goes to the modules
 usb_audio_in = true            # the FM-1 recordable over the cable: a USB sound card (class compliant, no driver),
                                # 2 inputs, 16-bit at 44.1 kHz: the master mix, MASTER aside (0.16.33; before, 10:
                                # the tracks apart, set aside: app.h, patches/fm1-base-usb-multi.patch); 0.16.34 the
-                               # app's frames, without the metronome, 3 dB under full scale (app.h FM1B_UAC_APP)
+                               # app's frames, without the metronome, 3 dB under full scale (app.h FM1B_UAC_APP);
+                               # 0.16.35 at 44.1 or 48 kHz, the host's choice (app.h FM1B_UAC_48K, usb48.h)
 usb_audio_out = false          # (a computer playing through it: not asked for, and not made the default output)
 cpu2 = true                    # the second core: tracks 3 and 4
 cpu2_fallback = true           # a failure of it: one core until power-off, not a restart

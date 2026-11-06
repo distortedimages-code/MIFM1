@@ -25,6 +25,9 @@ void app_splash(void);
  * 2: 4 KB) in RAM, not the pool */
 #define FM1B_UAC_APP 1
 #define APP_USB_GAIN 0.7079458f            /* -3 dB */
+/* (0.16.35) 44.1 or 48 kHz, the host's choice (it asks, SET_CUR; 44.1 until it does): at 48 the app's resampler
+ * (usb48.h; the patch's FELUCCA_UAC_SOURCE48), packets of 48 frames (+-1: 196 bytes at most) */
+#define FM1B_UAC_48K 1
 /* the browser emulator (tools/build.py --web, tools/web/README.md): the second core is the engine's own simulation
  * there, on the FM-1's modelled clock (mi/engine.cc PLAT_WEB, mi/web_costs.h) */
 #ifdef PLAT_WEB

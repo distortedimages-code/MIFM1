@@ -52,6 +52,7 @@
  * The modules' biggest tables are in the resource region (app.h), which the installer writes after the firmware:
  * until it holds this build's, the engine does not run (it would read erased flash) and the screen says so. */
 #include "fastmath.h"
+#include "usb48.h"                       /* (0.16.35) the USB audio input at 48 kHz */
 #include "mi/engine.h"
 /* (0.16.31) the screens seen less often drawn small rather than fast (their pixels are gfx.c's, as fast as ever): the
  * machine's, the matrix, the panels of the bits, the glitch, the filter, the envelopes, the LFOs, the mixer, Warps,
@@ -798,18 +799,31 @@ void app_backup_restored(void)
 
 /* ---------------------------------------------------------------- audio --- */
 static float eng_l[APP_BLOCK], eng_r[APP_BLOCK];
-/* (0.16.34) the USB audio input's frames (app.h FM1B_UAC_APP): the last render's mix without the metronome, APP_USB_GAIN
- * under full scale, 16-bit, rounded; uac_tap takes them right after app_render, block for block */
-static int16_t usb_lr[2 * APP_BLOCK] __attribute__((aligned(4)));
-const int16_t *app_uac_frames(uint32_t n)
-{
-    (void)n;
-    return usb_lr;
-}
-static int16_t usb16(float x)
+/* (0.16.34) the USB audio input's frames (app.h FM1B_UAC_APP): the last render's mix without the metronome (usb_l,
+ * usb_r), APP_USB_GAIN under full scale, 16-bit, rounded; uac_tap takes them right after app_render, block for block:
+ * at 44.1 kHz as they are, (0.16.35) at 48 kHz through usb48.h's resampler, the host's choice */
+static float usb_l[APP_BLOCK], usb_r[APP_BLOCK];
+static int16_t usb16[2 * R48_MAX(APP_BLOCK)] __attribute__((aligned(4)));
+static r48_t usb_rs;
+static int16_t to16(float x)
 {
     x = fm_clampf(x * (APP_USB_GAIN * 32767.0f), -32767.0f, 32767.0f);
     return (int16_t)(x + (x < 0.0f ? -0.5f : 0.5f));
+}
+const int16_t *app_uac_frames(uint32_t n)
+{
+    if (n > APP_BLOCK)
+        n = APP_BLOCK;
+    for (uint32_t i = 0; i < n; i++) {
+        usb16[2 * i] = to16(usb_l[i]);
+        usb16[2 * i + 1] = to16(usb_r[i]);
+    }
+    return usb16;
+}
+const int16_t *app_uac_frames48(uint32_t n, uint32_t *m)
+{
+    *m = r48_run(&usb_rs, usb_l, usb_r, n > APP_BLOCK ? APP_BLOCK : n, usb16, APP_USB_GAIN * 32767.0f);
+    return usb16;
 }
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
@@ -820,7 +834,9 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         n = APP_BLOCK;
     if (halted || !data_ok || !engine_ok) {
         for (i = 0; i < 2u * n; i++)
-            lr[i] = 0, usb_lr[i] = 0;
+            lr[i] = 0;
+        for (i = 0; i < n; i++)
+            usb_l[i] = usb_r[i] = 0.0f;
         return;
     }
     eng_render(eng_l, eng_r, n);
@@ -828,8 +844,8 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         const float *ck = eng_click_out();
         for (i = 0; i < n; i++) {
             float c = ck ? ck[i] : 0.0f;
-            usb_lr[2 * i] = usb16(eng_l[i] - c);
-            usb_lr[2 * i + 1] = usb16(eng_r[i] - c);
+            usb_l[i] = eng_l[i] - c;
+            usb_r[i] = eng_r[i] - c;
         }
     }
     for (i = 0; i < n; i++) {
@@ -847,6 +863,7 @@ void app_init(void)
 {
     cpu2_ok = plat_cpu2_set(1) == 0;     /* the one time it may start: here, at power-on */
     plat_usb_audio_full(1);              /* (0.16.33) the USB recording at full level, MASTER the headphones' only */
+    r48_init(&usb_rs);                   /* (0.16.35) the USB at 48 kHz: its filter */
     data_ok = data_check();
     project_load();
     pattern_boot();
@@ -3272,12 +3289,25 @@ APP_SMALL static void draw_machine(int force)      /* the machine, where the kno
             l = "Colours (K4)";
             text_cat(v, th->name, sizeof v);
             break;
-        default:
+        default: {
+            uint32_t u[2];               /* (0.16.35) the USB recording, while a host takes it: its rate, what it lost */
+            plat_usb_audio_info(u);
             l = dirty ? "MIFM1 " APP_VERSION ", not saved" : "MIFM1 " APP_VERSION;
-            text_cat(v, data_ok ? "tables OK" : "tables MISSING", sizeof v);
-            if (!data_ok)
-                c = AC3;
+            if (data_ok && u[0]) {
+                char n[12];
+                text_cat(v, u[0] == 48000u ? "USB 48k, " : "USB 44.1k, ", sizeof v);
+                int_text((int32_t)(u[1] > 99999u ? 99999u : u[1]), n);
+                text_cat(v, n, sizeof v);
+                text_cat(v, " lost", sizeof v);
+                if (u[1])
+                    c = AC3;
+            } else {
+                text_cat(v, data_ok ? "tables OK" : "tables MISSING", sizeof v);
+                if (!data_ok)
+                    c = AC3;
+            }
             break;
+        }
         }
         cv_text(10, y, &FONT_XS, l, MUTED);
         int32_t x = 230 - text_w(&FONT_XS, v);
@@ -6199,6 +6229,10 @@ void app_frame(void)
     }
     input();
     chain_service();
+    {
+        uint32_t u[2];                   /* (0.16.35) read each frame: a new stream's count starts from 0 */
+        plat_usb_audio_info(u);
+    }
     if (ui.msg_until && now >= ui.msg_until) {
         ui.msg_until = 0;
         ui.foot_shown[0] = -1;

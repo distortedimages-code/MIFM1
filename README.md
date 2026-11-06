@@ -188,7 +188,8 @@ tools/web/calibrate.py` recompte et réécrit la table.
 ## Enregistrer (USB)
 
 Branché en USB, le FM-1 est aussi une **carte son** (class compliant : aucun pilote, sur Mac, Windows, Linux, iPad,
-iPhone en USB-C), nommée « MIFM1 FM-1 » : **2 entrées, le mix master en stéréo**, 16 bits à 44,1 kHz, ce qu'on entend
+iPhone en USB-C), nommée « MIFM1 FM-1 » : **2 entrées, le mix master en stéréo**, 16 bits à **44,1 ou 48 kHz** (au
+choix de l'enregistreur), ce qu'on entend
 au casque (le bus master compris : compresseur ou OTT, limiteur), **sauf le métronome**, qui ne bat que dans le casque
 et le haut-parleur. MASTER ne règle que le haut-parleur et le casque : l'enregistrement garde son niveau (on peut couper
 le FM-1 et écouter par l'enregistreur). Sur un iPhone, l'appareil photo l'enregistre avec la vidéo ; dans un DAW, une
@@ -219,7 +220,17 @@ donne : ce qui en sort est ramené à ce qui y entre (suivi sur ~50 ms pour les 
 deux pistes ensemble), jamais plus de 3 dB (les bits) ou 6 dB (Warps) au-dessus ; un masque ou peu de bits sur un son
 faible le faisaient monter jusqu'à 13 dB, et Warps jusqu'à 20 dB au-dessus d'une piste douce.
 
-Projet en 44,1 kHz (le FM-1 ne propose que ce taux ; un enregistreur à 48 kHz, l'iPhone, convertit lui-même). Sur
+**44,1 ou 48 kHz** (0.16.35) : l'enregistreur choisit (un DAW selon son projet ; ce qu'il a pris, la page machine le dit, plus bas). À 48 kHz,
+le FM-1 convertit lui-même ce qu'il calcule à 44,1 (`firmware/usb48.h` : un filtre polyphase de 24 coefficients par
+phase, plat jusqu'à 19 kHz, −0,5 dB à 20 ; ce qui en revient replié dans la bande à −83 dB au moins ; `make usb48`),
+~2,5 % d'un cœur, seulement quand on enregistre à 48. Avant, il ne proposait que 44,1 et l'enregistreur convertissait.
+
+**Ce que l'enregistrement perd** : la dernière ligne de la page machine (GLO, SELECT) dit, tant qu'un enregistreur lit
+l'USB, son taux et les trous depuis le début de la prise (« USB 48k, 0 lost » ; en rouge dès qu'il y en a un) : un
+paquet que l'enregistreur n'a pas trouvé, une réserve vide ou pleine, l'enregistreur parti plus de 20 ms ; chacun
+s'entend comme un clic. Un clic dans la vidéo avec « 0 lost » vient donc de l'enregistreur, pas du câble.
+
+Sur
 Windows, les DAW en ASIO passent par FlexASIO ou ASIO4ALL (ou leur mode WASAPI). Le sens inverse (l'ordinateur qui joue
 dans le FM-1) n'est pas activé.
 
