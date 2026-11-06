@@ -189,7 +189,9 @@ celui qu'on lit marqué, et le lien vers Audiotrauma. Les machines, les filtres 
 une slide par machine (ou par groupe : les six batteries, les deux batteries FM, les bruits et modèles physiques), avec
 tout ce qui la concerne, sa fiche, son exemple, son histoire et ses photos ; on passe de l'une à l'autre par ses
 onglets, les flèches, un glissement du doigt ou les flèches du clavier. Le carrousel prend la hauteur de la slide
-montrée.
+montrée. En 0.16.47, tous les textes de la page sont réécrits, en anglais et en français : un ton plus scientifique et
+plus curieux, des anecdotes vérifiées (Émilie Gillet et ses mots dans le manuel de Plaits, la découverte de la FM par
+Chowning, le brevet de Moog…), TRAUMA laissé dans un peu de mystère.
 
 **La charge affichée est celle du FM-1, estimée.** Un navigateur ne peut pas mesurer le temps que le FM-1 mettrait (son
 horloge avance d'un bloc à la fois, et sa vitesse n'est pas celle du FM-1) : dans cette version, l'horloge du moteur
