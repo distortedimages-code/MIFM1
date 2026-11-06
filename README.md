@@ -803,15 +803,16 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **SELECT** | les pages de ce qu'on regarde (les deux du son de la piste, les deux de son filtre, les faces d'un effet…), en glissant |
 | **ALGORITHM** | le type de ce qu'on a devant soi, là où il y a un choix (le A cerclé en haut) : sur le son de la piste, son modèle (les 20 : les batteries, les batteries FM, ZERO et la FM, Plaits) ; sur son filtre, le modèle de filtre (OFF, LADDER, MS-20, SEM, VOX) ; sur Warps, d'un repère d'ALGO au suivant ; sur le delay, SYNC (vers la gauche) ou FREE (vers la droite) |
 | **PRESETS** | la piste active, de 1 à 4 (les presets eux-mêmes : EDIT tenu) |
-| **EDIT** | **tapé** : les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son ; **tenu : les presets** de la piste (touches noires : la banque, A celle d'usine ; blanches : le son, posé sur la piste et joué ; SAVE tenu : l'y garde ; REC tenu : l'efface) |
+| **EDIT** | **tapé** : les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son ; **tenu : les presets** de la piste (touches noires : la banque, A celle d'usine ; blanches : le son, posé sur la piste et joué ; SAVE tenu : l'y garde ; REC tenu : l'efface) ; **tenu + SELECT** (0.16.39) : **le niveau de la piste active** (« T1 LEVEL 85 » ; MASTER, lui, est le volume de sortie) |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
 | **SEQ** | tapé : les pas de la piste (NOTE, PROB, SPEED, LENGTH ; puis RATCHETS : RATCH, SPAN, CURVE, DIR ; puis CLIMB : CLIMB, NOTES, ON, SHAPE ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns** (touches noires : la banque, blanches : le pattern, plusieurs : un enchaînement ; REC tenu : efface) |
 | **ARP** | Endless, celui de la piste (voir plus bas) ; à nouveau : ses options (STRIDE, REST, HOLES, LEAP) |
 | **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leur SPREAD, leurs filtres (EQ), le DUCK, puis le bus master (COMP, OTT) ; ALGORITHM sur COMP ou OTT : le mode du bus (OFF, COMP, OTT) |
-| **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps ; SELECT parcourt leurs faces (leurs potards, les envois des pistes, leurs pas) |
+| **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps, chacun sur sa première face, **les envois des pistes** (0.16.39 ; avant, ses potards) ; SELECT parcourt leurs faces (les envois, leurs potards, leurs pas). Revenu d'ailleurs, FX retrouve la face où l'on était |
 | **ENV** | tout ce qui est enveloppe sur la piste active : l'enveloppe de Plaits (DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV) ; ENV encore (ou SELECT) : P.ENV et l'enveloppe du filtre (F.ATK, F.DECAY, PING) |
 | **PLAY** | le séquenceur tourne ou s'arrête ; **deux fois de suite** (STOP STOP, en moins de 0,4 s) : arrêté, et tout le son coupé, les queues du delay et de la réverbe comprises |
 | **REC tenu + PLAY** | (0.16.31) **l'enregistrement en direct** de la piste active, ou son arrêt (voir plus bas) |
+| **REC tenu + OCT± (en direct)** | (0.16.39) la longueur de la piste enregistrée, une mesure de plus ou de moins (1 à 4) |
 | **GLO tenu + PLAY** | (0.16.31) le **métronome** de l'enregistrement en direct, allumé ou éteint (allumé au démarrage) |
 | **REC** | **KEY** ↔ **STEP** (voir plus bas) ; sur la page d'Endless, l'enregistrement ; pendant l'enregistrement en direct, son arrêt (les pas continuent) |
 | **clavier** | en KEY, joue la piste active, même à l'arrêt, avec sa TRANSP et son OCTAVE ; **OCT− / OCT+** pour l'octave du clavier (en STEP : la page de pas) ; en MOD, les trois premières touches blanches sont les LFO |
@@ -907,7 +908,11 @@ l'arrêt, le **métronome compte une mesure** avant le premier pas : un ping à 
 le premier de la mesure, ~25 ms, au casque et au haut-parleur seulement (ni dans les effets ni sur l'USB, qui enregistre le mix sans lui) ; il bat ensuite tant qu'on enregistre.
 **GLO tenu + PLAY** l'allume ou l'éteint (éteint : l'enregistrement part tout de suite). Le pas d'arrivée suit la
 SPEED de la piste ; dans une autre DIRECTION qu'en avant, une note va toujours au pas qui joue. Une piste en Endless ou
-en ARP joue les touches à sa manière : rien ne s'écrit sur ses pas.
+en ARP joue les touches à sa manière : rien ne s'écrit sur ses pas. Depuis 0.16.39, **en bas de l'écran, les pas de la
+piste** qu'on enregistre (ses trigs, ses notes longues, le pas qui joue), la page de 16 pas qui joue ; et **REC tenu +
+OCT+ / OCT−** change sa longueur d'une mesure (16 pas ; de 1 à 4 mesures, « T1 LENGTH 2 BARS » ; une longueur entre deux
+mesures va d'abord à la mesure où elle est). Chaque piste garde la sienne : un kick sur une mesure, des nappes sur
+quatre. On relâche REC : l'enregistrement continue.
 
 Les pages d'une section se suivent sous SELECT (ou en retapant son bouton) ; depuis 0.16.6, une barre sous l'en-tête
 les montre, une part par page, celle qu'on regarde allumée.

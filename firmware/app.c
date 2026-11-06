@@ -393,13 +393,13 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
     case PT_DELAY1: case PT_DELAY2: case PT_DSEND: case PT_LANE: case PT_REVERB: case PT_RSEND:
     case PT_WARPS1: case PT_WARPS2: {    /* an effect: its knobs, the tracks' sends, its steps */
         int l = eng_page_lane(page);
-        if (l == LANE_DELAY) {
-            f[0] = PG_DELAY(0), f[1] = PG_DELAY(1), f[2] = PG_DSEND, f[3] = PG_STEP(LANE_DELAY);
+        if (l == LANE_DELAY) {           /* (0.16.39: the tracks' sends first, then the effect's knobs) */
+            f[0] = PG_DSEND, f[1] = PG_DELAY(0), f[2] = PG_DELAY(1), f[3] = PG_STEP(LANE_DELAY);
             f[4] = PG_EUC(LANE_DELAY), f[5] = VP_PLAY(LANE_DELAY);
             return 6;
         }
         if (l == LANE_REVERB) {
-            f[0] = PG_REVERB, f[1] = PG_RSEND, f[2] = PG_STEP(LANE_REVERB), f[3] = PG_EUC(LANE_REVERB);
+            f[0] = PG_RSEND, f[1] = PG_REVERB, f[2] = PG_STEP(LANE_REVERB), f[3] = PG_EUC(LANE_REVERB);
             f[4] = VP_PLAY(LANE_REVERB);
             return 5;
         }
@@ -871,7 +871,7 @@ void app_init(void)
     engine_ok = data_ok && eng_init() == 0;   /* (not before the tables: the modules' set-up may read them) */
     ui.track = ui.lane = 0;
     ui.page = ui.prev_page = PG_TRACK(0, 0);
-    ui.fx_page = PG_DELAY(0);
+    ui.fx_page = PG_DSEND;
     ui.touched_k = -1;
     ui.held_step = ui.erec = -1;
 }
@@ -3345,6 +3345,8 @@ static int foot_lane(void)               /* the lane whose steps the row shows, 
     int pt = ptype(ui.page);
     if (ui.grid)
         return ui.lane;
+    if (ui.lrec)                         /* (0.16.39) live recording: the track's steps, what is written */
+        return ui.track;
     if (pt == PT_PLAY || pt == PT_CLIMB)
         return plane(ui.page);
     if (pt == PT_STEP || pt == PT_RND || pt == PT_EUC)
@@ -5144,10 +5146,11 @@ static void module_button(int b)
         go_page(here && (pt == PT_MIX || pt == PT_PAN || pt == PT_SPREAD || pt == PT_EQ || pt == PT_DUCK ||
                          pt == PT_COMP || pt == PT_OTT) ? next : PG_MIX);
         break;
-    case B_FX: {                         /* the effect shown last; on an effect: the next one (delay, reverb, Warps) */
+    case B_FX: {                         /* the effect shown last; on an effect: the next one (delay, reverb, Warps),
+                                          * (0.16.39) at its first face, the tracks' sends */
         int l = plane(ui.page);
         if (here && l >= ENG_TRACKS)
-            go_page(l == LANE_DELAY ? PG_REVERB : l == LANE_REVERB ? PG_WARPS(0) : PG_DELAY(0));
+            go_page(l == LANE_DELAY ? PG_RSEND : l == LANE_REVERB ? PG_WARPS(0) : PG_DSEND);
         else
             go_page(ui.fx_page);
         break;
@@ -5158,6 +5161,7 @@ static void module_button(int b)
 }
 
 static void lrec_set(int on);
+static void lrec_bars(int d);
 static void button_down(int b)
 {
     ui.used[b] = 0;
@@ -5190,6 +5194,14 @@ static void button_down(int b)
         break;
     case B_OCTDN: case B_OCTUP:          /* the keyboard's octave; STEP mode: the steps' page. Both held: SELECT turns
                                           * the random dose (the first one's octave put back) */
+        if (ui.lrec && held(B_REC)) {    /* (0.16.39) live recording, REC held: the track's length, a bar (16 steps)
+                                          * more or less, 1 to 4 (REC's release then taken: the recording goes on) */
+            lrec_bars(b == B_OCTUP ? 1 : -1);
+            ui.lr_combo = 1;
+            ui.long_done[B_REC] = 1;
+            ui.used[b] = 1;
+            break;
+        }
         if (held(b == B_OCTUP ? B_OCTDN : B_OCTUP)) {
             if (!ui.dice && !ui.trauma) {
                 ui.octave = ui.oct_was;
@@ -5834,6 +5846,30 @@ static void lrec_set(int on)
     }
     app_say("LIVE REC", m);
 }
+/* (0.16.39) live recording, REC held, OCT+ or OCT-: the recorded track's length to the next whole bar up or down (16
+ * steps a bar, 1 to 4; a length between bars goes to the bar it is in first) */
+static void lrec_bars(int d)
+{
+    project_t *p = eng_project();
+    int t = ui.track, len = lane_len(t), n;
+    char m[16], v[8];
+    if (d > 0)
+        n = len / 16 * 16 + 16;
+    else
+        n = len > 16 ? (len - 1) / 16 * 16 : len;
+    n = clamp(n, 1, ENG_STEPS);
+    p->val[PG_STEP(t) * 4 + 3] = (float)n;
+    dirty = 1;
+    m[0] = 0;
+    int_text(n % 16 ? n : n / 16, v);
+    text_cat(m, v, sizeof m);
+    text_cat(m, n % 16 ? " STEPS" : n == 16 ? " BAR" : " BARS", sizeof m);
+    {
+        static const char *const LN[4] = {"T1 LENGTH", "T2 LENGTH", "T3 LENGTH", "T4 LENGTH"};
+        app_say(LN[t & 3], m);
+    }
+}
+
 static void lrec_key(int k, int note, int down)
 {
     int t = down ? ui.track : ui.lr_trk[k] - 1, len, s, nt[4], n;
@@ -5984,6 +6020,19 @@ static void input(void)
     e = plat_enc(EN_SELECT);
     if (e && held(B_EDIT))
         pre_used = 1;
+    if (e && held(B_EDIT) && data_ok) {  /* (0.16.39) EDIT held, SELECT turned: the active track's level (MASTER is
+                                          * the volume itself: turned, it would move the output too) */
+        static const char *const LV[4] = {"T1 LEVEL", "T2 LEVEL", "T3 LEVEL", "T4 LEVEL"};
+        char v[12];
+        int param = PG_MIX * 4 + ui.track;
+        edit_param(param, e);
+        eng_param_text(param, eng_project()->val[param], v, sizeof v);
+        ui.long_done[B_EDIT] = 1;        /* (the presets' screen not opened by this hold; open: closed) */
+        if (pre_open)
+            pre_open = 0, ui.full = 1;
+        app_say(LV[ui.track & 3], v);
+        e = 0;
+    }
     if (e && !ui.dice && held(B_OCTDN)) {   /* OCT- held, SELECT turned: the random dose's screen (the octave, or
                                           * the steps' page, OCT- moved put back) */
         ui.octave = ui.oct_was;
@@ -6224,7 +6273,7 @@ void app_host_reboot(void)
     ui.touched_k = -1;
     ui.held_step = ui.erec = -1;
     ui.prev_page = PG_TRACK(0, 0);
-    ui.fx_page = PG_DELAY(0);
+    ui.fx_page = PG_DSEND;
     halted = save_hold = dirty = 0;
     eng_play(0);
 }
@@ -6245,6 +6294,11 @@ void app_frame(void)
     }
     input();
     chain_service();
+    if (ui.lrec) {                       /* (0.16.39) live recording: the steps' page shown, the one playing */
+        int s = eng_step_now(ui.track);
+        if (s >= 0)
+            ui.spage = s / 16;
+    }
     {
         uint32_t u[2];                   /* (0.16.35) read each frame: a new stream's count starts from 0 */
         plat_usb_audio_info(u);
