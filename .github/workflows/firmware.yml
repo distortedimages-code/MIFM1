@@ -36,7 +36,7 @@ jobs:
           git diff --exit-code -- firmware/ || { echo "::error title=tables::run tools/patch_mi.sh and commit"; exit 1; }
       - name: MIFM1's changes to fm1-base (patches/)
         run: sh tools/patch_base.sh
-      - name: The engine on a computer (the default patch plays, every track and model sounds; the region's file is the arrays' bytes; the USB input's 10 channels)
+      - name: The engine on a computer (the default patch plays, every track and model sounds; the region's file is the arrays' bytes; the USB input in stereo, and its 10 channels set aside)
         run: make test
       - name: The FM-1's constraints (no libm, no C++ library, no double; the moved tables at the region's addresses)
         shell: bash                # (pipefail: the check's failure, not tail's success)

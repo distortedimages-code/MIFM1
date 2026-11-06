@@ -194,7 +194,7 @@ au casque (le bus master compris : compresseur ou OTT, limiteur ; le métronome 
 Sur un iPhone, l'appareil photo l'enregistre avec la vidéo ; dans un DAW, une piste stéréo, le MIDI par le même câble.
 
 **Depuis 0.16.33.** Avant, l'USB envoyait les quatre pistes séparées et le retour des effets (10 entrées), sans le bus
-master : un iPhone n'en prenait que les deux premières, la piste 1 seule. Les pistes séparées sont mises de côté pour
+master : un enregistreur stéréo (l'appareil photo d'un iPhone) n'en prend d'ordinaire que les deux premières, la piste 1. Les pistes séparées sont mises de côté pour
 l'instant (leur code reste, une option à la compilation : `ENG_USB_TRACKS`, `FM1B_UAC_CH`). Et le FM-1 garde maintenant
 **deux blocs d'avance** sur l'USB au lieu d'un (~8 ms de latence) : un bloc rendu en retard (un pic de calcul) ne
 s'entend plus dans l'enregistrement, quand il y laissait des échantillons répétés, un craquement (`make uac-stereo`, sur
