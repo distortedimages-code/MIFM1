@@ -76,48 +76,6 @@ static void old_locks(plock_t* o, const plock_t* q, int n = OLD_LOCKS) {
   for (int i = 0; i < n; ++i) o[i] = i < ENG_PLOCKS ? q[i] : plock_t{0xFF, 0, 0, 0};
 }
 
-// a project of now, written as 0.7 to 0.15 kept theirs (versions 15 to 23: 41 parameters a lane, no SPEED, DIRECTION or
-// CURVE, 3776 bytes), its version as the test set it: what eng_upgrade reads from an older FM-1 or a backup
-struct V23 {
-  uint32_t magic;
-  uint16_t version, size;
-  float val[OLD_PAGES * 4];
-  uint8_t algo[OLD_PAGES];
-  uint8_t out_mode, warps_hq, theme, dice, dice_seed;
-  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
-  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
-  int8_t rnd[ENG_LANES][41];
-  uint16_t seed[ENG_LANES];
-  plock_t lock[OLD_LOCKS];
-  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
-  uint8_t endless_len[ENG_TRACKS];
-  int8_t endless_key[ENG_TRACKS];
-  uint8_t rseed[ENG_LANES][41];
-  uint8_t trauma;
-};
-static_assert(sizeof(V23) == PROJECT_SIZE_22, "0.15's layout");
-static project_t* as_v23(project_t* q) {
-  static V23 o;
-  memset(&o, 0, sizeof o);
-  o.magic = q->magic, o.version = q->version, o.size = PROJECT_SIZE_22;
-  memcpy(o.val, q->val, sizeof o.val);
-  memcpy(o.algo, q->algo, sizeof o.algo);
-  o.out_mode = q->out_mode, o.warps_hq = q->warps_hq, o.theme = q->theme, o.dice = q->dice, o.dice_seed = q->dice_seed;
-  memcpy(o.cable, q->cable, sizeof o.cable);
-  memcpy(o.trig, q->trig, sizeof o.trig);
-  for (int l = 0; l < ENG_LANES; ++l)
-    for (int i = 0; i < 41; ++i) o.rnd[l][i] = q->rnd[l][i], o.rseed[l][i] = q->rseed[l][i];
-  memcpy(o.seed, q->seed, sizeof o.seed);
-  old_locks(o.lock, q->lock);
-  memcpy(o.endless, q->endless, sizeof o.endless);
-  memcpy(o.endless_len, q->endless_len, sizeof o.endless_len);
-  memcpy(o.endless_key, q->endless_key, sizeof o.endless_key);
-  o.trauma = q->trauma;
-  memset(q, 0xA5, sizeof *q);
-  memcpy(q, &o, sizeof o);
-  return q;
-}
-
 // a project of now, written as 0.16.0 to 0.16.6 kept theirs (versions 24 to 26: 42 parameters a lane, 384 locks, no
 // CLIMB; 3820 bytes, 0.16.0's 3804 without Endless' options), its version as the test set it
 struct V26 {
@@ -719,32 +677,23 @@ int main(int argc, char** argv) {
     printf("; its time %.1f us a block, 6x %.1f\n", us[1] / 6, us[0] / 6);
   }
 
-  // 13. 0.1.9's project (version 4, 2644 bytes) read into this version's: all of it, Warps off
+  // 13. (0.16.32) the projects before 0.16 (versions 4 to 23: 0.1.4's to 0.15's) are no longer read, a pattern of
+  // theirs neither: refused, the buffer as it was (a project of 0.16.0, version 24, still read: below)
   {
+    static const uint16_t kOld[][2] = {{4, 2644}, {5, 2680}, {6, 2804}, {7, 2864}, {8, 2888}, {9, 2964}, {10, 3104},
+                                       {11, 3104}, {12, 3204}, {13, 3488}, {14, 3652}, {15, 3776}, {19, 3776}, {23, 3776}};
     static uint8_t buf[sizeof(project_t)];
     project_t* q = reinterpret_cast<project_t*>(buf);
-    for (uint32_t i = 0; i < sizeof buf; ++i) buf[i] = 0;
-    q->magic = PROJECT_MAGIC;
-    q->version = 4;
-    q->size = 2644;
-    float* val = reinterpret_cast<float*>(buf + 8);
-    for (int i = 0; i < 132; ++i) val[i] = 0.25f;
-    buf[8 + 528 + PG_TRACK(1, 0)] = 17;                   // track 2 on NOISE, track 1 on STRING (the others on VA VCF:
-    buf[8 + 528 + PG_TRACK(0, 0)] = 19;                   // gone: the FM, its second algorithm)
-    buf[8 + 528 + 33] = 2;                                // the output: mono
-    cable_t* cab = reinterpret_cast<cable_t*>(buf + 572);
-    cab[0].src = 2;                                       // (Tides A2 then: LFO 2 now)
-    cab[0].dst = 3;
-    cab[0].depth = 33;
-    buf[2380 + 0] = 60;                                   // Endless, track 1: three notes
-    buf[2636 + 0] = 3;
-    int ok = eng_upgrade(q, 2644);
-    printf("a version 4 project: %s, track 2 model %d, output %d, a cable %s, knob %.2f, Endless %d notes, warps %s\n",
-           ok ? "read" : "REFUSED", q->algo[PG_TRACK(1, 0)], q->out_mode, q->cable[0][0].depth == 33 ? "kept" : "LOST",
-           q->val[5], q->endless_len[0], q->val[PG_WARPS(0) * 4] == WC_OFF ? "off" : "ON");
-    if (!ok || !eng_check(q) || q->algo[PG_TRACK(1, 0)] != eng_model_find(MK_PLAITS, 17) || q->out_mode != 2 || q->cable[0][0].depth != 33 ||
-        q->val[5] != 0.25f || q->endless_len[0] != 3 || q->endless[0][0] != 60 || q->val[PG_WARPS(0) * 4] != WC_OFF)
-      ++failures, printf("FAIL: the version 4 project\n");
+    int read = 0;
+    for (const auto& o : kOld) {
+      for (uint32_t i = 0; i < sizeof buf; ++i) buf[i] = 0;
+      q->magic = PROJECT_MAGIC;
+      q->version = o[0];
+      q->size = o[1];
+      read += eng_upgrade(q, o[1]) != 0 || q->version != o[0];
+    }
+    printf("the projects before 0.16 (versions 4 to 23): %s\n", read ? "READ" : "refused");
+    if (read) ++failures, printf("FAIL: a project before 0.16 read\n");
   }
 
   // 15. clearing a track's pattern: its trigs and locks gone, the other tracks' kept
@@ -802,56 +751,6 @@ int main(int argc, char** argv) {
     if (eng_upgrade(q, 564)) ++failures, printf("FAIL: a version 2 project read\n");
   }
 
-  // 17. 0.2's project (version 5, 2680 bytes): Marbles' RATE the tempo, the pages moved (the mixer, the reverb, the
-  // steps, the scale, Warps), a lock and a cable kept, a cable from Marbles dropped
-  {
-    static uint8_t buf[sizeof(project_t)];
-    project_t* q = reinterpret_cast<project_t*>(buf);
-    for (uint32_t i = 0; i < sizeof buf; ++i) buf[i] = 0;
-    q->magic = PROJECT_MAGIC;
-    q->version = 5;
-    q->size = 2680;
-    float* val = reinterpret_cast<float*>(buf + 8);
-    val[16 * 4 + 0] = 0.7f;                               // Marbles' RATE
-    val[20 * 4 + 2] = 0.33f;                              // the mixer: track 3's level
-    val[22 * 4 + 0] = 0.8f;                               // the reverb's time
-    val[24 * 4 + 3] = 12.0f;                              // track 1's steps: 12
-    val[28 * 4 + 2] = 3.0f;                               // the scale: Dorian
-    val[34 * 4 + 0] = 2.0f;                               // Warps: T2 the carrier
-    uint8_t* algo = buf + 8 + 140 * 4;
-    algo[PG_TRACK(2, 0)] = 19;                            // track 3 on STRING
-    cable_t* cab = reinterpret_cast<cable_t*>(buf + 8 + 560 + 35 + 3);
-    cab[0] = {1, 20 * 4 + 1, 40, 0};                      // Tides A1 -> track 2's level: LFO 1 now
-    cab[1] = {12, 2, 50, 0};                              // Marbles' Y -> track 1's TIMBRE: gone
-    cab[2] = {5, 3, 30, 0};                               // Tides B1 -> track 1's MORPH: gone (no LFO for it)
-    uint8_t* trig = buf + 8 + 560 + 35 + 3 + 160;
-    trig[1 * 8 + 0] = 0x11;                               // track 2: steps 1 and 5
-    uint8_t* lock = trig + 32 + 72 + 8;
-    lock[0] = 1 << 6 | 4;                                 // track 2, step 5: its note
-    lock[1] = TP_NOTE;
-    lock[2] = 200;
-    for (int i = 1; i < OLD_LOCKS; ++i) lock[i * 4 + 1] = 0xFF;
-    int ok = eng_upgrade(q, 2680);
-    char tx[24];
-    eng_param_text(PG_GLOBAL * 4, q->val[PG_GLOBAL * 4], tx, sizeof tx);
-    float lv = 0;
-    int haslock = 0;
-    for (int i = 0; i < ENG_PLOCKS; ++i)
-      if (q->lock[i].lane == 1 && q->lock[i].step == 4 && q->lock[i].tp == TP_NOTE) haslock = q->lock[i].v;
-    lv = q->val[PG_MIX * 4 + 2];
-    printf("a version 5 project: %s, tempo %s, level %.2f, reverb %.2f, length %.0f, scale %.0f, Warps' carrier %.0f, "
-           "LFO 2 %s, model %d, cables %d (L%d)/%d/%d, trig %d, lock %d\n",
-           ok ? "read" : "REFUSED", tx, lv, q->val[PG_REVERB * 4], q->val[PG_STEP(0) * 4 + 3], q->val[PG_GLOBAL * 4 + 1],
-           q->val[PG_WARPS(0) * 4], q->val[PG_LFO(1) * 4 + 2] == LM_SYNC ? "synced" : "NOT NEW", q->algo[PG_TRACK(2, 0)],
-           q->cable[0][0].depth, q->cable[0][0].src, q->cable[0][1].depth, q->cable[0][2].depth,
-           (q->trig[1][0] >> 4) & 1, haslock);
-    if (!ok || !eng_check(q) || q->val[PG_GLOBAL * 4] != 0.7f || lv != 0.33f || q->val[PG_REVERB * 4] != 0.8f ||
-        q->val[PG_STEP(0) * 4 + 3] != 12.0f || q->val[PG_GLOBAL * 4 + 1] != 3.0f || q->val[PG_WARPS(0) * 4] != 2.0f ||
-        q->val[PG_LFO(1) * 4 + 2] != LM_SYNC || q->algo[PG_TRACK(2, 0)] != eng_model_find(MK_PLAITS, 19) || q->cable[0][0].depth != 40 ||
-        q->cable[0][0].src != SRC_L1 || q->cable[0][0].dst != PG_MIX * 4 + 1 || q->cable[0][1].depth != 0 ||
-        q->cable[0][2].depth != 0 || haslock != 200)
-      ++failures, printf("FAIL: the version 5 project\n");
-  }
 
   // 18. swing: every step of track 1 played, SWING at 75 %: the off-beats late, a sixteenth and a half then half of
   // one apart (at 120 BPM 8269 and 2756 samples, ~65 and ~22 blocks)
@@ -1028,59 +927,10 @@ int main(int argc, char** argv) {
     eng_defaults(p);
   }
 
-  // 24. 0.3's project (version 6, 2804 bytes): all of it, the duck off, the master bus INIT's
-  {
-    static uint8_t buf[sizeof(project_t)];
-    project_t* q = reinterpret_cast<project_t*>(buf);
-    for (uint32_t i = 0; i < sizeof buf; ++i) buf[i] = 0;
-    q->magic = PROJECT_MAGIC;
-    q->version = 6;
-    q->size = 2804;
-    float* val = reinterpret_cast<float*>(buf + 8);
-    for (int i = 0; i < 148; ++i) val[i] = 0.25f;
-    uint8_t* algo = buf + 8 + 148 * 4;
-    algo[PG_TRACK(3, 0)] = 23;                            // track 4 on HI-HAT
-    uint8_t* trig = buf + 8 + 592 + 37 + 3 + 160;
-    trig[LANE_DELAY * 8] = 0x05;                          // the delay's lane: steps 1 and 3
-    int8_t* rnd = reinterpret_cast<int8_t*>(trig + 56);
-    rnd[2 * 19 + TP_DSEND] = -40;                         // track 3's delay send, looped
-    int ok = eng_upgrade(q, 2804);
-    printf("a version 6 project: %s, track 4 model %d, a knob %.2f, the delay's lane %d%d, a random %d, duck %.2f, bus %d\n",
-           ok ? "read" : "REFUSED", q->algo[PG_TRACK(3, 0)], q->val[100], q->trig[LANE_DELAY][0] & 1,
-           (q->trig[LANE_DELAY][0] >> 2) & 1, q->rnd[2][TP_DSEND], q->val[PG_DUCK * 4 + 2], q->algo[PG_COMP]);
-    if (!ok || !eng_check(q) || q->algo[PG_TRACK(3, 0)] != eng_model_find(MK_DRUM, 3) || q->val[100] != 0.25f || q->trig[LANE_DELAY][0] != 0x05 ||
-        q->rnd[2][TP_DSEND] != -40 || q->val[PG_DUCK * 4 + 2] != 0.0f || q->algo[PG_COMP] != MB_COMP)
-      ++failures, printf("FAIL: the version 6 project\n");
-  }
 
-  // 26. 0.3.7's project (version 7, 2864 bytes): all of it, the filter flat. Then the filter: the demo playing, every
+  // 26. the filter: the demo playing, every
   // track's low pass down (the highs gone: the mix darker), then its high pass up (brighter); the knob's text
   {
-    static uint8_t buf[sizeof(project_t)];
-    project_t* q = reinterpret_cast<project_t*>(buf);
-    for (uint32_t i = 0; i < sizeof buf; ++i) buf[i] = 0;
-    q->magic = PROJECT_MAGIC;
-    q->version = 7;
-    q->size = 2864;
-    float* val = reinterpret_cast<float*>(buf + 8);
-    for (int i = 0; i < 160; ++i) val[i] = 0.25f;
-    uint8_t* algo = buf + 8 + 160 * 4;
-    algo[PG_COMP] = MB_OTT;
-    algo[41] = 1;                                         // (after the 40 pages' choices: out_mode, warps_hq,
-    algo[42] = 3;                                         // theme)
-    uint8_t* trig = algo + 43 + 160;
-    trig[LANE_REVERB * 8] = 0x11;
-    int8_t* rnd = reinterpret_cast<int8_t*>(trig + 56);
-    rnd[1 * 20 + TP_DUCK] = -30;
-    int ok = eng_upgrade(q, 2864);
-    printf("a version 7 project: %s, OTT %d, HQ %d, theme %d, the reverb's lane %02x, a random %d, the filter %.2f\n",
-           ok ? "read" : "REFUSED", q->algo[PG_COMP], q->warps_hq, q->theme, q->trig[LANE_REVERB][0],
-           q->rnd[1][TP_DUCK], q->val[PG_EQ * 4 + 1]);
-    if (!ok || !eng_check(q) || q->algo[PG_COMP] != MB_OTT || q->warps_hq != 1 || q->theme != 3 ||
-        q->trig[LANE_REVERB][0] != 0x11 || q->rnd[1][TP_DUCK] != -30 || q->val[PG_EQ * 4 + 1] != 0.0f ||
-        q->val[PG_OTT * 4 + 3] != 0.25f)
-      ++failures, printf("FAIL: the version 7 project\n");
-
     char a[16], b[16], c[16];
     eng_param_text(PG_EQ * 4, -1.0f, a, sizeof a);
     eng_param_text(PG_EQ * 4 + 1, 1.0f, b, sizeof b);
@@ -1114,8 +964,7 @@ int main(int argc, char** argv) {
     eng_defaults(p);
   }
 
-  // 27. the Euclidean rhythms (3 in 8: x..x..x., 5 in 16, turned), 0.3.8's project (version 8, 2888 bytes: all of it,
-  // no grit), then the bending's bits on a held note of track 1 (a virtual analog voice, alone; 0.7, the grit's
+  // 27. the Euclidean rhythms (3 in 8: x..x..x., 5 in 16, turned), then the bending's bits on a held note of track 1 (a virtual analog voice, alone; 0.7, the grit's
   // place): BITS near the end (a few values left), at the end (1 bit: this quiet a voice, none), CLOCK at the end (x2
   // the note: a sample held for a long while), each SHAPE and a MASK (finite, within the output's reach); then its
   // glitch, the steps playing: GLITCH full (it takes its slice, then repeats it), BEND and DROP up (still finite)
@@ -1132,26 +981,6 @@ int main(int argc, char** argv) {
     if (strcmp(e38, "x..x..x.") != 0 || n516 != 5 || !eng_euclid(16, 5, 2, 2) || eng_euclid(16, 5, 2, 0) ||
         eng_euclid(8, 0, 0, 0) || !eng_euclid(4, 9, 0, 3))
       ++failures, printf("FAIL: the Euclidean rhythms\n");
-
-    static uint8_t buf[sizeof(project_t)];
-    project_t* q = reinterpret_cast<project_t*>(buf);
-    for (uint32_t i = 0; i < sizeof buf; ++i) buf[i] = 0;
-    q->magic = PROJECT_MAGIC;
-    q->version = 8;
-    q->size = 2888;
-    float* val = reinterpret_cast<float*>(buf + 8);
-    for (int i = 0; i < 164; ++i) val[i] = 0.25f;
-    uint8_t* algo = buf + 8 + 164 * 4;
-    algo[43] = 4;                                         // (after the 41 pages' choices: out_mode, warps_hq, theme)
-    int8_t* rnd = reinterpret_cast<int8_t*>(algo + 44 + 160 + 56);
-    rnd[3 * 21 + TP_EQ] = 25;
-    int ok = eng_upgrade(q, 2888);
-    printf("a version 8 project: %s, theme %d, the filter %.2f, its random %d, drive %.2f, fills %.0f\n",
-           ok ? "read" : "REFUSED", q->theme, q->val[PG_EQ * 4 + 2], q->rnd[3][TP_EQ], q->val[PG_BEND(1) * 4],
-           q->val[PG_EUC(2) * 4]);
-    if (!ok || !eng_check(q) || q->theme != 4 || q->val[PG_EQ * 4 + 2] != 0.25f || q->rnd[3][TP_EQ] != 25 ||
-        q->val[PG_BEND(1) * 4] != 0.0f || q->val[PG_EUC(2) * 4] != 0.0f)
-      ++failures, printf("FAIL: the version 8 project\n");
 
     eng_play(0);
     eng_blank(p);
@@ -1211,53 +1040,6 @@ int main(int argc, char** argv) {
            " shapes and a mask peak %.2f\n", d0, c0, k0, d1, d3, c2, kw);
     if (d0 < 64 || d1 > 16 || d3 > 3 || c2 > 4 || k0 <= 0.01f || kw > 2.0f || kw < 0.01f)
       ++failures, printf("FAIL: the bits\n");
-    {                                    // 0.6's project (version 14, 3652 bytes): read, its grit gone, the rest kept
-      struct v14 {
-        uint32_t magic;
-        uint16_t version, size;
-        float val[64 * 4];
-        uint8_t algo[64];
-        uint8_t out_mode, warps_hq, theme, dice, dice_seed;
-        cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
-        uint8_t trig[ENG_LANES][ENG_STEPS / 8];
-        int8_t rnd[ENG_LANES][37];
-        uint16_t seed[ENG_LANES];
-        plock_t lock[OLD_LOCKS];
-        uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
-        uint8_t endless_len[ENG_TRACKS];
-        int8_t endless_key[ENG_TRACKS];
-        uint8_t rseed[ENG_LANES][37];
-      };
-      static_assert(sizeof(v14) == 3652u, "0.6's project");
-      static uint8_t b14[sizeof(project_t)];
-      for (uint32_t i = 0; i < sizeof b14; ++i) b14[i] = 0;
-      v14* o = reinterpret_cast<v14*>(b14);
-      o->magic = PROJECT_MAGIC;
-      o->version = 14;
-      o->size = 3652;
-      for (int i = 0; i < 64 * 4; ++i) o->val[i] = 0.5f;
-      o->algo[PG_FILT(2, 0)] = MF_SEM;
-      o->theme = 5;
-      o->rnd[1][TP_CLOCK + 1] = 40;                       // (the grit's SHAPE's random: gone)
-      o->rnd[1][TP_CUTOFF] = 30;                          // (the filter's: kept)
-      for (int i = 0; i < OLD_LOCKS; ++i) o->lock[i].lane = 0xFF;
-      o->lock[0].lane = 2, o->lock[0].step = 3, o->lock[0].tp = TP_CLOCK + 3, o->lock[0].v = 9;   // (gone)
-      o->lock[1].lane = 2, o->lock[1].step = 4, o->lock[1].tp = TP_RESO, o->lock[1].v = 7;        // (kept)
-      o->cable[0][0].src = SRC_L1, o->cable[0][0].dst = PG_BEND(0) * 4, o->cable[0][0].depth = 50;   // (gone)
-      o->cable[0][1].src = SRC_L2, o->cable[0][1].dst = PG_FILT(0, 0) * 4, o->cable[0][1].depth = 40;
-      project_t* q14 = reinterpret_cast<project_t*>(b14);
-      int ok14 = eng_upgrade(q14, 3652);
-      printf("a version 14 project: %s, theme %d, bits %.2f, glitch %.2f size %.0f, filter %d %.2f, randoms %d %d, locks %d %d,"
-             " cables %d %d\n", ok14 ? "read" : "REFUSED", q14->theme, q14->val[PG_BEND(1) * 4], q14->val[PG_GLITCH(1) * 4],
-             q14->val[PG_GLITCH(1) * 4 + 1], q14->algo[PG_FILT(2, 0)], q14->val[PG_FILT(2, 1) * 4], q14->rnd[1][TP_CLOCK + 1],
-             q14->rnd[1][TP_CUTOFF], q14->lock[0].lane, q14->lock[1].lane, q14->cable[0][0].depth, q14->cable[0][1].depth);
-      if (!ok14 || !eng_check(q14) || q14->theme != 5 || q14->val[PG_BEND(1) * 4] != 0.0f ||
-          q14->val[PG_GLITCH(1) * 4] != 0.0f || q14->val[PG_GLITCH(1) * 4 + 1] != static_cast<float>(GL_16) ||
-          q14->algo[PG_FILT(2, 0)] != MF_SEM || q14->val[PG_FILT(2, 1) * 4] != 0.5f || q14->rnd[1][TP_CLOCK + 1] != 0 ||
-          q14->rnd[1][TP_CUTOFF] != 30 || q14->lock[0].lane != 0xFF || q14->lock[1].lane != 2 ||
-          q14->cable[0][0].depth != 0 || q14->cable[0][1].depth != 40)
-        ++failures, printf("FAIL: the version 14 project\n");
-    }
     for (int s2 = 0; s2 < 16; ++s2) eng_trig_set(0, s2, 1);   // the glitch: the steps playing
     p->val[PG_GLITCH(0) * 4 + 0] = 1.0f;
     p->val[PG_GLITCH(0) * 4 + 1] = static_cast<float>(GL_16);
@@ -1288,72 +1070,10 @@ int main(int argc, char** argv) {
     eng_defaults(p);
   }
 
-  // 28. 0.3.9's project (version 9, the layout of 0.4): Warps' knobs on their new faces (its lane's lock with them),
-  // Tides' cables to the LFOs (A1..A3) or gone; the LFOs (a square synced a beat: two edges a beat); the delay FREE
+  // 28. the LFOs (a square synced a beat: two edges a beat); the delay FREE
   // (its time kept: a dotted eighth at 120 BPM, 375 ms); SCALE on: FREQ in the scale too (a semitone up, C# out of C
   // major: the same pitch as none), off: a semitone higher
   {
-    struct v9 {                                          // (0.3.9's layout: no random dose)
-      uint32_t magic;
-      uint16_t version, size;
-      float val[52 * 4];
-      uint8_t algo[52];
-      uint8_t out_mode, warps_hq, theme;
-      cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
-      uint8_t trig[ENG_LANES][ENG_STEPS / 8];
-      int8_t rnd[ENG_LANES][25];
-      uint16_t seed[ENG_LANES];
-      plock_t lock[OLD_LOCKS];
-      uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
-      uint8_t endless_len[ENG_TRACKS];
-      int8_t endless_key[ENG_TRACKS];
-    };
-    static uint8_t buf[sizeof(project_t)];
-    static v9 old;
-    project_t* q = reinterpret_cast<project_t*>(buf);
-    v9* o9 = &old;
-    eng_blank(q);
-    o9->magic = PROJECT_MAGIC;
-    o9->version = 9;
-    o9->size = sizeof(v9);
-    for (int i = 0; i < 52 * 4; ++i) o9->val[i] = q->val[i];
-    for (int i = 0; i < 52; ++i) o9->algo[i] = q->algo[i];
-    old_locks(o9->lock, q->lock);
-    project_t* w = q;                                    // (made as 0.4's, then copied into the old layout)
-    static const float kOld[8] = {0.6f, 0.3f, 0.7f, 0.8f, static_cast<float>(WC_T3), 1.0f, 1.0f, 0.0f};
-    for (int k = 0; k < 8; ++k) q->val[PG_WARPS(k / 4) * 4 + k % 4] = kOld[k];   // 0.3's: ALGO TIMBRE L1 L2, CAR MOD DRY MODE
-    q->lock[0] = {LANE_WARPS, 3, 0, 100};                // its ALGORITHM on step 4
-    q->rnd[LANE_WARPS][1] = 20;                          // TIMBRE's random
-    q->cable[0][0] = {1, PG_WARPS(0) * 4 + 1, 50, 0};    // Tides A1 -> Warps' TIMBRE
-    q->cable[0][1] = {4, 5, 20, 0};                      // Tides A4 -> track 1's HARMONICS: gone
-    q->cable[4][0] = {2, 12 * 4 + 0, 30, 0};             // Tides A2 -> Tides A's frequency: gone
-    for (int i = 0; i < 52 * 4; ++i) o9->val[i] = w->val[i];
-    old_locks(o9->lock, w->lock);
-    for (int g = 0; g <= ENG_TRACKS; ++g)
-      for (int c = 0; c < ENG_CABLES; ++c) o9->cable[g][c] = w->cable[g][c];
-    for (int l = 0; l < ENG_LANES; ++l)
-      for (int i = 0; i < 25; ++i) o9->rnd[l][i] = w->rnd[l][i];
-    o9->theme = 3;
-    o9->trig[2][1] = 0x24;
-    o9->endless_key[1] = -5;
-    for (uint32_t i = 0; i < sizeof(v9); ++i) buf[i] = reinterpret_cast<uint8_t*>(o9)[i];
-    int ok = eng_upgrade(q, sizeof(v9));
-    printf("a version 9 project (%d bytes, %d now)", static_cast<int>(sizeof(v9)), static_cast<int>(sizeof(project_t)));
-    if (q->theme != 3 || q->trig[2][1] != 0x24 || q->endless_key[1] != -5 || q->dice != 0)
-      ++failures, printf(" FAIL: its layout");
-    printf("\n");
-    printf("a version 9 project: %s, Warps %.0f %.0f %.2f %.2f / %.2f %.2f %.2f %.0f, lock tp %d, random %d, cables %d->%d %d %d\n",
-           ok ? "read" : "REFUSED", q->val[PG_WARPS(0) * 4], q->val[PG_WARPS(0) * 4 + 1], q->val[PG_WARPS(0) * 4 + 2],
-           q->val[PG_WARPS(0) * 4 + 3], q->val[PG_WARPS(1) * 4], q->val[PG_WARPS(1) * 4 + 1], q->val[PG_WARPS(1) * 4 + 2],
-           q->val[PG_WARPS(1) * 4 + 3], q->lock[0].tp, q->rnd[LANE_WARPS][4], q->cable[0][0].src, q->cable[0][0].dst,
-           q->cable[0][1].depth, q->cable[4][0].depth);
-    if (!ok || !eng_check(q) || q->val[PG_WARPS(0) * 4] != WC_T3 || q->val[PG_WARPS(0) * 4 + 2] != 0.6f ||
-        q->val[PG_WARPS(0) * 4 + 3] != 1.0f || q->val[PG_WARPS(1) * 4] != 0.3f || q->val[PG_WARPS(1) * 4 + 2] != 0.8f ||
-        q->val[PG_WARPS(1) * 4 + 3] != WM_DRY || q->lock[0].tp != 2 || q->rnd[LANE_WARPS][4] != 20 ||
-        q->rnd[LANE_WARPS][1] != 0 || q->cable[0][0].src != SRC_L1 || q->cable[0][0].dst != PG_WARPS(1) * 4 ||
-        q->cable[0][1].depth != 0 || q->cable[4][0].depth != 0)
-      ++failures, printf("FAIL: the version 9 project\n");
-
     eng_play(0);                                          // the LFOs
     eng_defaults(p);
     p->val[PG_LFO(0) * 4 + 0] = static_cast<float>(LW_SQUARE);
@@ -1832,103 +1552,6 @@ int main(int argc, char** argv) {
         }
     printf("FM drums' envelope: %ld steps, %ld not the double's\n", steps, wrong);
     if (wrong) ++failures, printf("FAIL: the FM drums' envelope\n");
-  }
-
-  // 36. 0.4's, 0.5's and 0.5.6's projects (versions 10 and 11, 3104 bytes; 12 with its draws): read, as they were,
-  // their filters off (and ready), their draws kept (12) or 0
-  {
-    struct V12 {                                         // (engine.cc's project_v12)
-      uint32_t magic;
-      uint16_t version, size;
-      float val[52 * 4];
-      uint8_t algo[52];
-      uint8_t out_mode, warps_hq, theme, dice, dice_seed;
-      cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
-      uint8_t trig[ENG_LANES][ENG_STEPS / 8];
-      int8_t rnd[ENG_LANES][25];
-      uint16_t seed[ENG_LANES];
-      plock_t lock[OLD_LOCKS];
-      uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
-      uint8_t endless_len[ENG_TRACKS];
-      int8_t endless_key[ENG_TRACKS];
-      uint8_t rseed[ENG_LANES][25];
-    };
-    for (int v = 10; v <= 12; ++v) {
-      static project_t cur, q;
-      static V12 o;
-      eng_defaults(&cur);
-      memset(&o, 0, sizeof o);
-      o.magic = PROJECT_MAGIC;
-      o.version = static_cast<uint16_t>(v);
-      o.size = static_cast<uint16_t>(v == 12 ? sizeof o : 3104);
-      for (int i = 0; i < 52 * 4; ++i) o.val[i] = cur.val[i];
-      for (int i = 0; i < 52; ++i) o.algo[i] = cur.algo[i];
-      o.algo[PG_TRACK(2, 0)] = 7;
-      o.dice = 33;
-      for (int l = 0; l < ENG_LANES; ++l) {
-        for (int i = 0; i < 25; ++i) o.rnd[l][i] = cur.rnd[l][i], o.rseed[l][i] = static_cast<uint8_t>(v == 12 ? 5 : 99);
-        for (int i = 0; i < ENG_STEPS / 8; ++i) o.trig[l][i] = cur.trig[l][i];
-        o.seed[l] = cur.seed[l];
-      }
-      old_locks(o.lock, cur.lock);
-      o.lock[0] = plock_t{2, 5, TP_NOTE, 200};
-      memcpy(&q, &o, sizeof o);
-      int bytes = v == 12 ? static_cast<int>(sizeof o) : 3104;
-      int ok = eng_upgrade(&q, bytes) && eng_check(&q) && q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_SQ1, 0) && q.dice == 33 &&
-               q.rnd[3][TP_NOTE] == cur.rnd[3][TP_NOTE] && q.rseed[1][3] == (v == 12 ? 5 : 0) && !q.rseed[1][30] &&
-               q.lock[0].lane == 2 && q.lock[0].tp == TP_NOTE && q.algo[PG_FILT(1, 0)] == MF_OFF &&
-               q.val[PG_FILT(1, 0) * 4] > 0.5f && q.val[PG_MIX * 4 + 1] == cur.val[PG_MIX * 4 + 1];
-      printf("a version %d project: %s\n", v, ok ? "read" : "REFUSED");
-      if (!ok) ++failures, printf("FAIL: a version %d project\n", v);
-    }
-    struct V13 {                                         // (engine.cc's project_v13: 0.5.8's two filter pages a track)
-      uint32_t magic;
-      uint16_t version, size;
-      float val[60 * 4];
-      uint8_t algo[60];
-      uint8_t out_mode, warps_hq, theme, dice, dice_seed;
-      cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
-      uint8_t trig[ENG_LANES][ENG_STEPS / 8];
-      int8_t rnd[ENG_LANES][33];
-      uint16_t seed[ENG_LANES];
-      plock_t lock[OLD_LOCKS];
-      uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
-      uint8_t endless_len[ENG_TRACKS];
-      int8_t endless_key[ENG_TRACKS];
-      uint8_t rseed[ENG_LANES][33];
-    };
-    {                                                    // its filters: T2 a SEM high pass (its NOISE knob then on
-      static project_t cur, q;                           // its second page), T3 a ladder band pass driven, a cable on
-      static V13 o;                                      // T2's RESO
-      eng_defaults(&cur);
-      memset(&o, 0, sizeof o);
-      o.magic = PROJECT_MAGIC;
-      o.version = 13;
-      o.size = sizeof o;
-      for (int i = 0; i < 52 * 4; ++i) o.val[i] = cur.val[i];
-      for (int i = 0; i < 52; ++i) o.algo[i] = cur.algo[i];
-      for (int l = 0; l < ENG_LANES; ++l) {
-        for (int i = 0; i < 33; ++i) o.rnd[l][i] = cur.rnd[l][i], o.rseed[l][i] = 7;
-        for (int i = 0; i < ENG_STEPS / 8; ++i) o.trig[l][i] = cur.trig[l][i];
-        o.seed[l] = cur.seed[l];
-      }
-      old_locks(o.lock, cur.lock);
-      for (int t = 0; t < ENG_TRACKS; ++t) o.val[(52 + 2 * t) * 4] = 0.7f, o.val[(52 + 2 * t) * 4 + 3] = 0.4f;
-      o.algo[52 + 2] = MF_SEM, o.algo[52 + 3] = MF_HP;
-      o.val[(52 + 2) * 4] = 0.3f, o.val[(52 + 3) * 4] = 0.5f, o.val[(52 + 3) * 4 + 1] = 0.6f;
-      o.algo[52 + 4] = MF_LADDER, o.algo[52 + 5] = MF_BP;
-      o.val[(52 + 5) * 4] = 0.8f;
-      o.cable[1][0] = cable_t{SRC_L1, static_cast<uint8_t>((52 + 2) * 4 + 1), 50, 0};
-      memcpy(&q, &o, sizeof o);
-      int ok = eng_upgrade(&q, sizeof o) && eng_check(&q) && q.algo[PG_FILT(1, 0)] == MF_SEM &&
-               q.val[PG_FILT(1, 2) * 4] == MF_HP && std::fabs(q.val[PG_FILT(1, 2) * 4 + 1] - 0.47f) < 0.001f &&
-               q.val[PG_FILT(1, 0) * 4] == 0.3f && q.val[PG_FILT(1, 1) * 4] == 0.0f && q.val[PG_FILT(1, 1) * 4 + 1] == 0.6f &&
-               q.algo[PG_FILT(2, 0)] == MF_LADDER && q.val[PG_FILT(2, 2) * 4] == MF_BP && q.val[PG_FILT(2, 1) * 4] == 0.8f &&
-               q.val[PG_FILT(2, 2) * 4 + 1] == 0.0f && q.algo[PG_FILT(0, 0)] == MF_OFF && q.val[PG_FILT(3, 0) * 4 + 3] == 0.4f &&
-               q.cable[1][0].dst == PG_FILT(1, 0) * 4 + 1 && q.rseed[2][TP_NOTE] == 7 && q.rnd[2][TP_FTYPE] == 0;
-      printf("a version 13 project (0.5.8's filters): %s\n", ok ? "read, its filters in their new places" : "REFUSED");
-      if (!ok) ++failures, printf("FAIL: a version 13 project\n");
-    }
   }
 
   // 39. a looped random brought back to 0 draws another loop: T4's looped tune, two passes the same; its knob back to
@@ -2711,8 +2334,7 @@ int main(int argc, char** argv) {
   // 46. the FM (mi_fm4.cc, 0.10.1): on a track, its knobs (named, written as they are), each algorithm sounding; the
   // engine: the eighth algorithm's first operator alone (INDEX 0) at the note, a sine; FEEDBACK's saw and square (their
   // harmonics), clean (nothing between the harmonics above -55 dB) up to C6; SYNC and PW clean; a chord on RATIO; a
-  // held note held, let go; a decaying one over; a retrig without a step; any setting finite and bounded. Projects of
-  // 0.9 and 0.10.0 (versions 16, 17): their models renumbered, a model gone the FM on its nearest algorithm
+  // held note held, let go; a decaying one over; a retrig without a step; any setting finite and bounded
   {
     eng_play(0);
     eng_defaults(p);
@@ -2918,62 +2540,19 @@ int main(int argc, char** argv) {
     }
     shapes_ok &= loops >= 3;
     fm4_init();
-    // a project of 0.11.0 (version 19): the FM's MOVE where SHAPE is: a swell (-50 %), a pluck (+30 %), a strong one
-    // (+90 %), none; a lock (-60 %): their nearest shapes
-    static project_t q19;
-    eng_defaults(&q19);
-    q19.version = 19;
-    const float kMove[4] = {-0.5f, 0.3f, 0.9f, 0.0f};
-    for (int t = 0; t < ENG_TRACKS; ++t) {
-      q19.algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(eng_model_find(MK_FM, 0));
-      q19.val[PG_TRACK(t, 1) * 4 + 2] = kMove[t];
-    }
-    for (int i = 0; i < ENG_PLOCKS; ++i) q19.lock[i].lane = 0xFF;
-    q19.lock[0].lane = 1, q19.lock[0].step = 3, q19.lock[0].tp = 6, q19.lock[0].v = 51;   // (-60 %)
-    int v19 = eng_upgrade(as_v23(&q19), PROJECT_SIZE_22) && eng_check(&q19);
-    const int kWant[4] = {-2, 2, 3, 0};
-    for (int t = 0; t < ENG_TRACKS; ++t) v19 &= fm4_shape((q19.val[PG_TRACK(t, 1) * 4 + 2] + 1.0f) * 0.5f) == kWant[t];
-    v19 &= fm4_shape(static_cast<float>(q19.lock[0].v) / 255.0f) == -2;
-    // a project of 0.9 (version 16): VIRTUAL ANALOG (19 then) the FM on its own knobs, its second algorithm; CHIPTUNE
-    // (18) still Plaits', ZERO (10), MODAL (31). One of 0.10.0 (version 17): BASS (11) the FM's first algorithm, PAD
-    // (16) its sixth, CHIPTUNE (19), MODAL (26)
-    static project_t q16;
-    float kl[8];
-    fm4_defaults(kl);
-    const int fm = eng_model_find(MK_FM, 0);
-    eng_defaults(&q16);
-    q16.version = 16;
-    const uint8_t kOld[4] = {19, 18, 10, 31};
-    for (int t = 0; t < ENG_TRACKS; ++t) q16.algo[PG_TRACK(t, 0)] = kOld[t];
-    q16.val[PG_TRACK(0, 0) * 4 + 3] = 0.123f;
-    int up_ok = eng_upgrade(as_v23(&q16), PROJECT_SIZE_22) && eng_check(&q16) && q16.algo[PG_TRACK(0, 0)] == fm &&
-                q16.algo[PG_TRACK(1, 0)] == eng_model_find(MK_SQ1, 0) &&
-                q16.algo[PG_TRACK(2, 0)] == eng_model_find(MK_ZERO, 0) && q16.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PLAITS, 20);
-    up_ok &= std::fabs(q16.val[PG_TRACK(0, 0) * 4 + 3] - kl[2]) < 1e-6f &&
-             std::fabs(q16.val[PG_TRACK(0, 0) * 4 + 1] - 1.5f / 8.0f) < 1e-6f;
-    eng_defaults(&q16);
-    q16.version = 17;
-    const uint8_t kOld17[4] = {11, 16, 19, 26};
-    for (int t = 0; t < ENG_TRACKS; ++t) q16.algo[PG_TRACK(t, 0)] = kOld17[t];
-    up_ok &= eng_upgrade(as_v23(&q16), PROJECT_SIZE_22) && eng_check(&q16) && q16.algo[PG_TRACK(0, 0)] == fm &&
-             q16.algo[PG_TRACK(1, 0)] == fm && q16.algo[PG_TRACK(2, 0)] == eng_model_find(MK_SQ1, 0) &&
-             q16.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PLAITS, 20) &&
-             std::fabs(q16.val[PG_TRACK(0, 0) * 4 + 1] - 0.5f / 8.0f) < 1e-6f &&
-             std::fabs(q16.val[PG_TRACK(1, 0) * 4 + 1] - 5.5f / 8.0f) < 1e-6f;
     printf("the FM: knobs %s, its algorithms sounding %s (peaks %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f); C3 alone %.1f Hz, its octave "
            "%.0f dB; the saw %.0f %.0f dB, the square %.0f %.0f dB; on C6 between the harmonics: saw %.0f dB, square %.0f;"
            " on C5: SYNC %.0f, PW %.0f; a major chord: third %.0f, fifth %.0f, fourth %.0f dB; held %.3f %.3f, let go "
-           "%.5f; a tine over: %.6f; a retrig: a step of %.3f (the note's %.3f); 300 settings: peak %.2f%s; versions 16, 17 %s; "
-           "SHAPE %s (its brightness moving x%.2f to x%.2f, Loop's %d times), MOVE read as SHAPE %s\n",
+           "%.5f; a tine over: %.6f; a retrig: a step of %.3f (the note's %.3f); 300 settings: peak %.2f%s; "
+           "SHAPE %s (its brightness moving x%.2f to x%.2f, Loop's %d times)\n",
            kit_ok ? "ok" : "WRONG", sound_ok ? "ok" : "NO", pk[0], pk[1], pk[2], pk[3], pk[4], pk[5], pk[6], pk[7], hz,
            sine2, saw2, saw3, sq2, sq3, saw_alias, sq_alias, sync_alias, pw_alias, c3rd, c5th, c4th, held_a, held_b, after,
-           tail, step, typ, pk_any, nan_any ? ", NaN" : "", up_ok ? "read" : "WRONG", shapes_ok ? "ok" : "WRONG", sh_lo,
-           sh_hi, loops, v19 ? "ok" : "WRONG");
-    if (!shapes_ok || !v19 || !kit_ok || !sound_ok || std::fabs(hz - 130.81f) > 1.5f || sine2 > -80.0 || saw2 < -8.0 || saw2 > -4.0 ||
+           tail, step, typ, pk_any, nan_any ? ", NaN" : "", shapes_ok ? "ok" : "WRONG", sh_lo, sh_hi, loops);
+    if (!shapes_ok || !kit_ok || !sound_ok || std::fabs(hz - 130.81f) > 1.5f || sine2 > -80.0 || saw2 < -8.0 || saw2 > -4.0 ||
         saw3 < -14.0 || saw3 > -8.0 || sq2 > -40.0 || sq3 < -14.0 || sq3 > -8.0 || saw_alias > -55.0 || sq_alias > -55.0 ||
         sync_alias > -55.0 || pw_alias > -55.0 || c3rd < -12.0 || c5th < -12.0 || c4th > -40.0 || held_a < 0.1 ||
         std::fabs(held_b / held_a - 1.0) > 0.2 || after > 1e-3 || tail != 0.0f || step > 1.5f * typ + 0.02f ||
-        nan_any || pk_any > 1.25f || !up_ok)
+        nan_any || pk_any > 1.25f)
       ++failures, printf("FAIL: the FM\n");
   }
 
@@ -3094,7 +2673,7 @@ int main(int argc, char** argv) {
   // 48. POLY (mi_poly.cc, 0.12): its knobs; its chords (a chord memory's Min9; the scale's triad and seventh in A minor
   // on F, a seventh; PADS' chord through the engine, Root following it); its voices (a voice a trig, the last ringing
   // on under it; UNISON four; a chord three); held and let go; its alias (saw, pulse, the sub, up to C6); any setting
-  // finite and bounded; a project of 0.11.1 (version 20) renumbered
+  // finite and bounded
   {
     eng_play(0);
     eng_defaults(p);
@@ -3252,31 +2831,19 @@ int main(int argc, char** argv) {
       }
     }
     eng_play(0);
-    // a project of 0.11.1 (version 20): CHIPTUNE (13 then), PADS (12), MODAL (20), the FM (11)
-    static project_t q20;
-    eng_defaults(&q20);
-    q20.version = 20;
-    const uint8_t kOld20[4] = {13, 12, 20, 11};
-    for (int t = 0; t < ENG_TRACKS; ++t) q20.algo[PG_TRACK(t, 0)] = kOld20[t];
-    int v20 = eng_upgrade(as_v23(&q20), PROJECT_SIZE_22) && eng_check(&q20) &&
-              q20.algo[PG_TRACK(0, 0)] == eng_model_find(MK_SQ1, 0) &&
-              q20.algo[PG_TRACK(1, 0)] == eng_model_find(MK_PADS, 0) &&
-              q20.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 20) &&
-              q20.algo[PG_TRACK(3, 0)] == eng_model_find(MK_FM, 0);
     printf("POLY: knobs %s; chords %s; voices: a trig each %d, Mono %d, unison %d, a major chord %d; held %.2f %.2f, let go "
-           "%.5f; its alias at C6 %.0f dB; 300 settings: peak %.2f%s; after PADS: peak %.2f%s; version 20 %s\n",
+           "%.5f; its alias at C6 %.0f dB; 300 settings: peak %.2f%s; after PADS: peak %.2f%s\n",
            ok ? "ok" : "WRONG", chords_ok ? "ok" : "WRONG", two, one, four, three, held_a, held_b, after, alias, pk_any,
-           nan_any ? ", NaN" : "", epk, enan ? ", NaN" : "", v20 ? "read" : "WRONG");
+           nan_any ? ", NaN" : "", epk, enan ? ", NaN" : "");
     if (!ok || !chords_ok || two != 2 || one != 1 || four != 4 || three != 3 || held_a < 0.1 || std::fabs(held_b / held_a - 1.0) > 0.2 ||
-        after > 1e-3 || alias > -55.0 || nan_any || pk_any > 1.2f || enan || epk < 0.02f || !v20)
+        after > 1e-3 || alias > -55.0 || nan_any || pk_any > 1.2f || enan || epk < 0.02f)
       ++failures, printf("FAIL: POLY\n");
   }
 
   // 49. PROPHET (mi_prophet.cc, 0.13): its knobs; its voices (a trig each, the last ringing on; a Min7 four); held and
   // let go; its alias (its oscillators' settings, up to C6; the sync's step); POLY-MOD (the sweep moves the sync's
   // timbre, B's FM the bell's); any setting finite and bounded. The machines' state shared on a track: the FM, POLY,
-  // PROPHET, ZERO, a drum one after another on the same track through the engine, sounding, finite. A project of 0.12
-  // (version 21) renumbered
+  // PROPHET, ZERO, a drum one after another on the same track through the engine, sounding, finite
   {
     eng_play(0);
     eng_defaults(p);
@@ -3432,30 +2999,18 @@ int main(int argc, char** argv) {
       if (spk < 0.02f || spk > 1.5f) shared_ok = 0, printf("PROPHET: the shared state, model %d: peak %.3f\n", kSeq[m], spk);
     }
     eng_play(0);
-    // a project of 0.12 (version 21): CHIPTUNE (14 then), POLY (13), MODAL (21), PADS (12)
-    static project_t q21;
-    eng_defaults(&q21);
-    q21.version = 21;
-    const uint8_t kOld21[4] = {14, 13, 21, 12};
-    for (int t = 0; t < ENG_TRACKS; ++t) q21.algo[PG_TRACK(t, 0)] = kOld21[t];
-    int v21 = eng_upgrade(as_v23(&q21), PROJECT_SIZE_22) && eng_check(&q21) &&
-              q21.algo[PG_TRACK(0, 0)] == eng_model_find(MK_SQ1, 0) &&
-              q21.algo[PG_TRACK(1, 0)] == eng_model_find(MK_POLY, 0) &&
-              q21.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 20) &&
-              q21.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PADS, 0);
     printf("PROPHET: knobs %s; voices: a trig each %d, a Min7 %d; held %.2f %.2f, let go %.5f; its alias at C6 %.0f dB; "
-           "the sweep: brighter x%.2f at the trig; FM: %.2f of it moved; 300 settings: peak %.2f%s; the state shared %s; "
-           "version 21 %s\n",
+           "the sweep: brighter x%.2f at the trig; FM: %.2f of it moved; 300 settings: peak %.2f%s; the state shared %s\n",
            ok ? "ok" : "WRONG", two, four, held_a, held_b, after, alias, sweep, fmb, pk_any, nan_any ? ", NaN" : "",
-           shared_ok ? "ok" : "WRONG", v21 ? "read" : "WRONG");
+           shared_ok ? "ok" : "WRONG");
     if (!ok || two != 2 || four != 4 || held_a < 0.1 || std::fabs(held_b / held_a - 1.0) > 0.2 || after > 1e-3 ||
-        alias > -55.0 || sweep < 1.3 || fmb < 0.05 || nan_any || pk_any > 1.2f || !shared_ok || !v21)
+        alias > -55.0 || sweep < 1.3 || fmb < 0.05 || nan_any || pk_any > 1.2f || !shared_ok)
       ++failures, printf("FAIL: PROPHET\n");
   }
 
   {                                     // 50. TRAUMA (0.14): at 0 nothing; up the knob more harmonics on the same note
     // (the fundamental the strongest partial, its pitch kept), the level about kept, nothing past the edge; the
-    // filters' FM at most 10 % of its depth, none under 40 %; a 0.13 project's padding read as TRAUMA at 0
+    // filters' FM at most 10 % of its depth, none under 40 %
     project_t* p = eng_project();
     const uint32_t n = 128;
     static float l[128], r[128], out[22050];
@@ -3526,18 +3081,12 @@ int main(int argc, char** argv) {
     const float kTop = std::log(1.0f + 0.1f * 53.59815f) * 0.25f;   // (the knob for 10 % of the depth)
     ok &= fm_max[0] == 0.0f && fm_max[1] > 0.05f && fm_max[1] < kTop * 0.75f && fm_max[2] > kTop * 0.6f &&
           fm_max[2] <= kTop + 1e-3f;
-    // a 0.13 project (version 22): what was its padding read as TRAUMA at 0
-    static project_t q22;
-    eng_defaults(&q22);
-    q22.version = 22;
-    q22.trauma = 0xA5;
-    int v22 = eng_upgrade(as_v23(&q22), PROJECT_SIZE_22) && eng_check(&q22) && q22.trauma == 0 && q22.version == PROJECT_VERSION;
     printf("TRAUMA: harmonics against the note 0 %.3f, 50 %% %.3f, 100 %% %.3f; the note %.1f Hz %s, over its "
            "neighbours x%.0f; rms %.3f %.3f %.3f, peak at 100 %% %.2f; the filter's FM at 30 %% %.3f, 70 %% %.3f, "
-           "100 %% %.3f (at most %.3f); version 22 %s\n",
+           "100 %% %.3f (at most %.3f)\n",
            h0, h50, h100, g100.f0, g100.f0 == g0.f0 ? "kept" : "MOVED", g100.fund / (g100.side + 1e-12), g0.rms,
-           g50.rms, g100.rms, g100.pk, fm_max[0], fm_max[1], fm_max[2], kTop, v22 ? "read" : "WRONG");
-    if (!ok || !v22) ++failures, printf("FAIL: TRAUMA\n");
+           g50.rms, g100.rms, g100.pk, fm_max[0], fm_max[1], fm_max[2], kTop);
+    if (!ok) ++failures, printf("FAIL: TRAUMA\n");
     eng_defaults(p);
     eng_fresh();
   }
@@ -3649,8 +3198,7 @@ int main(int argc, char** argv) {
 
   {                                     // 53. the lanes' SPEED and DIRECTION, RATCH's tuplets, CURVE (0.16): a lane's
     // trigs as many as its speed says over a bar; its steps in each direction; 3:4 three hits evenly over four
-    // sixteenths; CURVE's gaps closer and closer (or apart); the pattern's length at its lanes' speeds; a 0.15 project
-    // read: its locks of RATCH the same, its randoms where they were, x1 and forward
+    // sixteenths; CURVE's gaps closer and closer (or apart); the pattern's length at its lanes' speeds
     project_t* p = eng_project();
     static float l[128], r[128];
     auto setup = [&]() {
@@ -3744,31 +3292,14 @@ int main(int argc, char** argv) {
     p->speed[0] = 0;
     p->dir[1] = DIR_PINGPONG;
     int len_pp = eng_pattern_len();
-    // a 0.15 project (version 23): RATCH locked to 2 (its travel 1..8 then), a random on GDROP, the last parameter then
-    setup();
-    eng_trig_set(0, 3, 1);
-    eng_lock_set(0, 3, TP_RATCHET, 2.0f);   // (as 0.16 writes it: re-written below as 0.15 did)
-    for (int i = 0; i < ENG_PLOCKS; ++i)
-      if (p->lock[i].lane == 0 && p->lock[i].tp == TP_RATCHET) p->lock[i].v = static_cast<uint8_t>(255.0f / 7.0f + 0.5f);
-    p->rnd[2][TP_GDROP] = 33;
-    p->rseed[2][TP_GDROP] = 7;
-    p->version = 23;
-    static project_t q;
-    q = *p;
-    int up = eng_upgrade(as_v23(&q), PROJECT_SIZE_22) && eng_check(&q);
-    float lv = -1.0f;
-    for (int i = 0; i < ENG_PLOCKS; ++i)
-      if (q.lock[i].lane == 0 && q.lock[i].tp == TP_RATCHET) lv = static_cast<float>(eng_ratch_hits(q.lock[i].v + 1, 0));
-    up &= std::fabs(lv - 2.0f) < 0.1f && q.rnd[2][TP_GDROP] == 33 && q.rseed[2][TP_GDROP] == 7 && !q.rnd[2][TP_CURVE] &&
-          !q.speed[0] && !q.dir[0] && q.val[PG_CURVE * 4] == 0.0f;
     printf("the lanes (0.16): a bar of sixteenths at x1/2 x3/4 x1 x2: %d %d %d %d trigs; the directions %s; 3 over 4 (\"%s\"): "
            "%d hits, %.0f and %.0f blocks apart; CURVE: gaps %.0f to %.0f blocks to the right, %.0f to %.0f to the left; "
-           "the pattern %d sixteenths at x1/2, %d there and back; a 0.15 project %s\n",
+           "the pattern %d sixteenths at x1/2, %d there and back\n",
            counts[0], counts[1], counts[2], counts[3], dir_ok ? "ok" : "WRONG", tup, n34, g1, g2, f1, l1, f2,
-           l2, len_half, len_pp, up ? "read, its RATCH locks the same" : "WRONG");
-    if (!speed_ok || !dir_ok || !tup_ok || !curve_ok || len_half != 32 || len_pp != 30 || !up) {
-      printf("FAIL: the lanes (speed %d dir %d tuplet %d curve %d len %d %d upgrade %d)\n", speed_ok, dir_ok, tup_ok,
-             curve_ok, len_half, len_pp, up);
+           l2, len_half, len_pp);
+    if (!speed_ok || !dir_ok || !tup_ok || !curve_ok || len_half != 32 || len_pp != 30) {
+      printf("FAIL: the lanes (speed %d dir %d tuplet %d curve %d len %d %d)\n", speed_ok, dir_ok, tup_ok,
+             curve_ok, len_half, len_pp);
       ++failures;
     }
     eng_defaults(p);

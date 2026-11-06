@@ -237,25 +237,9 @@ typedef struct {
                                           * 3820 bytes): read, CLIMB off, its locks the first 380;
                                           * 25: 0.16.2's and 0.16.3's, RATCH 1..8 then eight tuplets (9..16): read, each
                                           * as hits over a span, its locks too;
-                                          * 24: 0.16.0's and 0.16.1's, without Endless' options: read, all its notes;
-                                          * 23: 0.14's and 0.15's, without the lanes' speeds and directions, the ratchets
-                                          * 1 to 8 only, no CURVE: read, x1, forward, their locks of RATCH kept;
-                                          * 22: 0.13's, without TRAUMA (its byte where 0.13's ended, unused): read, TRAUMA at 0;
-                                          * 21: 0.12's, without PROPHET: read, renumbered; 20: 0.11.1's, without POLY: read, renumbered;
-                                          * 19: 0.11.0's, the FM's MOVE where SHAPE is: read, its nearest shape;
-                                          * 18: 0.10.1's, without PADS: read, renumbered, MOVE as SHAPE; 17: 0.10.0's, the FM in eight models: read, one FM, ALGO theirs;
-                                          * 16: 0.9's, thirteen of Plaits' models since gone: read, renumbered, those
-                                          * the FM's nearest (its kit); 15: 0.7's and 0.8's, the models numbered as they were (Plaits' 24 first):
-                                          * read, renumbered, Plaits' three drums MIFM1's; 14: 0.6's, with the grit (its four knobs where the bits are, no glitch):
-                                          * read, the grit gone; 13: 0.5.8's and 0.5.9's, their filters in two pages (the type an
-                                          * ALGORITHM, no NOISE as such, COLOR, ATTACK): read; 12: 0.5.6's, without the filters (8 pages, 8 lane parameters): read, the
-                                          * filters off; 11: 0.5's, without the looped randoms' draws (rseed) either: read, 0 each; 10: 0.4's,
-                                          * the same but without the FM drums either: read as it is; 9: 0.3.9's and 0.3.10's, with Tides, Warps' faces as they were, no random
-                                          * dose; 8: 0.3.8's,
-                                          * without the grit and the Euclidean rhythms either; 7: 0.3.3's to
-                                          * 0.3.7's, without the filter either; 6: 0.3.0's to 0.3.2's, without
-                                          * the duck and the master bus; 5: 0.2's, with Marbles; 4: 0.1.4's to 0.1.9's:
-                                          * eng_upgrade reads them) */
+                                          * 24: 0.16.0's and 0.16.1's, without Endless' options: read, all its notes
+                                          * (eng_upgrade reads them; 0.16.32: the versions before, 0.1.4's to 0.15's,
+                                          * no longer: such a project, or a pattern, is not loaded) */
 typedef struct {
     uint32_t magic;
     uint16_t version, size;
@@ -315,7 +299,6 @@ void eng_arp_release_all(void);          /* every key let go (a key let go on an
 enum { EO_STRIDE, EO_REST, EO_HOLES, EO_LEAP, EO_N };   /* Endless' options as the screen reads and writes them */
 int eng_endless_opt(int t, int o);       /* STRIDE 1..7, REST 0 or 2..8, HOLES and LEAP 0..100 */
 void eng_endless_opt_set(project_t *p, int t, int o, int v);
-#define PROJECT_SIZE_22 3776u            /* (0.7's to 0.15's project, version 15 to 23: its bytes) */
 enum { DIR_FWD, DIR_BACK, DIR_PINGPONG, DIR_RANDOM, DIR_DRUNK, DIR_TWO_ONE, DIR_N };   /* a lane's DIRECTION: forward,
                                           * backward, there and back, a step at random, a step either way at random,
                                           * two steps forward and one back */

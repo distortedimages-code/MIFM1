@@ -272,9 +272,7 @@ toutes, aux places de ceux des batteries FM :
 
 Choisir une batterie met ses potards à son kit et l'OCTAVE de la piste à 0 : un pas en do 3 joue la hauteur du kit,
 FREQ, la note, TRANSP et OCTAVE la déplacent. Un trig la relance, son enveloppe fait le reste ; un trig sur un son qui
-sonne encore l'enchaîne sans clic. Elles coûtent au FM-1 5 à 7 % d'un bloc par voix (le KICK de Plaits : 14 %). Les
-projets d'avant la 0.9 se lisent, leurs modèles renumérotés ; le KICK, la SNARE et le HI-HAT de Plaits y deviennent
-ceux de MIFM1 (KICK, SNARE, HAT), à leur kit.
+sonne encore l'enchaîne sans clic. Elles coûtent au FM-1 5 à 7 % d'un bloc par voix (le KICK de Plaits : 14 %).
 
 **Les batteries FM** (ALGORITHM après PERC, la banque FM DRUMS) : **FM DRUM** (la voix grosse caisse et toms du
 LXR-02 : un oscillateur et un modulateur en FM, une enveloppe de hauteur), **FM SNARE** (un oscillateur et un bruit
@@ -402,12 +400,7 @@ Choisir la FM met ces réglages aux siens (le deuxième algorithme, ses modulate
 de scie douce, en mouvement) et garde
 l'OCTAVE de la piste (la FM joue la note comme Plaits). La dose d'aléatoire tire tout, sauf RATIO dans ou vers les
 accords (ils sortiraient de la gamme). Une voix coûte au FM-1 environ 13 % d'un bloc (le carré +1 %, PW +2 %, la sync
-+1 %) : moins que les modèles de Plaits qu'elle remplace (VIRTUAL ANALOG 15 %, les 6-OP FM 17 %, HARMONIC 31 %). Les
-projets de la 0.10 et de la 0.11.0 se lisent, leur MOVE (un pincement, une montée) devenu la forme la plus proche (Soft,
-Pluck ou Hard ; Rise, Swell ou Slow), locks compris. Ceux de la 0.9 et de la 0.10.0 (où la FM était huit modèles, un par algorithme) se lisent aussi, leurs modèles
-renumérotés : un modèle de Plaits parti devient la FM, sur ses réglages et l'algorithme le plus proche (VA VCF, PHASE
-DIST et VIRTUAL ANALOG : 2 ; les 6-OP FM : 5 ; WAVE TERRAIN, STRING MACHINE, WAVETABLE et CHORDS : 6 ; WAVESHAPER et
-FM 2-OP : 1 ; HARMONIC : 8).
++1 %) : moins que les modèles de Plaits qu'elle remplace (VIRTUAL ANALOG 15 %, les 6-OP FM 17 %, HARMONIC 31 %).
 
 **PADS** (0.11 ; ALGORITHM après la FM, la banque MIFM1) : des **accords et leurs progressions**, joués par une nappe
 de cordes. **Une seule piste la joue** (ALGORITHM la saute sur les autres tant qu'une piste l'a) : ses accords sont
@@ -490,8 +483,7 @@ clavier : tout reste dans l'harmonie. Sans piste PADS, Prog ne quantise rien.
 Choisir PADS met ces réglages aux siens (Tintin, des triades ouvertes, tenues, une montée lente, un peu sombre, en
 ensemble, sans texture) et garde l'OCTAVE de la piste. Elle coûte au FM-1 de 5 % d'un bloc (une triade, une dent de
 scie par note) à 12 % (six notes, trois dents de scie chacune, la cloche) ; sur ses réglages, 7 %. TEXTURE sur
-Down y ajoute environ 30 % (un sinus par note), sur Dust 10 %, les autres presque rien. Les projets d'avant
-se lisent, leurs modèles de Plaits renumérotés.
+Down y ajoute environ 30 % (un sinus par note), sur Dust 10 %, les autres presque rien.
 
 **POLY** (0.12 ; ALGORITHM après PADS, la banque MIFM1) : un petit synthé analogique polyphonique d'après le
 **SH-101** de Roland (1982 : un oscillateur, sa dent de scie, son impulsion et sa sous-octave mélangées, un filtre à
@@ -529,8 +521,7 @@ quatre voix sonnent toujours). De même dans REV3 et PADS.
 | **WAVE** (Saw, Square, PW, PWM) | **CUTOFF** (20 Hz à 20 kHz) | **RESO** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **SUB** (−1 oct., −2, −2 à 25 %) | **ENV** (− : une montée, + : sa profondeur) | **MODE** (Mono, Poly) | **VOICE** (− : VINTAGE, + : UNISON) |
 
 Choisir POLY met ces réglages aux siens (une dent de scie sur sa sous-octave, un squelch, une voix par trig, un peu
-de vintage) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 3 % d'un bloc (quatre : 11 %). Les projets
-d'avant se lisent, leurs modèles de Plaits renumérotés.
+de vintage) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 3 % d'un bloc (quatre : 11 %).
 
 **REV3** (0.13 ; PROPHET jusqu'à 0.16.15 ; ALGORITHM après POLY, la banque MIFM1) : d'après le **Prophet-5** de
 Sequential Circuits (Dave Smith et John Bowen, 1978 : le premier polyphonique entièrement programmable), et nommé d'après
@@ -571,8 +562,7 @@ parallèles sortiraient de la gamme).
 | **OSC** (13 réglages) | **CUTOFF** (20 Hz à 20 kHz) | **RESO** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **VINTAGE** (Clean, puis les premières révisions) | **ENV** (− : avec une attaque, + : pincée) | **POLY-MOD** (− : l'enveloppe sur A, + : B sur A) | **CHORD** (− : l'harmonie, + : une mémoire d'accords ; Off : le clavier) |
 
 Choisir REV3 met ces réglages aux siens (deux dents de scie un peu écartées, un filtre de cuivre, une voix par
-trig) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 4,7 % d'un bloc (quatre : 16 %). Les projets d'avant se
-lisent, leurs modèles de Plaits renumérotés. Depuis la 0.13, ZERO, les batteries, la FM, POLY, REV3 et OTIS partagent la
+trig) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 4,7 % d'un bloc (quatre : 16 %). Depuis la 0.13, ZERO, les batteries, la FM, POLY, REV3 et OTIS partagent la
 mémoire d'une piste (une piste ne joue qu'une machine à la fois) : passer d'une machine à l'autre la refait à neuf.
 
 **OTIS** (0.16.14 sous le nom SQ-1, renommé en 0.16.16 ; ALGORITHM après REV3, la banque MIFM1, à la place de
@@ -938,7 +928,10 @@ un pattern quitté sans SAVE revient tel qu'il était sauvé (ses modifs perdues
 cours tel quel : c'est ainsi qu'on fait une variation (SAVE la remplit). **REC tenu et une touche blanche** efface un
 pattern (à l'arrêt). Ils sont gardés compressés dans la flash (un projet de 3,8 Ko en tient dans 0,7 à 1,5 Ko : de
 70 à 100 patterns selon leurs P-locks ; l'écran dit la place qui reste), à l'abri d'une coupure (une sauvegarde
-coupée laisse le pattern comme il était). Au premier démarrage, le projet sauvé devient A1. La sauvegarde de la page
+coupée laisse le pattern comme il était). Au premier démarrage, le projet sauvé devient A1. **Depuis 0.16.32, les
+projets et les patterns d'avant 0.16** (de 0.1.4 à 0.15) **ne se lisent plus** : un projet sauvé d'avant laisse la
+place à la démo, un pattern d'avant se comporte comme une case vide (SAVE l'écrase). Ceux de 0.16.0 et après se lisent
+toujours. Le code qui les convertissait (une douzaine de formats) rend sa place à la flash. La sauvegarde de la page
 d'installation (backup) garde le pattern en cours, pas encore les autres ; dans le navigateur, ils durent le temps de
 la page.
 
@@ -1122,9 +1115,6 @@ STOP, les enveloppes se ferment et les filtres s'éteignent en ~23 ms (une auto-
 leur bruit) jusqu'au trig suivant. L'écran du filtre dessine sa réponse telle qu'elle est (son enveloppe, sa FM, la
 touche), sa fréquence et, dans un petit cadre à côté de son nom, ce qu'il coûte au cœur qui le joue (en % du
 bloc : la part du filtre dans T1..T4 de la page machine) ; celui de l'enveloppe, sa courbe (la montée, la chute, le ping) et, dans l'anneau, où elle en est.
-
-Les projets d'avant 0.6.0 sont relus tels quels : le type de filtre passe sur TYPE, le NOISE de SEM et le BREATH de
-VOX sur NOISE (au même niveau de bruit).
 
 **Les rythmes euclidiens** (SEQ, cinquième page ; sur les effets, l'avant-dernière) : **FILLS** coups répartis aussi
 régulièrement que possible sur la longueur de la piste, **ROTATE** les décale ; LENGTH et PROB sont ceux de la piste
