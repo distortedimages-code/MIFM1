@@ -171,6 +171,13 @@ sur le même écran :
 - **METAL** : les stabs de la démo, ouverts et une octave plus haut, envoyés loin dans la réverbe ; DECAY (jusqu'à
   Freeze), SIZE, TONE, et MODE pour passer à SHIMMER.
 
+En 0.16.45, TAURUS joue une **boucle EBM** : le kick sur chaque temps, la caisse claire sur le deux et le quatre, la
+basse qui galope entre les kicks sur les doubles croches (fa mineur, ses sauts d'octave), la dent de scie du Minimoog
+poussée dans l'échelle ; CUTOFF, EMPH, CONTOUR, DECAY. Et les potards des filtres **glissent** (~10 ms, par 16
+échantillons) : un doigt qui tire le dessin envoie ses valeurs par à-coups (~60 par seconde), RESO et DRIVE sautaient
+et crépitaient sur un téléphone ; la recherche du réglage juste sous l'auto-oscillation (la courbe dessinée quand le
+filtre chante) se fait par moitiés, 7 mesures au lieu de 50 par image.
+
 Les histoires des machines récentes (POLY, REV3, TAURUS, VOCODER, CHOIR, STATIC) ont leurs photos d'archives depuis la
 0.16.44, et METAL la sienne : la plaque EMT 140 (1957), puis l'Erbe-Verb de Tom Erbe et Make Noise (2014). Un seul son à la fois sur la page : un
 exemple lancé arrête celui d'avant et met la machine en pause là où elle en est ; toucher la machine, « Essayer » ou

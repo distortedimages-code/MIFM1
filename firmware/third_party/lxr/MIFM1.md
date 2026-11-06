@@ -9,8 +9,8 @@ parser, menus, LFOs, modulation matrix, mixer or effects.
 
 Licence: GPL-3.0-only, with the additional permission and terms of `NOTICE.md` (Copyright (C) 2012-2026 Erica
 Synths): `LICENSE` and `NOTICE.md` here are the repository's own. The names "Erica Synths", "LXR" and "LXR-02" are
-not used for MIFM1 or its models (on the screen: FM DRUM, FM SNARE, FM CYMBAL, FM HI-HAT); they only say where this
-code comes from. MIFM1's firmware, which contains these voices, is distributed under GPL-3.0 as a whole.
+not used for MIFM1 or its models (on the screen: FM DRUM, FM SNARE; FM CYMBAL and FM HI-HAT were taken out of
+MIFM1 in 0.16.43, their code kept here for `make lxr-check`); they only say where this code comes from. MIFM1's firmware, which contains these voices, is distributed under GPL-3.0 as a whole.
 
 ## What MIFM1 changed (2026)
 

@@ -49,6 +49,8 @@ enum { LAB_LADDER, LAB_MS20, LAB_SEM, LAB_VOX, LAB_TAURUS, LAB_STATIC, LAB_KICK,
 #define LAB_RATCHES 10
 static int lab_on, lab_n, lab_p[4], lab_direct, lab_lane;   /* (direct: a filter on a saw, the engine idle) */
 static float lab_ph;                     /* (the saw's phase) */
+static float lab_ks[12];                 /* (0.16.45) the filter's knobs as heard: glided toward the knobs' (~10 ms) */
+static int lab_ks_on;
 static float lab_l[512], lab_r[512];
 static char lab_txt[32];
 static int lab_ratch[LAB_RATCHES];       /* RATCH's travel here: one step's hits, then hits over steps */
@@ -107,6 +109,7 @@ __attribute__((used, visibility("default"))) uint32_t lab_setup(uint32_t id)
         if (!mf_ready)
             mf_init(), mf_ready = 1;
         mf_reset(0);
+        lab_ks_on = 0;
         static const float F[12] = {0.45f, 0.4f, 0.0f, 0.3f, 0.2f, 0.0f, 0.0f, 0.0f, MF_LP, 0.0f, 0.0f, 0.0f};
         for (int k = 0; k < 12; k++)
             p->val[PG_FILT(0, k / 4) * 4 + k % 4] = F[k];
@@ -117,12 +120,40 @@ __attribute__((used, visibility("default"))) uint32_t lab_setup(uint32_t id)
         else
             lab_k(3, PG_FILT(0, 0) * 4 + 0, PG_FILT(0, 0) * 4 + 1, PG_FILT(0, 1) * 4 + 0, 0);
         return (uint32_t)lab_n;
-    } else if (id == LAB_TAURUS) {       /* the bass's riff on TAURUS, the filter off (its own ladder) */
+    } else if (id == LAB_TAURUS) {       /* (0.16.45) EBM: the kick on every beat, the snare on two and four, TAURUS
+                                          * galloping between the kicks on the sixteenths (F minor, its octave jumps),
+                                          * the Minimoog's saw pushed into its ladder, short notes; the filter off */
+        static const int8_t B[16] = {0, 5, 5, 17, 0, 5, 5, 17, 0, 5, 5, 17, 0, 1, 1, 15};   /* (over C2; 0: none) */
+        static const float K[8] = {5.5f / 9.0f, 0.35f, 0.7f, 0.33f, 0.45f, 0.8f, 0.3f, 0.0f};   /* (Saw, Hot 40 %) */
         eng_set_model(1, eng_model_find(MK_TAURUS, 0));
-        p->algo[PG_FILT(1, 0)] = MF_OFF;
-        lab_only(p, 1, 0.5f);
+        eng_set_model(2, eng_model_find(MK_DRUM, 1));
+        p->algo[PG_FILT(1, 0)] = p->algo[PG_FILT(2, 0)] = MF_OFF;
+        lab_only(p, 1, 0.9f);
+        p->val[PG_MIX * 4 + 1] = 0.85f, p->val[PG_MIX * 4 + 2] = 0.7f;
+        p->val[PG_PAN * 4 + 2] = 0.0f;
+        for (int i = 0; i < 8; i++) {
+            const int q = lab_mparam(1, i);
+            p->val[q] = eng_pdef(q)->kind == K_BIP ? 2.0f * K[i] - 1.0f : K[i];
+        }
+        p->val[PG_TRACK(1, 2) * 4 + 1] = 0.4f;   /* (LENGTH: short) */
+        p->val[PG_TRACK(1, 2) * 4 + 3] = -1.0f;  /* (OCTAVE -1: C2) */
+        p->val[PG_DUCK * 4 + 1] = 0.2f, p->val[PG_DUCK * 4 + 2] = p->val[PG_DUCK * 4 + 3] = 0.0f;
+        p->val[eng_track_param(1, TP_SEND)] = p->val[eng_track_param(1, TP_DSEND)] = 0.0f;
+        p->val[eng_track_param(2, TP_SEND)] = 0.25f, p->val[eng_track_param(2, TP_DSEND)] = 0.0f;
+        p->rnd[1][TP_RATCHET] = 0, p->rnd[2][5] = 0, p->rnd[2][TP_PAN] = 0;
+        p->val[PG_STEP(2) * 4 + 1] = 1.0f;
+        for (int t = 0; t < 3; t++)
+            eng_steps_clear(t);
+        for (int st = 0; st < 16; st++) {
+            eng_trig_set(0, st, st % 4 == 0);
+            eng_trig_set(2, st, st == 4 || st == 12);
+            if (B[st]) {
+                eng_trig_set(1, st, 1);
+                eng_lock_set(1, st, TP_NOTE, (float)B[st]);
+            }
+        }
         lab_lane = 1;
-        lab_k(3, lab_mparam(1, 3), lab_mparam(1, 4), lab_mparam(1, 5), 0);
+        lab_k(4, lab_mparam(1, 3), lab_mparam(1, 4), lab_mparam(1, 5), lab_mparam(1, 6));
     } else if (id == LAB_STATIC) {       /* STATIC on three tracks, ARC/01's three lanes (after its RELAY ROOM): BODY's
                                           * rare sub hits (43 Hz), ARC's copper ring (830 Hz by a modulator at 113 Hz),
                                           * SPARK's sparks (S/H, a band pass at 2.8 kHz), each at 35 % */
@@ -474,23 +505,35 @@ __attribute__((used, visibility("default"))) void lab_render(uint32_t n)
         eng_render(lab_l, lab_r, n);
         return;
     }
-    /* the saw (A1, polyBLEP: no alias heard), through the filter as its knobs have it */
+    /* the saw (A1, polyBLEP: no alias heard), through the filter as its knobs have it; (0.16.45) its knobs glided,
+     * 16 samples at a time (a finger's drag comes in steps, ~60 a second: RESO, DRIVE jumping crackled) */
     project_t *p = eng_project();
     float k[12];
     for (int i = 0; i < 12; i++)
         k[i] = p->val[PG_FILT(0, i / 4) * 4 + i % 4];
-    const int model = p->algo[PG_FILT(0, 0)], type = (int)(k[MF_TYPE] + 0.5f);
-    mf_set(0, model, type < 0 ? 0 : type > 2 ? 2 : type, k, 33.0f);
-    const float dt = 55.0f / 44100.0f;
-    for (uint32_t i = 0; i < n; i++) {
-        float x = 2.0f * lab_ph - 1.0f, t;
-        if (lab_ph < dt) t = lab_ph / dt, x -= t + t - t * t - 1.0f;
-        else if (lab_ph > 1.0f - dt) t = (lab_ph - 1.0f) / dt, x -= t * t + t + t + 1.0f;
-        lab_l[i] = lab_on ? 0.45f * x : 0.0f;
-        lab_ph += dt;
-        if (lab_ph >= 1.0f) lab_ph -= 1.0f;
+    if (!lab_ks_on) {
+        for (int i = 0; i < 12; i++)
+            lab_ks[i] = k[i];
+        lab_ks_on = 1;
     }
-    mf_process(0, lab_l, n);
+    const int model = p->algo[PG_FILT(0, 0)], type = (int)(k[MF_TYPE] + 0.5f);
+    const float dt = 55.0f / 44100.0f;
+    for (uint32_t at = 0; at < n; at += 16) {
+        const uint32_t m = n - at < 16 ? n - at : 16;
+        for (int i = 0; i < 12; i++)     /* (16 samples: 1 - e^(-16 / 441), ~10 ms) */
+            lab_ks[i] += (k[i] - lab_ks[i]) * 0.0356f;
+        lab_ks[MF_TYPE] = k[MF_TYPE];
+        mf_set(0, model, type < 0 ? 0 : type > 2 ? 2 : type, lab_ks, 33.0f);
+        for (uint32_t i = at; i < at + m; i++) {
+            float x = 2.0f * lab_ph - 1.0f, t;
+            if (lab_ph < dt) t = lab_ph / dt, x -= t + t - t * t - 1.0f;
+            else if (lab_ph > 1.0f - dt) t = (lab_ph - 1.0f) / dt, x -= t * t + t + t + 1.0f;
+            lab_l[i] = lab_on ? 0.45f * x : 0.0f;
+            lab_ph += dt;
+            if (lab_ph >= 1.0f) lab_ph -= 1.0f;
+        }
+        mf_process(0, lab_l + at, m);
+    }
     static const float G[4] = {0.45f, 0.23f, 0.18f, 0.36f};   /* (each as loud as the loops: LADDER, MS-20, SEM, VOX) */
     const float g = G[(unsigned)(model - MF_LADDER) & 3];
     for (uint32_t i = 0; i < n; i++) {
