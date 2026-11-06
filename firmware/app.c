@@ -233,7 +233,7 @@ static struct {
     int mod;                             /* MOD mode */
     int msel;                            /* MATRIX: the cable chosen (0..7 the track's, 8..15 the global ones) */
     int init_sel;                        /* GLO: the project REC held loads (0 new, 1 the demo, 2 the saved one, 3 the
-                                          * stress test, 4 the stress test on the FM drums) */
+                                          * stress test, 4 the stress test on the two FM drums) */
     int octave;                          /* the keyboard's */
     int dice;                            /* OCT- held (or both), SELECT turned: the random dose, on its own screen */
     uint32_t dice_at;                    /* (its screen came at) */
@@ -375,9 +375,9 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
     }
     case PT_MIX: case PT_PAN: case PT_SPREAD: case PT_EQ: case PT_DUCK: case PT_COMP: case PT_OTT:   /* the mixer:
                                           * the levels, the pans, the spreads (0.16.19), the filters, the duck, the
-                                          * master bus (its two modes) */
-        f[0] = PG_MIX, f[1] = PG_PAN, f[2] = VP_SPREAD, f[3] = PG_EQ, f[4] = PG_DUCK, f[5] = PG_COMP, f[6] = PG_OTT;
-        return 7;
+                                          * master bus (0.16.43: the compressor alone, OTT gone) */
+        f[0] = PG_MIX, f[1] = PG_PAN, f[2] = VP_SPREAD, f[3] = PG_EQ, f[4] = PG_DUCK, f[5] = PG_COMP;
+        return 6;
     case PT_STEP: case PT_RND: case PT_EUC: case PT_PLAY: case PT_CLIMB:
         if (t < 0) {                     /* an effect's Euclidean or PLAY face: its module's */
             int l = plane(page);
@@ -446,7 +446,7 @@ static int algo_here(int page)           /* ALGO does something here: the header
 {
     int pt = ptype(page);
     return algo_page(page) >= 0 || pt == PT_WARPS1 || pt == PT_WARPS2 || pt == PT_DELAY1 || pt == PT_DELAY2 ||
-           pt == PT_DSEND || pt == PT_COMP || pt == PT_OTT || pt == PT_REVERB || pt == PT_RSEND || pt == PT_DUCK;
+           pt == PT_DSEND || pt == PT_COMP || pt == PT_REVERB || pt == PT_RSEND || pt == PT_DUCK;
 }
 
 static int page_at(int page, int face)   /* its module's page at face (wrapping) */
@@ -566,7 +566,7 @@ static const char *module_name(int page)
                                                                         : track_kind(ptrack(page)) == MK_PADS ? "Pads"
                                                                         : track_kind(ptrack(page)) == MK_POLY ? "Poly"
                                                                         : track_kind(ptrack(page)) == MK_PROPHET ? "Rev3"
-                                                                        : track_kind(ptrack(page)) == MK_SQ1 ? "Otis"
+                                                                        : track_kind(ptrack(page)) == MK_CHOIR ? "Choir"
                                                                         : track_kind(ptrack(page)) == MK_TAURUS ? "Taurus"
                                                                         : track_kind(ptrack(page)) == MK_VOCODER ? "Vocoder"
                                                                         : track_kind(ptrack(page)) == MK_STATIC ? "Static"
@@ -601,7 +601,7 @@ static const char *const LANE_SHORT[ENG_LANES] = {"T1", "T2", "T3", "T4", "DL", 
 /* the colours of a module's state, as its icons print them (in Mutable's: teal, orange, pink) */
 static uint16_t accent3(int i) { return i <= 0 ? AC1 : i == 1 ? AC2 : AC3; }
 
-static uint16_t model_accent(int m)      /* by bank: orange MIFM1's voices (ZERO, the FM, OTIS...), teal Plaits' speech,
+static uint16_t model_accent(int m)      /* by bank: orange MIFM1's voices (ZERO, the FM, CHOIR...), teal Plaits' speech,
                                           * pink the drums, the noises and the physical models */
 {
     int b = eng_model_bank(m);
@@ -1097,10 +1097,6 @@ static const vop_t ICONS[NICON][IOPS] = {
      {'L', 20, 12, 23, 17}},                                                                        /* FM drum */
     {{'R', 6, 13, 20, 11}, {'L', 6, 17, 26, 17}, {'L', 7, 9, 11, 5}, {'L', 11, 5, 15, 9}, {'L', 15, 9, 19, 5},
      {'L', 19, 5, 23, 9}},                                                                          /* FM snare */
-    {{'L', 3, 13, 16, 8}, {'L', 16, 8, 29, 13}, {'L', 3, 13, 29, 13}, {'L', 16, 13, 16, 28},
-     {'L', 10, 28, 22, 28}},                                                                        /* FM cymbal */
-    {{'L', 5, 11, 27, 11}, {'L', 5, 15, 27, 15}, {'D', 16, 7, 2, 0}, {'L', 16, 15, 16, 28},
-     {'L', 10, 22, 22, 22}},                                                                        /* FM hi-hat */
     {{'C', 16, 16, 11, 0}, {'L', 6, 16, 9, 11}, {'L', 9, 11, 12, 11}, {'L', 12, 11, 16, 16}, {'L', 16, 16, 20, 21},
      {'L', 20, 21, 23, 21}, {'L', 23, 21, 26, 16}},                                                 /* ZERO: a sine
                                                                                                      * through zero */
@@ -1121,11 +1117,6 @@ static const vop_t ICONS[NICON][IOPS] = {
      {'L', 4, 27, 10, 17}, {'L', 10, 17, 10, 27}, {'L', 10, 27, 18, 17}, {'L', 18, 17, 18, 27},
      {'L', 18, 27, 26, 17}},                                                                        /* PROPHET: two
                                                                                                      * saws apart */
-    {{'L', 2, 27, 6, 21}, {'L', 6, 21, 10, 27}, {'L', 11, 19, 16, 13}, {'L', 16, 13, 16, 19}, {'L', 16, 19, 20, 14},
-     {'L', 21, 11, 21, 4}, {'L', 21, 4, 24, 4}, {'L', 24, 4, 24, 11}, {'L', 24, 11, 29, 11}},          /* OTIS: a
-                                                                                                     * Transwave's
-                                                                                                     * cycles, one
-                                                                                                     * after another */
     {{'C', 16, 19, 7, 0}, {'L', 10, 15, 6, 11}, {'L', 6, 11, 5, 5}, {'L', 22, 15, 26, 11}, {'L', 26, 11, 27, 5},
      {'D', 13, 22, 1, 0}, {'D', 19, 22, 1, 0}},                                                     /* TAURUS: the
                                                                                                      * bull */
@@ -1134,6 +1125,10 @@ static const vop_t ICONS[NICON][IOPS] = {
                                                                                                      /* VOCODER: a
                                                                                                      * microphone, a
                                                                                                      * wave, a line */
+    {{'C', 9, 14, 4, 0}, {'C', 16, 9, 4, 0}, {'C', 23, 14, 4, 0}, {'L', 3, 22, 15, 22}, {'L', 10, 17, 22, 17},
+     {'L', 17, 22, 29, 22}, {'L', 4, 27, 28, 27}},                                                  /* CHOIR: three
+                                                                                                     * singers in a
+                                                                                                     * row */
     {{'R', 4, 7, 24, 18}, {'D', 8, 11, 1, 0}, {'D', 14, 14, 1, 0}, {'D', 21, 10, 1, 0}, {'D', 11, 19, 1, 0},
      {'D', 18, 20, 1, 0}, {'D', 24, 16, 1, 0}, {'L', 10, 28, 22, 28}, {'L', 16, 25, 16, 28}},       /* STATIC */
     {{'R', 5, 6, 22, 14}, {'L', 10, 20, 8, 27}, {'L', 8, 27, 16, 20}},                              /* SPEECH */
@@ -1555,48 +1550,12 @@ static void fm_shape_panel(int t, int pg, uint16_t ac)
     }
 }
 
-/* OTIS's first face: in the ring, the cycle its newest voice reads (its Transwave's place as it steps), its name, its
- * program's family, the place */
-static void panel_sq1(int t, int m, uint16_t ac)
-{
-    float y[48];
-    char s[40], n[8];
-    int of = 32, at = eng_sq_cycle(t, y, 48, &of);
-    hoop(HX, HY, 27.0f, 2.0f, ac);
-    if (at < 0) {
-        vicon(HX, HY, 1.05f, 2.4f, ac, IC_MODEL + m, 0);
-    } else {
-        int reveal = anim_p >= 1.0f ? 48 : (int)(48.0f * (1.0f - (1.0f - anim_p) * (1.0f - anim_p)));
-        for (int i = 1; i < reveal; i++) {   /* (37 px wide, 13 px each way) */
-            float x0 = HX - 18.5f + (float)(i - 1) * (37.0f / 47.0f), x1 = HX - 18.5f + (float)i * (37.0f / 47.0f);
-            seg(x0, HY - y[i - 1] * 13.0f, x1, HY - y[i] * 13.0f, 4.0f, tint(ac, BG, 2));
-            seg(x0, HY - y[i - 1] * 13.0f, x1, HY - y[i] * 13.0f, 2.0f, ac);
-        }
-    }
-    int yl = hero_title(eng_algo_name(PG_TRACK(t, 0), m));
-    s[0] = 0;
-    text_cat(s, eng_sq_family(t), sizeof s);
-    if (at >= 0) {
-        text_cat(s, "|", sizeof s);
-        int_text(at % 32 + 1, n);
-        text_cat(s, n, sizeof s);
-        text_cat(s, " / ", sizeof s);
-        int_text(of, n);
-        text_cat(s, n, sizeof s);
-    }
-    hero_line(yl, s);
-}
-
 static void panel_plaits(int t, int face, uint16_t ac)
 {
     project_t *p = eng_project();
     int m = p->algo[PG_TRACK(t, 0)];
     char s[40], n[8];
     int alg = eng_fm_algo(t);            /* (the FM: its algorithm, as it plays) */
-    if (face != 2 && track_kind(t) == MK_SQ1) {
-        panel_sq1(t, m, ac);
-        return;
-    }
     hero_icon(alg >= 0 ? IC_ALG + alg : IC_MODEL + m, ac);
     if (face == 0) {                     /* the model (PADS: its progression, its chord) */
         int y = hero_title(eng_algo_name(PG_TRACK(t, 0), m));
@@ -1753,7 +1712,7 @@ static void lfo_scope(int force)         /* the LFO these 1.4 s (eng_hist), the 
 
 static int meter_lit(int t) { return (int)(fm_clampf(eng_meter(t) * 1.25f, 0.0f, 1.0f) * 7.0f + 0.5f); }
 
-static int bus_mode(void) { return eng_project()->algo[PG_COMP] % 3; }   /* MB_OFF, MB_COMP, MB_OTT */
+static int bus_mode(void) { return eng_project()->algo[PG_COMP] ? MB_COMP : MB_OFF; }   /* (0.16.43: OTT gone) */
 
 static void panel_duck(void)             /* the duck: its source's trigs (0.16.42: ALGORITHM, T1..T4), its decay */
 {
@@ -2094,17 +2053,11 @@ APP_SMALL static void panel_euclid(int l)
     }
 }
 
-static void panel_bus(int ott)           /* the master bus: this face's mode, on or not */
+static void panel_bus(void)              /* the master bus: the compressor, on or not */
 {
-    static const char *const M[3] = {"MASTER BUS OFF", "COMP ON", "OTT ON"};
-    int m = bus_mode(), on = m == (ott ? MB_OTT : MB_COMP);
-    char s[48];
-    hero_icon(ott ? IC_OTT : IC_COMP, on ? (ott ? AC3 : AC2) : MUTED);
-    int y = hero_title(ott ? "OTT" : "COMP");
-    s[0] = 0;
-    text_cat(s, on ? M[m] : m == MB_OFF ? M[0] : ott ? "COMP ON" : "OTT ON", sizeof s);
-    text_cat(s, on ? "|LIMITER" : "|ALGO: THIS ONE", sizeof s);
-    hero_line(y, s);
+    int on = bus_mode() == MB_COMP;
+    hero_icon(IC_COMP, on ? AC2 : MUTED);
+    hero_line(hero_title("COMP"), on ? "COMP ON|LIMITER" : "MASTER BUS OFF|ALGO: ON");
 }
 
 APP_SMALL static void panel_mixer(int pan)
@@ -2368,16 +2321,13 @@ static void fx_meter(int force)
 {
     static int shown = -1;
     int pt = ptype(ui.page), l = plane(ui.page), m;
-    if (pt == PT_DUCK || pt == PT_COMP || pt == PT_OTT) {
-        int mode = bus_mode(), h[3] = {0, 0, 0}, key;
+    if (pt == PT_DUCK || pt == PT_COMP) {
+        int mode = bus_mode(), h[1] = {0}, key;
         if (pt == PT_DUCK)
             h[0] = (int)(eng_duck() * 52.0f + 0.5f);
         else if (mode == MB_COMP)
             h[0] = (int)(fm_clampf(-eng_gr(0) / 18.0f, 0.0f, 1.0f) * 52.0f + 0.5f);
-        else if (mode == MB_OTT)
-            for (int b = 0; b < 3; b++)
-                h[b] = (int)(fm_clampf(eng_gr(b) / 24.0f, -1.0f, 1.0f) * 26.0f);
-        key = (h[0] + 64) | (h[1] + 64) << 7 | (h[2] + 64) << 14 | pt << 21 | mode << 26;
+        key = (h[0] + 64) | pt << 21 | mode << 26;
         if (!force && key == shown)
             return;
         shown = key;
@@ -2388,15 +2338,6 @@ static void fx_meter(int force)
         } else if (mode == MB_COMP) {    /* down from the top: the reduction (18 dB the whole bar) */
             cv_rect(2, 0, 6, 52, TRACK);
             cv_rect(2, 0, 6, h[0], AC2);
-        } else if (mode == MB_OTT) {     /* low, mid, high: up raised, down squashed (24 dB half the bar) */
-            for (int b = 0; b < 3; b++) {
-                cv_rect(b * 4, 0, 2, 52, TRACK);
-                if (h[b] > 0)
-                    cv_rect(b * 4, 26 - h[b], 2, h[b], AC3);
-                else if (h[b] < 0)
-                    cv_rect(b * 4, 26, 2, -h[b], AC1);
-                cv_rect(b * 4, 25, 2, 2, HI);
-            }
         }
         blit(226, PANEL_Y + 12);
         return;
@@ -2538,8 +2479,6 @@ APP_SMALL static void draw_panel(void)
     }
     if ((pt == PT_PLAITS1 || pt == PT_PLAITS2 || pt == PT_PLAITS3 || pt == PT_SON2) && eng_fm_algo(tr) >= 0)
         s[1] = s[1] * 9 + 1 + eng_fm_algo(tr);   /* (the FM: its algorithm's drawing) */
-    if ((pt == PT_PLAITS1 || pt == PT_PLAITS2 || pt == PT_PLAITS3) && track_kind(tr) == MK_SQ1)
-        s[1] = s[1] * 37 + 2 + eng_sq_cycle(tr, 0, 0, 0);   /* (OTIS: the cycle it reads) */
     if (tr >= 0 && tr == eng_pads_track()) {   /* (PADS: its progression's place, its chord) */
         char pl[40];
         eng_pads_line(pl, sizeof pl);
@@ -2570,7 +2509,7 @@ APP_SMALL static void draw_panel(void)
     case PT_VFLT1: case PT_VFLT2: panel_filter(tr, page_accent(ui.page)); break;
     case PT_EUC: panel_euclid(eng_page_lane(ui.page)); break;
     case PT_DUCK: panel_duck(); break;
-    case PT_COMP: case PT_OTT: panel_bus(pt == PT_OTT); break;
+    case PT_COMP: case PT_OTT: panel_bus(); break;
     case PT_STEP: case PT_LANE: case PT_PLAY:
         panel_steps(plane(ui.page), pt == PT_PLAY && plane(ui.page) < ENG_TRACKS);
         break;
@@ -2700,8 +2639,8 @@ static int knob_idle(int param)
     int page = param / 4, k = param % 4;
     if (page < 12 && page % 3 == 1 && k == 1)    /* (an FM drum's: one of its own) */
         return eng_model_enveloped(eng_project()->algo[page - 1]) && !eng_model_own(eng_project()->algo[page - 1]);
-    if (page == PG_COMP || page == PG_OTT)
-        return bus_mode() != (page == PG_OTT ? MB_OTT : MB_COMP);
+    if (page == PG_COMP)
+        return bus_mode() != MB_COMP;
     if (page >= PG_FILT(0, 0) && page <= PG_FILT(ENG_TRACKS - 1, 2))   /* the filter OFF: its knobs */
         return eng_project()->algo[PG_FILT((page - PG_FILT(0, 0)) / 3, 0)] == MF_OFF;
     if (ptype(page) == PT_LANE && k != 3)
@@ -3211,7 +3150,7 @@ APP_SMALL static void draw_projects(void)          /* the projects REC held load
 {
     static int shown = -1;
     static const char *const P[5] = {"New: 4 FM, nothing patched", "The demo groove", "The saved project",
-                                     "Stress test (plays at once)", "Stress test, on the 4 FM drums"};
+                                     "Stress test (plays at once)", "Stress test, on the FM drums"};
     if (ui.full || ui.body_panel || shown != ui.init_sel) {
         shown = ui.init_sel;
         cv_begin(240, PANEL_H, BG);
@@ -5742,7 +5681,7 @@ static void panel_chord(void)            /* the step's notes on two octaves of k
 }
 
 /* (0.16.40) a step held, ALGORITHM turned: the step's model, a detent a model of the track's family (Plaits' six, the
- * six drums, the four FM drums), from the track's; back on the track's, the lock gone. Returns what is left of e */
+ * six drums, the two FM drums), from the track's; back on the track's, the lock gone. Returns what is left of e */
 static int32_t step_model_turn(int t, int st, int32_t e)
 {
     int a = eng_project()->algo[PG_TRACK(t, 0)], m = eng_model_lock(t, st), n;
@@ -6153,13 +6092,10 @@ static void input(void)
         p->algo[PG_REVERB] = (uint8_t)clamp((int32_t)p->algo[PG_REVERB] + (e > 0 ? 1 : -1), RV_CLOUDS, RV_SHIMMER);
         dirty = 1;
         ui.full = 1;                     /* (its knobs' names, its panel) */
-    } else if (e && !ui.matrix && (ptype(ui.page) == PT_COMP || ptype(ui.page) == PT_OTT)) {
-        int m = clamp(bus_mode() + (e > 0 ? 1 : -1), MB_OFF, MB_OTT);   /* the master bus: off, COMP, OTT (its face) */
-        eng_project()->algo[PG_COMP] = (uint8_t)m;
+    } else if (e && !ui.matrix && ptype(ui.page) == PT_COMP) {
+        eng_project()->algo[PG_COMP] = (uint8_t)(e > 0 ? MB_COMP : MB_OFF);   /* the master bus: off or COMP */
         dirty = 1;
-        if (m != MB_OFF && ui.page != (m == MB_OTT ? PG_OTT : PG_COMP))
-            go_page_dir(m == MB_OTT ? PG_OTT : PG_COMP, e > 0 ? 1 : -1);
-        ui.full = ui.slide_dir ? ui.full : 1;
+        ui.full = 1;
     } else if (e && !ui.matrix && track_cat(ui.page) == CAT_FILTER) {
         project_t *p = eng_project();    /* the filter's model (OFF, LADDER, MS-20, SEM, VOX); GLO held: the four's */
         int t = ptrack(ui.page), m = clamp((int32_t)p->algo[PG_FILT(t, 0)] + e, 0, MF_MODELS - 1);

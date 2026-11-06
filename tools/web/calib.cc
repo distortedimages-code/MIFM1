@@ -15,7 +15,7 @@
 //                                        or its algorithm's mark 0..5 (T2 by T1, T2 playing too), HQ 0/1; EXTRA
 //                                        (bits) T1's EQ, the duck, the delay's filter and drive; the FM's square, PW,
 //                                        SYNC; PADS' MANUAL triad, six notes, one saw a note, its bell; POLY's voice, four;
-//                                        SQ-1's three layers and SPACE, its voices ringing on or one; T1's SPREAD; the
+//                                        CHOIR's four parts; T1's SPREAD; the
 //                                        reverb METAL or SHIMMER
 //   calib blank SECONDS                  nothing playing (the preparation's floor, a resting voice)
 #include <cstdio>
@@ -116,14 +116,9 @@ int main(int argc, char** argv) {
     if (extra & 8192) p->val[PG_TRACK(0, 1) * 4 + 0] = 0.0f;  // next); PROPHET: 1024 held, 8192 short, 16384 a
     if (extra & 16384) p->val[PG_TRACK(0, 2) * 4 + 0] = 2.0f * 13.5f / 15.0f - 1.0f;   // Min7 (four voices)
     if (extra & 32768) p->trauma = 50;   // TRAUMA's drive on the track (50 %: no filter, no delay's drive yet)
-    if (extra & 65536) {                 // SQ-1 (65536): its three layers, SPACE up; SHAPE long (its voices ringing on,
-      auto knob = [&](int i, float u) {  // four), 131072 short (one)
-        int param = PG_TRACK(0, 0) * 4 + 1 + i;
-        p->val[param] = eng_pdef(param)->kind == K_BIP ? 2.0f * u - 1.0f : u;
-      };
-      knob(6, 1.0f);
-      knob(7, 1.0f);
-      knob(5, extra & 131072 ? 0.0f : 1.0f);
+    if (extra & 65536) {                 // (0.16.43) CHOIR (65536): its four parts (VOICES at Choir); its kit, Solo
+      int param = PG_TRACK(0, 0) * 4 + 1 + 1;
+      p->val[param] = eng_pdef(param)->kind == K_BIP ? 1.0f : 1.0f;
     }
     p->warps_hq = static_cast<uint8_t>(hq);
     if (warps >= 0) {
@@ -147,7 +142,7 @@ int main(int argc, char** argv) {
   for (uint32_t b = 0; b < nb; ++b) {
     eng_render(l, r, 128);
     const int kind = eng_model_kind(eng_project()->algo[PG_TRACK(0, 0)]);
-    nv += kind == MK_PROPHET ? pro_voices(0) : kind == MK_SQ1 ? sq_voices(0) : kind == MK_VOCODER ? voc_voices(0)
+    nv += kind == MK_PROPHET ? pro_voices(0) : kind == MK_CHOIR ? 0 : kind == MK_VOCODER ? voc_voices(0)
                                                                                                      : poly_voices(0);
   }
   printf("blocks %u\nvoices %.4f\n", nb, nv / static_cast<double>(nb ? nb : 1));

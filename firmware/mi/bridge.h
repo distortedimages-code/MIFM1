@@ -41,7 +41,7 @@ void mp_render(void *v, float *out, float *aux, uint32_t n);
 const char *mp_model_name(int model);
 
 /* ---- the LXR-02's drum voices (mi_lxr.cc: Erica Synths' LXR firmware, GPL-3.0), one of each a track ---- */
-#define LX_MODELS 4                      /* the drum (kick, tom), the snare, the cymbal, the hi-hat */
+#define LX_MODELS 2                      /* the drum (kick, tom), the snare (0.16.43: the cymbal, the hi-hat gone) */
 #define LX_KNOBS 8                       /* the parameters a model takes from its track's knobs */
 void lx_init(void);
 /* k: the LX_KNOBS knobs, 0..1 (as a modulation reaches the LXR: its MIDI value is v x 127); note: MIDI, its fraction
@@ -161,10 +161,9 @@ int poly_voices(int t);                  /* its voices sounding */
 int poly_chord(float u);                 /* PROPHET's CHORD at u: -7 .. 7 (0 Off) */
 const char *poly_chord_name(float u);    /* its name (Off, Triad, 7th...) */
 /* (0.16.15) the keys held on the track (ids: the keys, notes: their pitches, n: 4 at most), a voice each; called
- * every block (an empty list lets them go). POLY's in MODE Poly, REV3's (MK_PROPHET) with CHORD Off, OTIS' (MK_SQ1) */
+ * every block (an empty list lets them go). POLY's in MODE Poly, REV3's (MK_PROPHET) with CHORD Off */
 void poly_keys(int t, const int *ids, const float *notes, int n);
 void pro_keys(int t, const int *ids, const float *notes, int n);
-void sq_keys(int t, const int *ids, const float *notes, int n);
 const char *poly_knob_name(int k);
 void poly_defaults(float *k);
 int poly_knob_steps(int k);              /* MODE's 2 (0.16.15: Mono, Poly; CHORD's place), the others 128 */
@@ -187,34 +186,24 @@ void pro_defaults(float *k);
 int pro_knob_steps(int k);               /* OSC's 13, CHORD's 15, the others 128 */
 void pro_knob_text(int k, float u, char *b, int n);
 
-/* ---- OTIS (mi_sq1.cc, 0.16.14 as SQ-1, renamed 0.16.16): a pocket Ensoniq after the SQ-1 and its OTIS chip, four voices a track: Transwaves
- * (32 cycles of 256 samples, or 8 loops of a bell's partials, MIFM1's own recipes, made in the track's Plaits voice's
- * memory) read by a phase accumulator, linearly between two samples, the next cycle taken at its wrap; OTIS' poles,
- * no resonance; three layers; a chorus, then the program's comb, phaser or drive. Its eight knobs (k: 0..1): WAVE
- * (24 programs), INDEX, SWEEP (bipolar from its middle), MOTION, COLOR, SHAPE, STACK, SPACE ---- */
-void sq_init(void);
-void sq_reset(int t);
-void sq_silence(int t);
-void sq_set(int t, const float *notes, int n, const float *k);   /* (0.16.16: a chord, 4 notes at most) */
-void sq_gate(int t, int g);
-void sq_render(int t, float *out, uint32_t n);
-int sq_voices(int t);
-int sq_progs(void);
-const char *sq_knob_name(int k);
-void sq_defaults(float *k);
-int sq_knob_steps(int k);                /* WAVE's 24, the others 128 */
-void sq_knob_text(int k, float u, float wave, char *b, int n);   /* (wave: WAVE's knob, SPACE's text names its effect) */
-const char *sq_prog_name(float wave);
-const char *sq_family(float wave);        /* its program's family (DIGITAL BASS, ELECTRIC...) */
-/* (the screen) the cycle the newest voice reads, n points of a period in y (-1..1); its place + 32 x the program, -1
- * none; of: the Transwave's places (32, a bell's 8) */
-int sq_cycle(int t, float *y, int n, int *of);
-
 /* ---- TAURUS (mi_taurus.cc, 0.16.20): a monophonic bass after Moog's Taurus bass pedals (the 205A: two saws, B's beat
  * and balance, the transistor ladder, a non-sustaining contour on it, the loudness' DECAY switch, glide; its presets
  * TAURUS, BASS, TUBA) and the Minimoog (its six waves, its third oscillator an octave under, its mixer driving the
  * ladder), one voice a track. Its eight knobs (k: 0..1, CONTOUR bipolar from its middle): VOICE (the three presets,
  * then the six waves), BEAT, MIX, CUTOFF, EMPHASIS, CONTOUR, DECAY, GLIDE ---- */
+/* ---- CHOIR (0.16.43, mi_choir.cc): a singing voice, a soprano alone or four parts (SATB) ---- */
+void choir_init(void);
+void choir_reset(int t);
+void choir_silence(int t);
+void choir_set(int t, const float *notes, int n, const float *k);   /* the parts' notes (the soprano's first) */
+void choir_gate(int t, int g);
+void choir_render(int t, float *out, uint32_t n);
+int choir_voices(float u);               /* VOICES at u: 1 (Solo) .. 4 (Choir) */
+const char *choir_knob_name(int k);
+void choir_defaults(float *k);
+int choir_knob_steps(int k);             /* VOICES' 4, the others 128 */
+void choir_knob_text(int k, float u, char *b, int n);
+
 void taurus_init(void);
 void taurus_reset(int t);
 void taurus_silence(int t);
@@ -318,16 +307,14 @@ void mdl_set(void *d, float time, float feedback, float filter, float resonance,
              float mod);
 void mdl_process(void *d, const float *in, float *out_l, float *out_r, uint32_t n);
 
-/* ---- the master bus (mi_master.cc): a compressor or OTT's three bands, then stmlib's limiter on each side ---- */
+/* ---- the master bus (mi_master.cc): a compressor, then stmlib's limiter on each side ---- */
 uint32_t mms_size(void);
 void mms_init(void *mem);
-void mms_mode(void *m, int mode);        /* 0 off (the limiter alone), 1 the compressor, 2 OTT */
+void mms_mode(void *m, int mode);        /* 0 off (the limiter alone), 1 the compressor (0.16.43: OTT gone) */
 /* the compressor: threshold in dB (0 and under), ratio (1: none), release in seconds, makeup in dB */
 void mms_comp(void *m, float threshold_db, float ratio, float release_s, float makeup_db);
-/* OTT: depth (its mix with the dry, 0..1), time (its attacks and releases scaled: 1 OTT's own), drive and level dB */
-void mms_ott(void *m, float depth, float time, float drive_db, float level_db);
 void mms_process(void *m, float *l, float *r, uint32_t n);   /* in place */
-float mms_gain(void *m, int band);       /* the gain now, dB: the compressor's (- its reduction), OTT's bands' */
+float mms_gain(void *m, int band);       /* the gain now, dB: the compressor's (- its reduction) */
 
 /* ---- Warps, at the FM-1's 44.1 kHz (its tables made again for it: mi_warps.cc) ---- */
 uint32_t mw_size(void);

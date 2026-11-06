@@ -159,7 +159,7 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Source", K_ENUM, 0, 3, kTrackNames}, {"Gain", K_BIP, 0, 0, 0}, {"Thresh", K_UNI, 0, 0, 0},
    {"Filter", K_BIP, 0, 0, 0}},
 };
-const char* const kBusModes[3] = {"OFF", "COMP", "OTT"};
+const char* const kBusModes[2] = {"OFF", "COMP"};   // (0.16.43: OTT gone; a project's OTT read as COMP)
 const char* const kDelayAlgos[2] = {"SYNC", "FREE"};
 const eng_pdef_t kDelayFreeTime = {"Time", K_UNI, 0, 0, 0};   // the delay's TIME when FREE: 1 ms..1.2 s
 const char* const kReverbAlgos[RV_ALGOS] = {"CLOUDS", "METAL", "SHIMMER"};
@@ -201,12 +201,11 @@ struct ModelDef {
 const ModelDef kModelDef[ENG_MODELS] = {
   {"KICK", "KICK", MK_DRUM, 0, 0}, {"SNARE", "SNAR", MK_DRUM, 1, 0}, {"CLAP", "CLAP", MK_DRUM, 2, 0},
   {"HAT", "HAT", MK_DRUM, 3, 0}, {"TOM", "TOM", MK_DRUM, 4, 0}, {"PERC", "PERC", MK_DRUM, 5, 0},
-  {"FM DRUM", "FDRM", MK_LXR, 0, 1}, {"FM SNARE", "FSNR", MK_LXR, 1, 1}, {"FM CYMBAL", "FCYM", MK_LXR, 2, 1},
-  {"FM HI-HAT", "FHAT", MK_LXR, 3, 1},
+  {"FM DRUM", "FDRM", MK_LXR, 0, 1}, {"FM SNARE", "FSNR", MK_LXR, 1, 1},
   {"ZERO", "ZERO", MK_ZERO, 0, 2},
   {"FM", "FM", MK_FM, 0, 2}, {"PADS", "PADS", MK_PADS, 0, 2}, {"POLY", "POLY", MK_POLY, 0, 2},
-  {"REV3", "REV3", MK_PROPHET, 0, 2}, {"OTIS", "OTIS", MK_SQ1, 0, 2}, {"TAURUS", "TAUR", MK_TAURUS, 0, 2},
-  {"VOCODER", "VOCO", MK_VOCODER, 0, 2}, {"STATIC", "STAT", MK_STATIC, 0, 2},
+  {"REV3", "REV3", MK_PROPHET, 0, 2}, {"TAURUS", "TAUR", MK_TAURUS, 0, 2},
+  {"VOCODER", "VOCO", MK_VOCODER, 0, 2}, {"CHOIR", "CHOR", MK_CHOIR, 0, 2}, {"STATIC", "STAT", MK_STATIC, 0, 2},
   {"SPEECH", "SPCH", MK_PLAITS, 15, 3},
   {"SWARM", "SWRM", MK_PLAITS, 16, 4}, {"NOISE", "NOIS", MK_PLAITS, 17, 4}, {"PARTICLES", "PART", MK_PLAITS, 18, 4},
   {"STRING", "STRG", MK_PLAITS, 19, 4}, {"MODAL", "MODL", MK_PLAITS, 20, 4},
@@ -215,8 +214,11 @@ const ModelDef kModelDef[ENG_MODELS] = {
 // (BS.1770 loudness: the loudest 400 ms of a held note, and of quarter notes), brought to -21 LUFS for the synths (they
 // were spread from -16, ZERO, to -30, POLY and SPEECH), -22 the kicks, -24 the snares and the toms, -25 the clap, -26 the
 // perc, -28 the cymbal, -29 the hats (from -20 to -35). In quarter decibels, on the voice as it comes out (before its
-// bits, its filter, Warps)
-const int8_t kModelTrim[ENG_MODELS] = {13, 10, 13, 18, 3, 8, -7, 0, -4, 24, -21, -17, -12, 30, 20, 6, 8, -3, 8, 35, 1, 14, 10, 32, -8};
+// bits, its filter, Warps). (0.16.43: CHOIR's a held C5 as loud as the synths' held notes, -16 LUFS on their
+// average here, measured)
+const int8_t kModelTrim[ENG_MODELS] = {13, 10, 13, 18, 3, 8, -7, 0, -21, -17, -12, 30, 20, 8, -3, 2, 8, 35, 1, 14, 10, 32, -8};
+const int kModels34 = 25, kOtis34 = 15;   // (0.16.24 to 0.16.42's numbers: 25 models, OTIS 15)
+const int8_t kFrom34[kModels34] = {0, 1, 2, 3, 4, 5, 6, 7, 3, 3, 8, 9, 10, 11, 12, 11, 13, 14, 16, 17, 18, 19, 20, 21, 22};
 const char* const kBankNames[ENG_BANKS] = {"DRUMS", "FM DRUMS", "MIFM1", "PLAITS", "NOISE & PHYSICAL"};
 inline const ModelDef& mdef(int m) { return kModelDef[m < 0 ? 0 : m >= ENG_MODELS ? ENG_MODELS - 1 : m]; }
 
@@ -280,11 +282,10 @@ float gate_frac(float v) { return 0.05f + 0.9f * v; }                         //
 float lane_tau(float v) { return 0.01f * fm_exp2f(v * 9.0f); }                // an effect lane's DECAY: 10 ms..5.1 s
 float duck_tau(float v) { return 0.02f * fm_exp2f(v * 7.0f); }                // the duck's DECAY: 20 ms..2.6 s
 // the master bus's knobs: the compressor's threshold (0..-36 dB), ratio (1..20), release (20 ms..1.3 s), gain
-// (+/-12 dB); OTT's time (x1/4..x4, x1 in the middle), drive and level (+/-12 dB)
+// (+/-12 dB)
 float comp_threshold(float v) { return -36.0f * v; }
 float comp_ratio(float v) { return 1.0f + 19.0f * v * v; }
 float comp_release(float v) { return 0.02f * fm_exp2f(v * 6.0f); }
-float ott_time(float v) { return fm_exp2f((v - 0.5f) * 4.0f); }
 
 // ------------------------------------------------------------------ engine ---
 const uint32_t kN = 128;                // app.h APP_BLOCK
@@ -561,7 +562,7 @@ int dice_interval(int m) {              // the parameter (tp) of a model that is
   if (d.kind == MK_PADS) return 1;      // kept out of its chords, at the dose; POLY's CHORD: its parallel ones would
   if (d.kind == MK_POLY) return 7;      // leave the scale; PROPHET's too; SQ-1's WAVE: a program, its Transwave made
   if (d.kind == MK_PROPHET) return 8;   // anew)
-  if (d.kind == MK_SQ1) return 1;
+  if (d.kind == MK_CHOIR) return 2;     // (0.16.43: CHOIR's VOICES, Solo or a choir)
   if (d.kind == MK_TAURUS) return 1;    // (TAURUS' VOICE: a preset, a wave)
   if (d.kind == MK_VOCODER) return 1;   // (VOCODER's MOD: which track it listens to, kept; its PLAY too, below)
   if (d.kind == MK_STATIC) return 1;    // (0.16.28: STATIC's MODE, its other knobs another generator's)
@@ -1099,11 +1100,11 @@ const int kTpTie = ENG_NTP;
 uint8_t trig_tie[ENG_LANES];            // the trig playing's
 // (0.16.16) a step's chord: its NOTE the lowest, up to three notes over it, each a lock of its own (tp kTpNote2 ..
 // kTpNote2 + 2: the semitones over NOTE, 1..96); the machines that play chords (POLY in Poly, REV3 with CHORD Off,
-// OTIS) play them all, the others NOTE alone
+// VOCODER in Poly, CHOIR past Solo) play them all, the others NOTE alone
 const int kTpNote2 = ENG_NTP + 1;
 uint8_t trig_iv[ENG_TRACKS][3], trig_cn[ENG_TRACKS];   // the trig playing's
 // (0.16.40) a step's model: a lock of its own (tp kTpModel, its value the model's number), another model of the
-// track's family (Plaits' six engines, the six drums, the four FM drums: one voice that changes its engine at a trig,
+// track's family (Plaits' six engines, the six drums, the two FM drums: one voice that changes its engine at a trig,
 // its knobs as they are), played from that trig to the next
 const int kTpModel = ENG_NTP + 4;
 uint8_t trig_model[ENG_TRACKS];         // the trig playing's: its model + 1 (0: the track's)
@@ -1800,13 +1801,13 @@ __attribute__((noinline)) MI_COLD void voc_chord_now(int t, float note) {
 // its owner, the machine whose state it holds (0xFF: none yet), made again when another comes (its _reset)
 alignas(8) uint8_t mstate[ENG_TRACKS][MF_STATE_BYTES];
 uint8_t mowner[ENG_TRACKS] = {0xFF, 0xFF, 0xFF, 0xFF};
-// (0.16.14) a track's Plaits voice's memory lent (SQ-1's Transwaves): made Plaits' again when another machine comes,
-// its epoch another (what was there gone)
+// (0.16.14) a track's Plaits voice's memory lent (VOCODER's): made Plaits' again when another machine comes, its epoch
+// another (what was there gone)
 uint8_t vlent[ENG_TRACKS];
 uint32_t vepoch[ENG_TRACKS];
 void mclaim(int t) {
   const int k = track_kind(t);
-  if (vlent[t] && k != MK_SQ1 && k != MK_VOCODER) {
+  if (vlent[t] && k != MK_VOCODER) {
     mp_init(voice[t]);
     ++vepoch[t];
     vlent[t] = 0;
@@ -1817,7 +1818,7 @@ void mclaim(int t) {
   else if (k == MK_FM) fm4_reset(t);
   else if (k == MK_POLY) poly_reset(t);
   else if (k == MK_PROPHET) pro_reset(t);
-  else if (k == MK_SQ1) sq_reset(t);
+  else if (k == MK_CHOIR) choir_reset(t);
   else if (k == MK_TAURUS) taurus_reset(t);
   else if (k == MK_VOCODER) voc_reset(t);
   else if (k == MK_STATIC) static_reset(t);
@@ -1831,10 +1832,9 @@ uint16_t harmony_mask() {               // the harmony's scale (POLY's chords): 
 inline int lx_param(int t, int i) { return PG_TRACK(t, 0) * 4 + 1 + i; }
 inline float lx_u(int param, float v) { return eng_pdef(param)->kind == K_BIP ? (v + 1.0f) * 0.5f : v; }
 inline float static_mode_u(int t) { return lx_u(lx_param(t, 0), proj.val[lx_param(t, 0)]); }   // (STATIC's MODE)
-int kb_poly(int t) {                    // (0.16.15) POLY in MODE Poly, PROPHET with CHORD Off, SQ-1, VOCODER in Poly
+int kb_poly(int t) {                    // (0.16.15) POLY in MODE Poly, PROPHET with CHORD Off, VOCODER in Poly
   const int k = track_kind(t);
   if (k == MK_VOCODER) return voc_pl(t) == 0;
-  if (k == MK_SQ1) return 1;
   if (k == MK_POLY) return lx_u(lx_param(t, 6), E(t, 7)) >= 0.5f;
   if (k == MK_PROPHET) return poly_chord(lx_u(lx_param(t, 7), E(t, 8))) == 0;
   return 0;
@@ -1847,7 +1847,7 @@ MI_COLD void kit_of(int m, float* k) {          // a model's knobs as its kit ha
   else if (d.kind == MK_PADS) pads_defaults(k);
   else if (d.kind == MK_POLY) poly_defaults(k);
   else if (d.kind == MK_PROPHET) pro_defaults(k);
-  else if (d.kind == MK_SQ1) sq_defaults(k);
+  else if (d.kind == MK_CHOIR) choir_defaults(k);
   else if (d.kind == MK_TAURUS) taurus_defaults(k);
   else if (d.kind == MK_VOCODER) voc_defaults(k);
   else if (d.kind == MK_STATIC) static_defaults(k);
@@ -1902,9 +1902,9 @@ const FactorySound kFactory[ENG_FACTORY] = {
   {"CLAP", MK_DRUM, 2, {-1.0f, -1.0f, -1.0f, -1.0f, 0.50f, -1.0f, 0.66f, -1.0f}, 0.0f, 0.5f, 0.0f, 0.0f,
    NO_FILTER, NO_BITS, NO_GLITCH},
   // the LXR-02's hi-hat closed, then open; a tom, longer, lower; metal (Plaits' modal resonator, its structure high)
-  {"HAT", MK_LXR, 3, {-1.0f, -1.0f, -1.0f, 0.06f, -1.0f, -1.0f, -1.0f, -1.0f}, 0.0f, 0.5f, 0.0f, 0.0f,
-   NO_FILTER, NO_BITS, NO_GLITCH},
-  {"OPEN HAT", MK_LXR, 3, {-1.0f, -1.0f, -1.0f, 0.36f, -1.0f, -1.0f, -1.0f, -1.0f}, 0.0f, 0.5f, 0.0f, 0.0f,
+  {"HAT", MK_DRUM, 3, {-1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f}, 0.0f, 0.5f, 0.0f, 0.0f,
+   NO_FILTER, NO_BITS, NO_GLITCH},       // (0.16.43: MIFM1's HAT, the FM HI-HAT gone; open: its decays ~0.3 s)
+  {"OPEN HAT", MK_DRUM, 3, {-1.0f, -1.0f, 0.42f, -1.0f, 0.56f, -1.0f, -1.0f, -1.0f}, 0.0f, 0.5f, 0.0f, 0.0f,
    NO_FILTER, NO_BITS, NO_GLITCH},
   {"TOM", MK_DRUM, 4, {-1.0f, -1.0f, 0.56f, -1.0f, -1.0f, -1.0f, -1.0f, 0.68f}, 0.0f, 0.5f, -3.0f, 0.0f,
    NO_FILTER, NO_BITS, NO_GLITCH},
@@ -1966,11 +1966,10 @@ void keys_to_voices(int t, int kind) {
   if (kind == MK_POLY) poly_keys(t, ids, nt, n);
   else if (kind == MK_PROPHET) pro_keys(t, ids, nt, n);
   else if (kind == MK_VOCODER) voc_keys(t, ids, nt, n);
-  else sq_keys(t, ids, nt, n);
 }
 
 // (0.16.16) the trig's notes: its note, its step's chord over it (a machine that plays chords: POLY in Poly, REV3 with
-// CHORD Off, OTIS), each in the scale; how many
+// CHORD Off, VOCODER in Poly), each in the scale; how many
 int step_chord(int t, float note, float* out) {
   int n = 0;
   out[n++] = note;
@@ -1981,6 +1980,50 @@ int step_chord(int t, float note, float* out) {
     out[n++] = x;
   }
   return n;
+}
+
+// (0.16.43) CHOIR's parts, the soprano's first: the step's chord (its notes from the top; parts past them an octave
+// under its lowest), or the note harmonized in the scale (Off: the major one on ROOT), the melody on top: the alto a
+// third under it, the tenor a fifth (a triad under the note, its root the tenor's), the bass an octave under the
+// tenor; as many as VOICES has (nv)
+int choir_parts(int t, float note, int nv, float* out) {
+  nv = nv < 1 ? 1 : nv > 4 ? 4 : nv;
+  if (trig_cn[t] > 0 && nv > 1) {        // (a step's chord, its top the soprano's; Solo: NOTE, as a mono machine)
+    float c[4];
+    int n = 0;
+    c[n++] = note;
+    for (int i = 0; i < trig_cn[t] && i < 3; ++i) {
+      float x = note + static_cast<float>(trig_iv[t][i]);
+      if (scale_on_t(t)) x = static_cast<float>(quantize(iround(x)));
+      c[n++] = x;
+    }
+    for (int i = 1; i < n; ++i)         // (high to low)
+      for (int j = i; j > 0 && c[j] > c[j - 1]; --j) {
+        const float x = c[j];
+        c[j] = c[j - 1], c[j - 1] = x;
+      }
+    for (int i = 0; i < nv; ++i) out[i] = i < n ? c[i] : c[n - 1] - 12.0f * static_cast<float>(i - n + 1);
+    return nv;
+  }
+  out[0] = note;
+  if (nv == 1) return 1;
+  const int root = Pi(PG_GLOBAL, 2);
+  uint32_t m = scale_on_t(t) ? scale_mask(Pi(PG_GLOBAL, 1)) : 0u;
+  m = m & 0xFFFu ? m : 0xAB5u;
+  auto in = [&](int x) { return (m >> (((x - root) % 12 + 12) % 12)) & 1u; };
+  int x = iround(note);
+  for (int g = 0; g < 12 && !in(x); ++g) --x;   // (the note in the scale, or the one under it)
+  int deg[5] = {x, 0, 0, 0, 0};
+  for (int d = 1; d <= 4; ++d) {        // (the scale's notes under it, one by one)
+    int y = deg[d - 1] - 1;
+    for (int g = 0; g < 12 && !in(y); ++g) --y;
+    deg[d] = y;
+  }
+  const float frac = note - static_cast<float>(x);   // (a note between the scale's: its parts the same way off)
+  out[1] = static_cast<float>(deg[2]) + frac;
+  out[2] = static_cast<float>(deg[4]) + frac;
+  out[3] = out[2] - 12.0f;
+  return nv;
 }
 
 void set_voice(int t) {
@@ -2007,11 +2050,9 @@ void set_voice(int t) {
       if (cn == 1) cn = step_chord(t, note, nn);
       lead_chord(t, nn, cn);
       pro_set(t, nn, cn, k);
-    } else if (kind == MK_SQ1) {
+    } else if (kind == MK_CHOIR) {      // (0.16.43: the step's chord, or the note harmonized: choir_parts)
       float sc[4];
-      const int cn = step_chord(t, note, sc);
-      lead_chord(t, sc, cn);
-      sq_set(t, sc, cn, k);
+      choir_set(t, sc, choir_parts(t, note, choir_voices(k[1]), sc), k);
     } else if (kind == MK_TAURUS) {
       taurus_set(t, note, k);
     } else if (kind == MK_STATIC) {
@@ -2026,7 +2067,7 @@ void set_voice(int t) {
       voc_set(t, sc, cn, pl < 0, k);
     }
     else lx_set(t, sub, note, k);
-    if (kind == MK_POLY || kind == MK_PROPHET || kind == MK_SQ1 || kind == MK_VOCODER) keys_to_voices(t, kind);
+    if (kind == MK_POLY || kind == MK_PROPHET || kind == MK_VOCODER) keys_to_voices(t, kind);
     return;
   }
   // the models whose MORPH is their decay (string, modal, the drums: their own envelope, no LPG) take DECAY too, around
@@ -2398,7 +2439,8 @@ void render_voice(int t, uint32_t n) {
     }
     if (track_kind(t) == MK_POLY) own = kWebPoly[0] + static_cast<float>(poly_voices(t)) * kWebPoly[1];   // (its voices)
     if (track_kind(t) == MK_PROPHET) own = kWebPro[0] + static_cast<float>(pro_voices(t)) * kWebPro[1];
-    if (track_kind(t) == MK_SQ1) own = kWebSq[0] + static_cast<float>(sq_voices(t)) * kWebSq[1];
+    if (track_kind(t) == MK_CHOIR)       // (0.16.43: its parts)
+      own = kWebChoir[0] + static_cast<float>(choir_voices(lx_u(lx_param(t, 1), E(t, 2)))) * kWebChoir[1];
     if (track_kind(t) == MK_STATIC) own = kWebStatic[static_mode(lx_u(lx_param(t, 0), E(t, 1)))];   // (0.16.27: its generator's)
     if (track_kind(t) == MK_VOCODER)     // (its voices; its bands, MOD on)
       own = kWebVoc[0] + static_cast<float>(voc_voices(t)) * kWebVoc[1] +
@@ -2411,7 +2453,7 @@ void render_voice(int t, uint32_t n) {
   int kind = track_kind(t);             // an FM drum: a rise triggers it, its own envelope does the rest; ZERO, a
   int lx = kind == MK_LXR, ac = kind == MK_ZERO, dr = kind == MK_DRUM, fm = kind == MK_FM;   // drum, the FM, PADS:
   int pd = kind == MK_PADS, pd_on = pd && t == pad_track;   // their gate, their own render (PADS: one track's)
-  int po = kind == MK_POLY, px = kind == MK_PROPHET, sq1 = kind == MK_SQ1, tau = kind == MK_TAURUS;
+  int po = kind == MK_POLY, px = kind == MK_PROPHET, ch = kind == MK_CHOIR, tau = kind == MK_TAURUS;
   int vc = kind == MK_VOCODER, stc = kind == MK_STATIC;
   uint32_t step = n / kFrames, pos = 0;
   for (uint32_t k = 0; k < kFrames; ++k) {
@@ -2425,7 +2467,7 @@ void render_voice(int t, uint32_t n) {
       else if (fm) fm4_render(t, &vbuf[t][pos], at - pos);
       else if (po) poly_render(t, &vbuf[t][pos], at - pos);
       else if (px) pro_render(t, &vbuf[t][pos], at - pos);
-      else if (sq1) sq_render(t, &vbuf[t][pos], at - pos);
+      else if (ch) choir_render(t, &vbuf[t][pos], at - pos);
       else if (tau) taurus_render(t, &vbuf[t][pos], at - pos);
       else if (vc) voc_render(t, &vbuf[t][pos], at - pos);
       else if (stc) static_render(t, &vbuf[t][pos], at - pos);
@@ -2449,7 +2491,7 @@ void render_voice(int t, uint32_t n) {
     else if (fm) fm4_gate(t, g);
     else if (po) poly_gate(t, g);
     else if (px) pro_gate(t, g);
-    else if (sq1) sq_gate(t, g);
+    else if (ch) choir_gate(t, g);
     else if (tau) taurus_gate(t, g);
     else if (vc) voc_gate(t, g);
     else if (stc) static_gate(t, g);
@@ -2467,7 +2509,7 @@ void render_voice(int t, uint32_t n) {
     else if (fm) fm4_render(t, &vbuf[t][pos], n - pos);
     else if (po) poly_render(t, &vbuf[t][pos], n - pos);
     else if (px) pro_render(t, &vbuf[t][pos], n - pos);
-    else if (sq1) sq_render(t, &vbuf[t][pos], n - pos);
+    else if (ch) choir_render(t, &vbuf[t][pos], n - pos);
     else if (tau) taurus_render(t, &vbuf[t][pos], n - pos);
     else if (vc) voc_render(t, &vbuf[t][pos], n - pos);
     else if (stc) static_render(t, &vbuf[t][pos], n - pos);
@@ -2794,7 +2836,7 @@ void mix_job(uint32_t n) {
 void fx_job(uint32_t n) {
 #ifdef PLAT_WEB
   {                                     // (the bus's mode; the EQ of the tracks playing, the duck, the delay's filter,
-    int bus = proj.algo[PG_COMP] > MB_OTT ? static_cast<int>(MB_COMP) : proj.algo[PG_COMP];   // Warps in the mix)
+    int bus = proj.algo[PG_COMP] >= MB_OTT ? static_cast<int>(MB_COMP) : proj.algo[PG_COMP];   // Warps in the mix)
     float us = kWebFx[bus];
     for (int t = 0; t < ENG_TRACKS; ++t) {
       if ((mj.eq[t] <= -kEqDead || mj.eq[t] >= kEqDead) && quiet[t] < kQuiet) us += kWebFxEq;
@@ -2840,7 +2882,7 @@ void fx_job(uint32_t n) {
     eng_test_prebus[1][i] = fx_out_r[i];
   }
 #endif
-  mms_process(master, fx_out_l, fx_out_r, n);   // the master bus: the compressor or OTT, the limiter
+  mms_process(master, fx_out_l, fx_out_r, n);   // the master bus: the compressor, the limiter
   for (uint32_t i = 0; i < n; ++i) {     // then a soft limit, the output's mode
     float ol = sat(fx_out_l[i]), orr = sat(fx_out_r[i]);
     if (fx_mode == 1) {                 // the right inverted: a headset with a mic (a 4-pole plug in the 3-pole jack)
@@ -3219,7 +3261,7 @@ MI_COLD const char* eng_param_name(int param) {
                                            : track_kind(t) == MK_PADS ? pads_knob_name(lk)
                                            : track_kind(t) == MK_POLY ? poly_knob_name(lk)
                                            : track_kind(t) == MK_PROPHET ? pro_knob_name(lk)
-                                           : track_kind(t) == MK_SQ1 ? sq_knob_name(lk)
+                                           : track_kind(t) == MK_CHOIR ? choir_knob_name(lk)
                                            : track_kind(t) == MK_TAURUS ? taurus_knob_name(lk)
                                            : track_kind(t) == MK_VOCODER ? voc_knob_name(lk)
                                            : track_kind(t) == MK_STATIC ? static_knob_name(lk, static_mode_u(t))
@@ -3237,8 +3279,8 @@ MI_COLD const char* eng_param_name(int param) {
 }
 
 // (0.16.16) a knob drawn from its middle (its - +): a bipolar parameter's, a negative range's; a machine's own knobs say
-// where theirs start (PADS' TEXTURE, OTIS' SHAPE, STACK and SPACE from the left on a bipolar place; OTIS' SWEEP and
-// COLOR from the middle on a plain one)
+// where theirs start (PADS' TEXTURE from the left on a bipolar place; TAURUS' CONTOUR, VOCODER's SHIFT from the middle;
+// CHOIR's all from the left)
 int eng_param_centered(int param) {
   const eng_pdef_t* d = eng_pdef(param);
   const int c = d->kind == K_BIP || (d->kind == K_INT && d->lo < 0);
@@ -3246,9 +3288,9 @@ int eng_param_centered(int param) {
   if (lk < 0 || zero_on(param / 12)) return c;
   const int k = track_kind(param / 12);
   if (k == MK_PADS && lk == 7) return 0;
-  if (k == MK_SQ1) return lk == 2 || lk == 4;
   if (k == MK_TAURUS) return lk == 5;   // (CONTOUR: a swell to the left, its depth to the right)
   if (k == MK_VOCODER) return lk == 6;  // (SHIFT: the voice lower or higher)
+  if (k == MK_CHOIR) return 0;
   return c;
 }
 
@@ -3268,10 +3310,13 @@ int eng_model_free(int t, int m) {
   return 1;
 }
 int eng_pads_track(void) { return pad_track; }
+int eng_choir_parts(int t, float note, int nv, float* out) {   // (0.16.43: the tests')
+  return t >= 0 && t < ENG_TRACKS ? choir_parts(t, note, nv, out) : 0;
+}
 int eng_duck_track(int k) { return k <= 0 ? duck_src() : duck_knob_track(k); }   // (0.16.42)
 int eng_lead_ok(int t) {                // (0.16.42) a track that plays chords: SCALE can follow it
   const int k = t >= 0 && t < ENG_TRACKS ? track_kind(t) : -1;
-  return k == MK_PADS || k == MK_POLY || k == MK_PROPHET || k == MK_SQ1 || k == MK_VOCODER;
+  return k == MK_PADS || k == MK_POLY || k == MK_PROPHET || k == MK_VOCODER;
 }
 int eng_scale_step(int sc, int e) {     // (0.16.42) SCALE turned e detents, past FOLLOW's tracks that play no chords
   const int d = e > 0 ? 1 : -1;
@@ -3393,7 +3438,7 @@ extern "C" void mf_forget(void) {
 }
 extern "C" void* mf_voice_mem(int t, uint32_t* bytes, uint32_t* epoch) {
   t = t < 0 ? 0 : t >= ENG_TRACKS ? ENG_TRACKS - 1 : t;
-  if ((track_kind(t) != MK_SQ1 && track_kind(t) != MK_VOCODER) || !voice[t]) {   // (only the machine on the track)
+  if (track_kind(t) != MK_VOCODER || !voice[t]) {   // (only the machine on the track)
     *bytes = 0;
     *epoch = vepoch[t];
     return nullptr;
@@ -3407,14 +3452,6 @@ int eng_fm_algo(int t) { return t >= 0 && t < ENG_TRACKS && track_kind(t) == MK_
 int eng_fm_shaped(int t) { return eng_fm_algo(t) >= 0 && fm4_shape((E(t, 6) + 1.0f) * 0.5f) ? fm4_modulators(eng_fm_algo(t)) : 0; }
 float eng_fm_shape(int t, int op, float x) {
   return eng_fm_algo(t) >= 0 ? fm4_shape_level((E(t, 6) + 1.0f) * 0.5f, op, x) : 0.0f;
-}
-int eng_sq_cycle(int t, float* y, int n, int* of) {
-  if (t < 0 || t >= ENG_TRACKS || track_kind(t) != MK_SQ1 || mowner[t] != MK_SQ1) return -1;
-  return sq_cycle(t, y, n, of);
-}
-const char* eng_sq_family(int t) {
-  if (t < 0 || t >= ENG_TRACKS || track_kind(t) != MK_SQ1) return "";
-  return sq_family(lx_u(lx_param(t, 0), E(t, 1)));
 }
 int eng_model_own(int m) { return mdef(m).kind != MK_PLAITS; }
 int eng_model_find(int kind, int sub) {
@@ -3437,7 +3474,7 @@ MI_COLD float eng_lx_step(int param, float v, int detents) {
                                             : track_kind(t) == MK_PADS ? pads_knob_steps(lk)
                                             : track_kind(t) == MK_POLY ? poly_knob_steps(lk)
                                             : track_kind(t) == MK_PROPHET ? pro_knob_steps(lk)
-                                            : track_kind(t) == MK_SQ1 ? sq_knob_steps(lk)
+                                            : track_kind(t) == MK_CHOIR ? choir_knob_steps(lk)
                                             : track_kind(t) == MK_TAURUS ? taurus_knob_steps(lk)
                                             : track_kind(t) == MK_VOCODER ? voc_knob_steps(lk)
                                             : track_kind(t) == MK_STATIC ? static_knob_steps(lk, static_mode_u(t))
@@ -3551,13 +3588,17 @@ MI_COLD int eng_sound_set(int t, const eng_sound_t* s) {
   int m = s->algo[0], was_plaits = 0;
   if (s->version == 1 && m >= 15) {     // (before 0.16.14: CHIPTUNE 15, FORMANT 16 now SQ-1 from its kit; the others one
     was_plaits = m <= 16;               // lower)
-    m = was_plaits ? eng_model_find(MK_SQ1, 0) : m - 1;
+    m = was_plaits ? kOtis34 : m - 1;
   } else if (s->version == 3 && m == 16) {   // (0.16.17's ROBOVOX, withdrawn: SPEECH again, at noon)
     was_plaits = 1;
   }
   if (s->version <= 4 && m >= 16) ++m;   // (0.16.20: TAURUS at 16, the models from there one further on)
   if (s->version <= 5 && m >= 17) ++m;   // (0.16.21: VOCODER at 17, the same)
   if (s->version <= 6 && m >= 18) ++m;   // (0.16.24: STATIC at 18, the same)
+  if (s->version <= 7) {                // (0.16.43: FM CYMBAL, FM HI-HAT, OTIS gone, CHOIR at 15: models_v35's)
+    was_plaits |= m == 8 || m == 9 || m == kOtis34;
+    m = m >= 0 && m < kModels34 ? kFrom34[m] : 0;
+  }
   m = m >= 0 && m < ENG_MODELS ? m : 0;
   if (!eng_model_free(t, m)) return -2;   // (PADS: once a project)
   for (int i = 0; i < SND_PAGES; ++i) {
@@ -3676,9 +3717,8 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
     poly_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0 && track_kind(param / 12) == MK_PROPHET) {   // PROPHET's (its oscillators, Hz, a chord...)
     pro_knob_text(lk, lx_u(param, v), b, n);
-  } else if (lk >= 0 && track_kind(param / 12) == MK_SQ1) {   // SQ-1's (a program, %, its layers, its SPACE)
-    const int t = param / 12;
-    sq_knob_text(lk, lx_u(param, v), lx_u(lx_param(t, 0), proj.val[lx_param(t, 0)]), b, n);
+  } else if (lk >= 0 && track_kind(param / 12) == MK_CHOIR) {   // CHOIR's (a vowel, its parts, %, times, cents)
+    choir_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0 && track_kind(param / 12) == MK_TAURUS) {   // TAURUS' (a preset or a wave, cents, Hz, times)
     taurus_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0 && track_kind(param / 12) == MK_VOCODER) {   // VOCODER's (a track, a tone, times, bands)
@@ -3895,12 +3935,9 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
     if (r < 10.0f) put_num(b, n, static_cast<int32_t>(r * 10.0f + 0.5f), 1, 0);
     else put_num(b, n, static_cast<int32_t>(r + 0.5f), 0, 0);
     put_end(b, n, ":1");
-  } else if ((pt == PT_COMP && k == 3) || (pt == PT_OTT && k >= 2)) {   // gains: +/-12 dB
+  } else if (pt == PT_COMP && k == 3) {   // its gain: +/-12 dB
     put_num(b, n, static_cast<int32_t>(v * 12.0f + (v < 0 ? -0.5f : 0.5f)), 0, 1);
     put_end(b, n, " dB");
-  } else if (pt == PT_OTT && k == 1) {    // OTT's time: x1 its own
-    put(b, n, "x");
-    put_num(b + 1, n - 1, static_cast<int32_t>(ott_time(v) * 100.0f + 0.5f), 2, 0);
   } else if (pt == PT_CURVE) {          // (0.16) the ratchets' CURVE: closer (a bounce), apart, or even
     int c = static_cast<int>(v * 100.0f + (v < 0 ? -0.5f : 0.5f));
     if (c == 0) {
@@ -3916,7 +3953,7 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
     put_num(b, n, static_cast<int32_t>(50.0f + 25.0f * v + 0.5f), 0, 0);
     put_end(b, n, "%");
   } else if ((pt == PT_STEP && k == 1) || (pt == PT_ARP && k == 1) || (pt == PT_LANE && (k == 1 || k == 2)) ||
-             (pt == PT_DUCK && k > 0) || (pt == PT_OTT && k == 0) || (pt == PT_GLITCH && (k == 0 || k == 3)) ||
+             (pt == PT_DUCK && k > 0) || (pt == PT_GLITCH && (k == 0 || k == 3)) ||
              (pt == PT_WARPS1 && k == 3)) {
     put_num(b, n, static_cast<int32_t>(v * 100.0f + 0.5f), 0, 0);
     put_end(b, n, "%");
@@ -3986,7 +4023,7 @@ int eng_algo_count(int page) {
     case PT_FILT1: return MF_MODELS;
     case PT_DELAY1: return 2;
     case PT_REVERB: return RV_ALGOS;
-    case PT_COMP: return 3;
+    case PT_COMP: return 2;
     default: return 0;
   }
 }
@@ -4077,15 +4114,10 @@ MI_COLD void eng_blank(project_t* p) {
   static const float kW[8] = {static_cast<float>(WC_OFF), 1.0f, 0.4f, 1.0f, 0.5f, 0.6f, 0.6f,
                               static_cast<float>(WM_WARPS)};
   for (int k = 0; k < 8; ++k) p->val[PG_WARPS(k / 4) * 4 + k % 4] = kW[k];
-  // the duck: off (its DECAY ~180 ms); the master bus: a gentle compressor (-10 dB, 3:1, 160 ms, +4 dB); OTT ready at
-  // half its depth
+  // the duck: off (its DECAY ~180 ms); the master bus: a gentle compressor (-10 dB, 3:1, 160 ms, +4 dB)
   p->val[PG_DUCK * 4 + 0] = 0.45f;
   static const float kComp[4] = {0.28f, 0.32f, 0.5f, 4.0f / 12.0f};
-  static const float kOtt[4] = {0.5f, 0.5f, 0.0f, 0.0f};
-  for (int k = 0; k < 4; ++k) {
-    p->val[PG_COMP * 4 + k] = kComp[k];
-    p->val[PG_OTT * 4 + k] = kOtt[k];
-  }
+  for (int k = 0; k < 4; ++k) p->val[PG_COMP * 4 + k] = kComp[k];
   p->algo[PG_COMP] = MB_COMP;
   for (int t = 0; t < ENG_TRACKS; ++t) {                 // the filters: off, LP; ready at 1.2 kHz, some resonance
     static const float kF[12] = {0.6f, 0.3f, 0.3f, 0.35f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};   // and
@@ -4167,14 +4199,14 @@ MI_COLD void eng_defaults(project_t* p) {
 
 // the demo groove (GLO, SELECT: PROJECT, the second; a first power-on; the browser emulator's start): a kick on the
 // beat, ducking an FM bass through a Moog filter (LADDER, its envelope, a triangle a bar on its cutoff) that rolls on
-// the off-beats with a riff of locks, the FM hi-hat on every sixteenth (its decay and pan new at each, an open one on
-// the off-beats), dub stabs of minor sevenths (the FM's PAD) through SEM (S&H on their brightness, a smooth random on
+// the off-beats with a riff of locks, the hat on every sixteenth (its decay and pan new at each, an open one on the
+// off-beats; 0.16.43: MIFM1's HAT, the FM HI-HAT gone), dub stabs of minor sevenths (the FM's PAD) through SEM (S&H on their brightness, a smooth random on
 // the cutoff) thrown into a dotted-eighth ping-pong and the reverb; F minor, 124 BPM, a gentle compressor on the bus.
 // Light on purpose: about half of each of the FM-1's cores (the machine page), room left for what is added
 MI_COLD void eng_groove(project_t* p) {
   eng_blank(p);
-  const int kModel[4] = {eng_model_find(MK_DRUM, 0), eng_model_find(MK_FM, 0), eng_model_find(MK_LXR, 3),
-                         eng_model_find(MK_FM, 0)};   // kick, the FM (a bass), FM hi-hat, the FM (chords)
+  const int kModel[4] = {eng_model_find(MK_DRUM, 0), eng_model_find(MK_FM, 0), eng_model_find(MK_DRUM, 3),
+                         eng_model_find(MK_FM, 0)};   // kick, the FM (a bass), the hat, the FM (chords)
   static const int kOct[4] = {0, -1, 0, 0};
   static const float kLevel[4] = {1.0f, 0.4f, 0.5f, 1.0f};
   static const float kPan[4] = {0.0f, 0.0f, 0.25f, -0.15f};
@@ -4246,14 +4278,14 @@ MI_COLD void eng_groove(project_t* p) {
   set_lock(p, 1, 10, TP_NOTE, 7.0f);
   set_lock(p, 1, 11, TP_NOTE, 5.0f);
   set_lock(p, 1, 15, TP_NOTE, 10.0f);
-  set_lock(p, 2, 2, TP_DECAY, 0.75f);                    // the open hats, on the off-beats
-  set_lock(p, 2, 6, TP_DECAY, 0.75f);
-  set_lock(p, 2, 10, TP_DECAY, 0.75f);
-  set_lock(p, 2, 14, TP_DECAY, 0.85f);
+  set_lock(p, 2, 2, 5, 0.5f);                            // the open hats, on the off-beats (N.DECAY, the HAT's
+  set_lock(p, 2, 6, 5, 0.5f);                            // fifth knob)
+  set_lock(p, 2, 10, 5, 0.5f);
+  set_lock(p, 2, 14, 5, 0.6f);
   set_lock(p, 0, 12, TP_RATCHET, 2.0f);                  // the kick's double, its last of the bar
   set_lock(p, 3, 11, TP_NOTE, -2.0f);                    // the stabs: their second one a step down
   p->rnd[1][TP_RATCHET] = 12;                            // the bass: a ratchet now and then
-  p->rnd[2][TP_DECAY] = 20;                              // the hats: their decay and pan new at each
+  p->rnd[2][5] = 20;                                     // the hats: their decay and pan new at each
   p->rnd[2][TP_PAN] = 30;
   p->val[PG_STEP(2) * 4 + 1] = 0.9f;                     // (and 10 % of them left out)
   ++lock_gen;
@@ -4261,7 +4293,7 @@ MI_COLD void eng_groove(project_t* p) {
 
 // the stress test (GLO, SELECT: PROJECT, K1, REC held): a fixed patch that keeps everything busy, to read the
 // machine page against, version after version: four tracks playing (a kick, the FM synced on a square, the FM in PW
-// on a square, three operators heard, a chord: the FM at its heaviest, MODAL), two of them bent, Warps (diode ring, T3 by T2), OTT, the
+// on a square, three operators heard, a chord: the FM at its heaviest, MODAL), two of them bent, Warps (diode ring, T3 by T2), the compressor, the
 // delay and the reverb fed, the duck, the filters, the three LFOs on 18 cables, randoms, locks, ratchets
 MI_COLD void eng_stress(project_t* p) {
   eng_blank(p);
@@ -4325,9 +4357,9 @@ MI_COLD void eng_stress(project_t* p) {
   static const float kWarps[8] = {static_cast<float>(WC_T3), 1.0f, 0.4f, 0.8f, 0.5f, 0.6f, 0.6f,
                                   static_cast<float>(WM_WARPS)};
   for (int k = 0; k < 8; ++k) p->val[PG_WARPS(k / 4) * 4 + k % 4] = kWarps[k];
-  p->algo[PG_COMP] = MB_OTT;                             // the master bus: OTT
-  static const float kOtt[4] = {0.6f, 0.5f, 0.1f, 0.0f};
-  for (int k = 0; k < 4; ++k) p->val[PG_OTT * 4 + k] = kOtt[k];
+  p->algo[PG_COMP] = MB_COMP;                            // the master bus: the compressor (0.16.43: OTT gone)
+  static const float kComp[4] = {0.45f, 0.5f, 0.4f, 4.0f / 12.0f};
+  for (int k = 0; k < 4; ++k) p->val[PG_COMP * 4 + k] = kComp[k];
   p->val[PG_GLOBAL * 4 + 1] = 2.0f;                      // minor
   // the cables: each track's, then the global ones
   cable(p, 0, 0, SRC_L2, PG_TRACK(0, 0) * 4 + 2, 25);    // T1: S&H -> BRIGHT, sine -> its bits, the triangle -> DECAY
@@ -4346,10 +4378,10 @@ MI_COLD void eng_stress(project_t* p) {
   cable(p, 3, 2, SRC_L1, PG_RSEND * 4 + 3, 30);
   cable(p, 3, 3, SRC_L2, PG_PAN * 4 + 3, -50);
   cable(p, 4, 0, SRC_L1, PG_DELAY(0) * 4 + 2, 25);       // global: the delay's filter and wow, Warps' TIMBRE, the
-  cable(p, 4, 1, SRC_L3, PG_DELAY(1) * 4 + 2, 30);       // reverb's time, OTT's depth
+  cable(p, 4, 1, SRC_L3, PG_DELAY(1) * 4 + 2, 30);       // reverb's time, the compressor's threshold
   cable(p, 4, 2, SRC_L2, PG_WARPS(1) * 4 + 0, 40);
   cable(p, 4, 3, SRC_L3, PG_REVERB * 4 + 0, 20);
-  cable(p, 4, 4, SRC_L1, PG_OTT * 4 + 0, 20);
+  cable(p, 4, 4, SRC_L1, PG_COMP * 4 + 0, 20);
   static const uint16_t kPat[4] = {0x5111, 0x6DB6, 0x4925, 0x8282};   // bit s: step s
   for (int t = 0; t < ENG_TRACKS; ++t) set_trigs(p, t, kPat[t]);
   set_lock(p, 0, 14, TP_RATCHET, 3.0f);
@@ -4364,13 +4396,13 @@ MI_COLD void eng_stress(project_t* p) {
   ++lock_gen;
 }
 
-// the stress test on the four FM drums (GLO, SELECT: PROJECT, the fifth): the same patch, the cables and the effects
-// as they are, the tracks on the drum, the snare, the cymbal and the hi-hat (their kits, at their own pitch): what
-// the LXR-02's voices cost against Plaits', on the machine page
+// the stress test on the FM drums (GLO, SELECT: PROJECT, the fifth): the same patch, the cables and the effects as
+// they are, the tracks on the drum, the snare, the drum, the snare (their kits, at their own pitch; 0.16.43: the
+// cymbal and the hi-hat gone): what the LXR-02's voices cost against Plaits', on the machine page
 MI_COLD void eng_stress_fm(project_t* p) {
   eng_stress(p);
   for (int t = 0; t < ENG_TRACKS; ++t) {
-    p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(eng_model_find(MK_LXR, t));
+    p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(eng_model_find(MK_LXR, t & 1));
     lx_kit(p, t);
     p->val[PG_TRACK(t, 2) * 4 + 3] = 0.0f;               // (octave 0: each its kit's pitch)
   }
@@ -4444,19 +4476,36 @@ void eng_rnd_redraw(project_t* p, int lane, int tp) {
   if (lane >= 0 && lane < ENG_LANES && tp >= 0 && tp < ENG_NTP) p->rseed[lane][tp] = static_cast<uint8_t>(p->rseed[lane][tp] + 1u);
 }
 
-// 0.16.14: CHIPTUNE and FORMANT gone, SQ-1 in their place: a track that played one plays SQ-1 from its kit, its locks
-// on its eight knobs (Plaits' meanings) gone
-MI_COLD void sq_from_plaits(project_t* p, int t) {
+// a track on another machine than it was (0.16.14: CHIPTUNE and FORMANT gone, SQ-1 in their place; 0.16.43: FM
+// CYMBAL, FM HI-HAT, OTIS gone): its knobs its kit's, its locks on its eight knobs (the old meanings) gone
+MI_COLD void kit_fresh(project_t* p, int t) {
   lx_kit(p, t);
   for (int i = 0; i < ENG_PLOCKS; ++i) {
     plock_t& k = p->lock[i];
     if (k.lane == t && k.tp >= 1 && k.tp <= LX_KNOBS) k.lane = 0xFF;
   }
 }
+// (0.16.43) FM CYMBAL (8), FM HI-HAT (9) and OTIS (15) gone, CHOIR at 15 (after VOCODER): 0.16.24's to 0.16.42's
+// numbers to these; a track on a model gone plays the nearest (the cymbal, the hi-hat: HAT; OTIS: POLY) from its kit;
+// a step's model gone, none
+MI_COLD void models_v35(project_t* p) {
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    const int o = p->algo[PG_TRACK(t, 0)];
+    p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(o < kModels34 ? kFrom34[o] : 0);
+    if (o == 8 || o == 9 || o == kOtis34) kit_fresh(p, t);
+  }
+  if (p->algo[PG_COMP] >= MB_OTT) p->algo[PG_COMP] = MB_COMP;   // (OTT gone too: the compressor)
+  for (int i = 0; i < ENG_PLOCKS; ++i) {
+    plock_t& k = p->lock[i];
+    if (k.lane >= ENG_TRACKS || k.tp != kTpModel) continue;
+    if (k.v >= kModels34 || k.v == 8 || k.v == 9 || k.v == kOtis34) k.lane = 0xFF;
+    else k.v = static_cast<uint8_t>(kFrom34[k.v]);
+  }
+}
 MI_COLD void models_from(project_t* p, int at) {   // a machine come in at at: the numbers from there one further on
   for (int t = 0; t < ENG_TRACKS; ++t) {           // (0.16.20: TAURUS at 16, 0.16.18's and 0.16.19's SPEECH 16 ..
     const int o = p->algo[PG_TRACK(t, 0)];         // MODAL 21; 0.16.21: VOCODER at 17, 0.16.20's SPEECH 17 ..)
-    if (o >= at) p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(o + 1 < ENG_MODELS ? o + 1 : 0);
+    if (o >= at) p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(o + 1 < kModels34 ? o + 1 : 0);
   }
   for (int i = 0; i < ENG_PLOCKS; ++i)             // (0.16.40: a step's model too)
     if (p->lock[i].lane < ENG_TRACKS && p->lock[i].tp == kTpModel && p->lock[i].v >= at) ++p->lock[i].v;
@@ -4469,10 +4518,9 @@ MI_COLD void models_v27(project_t* p) {   // (0.13 to 0.16.13's numbers: ..., PR
     const int o = p->algo[PG_TRACK(t, 0)];
     if (o <= 14) continue;
     if (o <= 16) {
-      p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(eng_model_find(MK_SQ1, 0));
-      sq_from_plaits(p, t);
+      p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(kOtis34);   // (its kit at models_v35: POLY's)
     } else {
-      p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(o - 1 < ENG_MODELS ? o - 1 : 0);
+      p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(o - 1 < kModels34 ? o - 1 : 0);
     }
   }
 }
@@ -4622,9 +4670,10 @@ int upgrade_any(project_t* p, int bytes);
 MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them, sizeof(project_t) >= the largest)
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   const int v = p->magic == PROJECT_MAGIC ? static_cast<int>(p->version) : 0;
-  if (v == 33 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+  if ((v == 33 || v == 34) && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
     p->version = PROJECT_VERSION;       // (0.16.23: its layout this one; STATIC at 18, the models from there one
-    static_in(p);                       // further on)
+    if (v == 33) static_in(p);          // further on; 0.16.24 to 0.16.42: the models gone, CHOIR's place)
+    models_v35(p);
     return 1;
   }
   if (v >= 27 && v <= 32 && bytes == static_cast<int>(sizeof(project_v32)) && p->size == sizeof(project_v32)) {
@@ -4636,14 +4685,16 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
     if (v <= 30) taurus_in(p);          // the models from there one further on; 0.16.17's ROBOVOX (16), withdrawn:
     if (v <= 31) vocoder_in(p);         // SPEECH again in its place, at noon)
     static_in(p);
+    models_v35(p);
     if (v == 29)
       for (int t = 0; t < ENG_TRACKS; ++t)
-        if (p->algo[PG_TRACK(t, 0)] == eng_model_find(MK_PLAITS, 15)) sq_from_plaits(p, t);
+        if (p->algo[PG_TRACK(t, 0)] == eng_model_find(MK_PLAITS, 15)) kit_fresh(p, t);
     return 1;
   }
   if (!upgrade_any(p, bytes)) return 0;   // (0.16.32: before 0.16, a project is no longer read: 0)
   climb_off_all(p);
   models_v27(p), taurus_in(p), vocoder_in(p), static_in(p);   // (0.16.0 to 0.16.6: their numbers 0.16.13's)
+  models_v35(p);
   return 1;
 }
 MI_COLD int upgrade_any(project_t* p, int bytes) {
@@ -4691,7 +4742,7 @@ MI_COLD int eng_init(void) {
   voc_init();
   static_init();
   pro_init();
-  sq_init();
+  choir_init();
   reverb = arena + a;
   a += (mrv_size() + 7u) & ~7u;
   mrv_init(reverb);
@@ -4754,7 +4805,7 @@ MI_COLD void cut_now() {
     else if (k == MK_FM) fm4_silence(t);
     else if (k == MK_POLY) poly_silence(t);
     else if (k == MK_PROPHET) pro_silence(t);
-    else if (k == MK_SQ1) sq_silence(t);
+    else if (k == MK_CHOIR) choir_silence(t);
     else if (k == MK_TAURUS) taurus_silence(t);
     else if (k == MK_VOCODER) voc_silence(t);
     else if (k == MK_STATIC) static_silence(t);
@@ -4763,7 +4814,7 @@ MI_COLD void cut_now() {
   for (int t = 0; t < ENG_TRACKS; ++t) mf_reset(t);   // (the filters' rings)
   for (int t = 0; t < ENG_TRACKS; ++t) {
     sp_run[t] = 0;                      // (SPREAD's lines: silent again)
-    if (!vlent[t]) mp_init(voice[t]);   // (SQ-1's Transwaves kept)
+    if (!vlent[t]) mp_init(voice[t]);   // (VOCODER's memory kept)
     vgate[t] = 0;                       // (a key still held: a new trig)
     quiet[t] = kQuiet;                  // (resting until then)
     bend[t].hold = bend[t].cnt = 0.0f;
@@ -5221,10 +5272,9 @@ void eng_render(float* l, float* r, uint32_t n) {
                                                   : step_len_now() * kDivMult[div < 0 ? 0 : div >= kDivs ? kDivs - 1 : div];
   mdl_set(delay, dtime, E(LANE_DELAY, 1), E(LANE_DELAY, 2), E(LANE_DELAY, 4), E(LANE_DELAY, 3),
           iround(E(LANE_DELAY, 5)), E(LANE_DELAY, 6));
-  mms_mode(master, proj.algo[PG_COMP] > MB_OTT ? static_cast<int>(MB_COMP) : proj.algo[PG_COMP]);
+  mms_mode(master, proj.algo[PG_COMP] >= MB_OTT ? static_cast<int>(MB_COMP) : proj.algo[PG_COMP]);
   mms_comp(master, comp_threshold(P(PG_COMP, 0)), comp_ratio(P(PG_COMP, 1)), comp_release(P(PG_COMP, 2)),
            P(PG_COMP, 3) * 12.0f);
-  mms_ott(master, P(PG_OTT, 0), ott_time(P(PG_OTT, 1)), P(PG_OTT, 2) * 12.0f, P(PG_OTT, 3) * 12.0f);
   {
     float(*vb)[kN] = vbuf;              // the voices' next block where the mix takes this one
     vbuf = mbuf;
@@ -5510,7 +5560,10 @@ void eng_step_chords(int lane, uint8_t* out) {   // every step's notes over its 
         proj.lock[i].step < ENG_STEPS && proj.lock[i].v)
       ++out[proj.lock[i].step];
 }
-int eng_track_chords(int t) { return t >= 0 && t < ENG_TRACKS && kb_poly(t); }
+int eng_track_chords(int t) {           // (0.16.43: CHOIR past Solo sings a step's chord, its keys one at a time)
+  return t >= 0 && t < ENG_TRACKS &&
+         (kb_poly(t) || (track_kind(t) == MK_CHOIR && choir_voices(lx_u(lx_param(t, 1), E(t, 2))) > 1));
+}
 int eng_step_locked(int lane, int step) {
   int n = 0;
   for (int i = 0; i < ENG_PLOCKS; ++i) n += proj.lock[i].lane == lane && proj.lock[i].step == step;

@@ -895,8 +895,8 @@ int main(int argc, char** argv) {
     if (ratio[1] > -9.0 || std::fabs(ratio[0]) > 3.0) ++failures, printf("FAIL: the duck\n");
   }
 
-  // 23. the master bus: the compressor brings a loud patch down (its reduction seen), OTT keeps it as loud at its
-  // depth's middle, every mode's peak under full scale (the limiter: 0.8 at most, the soft limit after)
+  // 23. the master bus: the compressor brings a loud patch down (its reduction seen), every mode's peak under full
+  // scale (the limiter: 0.8 at most, the soft limit after); (0.16.43) a project's OTT read as the compressor
   {
     double rms[3];
     float pk[3], gr = 0;
@@ -921,9 +921,10 @@ int main(int argc, char** argv) {
       rms[m] = std::sqrt(e / (1378.0 * n));
       eng_play(0);
     }
-    printf("master bus: off rms %.3f peak %.2f; comp (-22 dB, 3:1, +4 dB) rms %.3f peak %.2f, %.1f dB at most; OTT rms %.3f "
-           "peak %.2f\n", rms[0], pk[0], rms[1], pk[1], gr, rms[2], pk[2]);
-    if (gr > -6.0f || pk[0] > 1.0f || pk[1] > 1.0f || pk[2] > 1.0f || rms[2] < rms[0] * 0.6 || rms[2] > rms[0] * 1.7)
+    printf("master bus: off rms %.3f peak %.2f; comp (-22 dB, 3:1, +4 dB) rms %.3f peak %.2f, %.1f dB at most; OTT's "
+           "number (gone) rms %.3f, the compressor's %s\n", rms[0], pk[0], rms[1], pk[1], gr, rms[2],
+           std::fabs(rms[2] / rms[1] - 1.0) < 0.02 ? "ok" : "WRONG");
+    if (gr > -6.0f || pk[0] > 1.0f || pk[1] > 1.0f || pk[2] > 1.0f || std::fabs(rms[2] / rms[1] - 1.0) > 0.02)
       ++failures, printf("FAIL: the master bus\n");
     eng_defaults(p);
   }
@@ -1320,7 +1321,7 @@ int main(int argc, char** argv) {
     eng_defaults(p);
   }
 
-  // 32. the stress test: it plays (every track, Warps, OTT), no NaN, nothing stuck; its weight beside the demo's on
+  // 32. the stress test: it plays (every track, Warps, the compressor: 0.16.43, OTT gone), no NaN, nothing stuck; its weight beside the demo's on
   // this computer (the FM-1's figures are on its machine page); on the FM drums too, lighter
   {
     auto weigh = [&](int stress, float* pk, int* sounding) {
@@ -1361,7 +1362,7 @@ int main(int argc, char** argv) {
       for (int c = 0; c < ENG_CABLES; ++c) cables += p->cable[g][c].depth != 0;
     printf("the stress test: peak %.3f, %d tracks sounding, Warps %d, bus %d, %d cables; %.2fx the demo's time here\n",
            pk_stress, snd_stress, warps, bus, cables, t_stress / (t_demo > 0.0 ? t_demo : 1.0));
-    if (pk_stress < 0.05f || pk_stress > 1.0f || snd_stress != ENG_TRACKS || warps != 2 || bus != MB_OTT || cables != 20)
+    if (pk_stress < 0.05f || pk_stress > 1.0f || snd_stress != ENG_TRACKS || warps != 2 || bus != MB_COMP || cables != 20)
       ++failures, printf("FAIL: the stress test\n");
     float pk_fm;
     int snd_fm;
@@ -3993,198 +3994,6 @@ int main(int argc, char** argv) {
     eng_fresh();
   }
 
-  {                                     // 65. SQ-1 (0.16.14): in CHIPTUNE's place (FORMANT gone); its knobs, its kit;
-    // every program sounding, finite, bounded, silent after its release; SWEEP moving its Transwave (a pluck's
-    // brighter at the trig, a pad's later), INDEX its place; the levels of its programs close; 300 settings bounded;
-    // through the engine one track after another machine and back (Plaits' memory lent and given back: SPEECH,
-    // MODAL sounding after it); a project of 0.16.13 (version 27) and one of 0.16.6 (26) renumbered, CHIPTUNE and
-    // FORMANT SQ-1 from its kit (their locks on its knobs gone); a preset of before (its version 1) the same
-    project_t* p = eng_project();
-    const uint32_t n = 128;
-    static float l[128], r[128];
-    eng_play(0);
-    eng_defaults(p);
-    eng_fresh();
-    const int sq_m = eng_model_find(MK_SQ1, 0);
-    int ok = sq_m == 15 && ENG_MODELS == 25 && eng_model_find(MK_PLAITS, 7) < 0 && eng_model_find(MK_PLAITS, 11) < 0 &&
-             eng_model_bank(sq_m) == 2 && eng_model_own(sq_m) && sq_progs() == 24;
-    eng_set_model(0, sq_m);
-    float kd[8];
-    sq_defaults(kd);
-    for (int i = 0; i < 8; ++i) {
-      int param = PG_TRACK(0, 0) * 4 + 1 + i;
-      float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
-      if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), sq_knob_name(i)) != 0) ok = 0;
-    }
-    char tx[24];
-    const float kMetal = 6.5f / 24.0f, kPiano = 3.5f / 24.0f;
-    struct { int k; float u, w; const char* want; } kTx[] = {
-        {0, 0.0f, 0.0f, "Res Bass"}, {0, kPiano, 0.0f, "E.Piano"}, {0, 1.0f, 0.0f, "Click"}, {2, 0.5f, 0.0f, "0%"},
-        {2, 1.0f, 0.0f, "+100%"}, {2, 0.0f, 0.0f, "-100%"}, {4, 0.6f, 0.0f, "Open"}, {4, 0.0f, 0.0f, "100% Dark"},
-        {4, 1.0f, 0.0f, "100% Thin"}, {5, 0.0f, 0.0f, "Perc"}, {5, 1.0f, 0.0f, "Pad"}, {6, 0.0f, 0.0f, "Off"},
-        {6, 0.5f, 0.0f, "100% 2nd"}, {6, 1.0f, 0.0f, "100% 3rd"}, {7, 0.0f, 0.0f, "Dry"}, {7, 0.25f, 0.0f, "50% Chorus"},
-        {7, 1.0f, kMetal, "100% +Comb"}, {7, 0.75f, kPiano, "50% +Phaser"}, {7, 1.0f, 0.0f, "100% +Drive"},
-        {3, 0.25f, 0.0f, "25%"}};
-    for (const auto& x : kTx) {
-      sq_knob_text(x.k, x.u, x.w, tx, sizeof tx);
-      if (std::strcmp(tx, x.want)) ok = 0, printf("SQ-1: knob %d at %.3f written %s, %s expected\n", x.k, x.u, tx, x.want);
-    }
-    if (std::strcmp(sq_family(kMetal), "Metallic") || std::strcmp(sq_family(1.0f), "Percussive")) ok = 0;
-    // every program: C3 held half a second, let go
-    static float ab[44100 * 4];
-    auto play = [&](const float* kk, float note, int held_blocks, int total_blocks) {
-      sq_reset(0);
-      sq_set(0, &note, 1, kk);
-      sq_gate(0, 1);
-      for (int b = 0; b < total_blocks; ++b) {
-        if (b == held_blocks) sq_gate(0, 0);
-        sq_render(0, &ab[b * n], n);
-      }
-    };
-    auto bright = [&](uint32_t from, uint32_t len) {   // (its brightness: the slope's energy against the level's)
-      double ex = 0.0, ed = 0.0;
-      for (uint32_t i = from; i < from + len; ++i) ex += ab[i] * ab[i], ed += (ab[i] - ab[i - 1]) * (ab[i] - ab[i - 1]);
-      return std::sqrt(ed / (ex + 1e-12));
-    };
-    auto rms = [&](uint32_t from, uint32_t len) {
-      double e = 0.0;
-      for (uint32_t i = from; i < from + len; ++i) e += ab[i] * ab[i];
-      return std::sqrt(e / len);
-    };
-    int sounds = 0, finite = 1, quiet = 1, moves = 0;
-    float pk_all = 0.0f;
-    double lo = 1e9, hi = 0.0;
-    for (int pr = 0; pr < 24; ++pr) {
-      float k[8];
-      sq_defaults(k);
-      k[0] = (pr + 0.5f) / 24.0f;
-      k[1] = 0.25f, k[2] = 0.85f, k[3] = 0.0f, k[5] = 0.45f, k[6] = 0.3f, k[7] = 0.0f;
-      play(k, 48.0f, 172, 1300);         // (half a second held, then three and a half)
-      float pk = 0.0f;
-      for (uint32_t i = 0; i < 1300 * n; ++i) {
-        if (!std::isfinite(ab[i])) finite = 0;
-        pk = std::max(pk, std::fabs(ab[i]));
-      }
-      double tail = 0.0;
-      for (uint32_t i = 1200 * n; i < 1300 * n; ++i) tail = std::max(tail, (double)std::fabs(ab[i]));
-      double lv = rms(2205, 8820), b0 = bright(441, 1764), b1 = bright(13230, 4410);
-      sounds += lv > 0.01 && pk < 1.0f;
-      quiet &= tail < 1e-4;
-      if (tail >= 1e-4) printf("SQ-1: program %d still %.5f after its release\n", pr, tail);
-      lo = std::min(lo, lv), hi = std::max(hi, lv);
-      pk_all = std::max(pk_all, pk);
-      static const int kRise[24] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0};
-      double ratio = kRise[pr] ? b1 / b0 : b0 / b1;
-      moves += ratio > 1.08;
-      if (getenv("SQ1_VERBOSE"))
-        printf("  SQ-1 %2d %-9s rms %.3f peak %.2f, brightness %.2f then %.2f (x%.2f)\n", pr, sq_prog_name(k[0]), lv, pk,
-               b0, b1, ratio);
-    }
-    // INDEX: Res Bass, no sweep, at its start and at its end
-    float k[8];
-    sq_defaults(k);
-    k[0] = 0.5f / 24.0f, k[2] = 0.5f, k[3] = 0.0f, k[6] = 0.0f, k[7] = 0.0f, k[5] = 0.6f, k[4] = 0.6f;
-    k[1] = 0.0f;
-    play(k, 48.0f, 400, 400);
-    double i0 = bright(8820, 8820);
-    k[1] = 1.0f;
-    play(k, 48.0f, 400, 400);
-    double i1 = bright(8820, 8820);
-    // a Transwave steps: the cycle read changes only at its wrap (the place on the screen one of 32)
-    float cyc[48];
-    int of = 0, at = sq_cycle(0, cyc, 48, &of);
-    int steps = at >= 0 && at % 32 == 31 && of == 32;
-    // anything: 300 settings
-    uint32_t sd = 9876u;
-    auto rnd = [&]() { sd = sd * 1664525u + 1013904223u; return static_cast<float>(sd >> 8) / 16777216.0f; };
-    float pk_any = 0.0f;
-    int nan_any = 0;
-    sq_reset(0);
-    for (int s2 = 0; s2 < 300; ++s2) {
-      for (int i = 0; i < 8; ++i) k[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();
-      {
-        const float nn = 24.0f + 84.0f * rnd();
-        sq_set(0, &nn, 1, k);
-      }
-      sq_gate(0, 1);
-      for (int b = 0; b < 60; ++b) {
-        if (b == 30) sq_gate(0, 0);
-        sq_render(0, ab, 32);
-        for (int i = 0; i < 32; ++i) {
-          if (!std::isfinite(ab[i])) nan_any = 1;
-          pk_any = std::max(pk_any, std::fabs(ab[i]));
-        }
-      }
-    }
-    // through the engine: SQ-1, SPEECH, SQ-1, MODAL, SQ-1 on track 1 (Plaits' memory lent and back)
-    eng_defaults(p);
-    eng_fresh();
-    for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(0, st, st % 2 == 0);
-    const int kSeq[5] = {sq_m, eng_model_find(MK_PLAITS, 15), sq_m, eng_model_find(MK_PLAITS, 20), sq_m};
-    eng_play(1);
-    int shared_ok = 1;
-    for (int m = 0; m < 5; ++m) {
-      eng_set_model(0, kSeq[m]);
-      float spk = 0.0f;
-      for (int b = 0; b < 300; ++b) {
-        eng_render(l, r, n);
-        for (uint32_t i = 0; i < n; ++i) {
-          if (!std::isfinite(l[i])) shared_ok = 0;
-          spk = std::max(spk, std::fabs(l[i]));
-        }
-      }
-      if (spk < 0.02f || spk > 1.5f) shared_ok = 0, printf("SQ-1: through the engine, model %d: peak %.3f\n", kSeq[m], spk);
-    }
-    eng_play(0);
-    // a project of 0.16.13 (version 27): CHIPTUNE (15) with a lock on HARMONICS and one on NOTE, FORMANT (16),
-    // SPEECH (17), MODAL (22); one of 0.16.6 (26): SWARM (18), POLY (13), STRING (21), CHIPTUNE (15)
-    static project_t q;
-    eng_defaults(&q);
-    q.version = 27;
-    const uint8_t kOld27[4] = {15, 16, 17, 22};
-    for (int t = 0; t < ENG_TRACKS; ++t) q.algo[PG_TRACK(t, 0)] = kOld27[t];
-    for (int i = 0; i < ENG_PLOCKS; ++i) q.lock[i].lane = 0xFF;
-    q.lock[0] = plock_t{0, 3, 1, 200};
-    q.lock[1] = plock_t{0, 4, TP_NOTE, 100};
-    q.val[PG_TRACK(0, 0) * 4 + 1] = 0.9f;   // (HARMONICS: SQ-1's WAVE then its kit's)
-    as_v32(&q, 27);                     // (0.16.22's layout: 68 pages, 380 locks)
-    int v27 = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == sq_m &&
-              q.algo[PG_TRACK(1, 0)] == sq_m && q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 15) &&
-              q.algo[PG_TRACK(3, 0)] == eng_model_find(MK_PLAITS, 20) && q.lock[0].lane == 0xFF &&
-              q.lock[1].lane == 0 && q.lock[1].tp == TP_NOTE && std::fabs(q.val[PG_TRACK(0, 0) * 4 + 1] - kd[0]) < 1e-6f;
-    eng_defaults(&q);
-    const uint8_t kOld26[4] = {18, 13, 21, 15};
-    for (int t = 0; t < ENG_TRACKS; ++t) q.algo[PG_TRACK(t, 0)] = kOld26[t];
-    int bytes26 = as_v26(&q, 26);
-    int v26 = eng_upgrade(&q, bytes26) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == eng_model_find(MK_PLAITS, 16) &&
-              q.algo[PG_TRACK(1, 0)] == eng_model_find(MK_POLY, 0) &&
-              q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_PLAITS, 19) && q.algo[PG_TRACK(3, 0)] == sq_m;
-    // a preset of before: CHIPTUNE's (15) SQ-1's kit, STRING's (21) STRING
-    eng_defaults(p);
-    eng_fresh();
-    eng_sound_t a;
-    eng_set_model(1, eng_model_find(MK_PLAITS, 19));
-    eng_sound_get(1, &a);
-    a.version = 1;
-    a.algo[0] = 15;
-    a.val[1] = 0.95f;
-    int snd = eng_sound_check(&a, sizeof a) && eng_sound_set(2, &a) == 0 && p->algo[PG_TRACK(2, 0)] == sq_m &&
-              std::fabs(p->val[PG_TRACK(2, 0) * 4 + 1] - kd[0]) < 1e-6f;
-    a.algo[0] = 21;
-    snd &= eng_sound_set(3, &a) == 0 && p->algo[PG_TRACK(3, 0)] == eng_model_find(MK_PLAITS, 19);
-    eng_defaults(p);
-    eng_fresh();
-    printf("SQ-1: knobs %s; its 24 programs sounding %d, finite %s, after their release %s, peak %.2f, levels %.3f .. "
-           "%.3f; SWEEP moving %d of 24; INDEX brighter x%.2f; its Transwave stepping %s; 300 settings: peak %.2f%s; "
-           "through the engine %s; versions 27, 26 %s %s; a preset of before %s\n",
-           ok ? "ok" : "WRONG", sounds, finite ? "yes" : "NO", quiet ? "silent" : "STILL", pk_all, lo, hi, moves,
-           i1 / i0, steps ? "ok" : "WRONG", pk_any, nan_any ? ", NaN" : "", shared_ok ? "ok" : "WRONG",
-           v27 ? "read" : "WRONG", v26 ? "read" : "WRONG", snd ? "read" : "WRONG");
-    if (!ok || sounds != 24 || !finite || !quiet || pk_all > 1.0f || hi / lo > 2.0 || moves < 22 || i1 / i0 < 2.0 ||
-        !steps || pk_any > 1.2f || nan_any || !shared_ok || !v27 || !v26 || !snd)
-      ++failures, printf("FAIL: SQ-1\n");
-  }
-
   {                                     // 66. the keys (0.16.15): a voice of one plays the newest key held, back to
     // the one before when it is let go (a new trig); POLY in MODE Poly, PROPHET with CHORD Off and SQ-1 play the keys
     // held, a voice each, the one let go falling (DECAY at Hold), the steps silent meanwhile; MODE Mono one voice; a
@@ -4216,7 +4025,7 @@ int main(int argc, char** argv) {
     eng_key(0, 60, 0);
     blocks(20);
     int mono = n2 > n1 && n3 == n1 && back && !(eng_gates() & 1u);   // (64 in the project's scale)
-    // the keys' chords: POLY (Poly, DECAY Hold), PROPHET (CHORD Off, DECAY Hold), SQ-1
+    // the keys' chords: POLY (Poly, DECAY Hold), PROPHET (CHORD Off, DECAY Hold)
     auto silent = [&]() {               // (a voice resting keeps its count: the track's sound tells)
       float pk = 0.0f;
       for (int b = 0; b < 20; ++b) {
@@ -4227,14 +4036,14 @@ int main(int argc, char** argv) {
     };
     auto chord = [&](int kind, int* held3, int* after1, int* none) {
       eng_set_model(0, eng_model_find(kind, 0));
-      if (kind != MK_SQ1) knob(0, 3, 1.0f);
+      knob(0, 3, 1.0f);
       eng_key(0, 60, 1);
       blocks(2);
       eng_key(0, 64, 1);
       blocks(2);
       eng_key(0, 67, 1);
       blocks(20);
-      auto voices = [&]() { return kind == MK_POLY ? poly_voices(0) : kind == MK_PROPHET ? pro_voices(0) : sq_voices(0); };
+      auto voices = [&]() { return kind == MK_POLY ? poly_voices(0) : pro_voices(0); };
       *held3 = voices();
       eng_key(0, 64, 0);
       blocks(700);
@@ -4244,11 +4053,10 @@ int main(int argc, char** argv) {
       blocks(1500);
       *none = silent() ? 0 : voices();
     };
-    int ph3, ph1, ph0, xh3, xh1, xh0, sh3, sh1, sh0;
+    int ph3, ph1, ph0, xh3, xh1, xh0;
     chord(MK_POLY, &ph3, &ph1, &ph0);
     chord(MK_PROPHET, &xh3, &xh1, &xh0);
-    chord(MK_SQ1, &sh3, &sh1, &sh0);
-    int chords = ph3 == 3 && ph1 == 2 && ph0 == 0 && xh3 == 3 && xh1 == 2 && xh0 == 0 && sh3 == 3 && sh1 == 2 && sh0 == 0;
+    int chords = ph3 == 3 && ph1 == 2 && ph0 == 0 && xh3 == 3 && xh1 == 2 && xh0 == 0;
     // POLY in MODE Mono: one voice, the newest key
     eng_set_model(0, eng_model_find(MK_POLY, 0));
     knob(0, 3, 1.0f);
@@ -4299,8 +4107,8 @@ int main(int argc, char** argv) {
     eng_defaults(p);
     eng_fresh();
     printf("the keys: one voice %s (%d %d %d, back with a trig %s); the chords held 3, 64 let go, all: POLY %d %d %d, "
-           "PROPHET %d %d %d, SQ-1 %d %d %d; POLY Mono %s; a trig's length: %d blocks, held over 3 steps more %d %s\n",
-           mono ? "ok" : "WRONG", n1, n2, n3, back ? "yes" : "NO", ph3, ph1, ph0, xh3, xh1, xh0, sh3, sh1, sh0,
+           "PROPHET %d %d %d; POLY Mono %s; a trig's length: %d blocks, held over 3 steps more %d %s\n",
+           mono ? "ok" : "WRONG", n1, n2, n3, back ? "yes" : "NO", ph3, ph1, ph0, xh3, xh1, xh0,
            pmono ? "ok" : "WRONG", g1, g4, tie_ok ? "ok" : "WRONG");
     if (!mono || !chords || !pmono || !tie_ok) ++failures, printf("FAIL: the keys\n");
   }
@@ -4599,11 +4407,11 @@ int main(int argc, char** argv) {
     // after its release; TUBA an octave under its note (B at 32'), the Minimoog's waves their sub (C at 32'); its bass
     // given back as EMPHASIS rises (55 Hz under a cutoff at 400 Hz: at 0.9 at least 70 % of it at 0); GLIDE: the
     // pitch 30 ms after a jump of an octave still under it, at once without; a project of 0.16.19 (30) and a sound
-    // (4) renumbered (SPEECH 16 now where it is, OTIS 15 kept, MODAL the last)
+    // (4) renumbered (SPEECH 16 now where it is, OTIS 15 POLY since 0.16.43, MODAL the last)
     const int tm = eng_model_find(MK_TAURUS, 0);
     const int speech = eng_model_find(MK_PLAITS, 15), modal = eng_model_find(MK_PLAITS, 20);
-    int ok = tm == 16 && ENG_MODELS >= 23 && eng_model_bank(tm) == 2 && eng_model_own(tm) && speech > tm &&
-             modal == ENG_MODELS - 1 && eng_model_find(MK_SQ1, 0) == 15;
+    int ok = tm == 13 && ENG_MODELS >= 23 && eng_model_bank(tm) == 2 && eng_model_own(tm) && speech > tm &&
+             modal == ENG_MODELS - 1 && eng_model_find(MK_CHOIR, 0) == 15;
     project_t* p = eng_project();
     eng_defaults(p);
     eng_fresh();
@@ -4701,7 +4509,7 @@ int main(int argc, char** argv) {
     q.algo[PG_TRACK(3, 0)] = 21;         // (MODAL then)
     as_v32(&q, 30);                     // (0.16.22's layout: 68 pages, 380 locks)
     const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(1, 0)] == speech &&
-                        q.algo[PG_TRACK(2, 0)] == 15 && q.algo[PG_TRACK(3, 0)] == modal;
+                        q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_POLY, 0) && q.algo[PG_TRACK(3, 0)] == modal;
     eng_defaults(p);
     eng_fresh();
     eng_set_model(1, eng_model_find(MK_PLAITS, 15));
@@ -4736,8 +4544,8 @@ int main(int argc, char** argv) {
     // (SPEECH on T1 after it, sounding); a project of 0.16.20 (31) and a sound (5) renumbered (TAURUS 16 kept, SPEECH
     // 17 now 18, MODAL the last)
     const int vm = eng_model_find(MK_VOCODER, 0), speech = eng_model_find(MK_PLAITS, 15);
-    int ok = vm == 17 && ENG_MODELS == 25 && eng_model_bank(vm) == 2 && eng_model_own(vm) && speech == 19 &&
-             eng_model_find(MK_TAURUS, 0) == 16;
+    int ok = vm == 14 && ENG_MODELS == 23 && eng_model_bank(vm) == 2 && eng_model_own(vm) && speech == 17 &&
+             eng_model_find(MK_TAURUS, 0) == 13;   // (0.16.43's numbers)
     project_t* p = eng_project();
     eng_defaults(p);
     eng_fresh();
@@ -4897,7 +4705,7 @@ int main(int argc, char** argv) {
     q.algo[PG_TRACK(1, 0)] = 17;
     q.algo[PG_TRACK(2, 0)] = 22;
     as_v32(&q, 31);                     // (0.16.22's layout: 68 pages, 380 locks)
-    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == 16 &&
+    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == 13 &&
                         q.algo[PG_TRACK(1, 0)] == speech && q.algo[PG_TRACK(2, 0)] == ENG_MODELS - 1;
     eng_defaults(p);
     eng_fresh();
@@ -5096,7 +4904,7 @@ int main(int argc, char** argv) {
   // no NaN, no peak over the soft knee's 1.2, at any knobs; a project of 0.16.23 (33) and a sound (6) renumbered
   {
     const int sm = eng_model_find(MK_STATIC, 0), speech = eng_model_find(MK_PLAITS, 15);
-    int ok = sm == 18 && ENG_MODELS == 25 && eng_model_bank(sm) == 2 && eng_model_own(sm) && speech == 19;
+    int ok = sm == 16 && ENG_MODELS == 23 && eng_model_bank(sm) == 2 && eng_model_own(sm) && speech == 17;
     project_t* p = eng_project();
     eng_defaults(p);
     eng_fresh();
@@ -5270,7 +5078,7 @@ int main(int argc, char** argv) {
     q.algo[PG_TRACK(1, 0)] = 23;
     q.algo[PG_TRACK(2, 0)] = 17;
     const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == speech &&
-                        q.algo[PG_TRACK(1, 0)] == ENG_MODELS - 1 && q.algo[PG_TRACK(2, 0)] == 17;
+                        q.algo[PG_TRACK(1, 0)] == ENG_MODELS - 1 && q.algo[PG_TRACK(2, 0)] == 14;
     eng_sound_t snd;
     eng_sound_get(1, &snd);
     snd.version = 6;
@@ -5447,7 +5255,7 @@ int main(int argc, char** argv) {
     const uint32_t n = 128;
     float l[128], r[128];
     const int sp = eng_model_find(MK_PLAITS, 15), str = eng_model_find(MK_PLAITS, 19), kick = eng_model_find(MK_DRUM, 0),
-              fdr = eng_model_find(MK_LXR, 0), fhat = eng_model_find(MK_LXR, 3), fmm = eng_model_find(MK_FM, 0);
+              fdr = eng_model_find(MK_LXR, 0), fhat = eng_model_find(MK_LXR, 1), fmm = eng_model_find(MK_FM, 0);   // (0.16.43: FM SNARE)
     // a bar with a trig on steps 0 and 4, the second locked to lk (-1 none): each trig's first 100 ms, its level and
     // its share over 2 kHz (the second difference's over the signal's)
     auto bar = [&](int model, int lk, float* lv, float* hf) {
@@ -5495,7 +5303,7 @@ int main(int argc, char** argv) {
     eng_defaults(p);
     eng_fresh();
     printf("a step's model: SPEECH, step 5 on STRING: its level x%.2f (the first step's x%.2f, its highs x%.2f); FM DRUM, "
-           "step 5 on FM HI-HAT: its highs x%.1f (the first step's x%.2f); the calls %s\n", lv1[1] / lv0[1],
+           "step 5 on FM SNARE: its highs x%.1f (the first step's x%.2f); the calls %s\n", lv1[1] / lv0[1],
            lv1[0] / lv0[0], hf1[0] / hf0[0], hf3[1] / hf2[1], hf3[0] / hf2[0], api ? "ok" : "WRONG");
     if (!plaits || !drums || !api) ++failures, printf("FAIL: a step's model\n");
   }
@@ -5736,6 +5544,150 @@ int main(int argc, char** argv) {
            b2, b0, b1, c1, api ? "ok" : "WRONG", q[0], q[1], q[2], q[3], q[4], up1, up2, down, sname,
            fol ? "ok" : "WRONG");
     if (!ducked || !api || !fol) ++failures, printf("FAIL: the duck's source, FOLLOW\n");
+  }
+
+  {  // (0.16.43) CHOIR, in OTIS' place (15): its knobs, its texts; a soprano alone two octaves over the note (C3: C5,
+     // 523 Hz), finite, as loud as the synths; a key slid to another while held glides to it (legato: between them
+     // 20 ms after, there 0.6 s after), no new attack; the choir's parts (a third and a fifth under the note in the
+     // scale, the bass an octave under the tenor; a step's chord from its top); as loud as the soprano alone; FM CYMBAL,
+     // FM HI-HAT, OTIS and OTT gone: a project of 0.16.42 (34) and a sound (7) read (HAT, HAT, POLY, the compressor)
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    static float buf[44100];
+    const int cm = eng_model_find(MK_CHOIR, 0);
+    int ok = cm == 15 && ENG_MODELS == 23 && eng_model_bank(cm) == 2 && eng_model_own(cm) &&
+             !std::strcmp(eng_algo_name(PG_TRACK(0, 0), cm), "CHOIR") && eng_model_find(MK_LXR, 2) < 0 &&
+             eng_model_find(MK_LXR, 1) == 7;
+    auto knob = [&](int t, int i, float u) {
+      int param = PG_TRACK(t, 0) * 4 + 1 + i;
+      p->val[param] = eng_pdef(param)->kind == K_BIP ? 2.0f * u - 1.0f : u;
+    };
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    for (int l2 = 0; l2 < ENG_LANES; ++l2)
+      for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(l2, st, 0);
+    eng_set_model(0, cm);
+    char tx[6][16];
+    const float tu[6] = {0.0f, 0.125f, 0.0f, 1.0f, 0.6f, 0.0f};
+    const int tk[6] = {0, 0, 1, 1, 5, 3};
+    for (int i = 0; i < 6; ++i) {
+      knob(0, tk[i], tu[i]);
+      eng_param_text(PG_TRACK(0, 0) * 4 + 1 + tk[i], p->val[PG_TRACK(0, 0) * 4 + 1 + tk[i]], tx[i], 16);
+    }
+    const int texts = !std::strcmp(tx[0], "A") && !std::strcmp(tx[1], "A-E") && !std::strcmp(tx[2], "Solo") &&
+                      !std::strcmp(tx[3], "Choir") && !std::strcmp(tx[4], "36 ct") && !std::strcmp(tx[5], "Off") &&
+                      !std::strcmp(eng_param_name(PG_TRACK(0, 0) * 4 + 1), "Vowel");
+    knob(0, 1, 0.0f);                     // (Solo, A, no breath, no vibrato: its pitch alone)
+    knob(0, 3, 0.0f);
+    knob(0, 5, 0.0f);
+    p->val[PG_TRACK(0, 0) * 4 + 0] = 0.0f;   // (FREQ at noon)
+    p->val[PG_MIX * 4 + 0] = 1.0f;
+    // the period: the lag in 1.5 .. 2.6 ms (385 .. 667 Hz) that best matches the signal with itself
+    auto hz = [&](const float* x, int at, int len) {
+      double best = -1e30;
+      int lag = 0;
+      for (int k = 66; k < 115; ++k) {
+        double c = 0;
+        for (int i = 0; i < len; ++i) c += x[at + i] * x[at + i + k];
+        if (c > best) best = c, lag = k;
+      }
+      double y0 = 0, y1 = 0, y2 = 0;    // (between two lags)
+      for (int i = 0; i < len; ++i) y0 += x[at + i] * x[at + i + lag - 1], y1 += x[at + i] * x[at + i + lag],
+                                    y2 += x[at + i] * x[at + i + lag + 1];
+      const double d = 0.5 * (y0 - y2) / (y0 - 2 * y1 + y2);
+      return 44100.0 / (lag + d);
+    };
+    auto run = [&](int key2, int at2, int blocks) {   // key 48 held, another at at2 (blocks) while held: buf
+      eng_cut();
+      for (int b = 0; b < 3; ++b) eng_render(l, r, 128);
+      eng_key(0, 48, 1);
+      for (int b = 0; b < blocks; ++b) {
+        if (b == at2 && key2 >= 0) eng_key(0, key2, 1);
+        eng_render(l, r, 128);
+        for (int i = 0; i < 128 && b * 128 + i < 44100; ++i) buf[b * 128 + i] = l[i];
+      }
+      eng_key(0, 48, 0);
+      if (key2 >= 0) eng_key(0, key2, 0);
+      for (int b = 0; b < 400; ++b) eng_render(l, r, 128);
+    };
+    run(-1, 0, 344);
+    double e = 0;
+    int fin = 1;
+    for (int i = 22050; i < 44100; ++i) e += buf[i] * buf[i], fin &= std::isfinite(buf[i]);
+    const double solo_rms = std::sqrt(e / 22050), f_solo = hz(buf, 30000, 2048);
+    const int solo = fin && solo_rms > 0.03 && solo_rms < 0.4 && std::fabs(f_solo / 523.25 - 1.0) < 0.01;
+    // legato: 48 then 55 (a fifth: 523 -> 784 Hz) while 48 is held, at 0.5 s
+    run(55, 172, 344);
+    auto hz2 = [&](const float* x, int at, int len) {   // (the same, 600 .. 1000 Hz)
+      double best = -1e30;
+      int lag = 0;
+      for (int k = 44; k < 74; ++k) {
+        double c = 0;
+        for (int i = 0; i < len; ++i) c += x[at + i] * x[at + i + k];
+        if (c > best) best = c, lag = k;
+      }
+      return 44100.0 / lag;
+    };
+    const int t0 = 172 * 128;
+    const double f_after = hz2(buf, t0 + 22050 - 4096, 2048);   // (~0.45 s on)
+    double f_early = 0;                   // (20 ms on: the zero crossings' rate over 10 ms, a rough pitch)
+    {
+      int z = 0;
+      for (int i = t0 + 880; i < t0 + 1320; ++i) z += buf[i - 1] < 0.0f && buf[i] >= 0.0f;
+      f_early = z / 0.01;
+    }
+    const int glide = std::fabs(f_after / 783.99 - 1.0) < 0.02;
+    // the choir's parts, C major: E4 (64) -> E, C, A, A an octave down; a step's chord (C E G) from its top
+    p->val[PG_GLOBAL * 4 + 1] = 1.0f;
+    p->val[PG_GLOBAL * 4 + 2] = 0.0f;
+    eng_render(l, r, 128);                // (the scale as the render reads it)
+    float pa[4];
+    const int np = eng_choir_parts(0, 64.0f, 4, pa);
+    int parts = np == 4 && pa[0] == 64.0f && pa[1] == 60.0f && pa[2] == 57.0f && pa[3] == 45.0f;
+    parts &= eng_choir_parts(0, 64.0f, 1, pa) == 1 && pa[0] == 64.0f;
+    // four parts: as loud as one (within 3 dB), finite
+    knob(0, 1, 1.0f);
+    run(-1, 0, 344);
+    e = 0;
+    for (int i = 22050; i < 44100; ++i) e += buf[i] * buf[i], fin &= std::isfinite(buf[i]);
+    const double choir_rms = std::sqrt(e / 22050);
+    const int choir_ok = fin && choir_rms > solo_rms * 0.7 && choir_rms < solo_rms * 1.42;
+    // 0.16.42's project (34): OTIS on T1, FM CYMBAL on T2, FM HI-HAT on T3, FM DRUM on T4 a step on FM HI-HAT, the
+    // other on FM SNARE; OTT on the bus. Its sound (7) of OTIS
+    static project_t q;
+    eng_defaults(&q);
+    q.version = 34;
+    q.algo[PG_TRACK(0, 0)] = 15;
+    q.algo[PG_TRACK(1, 0)] = 8;
+    q.algo[PG_TRACK(2, 0)] = 9;
+    q.algo[PG_TRACK(3, 0)] = 6;
+    q.algo[PG_COMP] = MB_OTT;
+    for (int i = 0; i < ENG_PLOCKS; ++i) q.lock[i].lane = 0xFF;
+    q.lock[0] = plock_t{3, 2, static_cast<uint8_t>(ENG_NTP + 4), 9};
+    q.lock[1] = plock_t{3, 4, static_cast<uint8_t>(ENG_NTP + 4), 7};
+    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) &&
+                        q.algo[PG_TRACK(0, 0)] == eng_model_find(MK_POLY, 0) &&
+                        q.algo[PG_TRACK(1, 0)] == eng_model_find(MK_DRUM, 3) &&
+                        q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_DRUM, 3) &&
+                        q.algo[PG_TRACK(3, 0)] == eng_model_find(MK_LXR, 0) && q.algo[PG_COMP] == MB_COMP &&
+                        q.lock[0].lane == 0xFF && q.lock[1].lane == 3 && q.lock[1].v == 7;
+    eng_defaults(p);
+    eng_fresh();
+    static eng_sound_t snd;
+    eng_sound_get(1, &snd);
+    snd.version = 7;
+    snd.algo[0] = 15;
+    const int snd_ok = eng_sound_set(1, &snd) == 0 && p->algo[PG_TRACK(1, 0)] == eng_model_find(MK_POLY, 0);
+    eng_defaults(p);
+    eng_fresh();
+    printf("CHOIR: at %d of %d, texts %s; alone %.1f Hz (C5 523.3), rms %.3f; slid a fifth up: %.0f Hz 20 ms on, %.1f "
+           "0.45 s on (784.0) %s; its parts on E4: %.0f %.0f %.0f %.0f %s; four parts rms %.3f %s; 0.16.42's project %s, "
+           "its sound %s\n", cm, ENG_MODELS, texts ? "ok" : "WRONG", f_solo, solo_rms, f_early, f_after,
+           glide ? "ok" : "WRONG", pa[0], pa[1], pa[2], pa[3], parts ? "ok" : "WRONG", choir_rms,
+           choir_ok ? "ok" : "WRONG", proj_ok ? "ok" : "WRONG", snd_ok ? "ok" : "WRONG");
+    if (!ok || !texts || !solo || !glide || !parts || !choir_ok || !proj_ok || !snd_ok)
+      ++failures, printf("FAIL: CHOIR\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

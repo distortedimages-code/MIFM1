@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Yoann. The parameters' conversions (apply below) are those of the LXR firmware's MidiParser.c,
 // Copyright (C) 2012-2026 Erica Synths, and its INIT kit's values (initKit.c), GPL-3.0-only.
-// MIFM1: the LXR-02's four drum voices (third_party/lxr: Erica Synths' LXR firmware, GPL-3.0-only with the terms of
-// its NOTICE.md) behind bridge.h, one of each a track. A track playing one of them sets its parameters as the
+// MIFM1: the LXR-02's drum voices (third_party/lxr: Erica Synths' LXR firmware, GPL-3.0-only with the terms of
+// its NOTICE.md) behind bridge.h, one of each a track: the drum and the snare (0.16.43: the cymbal and the hi-hat
+// gone, their room the CHOIR's). A track playing one of them sets its parameters as the
 // LXR-02's MIDI parser does (the values of a modulation: 0..1, the MIDI value v x 127) and plays it as its mixer
 // does: in blocks of 64 frames, the filter's frequency, then the envelopes (calcAsync), then the samples (calcSync).
 // A trig starts a new block where it lands: the rest of the block under way is dropped (the voice is retriggered
@@ -10,13 +11,11 @@
 #include "bridge.h"
 #include "Soundengine/DSPAudio/DrumVoice.h"
 #include "Soundengine/DSPAudio/Snare.h"
-#include "Soundengine/DSPAudio/CymbalVoice.h"
-#include "Soundengine/DSPAudio/HiHat.h"
 #include "Soundengine/MIDI/valueShaper.h"
 
 namespace {
 
-enum { DRUM, SNARE, CYMBAL, HIHAT };
+enum { DRUM, SNARE };
 
 // the parameters, by what they do (MidiMessages.h: a voice's own CC numbers)
 enum Param {
@@ -135,66 +134,6 @@ void apply(int model, uint8_t v, int p, uint8_t itg, float flt, int is_float) {
       }
       break;
     }
-    case CYMBAL: {
-      CymbalVoice& c = cymbalVoice[v];
-      switch (p) {
-        case P_WAVE: c.osc.waveform = wave_of(itg, flt, is_float); break;
-        case P_WAVE2: c.modOsc.waveform = wave_of(itg, flt, is_float); break;
-        case P_WAVE3: c.modOsc2.waveform = wave_of(itg, flt, is_float); break;
-        case P_COARSE: coarse(&c.osc, itg); break;
-        case P_FINE: fine(&c.osc, itg); break;
-        case P_MOD1_F: coarse(&c.modOsc, itg); break;
-        case P_MOD2_F: coarse(&c.modOsc2, itg); break;
-        case P_FM1: c.fmModAmount1 = flt; break;
-        case P_FM2: c.fmModAmount2 = flt; break;
-        case P_ATTACK: slopeEg2_setAttack(&c.oscVolEg, itg, false); break;
-        case P_DECAY: slopeEg2_setDecay(&c.oscVolEg, itg, false); break;
-        case P_SLOPE: slopeEg2_setSlope(&c.oscVolEg, itg); break;
-        case P_REPEAT: c.oscVolEg.repeat = itg; break;
-        case P_FILTER: SVF_directSetFilterValue(&c.filter, valueShaperF2F(flt, FILTER_SHAPER)); break;
-        case P_RESO: SVF_setReso(&c.filter, flt); break;
-        case P_FTYPE: c.filterType = type_of(itg, flt, is_float); break;
-        case P_FDRIVE: SVF_setDrive(&c.filter, flt); break;
-        case P_DIST: setDistortionShape(&c.distortion, flt); break;
-        case P_TWAVE: transient_setWaveform(&c.transGen, twave_of(itg, flt, is_float)); break;
-        case P_TVOL: c.transGen.volume = flt; break;
-        case P_TFREQ: c.transGen.pitch = 1.f + ((itg / 33.9f) - 0.75f); break;
-        case P_VOL: c.vol = flt; break;
-        case P_VOLMOD: c.volumeMod = itg != 0; break;
-        case P_PWM: c.pwm = flt; break;
-      }
-      break;
-    }
-    default: {
-      HiHatVoice& h = hatVoice[v];
-      switch (p) {
-        case P_WAVE: h.osc.waveform = wave_of(itg, flt, is_float); break;
-        case P_WAVE2: h.modOsc.waveform = wave_of(itg, flt, is_float); break;
-        case P_WAVE3: h.modOsc2.waveform = wave_of(itg, flt, is_float); break;
-        case P_COARSE: coarse(&h.osc, itg); break;
-        case P_FINE: fine(&h.osc, itg); break;
-        case P_MOD1_F: coarse(&h.modOsc, itg); break;
-        case P_MOD2_F: coarse(&h.modOsc2, itg); break;
-        case P_FM1: h.fmModAmount1 = flt; break;
-        case P_FM2: h.fmModAmount2 = flt; break;
-        case P_ATTACK: slopeEg2_setAttack(&h.oscVolEg, itg, false); break;
-        case P_DECAY: h.decayClosed = slopeEg2_calcDecay(itg); break;
-        case P_DECAY_OPEN: h.decayOpen = slopeEg2_calcDecay(itg); break;
-        case P_SLOPE: slopeEg2_setSlope(&h.oscVolEg, itg); break;
-        case P_FILTER: SVF_directSetFilterValue(&h.filter, valueShaperF2F(flt, FILTER_SHAPER)); break;
-        case P_RESO: SVF_setReso(&h.filter, flt); break;
-        case P_FTYPE: h.filterType = type_of(itg, flt, is_float); break;
-        case P_FDRIVE: SVF_setDrive(&h.filter, flt); break;
-        case P_DIST: setDistortionShape(&h.distortion, flt); break;
-        case P_TWAVE: transient_setWaveform(&h.transGen, twave_of(itg, flt, is_float)); break;
-        case P_TVOL: h.transGen.volume = flt; break;
-        case P_TFREQ: h.transGen.pitch = 1.f + ((itg / 33.9f) - 0.75f); break;
-        case P_VOL: h.vol = flt; break;
-        case P_VOLMOD: h.volumeMod = itg != 0; break;
-        case P_PWM: h.pwm = flt; break;
-      }
-      break;
-    }
   }
 }
 
@@ -204,8 +143,7 @@ struct Kit {
 };
 
 // each voice's sound as the LXR firmware's INIT kit has it (initKit.c), then MIFM1's changes (the knobs' own
-// values: lx_defaults): a punchier kick (a click), a cymbal that rings (a square modulated by a sine and noise; the
-// INIT kit's is noise alone, which its modulators do not move)
+// values: lx_defaults): a punchier kick (a click)
 const Kit kKits[LX_MODELS][26] = {
   {{P_WAVE, 0}, {P_WAVE2, 0}, {P_COARSE, 31}, {P_FINE, 63}, {P_MOD1_F, 0}, {P_FM1, 0}, {P_MIXMODE, 0},
    {P_PITCHD, 26}, {P_MODAMNT, 44}, {P_PSLOPE, 22}, {P_ATTACK, 0}, {P_DECAY, 21}, {P_SLOPE, 46},
@@ -214,14 +152,6 @@ const Kit kKits[LX_MODELS][26] = {
   {{P_WAVE, 1}, {P_COARSE, 45}, {P_FINE, 64}, {P_NOISE_F, 127}, {P_NOISE_MIX, 61}, {P_PITCHD, 14},
    {P_MODAMNT, 81}, {P_PSLOPE, 15}, {P_ATTACK, 0}, {P_DECAY, 10}, {P_SLOPE, 10}, {P_REPEAT, 0}, {P_FILTER, 127},
    {P_RESO, 0}, {P_FTYPE, 0}, {P_FDRIVE, 0}, {P_DIST, 63}, {P_TWAVE, 0}, {P_TVOL, 0}, {P_TFREQ, 0}, {P_VOL, 127},
-   {P_VOLMOD, 0}, {P_PWM, 0}, {-1, 0}},
-  {{P_WAVE, 4}, {P_WAVE2, 0}, {P_WAVE3, 0}, {P_COARSE, 127}, {P_FINE, 63}, {P_MOD1_F, 0}, {P_MOD2_F, 0},
-   {P_FM1, 0}, {P_FM2, 0}, {P_ATTACK, 0}, {P_DECAY, 107}, {P_SLOPE, 0}, {P_REPEAT, 0}, {P_FILTER, 68},
-   {P_RESO, 0}, {P_FTYPE, 1}, {P_FDRIVE, 0}, {P_DIST, 63}, {P_TWAVE, 0}, {P_TVOL, 0}, {P_TFREQ, 0}, {P_VOL, 127},
-   {P_VOLMOD, 0}, {P_PWM, 0}, {-1, 0}},
-  {{P_WAVE, 0}, {P_WAVE2, 0}, {P_WAVE3, 0}, {P_COARSE, 50}, {P_FINE, 63}, {P_MOD1_F, 56}, {P_MOD2_F, 127},
-   {P_FM1, 127}, {P_FM2, 127}, {P_ATTACK, 0}, {P_DECAY, 5}, {P_DECAY_OPEN, 17}, {P_SLOPE, 6}, {P_FILTER, 104},
-   {P_RESO, 0}, {P_FTYPE, 1}, {P_FDRIVE, 0}, {P_DIST, 63}, {P_TWAVE, 0}, {P_TVOL, 0}, {P_TFREQ, 0}, {P_VOL, 127},
    {P_VOLMOD, 0}, {P_PWM, 0}, {-1, 0}},
 };
 
@@ -237,13 +167,7 @@ const Knob kKnobs[LX_MODELS][LX_KNOBS] = {
    {P_WAVE, "Wave", 0}, {P_TVOL, "Click", 32}, {P_DIST, "Drive", 63}, {P_MODAMNT, "P.Amt", 44}},
   {{P_NOISE_MIX, "Noise", 61}, {P_NOISE_F, "NoisF", 127}, {P_PITCHD, "P.Dec", 14}, {P_DECAY, "Decay", 12},
    {P_FILTER, "Filter", 127}, {P_RESO, "Reso", 0}, {P_DIST, "Drive", 63}, {P_MODAMNT, "P.Amt", 81}},
-  {{P_FM1, "Mod 1", 64}, {P_MOD1_F, "Frq 1", 97}, {P_FM2, "Mod 2", 32}, {P_DECAY, "Decay", 107},
-   {P_FILTER, "Filter", 68}, {P_MOD2_F, "Frq 2", 120}, {P_WAVE, "Wave", 64}, {P_DIST, "Drive", 63}},
-  {{P_FM1, "Mod 1", 127}, {P_MOD1_F, "Frq 1", 56}, {P_FM2, "Mod 2", 127}, {P_DECAY, "Decay", 5},
-   {P_FILTER, "Filter", 104}, {P_MOD2_F, "Frq 2", 127}, {P_WAVE, "Wave", 0}, {P_DIST, "Drive", 63}},
 };
-// the cymbal's base pitch and second modulator in MIFM1's kit (see kKits)
-const Kit kCymbalFix[3] = {{P_COARSE, 84}, {P_WAVE3, 4}, {-1, 0}};
 
 const char* const kWaves[NUM_OSC_WAVEFORMS] = {"Sine", "Tri", "Saw", "Rect", "Noise", "PWM"};
 
@@ -265,16 +189,13 @@ Track tracks[LXR_VOICES];
 // a knob's MIDI value, v x 127 as the LXR-02 takes a modulation's (a hair over, so that a knob set to n / 127 is n)
 inline int itg_of(float u) { return static_cast<int>(u * 127.0f + 1e-4f); }
 
-int note_moves(int model, int p) {      // the oscillators the played note moves (Drum_trigger, Cymbal_trigger...)
-  return p == P_COARSE || (p == P_MOD1_F && model != SNARE) || (p == P_MOD2_F && model >= CYMBAL);
+int note_moves(int model, int p) {      // the oscillators the played note moves (Drum_trigger, Snare_trigger)
+  return p == P_COARSE || (p == P_MOD1_F && model != SNARE);
 }
 
 int base_of(const Track& tr, int m, int p) {   // a pitch's own value: its knob's, or the kit's
   for (int k = 0; k < LX_KNOBS; ++k)
     if (kKnobs[m][k].p == p) return itg_of(tr.knob[k]);
-  if (m == CYMBAL)
-    for (int j = 0; kCymbalFix[j].p >= 0; ++j)
-      if (kCymbalFix[j].p == p) return kCymbalFix[j].v;
   for (int i = 0; kKits[m][i].p >= 0; ++i)
     if (kKits[m][i].p == p) return kKits[m][i].v;
   return 0;
@@ -283,7 +204,7 @@ int base_of(const Track& tr, int m, int p) {   // a pitch's own value: its knob'
 void set_pitch(Track& tr, int t, int semis) {   // the note: its semitones over the coarse of every oscillator it moves
   int m = tr.model;
   for (int p = P_COARSE; p <= P_MOD2_F; ++p) {
-    if (!note_moves(m, p) || (p == P_MOD2_F && m < CYMBAL)) continue;
+    if (!note_moves(m, p)) continue;
     int c = base_of(tr, m, p) + semis;
     apply(m, static_cast<uint8_t>(t), p, static_cast<uint8_t>(c < 0 ? 0 : c > 127 ? 127 : c), 0.0f, 0);
   }
@@ -298,15 +219,10 @@ void start(Track& tr, int t, int model) {   // a voice of that model on the trac
       voiceArray[v].ampFilterInput = voiceArray[v].lastGain = 0;
       SVF_reset(&voiceArray[v].filter);
       break;
-    case SNARE: Snare_init(v); break;
-    case CYMBAL: Cymbal_init(v); break;
-    default: HiHat_init(v); break;
+    default: Snare_init(v); break;
   }
   for (int i = 0; kKits[model][i].p >= 0; ++i)
     apply(model, v, kKits[model][i].p, kKits[model][i].v, kKits[model][i].v / 127.f, 0);
-  if (model == CYMBAL)
-    for (int i = 0; kCymbalFix[i].p >= 0; ++i)
-      apply(model, v, kCymbalFix[i].p, kCymbalFix[i].v, kCymbalFix[i].v / 127.f, 0);
   for (int k = 0; k < LX_KNOBS; ++k) tr.knob[k] = -1.0f;   // (applied at the next lx_set)
   tr.note = 1000;
   tr.fine = -1;
@@ -323,23 +239,11 @@ void block(Track& tr, int t) {          // the next 64 frames: the mixer's order
       calcDrumVoiceAsync(v);
       calcDrumVoiceSyncBlock(v, tr.buf, kBlock);
       break;
-    case SNARE:
+    default:
       if (tr.trig) Snare_trigger(v, 127, SEQ_DEFAULT_NOTE);
       SVF_recalcFreq(&snareVoice[v].filter);
       Snare_calcAsync(v);
       Snare_calcSyncBlock(v, tr.buf, kBlock);
-      break;
-    case CYMBAL:
-      if (tr.trig) Cymbal_trigger(v, 127, SEQ_DEFAULT_NOTE);
-      SVF_recalcFreq(&cymbalVoice[v].filter);
-      Cymbal_calcAsync(v);
-      Cymbal_calcSyncBlock(v, tr.buf, kBlock);
-      break;
-    default:
-      if (tr.trig) HiHat_trigger(v, 127, 0, SEQ_DEFAULT_NOTE);   // (closed: the open hat is a longer Decay)
-      SVF_recalcFreq(&hatVoice[v].filter);
-      HiHat_calcAsync(v);
-      HiHat_calcSyncBlock(v, tr.buf, kBlock);
       break;
   }
   tr.trig = 0;
@@ -359,12 +263,6 @@ void lx_init(void) {
     voiceArray[t].modOsc.rng = seed ^ 2u;
     snareVoice[t].osc.rng = seed ^ 3u;
     snareVoice[t].noiseOsc.rng = seed ^ 4u;
-    cymbalVoice[t].osc.rng = seed ^ 5u;
-    cymbalVoice[t].modOsc.rng = seed ^ 6u;
-    cymbalVoice[t].modOsc2.rng = seed ^ 7u;
-    hatVoice[t].osc.rng = seed ^ 8u;
-    hatVoice[t].modOsc.rng = seed ^ 9u;
-    hatVoice[t].modOsc2.rng = seed ^ 10u;
     tracks[t].model = -1;
     tracks[t].pos = kBlock;
     tracks[t].trig = 0;

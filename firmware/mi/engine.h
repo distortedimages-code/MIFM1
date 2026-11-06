@@ -138,24 +138,22 @@ const char *eng_param_name(int param);   /* its name as the module prints it: Pl
                                           * model (the kick's MORPH is its Decay) */
 int eng_model_enveloped(int model);      /* 1: a Plaits model with its own envelope, the LPG bypassed (6-op FM,
                                           * string, modal, the drums), or an FM drum */
-/* the models (0.10.1), in ALGORITHM's order, by bank: MIFM1's six drums (mi_drum.cc), the LXR-02's four FM drums
- * (mi_lxr.cc), MIFM1's own voices (ZERO, mi_zero.cc; the FM, four operators and eight algorithms: mi_fm4.cc), then
- * MIFM1's SQ-1 (0.16.14: a pocket Ensoniq, mi_sq1.cc), then Plaits' (its speech, its noises and physical models). A model with its own knobs (a drum, an FM drum,
+/* the models (0.10.1), in ALGORITHM's order, by bank: MIFM1's six drums (mi_drum.cc), the LXR-02's two FM drums
+ * (mi_lxr.cc; 0.16.43: its cymbal and hi-hat gone), MIFM1's own voices (ZERO, mi_zero.cc; the FM, four operators and
+ * eight algorithms: mi_fm4.cc; ... 0.16.43: CHOIR, mi_choir.cc, in OTIS' place, gone), then Plaits' (its speech, its
+ * noises and physical models). A model with its own knobs (a drum, an FM drum,
  * ZERO, the FM) takes its eight parameters from the knobs after FREQ: HARMONICS, TIMBRE, MORPH, the envelope page's
  * four, the pitch envelope's. Its kind says what plays it, its sub its index there (Plaits' engine, the LXR's voice,
  * the drum, the FM's kit) */
-enum { MK_PLAITS, MK_LXR, MK_ZERO, MK_DRUM, MK_FM, MK_PADS, MK_POLY, MK_PROPHET, MK_SQ1, MK_TAURUS, MK_VOCODER,
+enum { MK_PLAITS, MK_LXR, MK_ZERO, MK_DRUM, MK_FM, MK_PADS, MK_POLY, MK_PROPHET, MK_CHOIR, MK_TAURUS, MK_VOCODER,
        MK_STATIC };
-#define ENG_MODELS 25                    /* (0.16.20: TAURUS at 16; 0.16.21: VOCODER at 17; 0.16.24: STATIC, MIFM1's
-                                          * last, at 18; Plaits' from 19) */
+#define ENG_MODELS 23                    /* (0.16.43: FM CYMBAL, FM HI-HAT, OTIS gone; CHOIR at 15, after VOCODER;
+                                          * STATIC at 16, Plaits' from 17) */
 #define ENG_BANKS 5
 int eng_model_kind(int m);
 int eng_model_sub(int m);
 int eng_model_bank(int m);
 int eng_model_own(int m);                /* 1: its own eight knobs (not Plaits') */
-int eng_sq_cycle(int t, float *y, int n, int *of);   /* SQ-1 on track t: the cycle it reads (n points of a period, -1..1),
-                                                   * its place + 32 x its program; -1 none; of: its places */
-const char *eng_sq_family(int t);        /* SQ-1 on track t: its program's family ("" another machine) */
 int eng_model_find(int kind, int sub);   /* the model a kind's sub is, -1 none */
 const char *eng_model_abbr(int m);       /* in four letters or so (the tracks' row) */
 const char *eng_bank_name(int b);
@@ -164,6 +162,7 @@ int eng_fm_shaped(int t);                /* its SHAPE now: the operators it move
 float eng_fm_shape(int t, int op, float x);   /* operator op's level in it at x (its units), -1..1 */
 int eng_model_free(int t, int m);        /* 0: a model once a project (PADS) another track holds */
 int eng_pads_track(void);                /* the track PADS is on, -1 none */
+int eng_choir_parts(int t, float note, int nv, float *out);   /* (0.16.43) CHOIR's parts for a note: how many */
 int eng_duck_track(int k);               /* (0.16.42) the duck: 0 its source, 1..3 the track of that depth knob */
 int eng_lead_ok(int t);                  /* (0.16.42) a track that plays chords (SCALE FOLLOW can lead from it) */
 int eng_scale_step(int sc, int e);       /* (0.16.42) SCALE turned e detents (past FOLLOW's tracks without chords) */
@@ -184,7 +183,8 @@ int eng_model_lock_set(int lane, int step, int m);   /* 0 ok, -1 no room or not 
  * knobs' randoms, a name. Saved by the screen (app.c, pat_store.h), read onto any track */
 #define SND_PAGES 8
 #define SND_MAGIC 0x31444E53u            /* "SND1" */
-#define SND_VERSION 7                    /* (6: 0.16.21's to 0.16.23's, STATIC (0.16.24) not yet at 18: read, the
+#define SND_VERSION 8                    /* (7: 0.16.24's to 0.16.42's: FM CYMBAL, FM HI-HAT, OTIS there (gone): read as
+                                          * HAT, HAT, POLY from their kits, the others to their places; 6: 0.16.21's to 0.16.23's, STATIC (0.16.24) not yet at 18: read, the
                                           * models from 18 one further on, as the older ones after theirs; 5: 0.16.20's, VOCODER (0.16.21) not yet at 17: read, the models from 17 one
                                           * further on, as 1 to 4's after theirs; 4: 0.16.18's and 0.16.19's, TAURUS
                                           * (0.16.20) not yet at 16 either: from 16 one further on first; 3: 0.16.17's, ROBOVOX (16)
@@ -230,7 +230,9 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 34u              /* (33: 0.16.23's: STATIC (0.16.24) not yet at 18: read, the models from 18
+#define PROJECT_VERSION 35u              /* (34: 0.16.24's to 0.16.42's: FM CYMBAL, FM HI-HAT, OTIS there (0.16.43:
+                                          * gone): read, as HAT, HAT, POLY from their kits, the others to their places;
+                                          * 33: 0.16.23's: STATIC (0.16.24) not yet at 18: read, the models from 18
                                           * one further on, as the older ones after theirs; 32: 0.16.21's and 0.16.22's: 68 pages, 380 locks, no followers: read,
                                           * the followers' pages at their defaults, the locks past 367 left out;
                                           * 31: 0.16.20's: VOCODER (0.16.21) not yet at 17, the models from there one
@@ -369,8 +371,8 @@ int eng_step_tie(int lane, int step);
 int eng_step_tie_set(int lane, int step, int steps);   /* 0 ok, -1 no room */
 void eng_step_ties(int lane, uint8_t *out);   /* all ENG_STEPS of them, one look */
 /* (0.16.16) a track's step as a chord: its NOTE the lowest, up to three notes over it (locks of their own kind);
- * the machines that play chords (eng_track_chords: POLY in Poly, REV3 with CHORD Off, OTIS) play them all, the others
- * NOTE alone */
+ * the machines that play chords (eng_track_chords: POLY in Poly, REV3 with CHORD Off, VOCODER in Poly, CHOIR past
+ * Solo) play them all, the others NOTE alone */
 int eng_step_notes(int lane, int step, int *out);   /* its notes (NOTE's values), the lowest first: how many (1..4) */
 int eng_step_notes_set(int lane, int step, const int *notes, int n);   /* 0 ok; -1 no room; -2 out of NOTE's range */
 void eng_step_chords(int lane, uint8_t *out);   /* every step's notes over its NOTE (0: alone), ENG_STEPS of them */

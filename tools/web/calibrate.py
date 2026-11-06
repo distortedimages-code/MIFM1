@@ -38,7 +38,7 @@ PAD = VA                                             # (the FM's square, PW and 
 PADS = NAMES.index("PADS")                           # (PADS: its notes, one saw each or three, its bell: calib.cc)
 POLY = NAMES.index("POLY")                           # (POLY: a voice held, four in unison)
 PRO = NAMES.index("REV3")                            # (REV3, after the Prophet-5: a voice, four in a chord)
-SQ1 = NAMES.index("OTIS")                            # (OTIS, after the SQ-1: a voice, four ringing on; its layers, SPACE)
+CHOIR = NAMES.index("CHOIR")                         # (CHOIR: a soprano alone, four parts)
 VOC = NAMES.index("VOCODER")                         # (VOCODER: a voice, four ringing on, its bands)
 STAT = NAMES.index("STATIC")                         # (STATIC: BODY, ARC, SPARK, each held)
 
@@ -102,8 +102,7 @@ def main():
         jobs[f"poly{x}"] = ("one", POLY, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
     for x, bit in (("one", 1024 | 8192), ("four", 1024 | 16384)):
         jobs[f"pro{x}"] = ("one", PRO, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
-    for x, bit in (("one", 65536 | 131072), ("four", 65536)):
-        jobs[f"sq{x}"] = ("one", SQ1, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
+    jobs["choirfour"] = ("one", CHOIR, 0, 0, 0, 0, 0, -1, 0, SECS, 65536)   # (alone: its model's run)
     for x, bit in (("one", 0), ("four", 524288), ("bands", 1048576)):
         jobs[f"voc{x}"] = ("one", VOC, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
     for x, bit in (("arc", 2097152), ("spark", 4194304)):
@@ -113,7 +112,7 @@ def main():
             jobs[f"filter{f}.{v}"] = ("one", VA, f, fm, nz, 0, 0, -1, 0, SECS)
     jobs["bend"] = ("one", VA, 0, 0, 0, 1, 0, -1, 0, SECS)
     jobs["trauma"] = ("one", VA, 0, 0, 0, 0, 0, -1, 0, SECS, 32768)   # (TRAUMA's drive on the track)
-    for b in range(3):
+    for b in range(2):
         jobs[f"bus{b}"] = ("one", VA, 0, 0, 0, 0, b, -1, 0, SECS)
     for e in (1, 2, 4, 262144, 8388608, 16777216):       # (262144: T1's SPREAD; the reverb METAL, SHIMMER)
         jobs[f"fx{e}"] = ("one", VA, 0, 0, 0, 0, 0, -1, 0, SECS, e)
@@ -130,13 +129,14 @@ def main():
                                 for f in range(1, 5)]
     bend = k(res["bend"]["voice"] - va["voice"], K_VOICE)   # (apply_bend inlined in render_voice)
     trauma = k(max(res["trauma"]["voice"] - va["voice"], 0.0), K_VOICE)   # (apply_trauma, the same)
-    fx = [k(res[f"bus{b}"]["tasks"] - (res[f"bus{b}"]["voice"] - 3 * rest), K_FX) for b in range(3)]
+    fx = [k(res[f"bus{b}"]["tasks"] - (res[f"bus{b}"]["voice"] - 3 * rest), K_FX) for b in range(2)]
     st = res["stress"]                                   # (Warps in the mix, and what else the stress test's effects
     fx_s = k(st["tasks"] - st["voice"] - st["warps"], K_FX)   # do that these runs do not: the rest of its figure)
     fx_w = None
     fxe = [k(res[f"fx{e}"]["tasks"] - res[f"fx{e}"]["voice"] - (res["bus0"]["tasks"] - res["bus0"]["voice"]), K_FX)
            for e in (1, 2, 4, 262144, 8388608, 16777216)]
-    fx_w = max(fx_s - (fx[2] + 2 * fxe[0] + fxe[1] + fxe[2]), 0.0)   # (OTT, T3 and T4's EQ, the duck on 3, the delay's)
+    fx_w = max(fx_s - (fx[1] + 2 * fxe[0] + fxe[1] + fxe[2]), 0.0)   # (the compressor, T3 and T4's EQ, the duck on 3,
+                                                                    # the delay's)
     warps = [[k(res[f"warps{hq}.{a}"]["warps"], K_WARPS) for a in range(6)] for hq in range(2)]
     fmx = [max(k(res[f"fm{x}"]["voice"] - 3 * rest, K_VOICE) - model[PAD], 0.0) for x in ("sq", "pw", "sync")]
     pv = {x: k(res[f"pads{x}"]["voice"] - 3 * rest, K_VOICE) for x in ("triad", "six", "one", "bell")}
@@ -151,10 +151,9 @@ def main():
     m1, m4 = res["proone"]["nv"], res["profour"]["nv"]
     prv = max((pr["four"] - pr["one"]) / max(m4 - m1, 0.5), 0.0)
     proc = [max(pr["one"] - m1 * prv, 0.0), prv]
-    sq = {x: k(res[f"sq{x}"]["voice"] - 3 * rest, K_VOICE) for x in ("one", "four")}
-    q1, q4 = res["sqone"]["nv"], res["sqfour"]["nv"]
-    sqv = max((sq["four"] - sq["one"]) / max(q4 - q1, 0.5), 0.0)
-    sqc = [max(sq["one"] - q1 * sqv, 0.0), sqv]
+    ch4 = k(res["choirfour"]["voice"] - 3 * rest, K_VOICE)   # (its floor and a part: alone one part, four)
+    chv = max((ch4 - model[CHOIR]) / 3.0, 0.0)
+    choirc = [max(model[CHOIR] - chv, 0.0), chv]
     vo = {x: k(res[f"voc{x}"]["voice"] - 3 * rest, K_VOICE) for x in ("one", "four", "bands")}
     w1, w4, wb = res["vocone"]["nv"], res["vocfour"]["nv"], res["vocbands"]["nv"]
     vov = max((vo["four"] - vo["one"]) / max(w4 - w1, 0.5), 0.0)
@@ -192,7 +191,7 @@ def main():
           "(one saw, three), its bell */",
           "static const float kWebPoly[2] = {" + ", ".join(f1(v) for v in polyc) + "};   /* POLY: its floor, a voice */",
           "static const float kWebPro[2] = {" + ", ".join(f1(v) for v in proc) + "};   /* REV3: its floor, a voice */",
-          "static const float kWebSq[2] = {" + ", ".join(f1(v) for v in sqc) + "};   /* OTIS: its floor, a voice */",
+          "static const float kWebChoir[2] = {" + ", ".join(f1(v) for v in choirc) + "};   /* CHOIR: its floor, a part */",
           "static const float kWebVoc[3] = {" + ", ".join(f1(v) for v in vocc) + "};   /* VOCODER: its floor, a voice, "
           "its bands (MOD on) */",
           "static const float kWebStatic[3] = {" + ", ".join(f1(v) for v in statc) + "};   /* STATIC: BODY, ARC, "
@@ -204,8 +203,8 @@ def main():
           "    {" + ", ".join(f1(v) for v in warps[0]) + "},",
           "    {" + ", ".join(f1(v) for v in warps[1]) + "},",
           "};",
-          "static const float kWebFx[3] = {" + ", ".join(f1(v) for v in fx) + "};   /* the effects, the mix and the master "
-          "bus (OFF, COMP, OTT) */",
+          "static const float kWebFx[2] = {" + ", ".join(f1(v) for v in fx) + "};   /* the effects, the mix and the master "
+          "bus (OFF, COMP) */",
           f"static const float kWebFxEq = {f1(fxe[0])}, kWebFxDuck = {f1(fxe[1] / 3.0)}, kWebFxDelay = {f1(fxe[2])};   /* "
           "a track's EQ (playing), the duck on a track, the delay's filter and drive */",
           f"static const float kWebFxWarps = {f1(fx_w)};   /* Warps in the mix (the rest of the stress test's effects) */",

@@ -25,10 +25,6 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   oscillateurs (treize réglages du panneau), son filtre, ses deux enveloppes, sa **Poly-Mod** (le balayage de la sync,
   la FM), un bouton **VINTAGE** comme celui de la Rev 4, une mémoire d'accords ou des accords qui suivent l'harmonie
   (celle de PADS, ou la gamme), et sans accord, ceux qu'on joue au clavier (voir plus bas) ;
-- **OTIS** (0.16.14, SQ-1 jusqu'à 0.16.15) : un Ensoniq de poche, nommé d'après la puce du SQ-1 (OTIS, l'ES5505),
-  quatre voix par piste : des **Transwaves** (32 cycles qui changent peu à peu, lus entiers et par marches ; depuis
-  0.16.16, huit classiques et sept plus granuleuses), les filtres sans résonance de la puce, trois couches, un petit
-  effet ; 24 programmes en huit familles, huit potards (voir plus bas) ;
 - **TAURUS** (0.16.20) : une basse monophonique très grasse d'après les pédales **Taurus** de Moog (deux scies qui
   battent, l'échelle à transistors du Minimoog, un contour qui retombe, le DECAY, le glide ; ses trois presets TAURUS,
   BASS, TUBA) et le **Minimoog** (ses six formes d'onde, son troisième oscillateur une octave dessous, son mixer qui
@@ -38,6 +34,10 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   un **chœur** (TONE), un **ensemble** pour l'épaissir, SHIFT pour déplacer les formants, AIR pour laisser passer les
   sifflantes ; sans voix, une machine à cordes ; depuis la 0.16.28, **PLAY** le joue en Mono, en Poly ou sur les
   **progressions de PADS** (voir plus bas) ;
+- **CHOIR** (0.16.43) : une **voix chantée** par formants, une soprano seule ou un **chœur** à quatre voix (soprano,
+  alto, ténor, basse) qui s'harmonise tout seul dans la gamme, sous la mélodie ; elle **glisse** d'une note à l'autre
+  quand on glisse le doigt sur les pads, sa voyelle se règle de A à U, son timbre du doux au pressé, son vibrato, et
+  un souffle (aucun par défaut) (voir plus bas) ;
 - **STATIC** (0.16.24, refaite en 0.16.27 d'après **ARC/01**, le cahier des charges de Yoann) : une machine
   d'**événements électriques** pour des séquences minimales, percussives et instables, d'après **Pan Sonic** et **Ryoji
   Ikeda** ; trois générateurs, un par piste ou un par pas : **BODY** (un sinus sub, sa hauteur qui tombe, pur ou
@@ -48,8 +48,8 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
   allumés, inversés ou coupés, des formes numériques) et son **glitch** à la manière du Data Bender de Qu-Bit (des
   répétitions calées au tempo, ralenties ou accélérées, des accidents) ;
-- **quatre batteries FM** comme modèles de piste en plus : les voix du **LXR-02** (son firmware est open source,
-  GPL-3.0), grosse caisse et toms, caisse claire, cymbale et charleston, leur code tel quel (voir plus bas) ;
+- **deux batteries FM** comme modèles de piste en plus : les voix du **LXR-02** (son firmware est open source,
+  GPL-3.0), grosse caisse et toms, caisse claire, leur code tel quel (voir plus bas) ;
 - **ZERO** (0.8.1), la voix propre de MIFM1 : des sinusoïdes pures en vraie FM à travers zéro (un modulateur sinus,
   triangle ou dent de scie), des pulsations rondes, un battement qui fait vivre le son ; chaque trig est un autre son,
   ou les mêmes seize en boucle (voir plus bas) ;
@@ -103,12 +103,16 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   sa somme en mono reste exactement la piste (voir plus bas) ;
 - un **duck** : les autres pistes baissent à chaque trig de sa source (T1, ou celle choisie : 0.16.42 ; sa profondeur
   par piste, un DECAY commun), avant leurs envois : ce qu'elles envoient au delay et à la réverbe baisse avec elles ;
-- un **bus master** : un compresseur (seuil, ratio, release, gain) ou un mode **OTT** (trois bandes compressées vers
-  le haut et vers le bas, d'après le preset d'Ableton que le plug-in de Xfer a rendu célèbre : DEPTH, TIME, DRIVE,
-  LEVEL), puis le limiteur de stmlib (celui de Rings et d'Elements).
+- un **bus master** : un compresseur (seuil, ratio, release, gain), puis le limiteur de stmlib (celui de Rings et
+  d'Elements).
 
 Marbles a été retiré en 0.3 (le séquenceur pas à pas fait tout, plus vite), Rings après le banc d'essai v0.0 (les
 modèles MODAL et STRING de Plaits en reprennent le code, en plus léger).
+
+En 0.16.43, trois machines et un mode ont laissé la place à CHOIR : **FM CYMBAL** et **FM HI-HAT** (les batteries HAT
+de MIFM1 font le charleston), **OTIS** (l'Ensoniq de poche, 0.16.14) et le mode **OTT** du bus master (le compresseur
+reste). Les projets et les sons enregistrés avant se relisent : une piste FM CYMBAL ou FM HI-HAT passe au HAT de MIFM1
+(son kit), une piste OTIS à POLY (son kit), un bus en OTT au compresseur.
 
 ## Installer
 
@@ -192,7 +196,7 @@ tools/web/calibrate.py` recompte et réécrit la table.
 Branché en USB, le FM-1 est aussi une **carte son** (class compliant : aucun pilote, sur Mac, Windows, Linux, iPad,
 iPhone en USB-C), nommée « MIFM1 FM-1 » : **2 entrées, le mix master en stéréo**, 16 bits à **44,1 ou 48 kHz** (au
 choix de l'enregistreur), ce qu'on entend
-au casque (le bus master compris : compresseur ou OTT, limiteur), **sauf le métronome**, qui ne bat que dans le casque
+au casque (le bus master compris : compresseur, limiteur), **sauf le métronome**, qui ne bat que dans le casque
 et le haut-parleur. MASTER ne règle que le haut-parleur et le casque : l'enregistrement garde son niveau (on peut couper
 le FM-1 et écouter par l'enregistreur). Sur un iPhone, l'appareil photo l'enregistre avec la vidéo ; dans un DAW, une
 piste stéréo, le MIDI par le même câble.
@@ -257,7 +261,7 @@ troisième couleur se tire dessous, puis « 4-TRACK SYNTHESIS MACHINE » et la v
 Un FM-1 sans projet sauvegardé joue **la démo** (PLAY), un groove : piste 1 un kick sur les temps (
 un double à la fin de la mesure) qui fait respirer (le duck) une basse FM en piste 2 (quatre opérateurs en chaîne,
 une dent de scie en haut) dans le filtre LADDER (son enveloppe à chaque note, un LFO triangle d'une mesure sur la coupure), qui roule sur les contretemps avec
-un riff de locks et un ratchet de temps en temps ; piste 3 le charleston FM sur toutes les doubles croches (decay et
+un riff de locks et un ratchet de temps en temps ; piste 3 le charleston (le HAT de MIFM1 depuis la 0.16.43) sur toutes les doubles croches (decay et
 pan tirés à chaque coup, ouvert sur les contretemps, 10 % de coups laissés) ; piste 4 des accords dub de septième
 mineure, la FM (trois opérateurs entendus, l'accord sur RATIO) dans le filtre SEM (un S&H sur leur brillance, un hasard lisse sur la coupure, un souffle de
 bruit), jetés dans un delay ping-pong à la croche pointée et dans la réverbe ; un compresseur doux sur le bus. Fa
@@ -267,18 +271,18 @@ VIRTUAL ANALOG et CHORDS), de la place pour ce qu'on y ajoute (Warps en prend 20
 **Repartir de zéro (INIT)** : GLO, SELECT (la page PROJECT), puis **K1** choisit le projet et **REC tenu** le
 charge : *New* (4 pistes sur la FM de MIFM1, sur ses réglages, aucun pas, aucun câble, rien vers les
 effets, do majeur), *The demo groove* (la démo ci-dessus) ou *The saved project* (le dernier sauvegardé, pour
-annuler), *Stress test* ou *Stress test, on the 4 FM drums*. Le transport s'arrête ; rien n'est sauvegardé tant que SAVE n'est pas tenu.
+annuler), *Stress test* ou *Stress test, on the FM drums*. Le transport s'arrête ; rien n'est sauvegardé tant que SAVE n'est pas tenu.
 
 **Le stress test** (GLO, SELECT, K1 sur *Stress test*, REC tenu) : un patch fixe, le même à chaque fois, qui démarre
 tout seul et laisse sous les yeux la page machine (la charge des cœurs, le pic, ce que coûte chaque piste) : pour
 comparer les versions entre elles. Une grosse caisse et une basse (la FM synchronisée sur un carré) passées aux bits
 (et la piste 4 au glitch), des accords (la FM, trois opérateurs entendus, en PW sur un carré : la FM au plus lourd ;
 0.10, les chiffres changent donc avec la FM) et un résonateur MODAL, chacun dans un des quatre filtres (depuis 0.5.8 : LADDER, MS-20, SEM avec sa FM, VOX pingé ; les
-chiffres montent donc par rapport aux versions d'avant), Warps (anneau à diodes, T3 par T2), OTT sur le bus, le delay et la réverbe nourris, le duck, les
+chiffres montent donc par rapport aux versions d'avant), Warps (anneau à diodes, T3 par T2), le compresseur sur le bus (OTT jusqu'à 0.16.42), le delay et la réverbe nourris, le duck, les
 filtres, les trois LFO sur 20 câbles, des aléatoires, des locks et des ratchets. La sortie, la qualité de Warps (Eco
-ou HQ) et le thème restent ceux de la machine : comparer avec le même réglage de Warps. *Stress test, on the 4 FM
+ou HQ) et le thème restent ceux de la machine : comparer avec le même réglage de Warps. *Stress test, on the FM
 drums* (le cinquième choix) joue le même patch, les mêmes câbles et les mêmes effets, mais les quatre pistes sur les
-quatre batteries FM (chacune sur son kit, à sa hauteur) : ce que coûtent les voix du LXR-02 à côté de celles de
+deux batteries FM, en alternance (chacune sur son kit, à sa hauteur) : ce que coûtent les voix du LXR-02 à côté de celles de
 Plaits, piste par piste sur la page machine. Sur l'ordinateur, il prend un quart du temps du stress test.
 
 **Les batteries** (0.9 ; ALGORITHM au début, la banque DRUMS) : celles de MIFM1, d'après le
@@ -303,8 +307,8 @@ FREQ, la note, TRANSP et OCTAVE la déplacent. Un trig la relance, son enveloppe
 sonne encore l'enchaîne sans clic. Elles coûtent au FM-1 5 à 7 % d'un bloc par voix (le KICK de Plaits : 14 %).
 
 **Les batteries FM** (ALGORITHM après PERC, la banque FM DRUMS) : **FM DRUM** (la voix grosse caisse et toms du
-LXR-02 : un oscillateur et un modulateur en FM, une enveloppe de hauteur), **FM SNARE** (un oscillateur et un bruit
-filtré), **FM CYMBAL** et **FM HI-HAT** (un oscillateur modulé en FM par deux autres). Choisir l'une d'elles sur une
+LXR-02 : un oscillateur et un modulateur en FM, une enveloppe de hauteur) et **FM SNARE** (un oscillateur et un bruit
+filtré) ; la cymbale et le charleston du LXR-02 (FM CYMBAL, FM HI-HAT) ont été retirés en 0.16.43. Choisir l'une d'elles sur une
 piste met ses huit réglages à ceux de son kit (le kit INIT du LXR-02, retouché pour sonner tout de suite), sur les
 potards qui suivent FREQ, sur les trois pages de leur son (EDIT, puis SELECT) : les trois de la première, les quatre
 de la deuxième, et le premier de la troisième (à la place de GATE). ENV n'a alors qu'une page : l'enveloppe du
@@ -315,21 +319,19 @@ de potard passe à la valeur suivante (WAVE : à la forme d'onde suivante) :
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | **FM DRUM** | FM (l'index) | MODFRQ (le modulateur) | P.DEC (l'enveloppe de hauteur) | DECAY | WAVE | CLICK (le snap) | DRIVE | P.AMT (la profondeur de l'enveloppe de hauteur) |
 | **FM SNARE** | NOISE (le mélange) | NOISF (la fréquence du bruit) | P.DEC | DECAY | FILTER (sur le bruit) | RESO | DRIVE | P.AMT |
-| **FM CYMBAL** | MOD 1 | FRQ 1 | MOD 2 | DECAY | FILTER (passe-haut) | FRQ 2 | WAVE (l'oscillateur) | DRIVE |
-| **FM HI-HAT** | MOD 1 | FRQ 1 | MOD 2 | DECAY | FILTER (passe-haut) | FRQ 2 | WAVE (l'oscillateur) | DRIVE |
 
 Les autres réglages des voix restent ceux du kit. FREQ, la note, TRANSP et OCTAVE déplacent leurs oscillateurs comme
 une note MIDI le fait sur le LXR-02 (un pas en do 3, octave 0, joue la hauteur du kit ; ce qui dépasse le demi-ton va
 sur leur accord fin). Choisir une batterie FM remet l'OCTAVE de la piste à 0 (une piste de basse à −1 la jouerait une
 octave sous son kit). Un trig relance la voix (à pleine vélocité), son enveloppe fait le reste : GATE n'y change
-rien. Le charleston ouvert est un DECAY plus long : un lock sur DECAY. Les câbles, les locks, les aléatoires, la dose
+rien. Les câbles, les locks, les aléatoires, la dose
 et le circuit bending marchent sur elles comme sur Plaits. Leur code est celui du LXR-02, compilé tel quel (ce qui change pour le
 FM-1 est listé dans `firmware/third_party/lxr/MIFM1.md`) : le LXR-02 calcule une partie en double précision, que le
 FM-1 n'a pas ; leur enveloppe d'amplitude garde exactement la valeur du double (vérifiée pas à pas), le reste passe
 en float, et `make lxr-check` compare les deux : 99,99 % des échantillons identiques à ceux du LXR-02, les autres à
 quelques pas de 16 bits (-111 dB).
 
-**ZERO** (0.8.1, à la place d'ARC, la voix de la 0.8.0 ; ALGORITHM après FM HI-HAT, la banque MIFM1) : la voix écrite
+**ZERO** (0.8.1, à la place d'ARC, la voix de la 0.8.0 ; ALGORITHM après FM SNARE, la banque MIFM1) : la voix écrite
 pour MIFM1, des sinusoïdes pures en **vraie FM à travers zéro**. Une sinusoïde porte la note ; un modulateur la module
 en fréquence linéairement, comme l'entrée FM « through zero » d'un oscillateur analogique : la fréquence de la porteuse
 est la note plus INDEX fois la note fois le modulateur. Au-delà d'INDEX 1, elle passe sous zéro et la phase repart à
@@ -509,7 +511,7 @@ au-dessus d'une note de l'accord : la quarte sur un accord majeur). Une basse, u
 clavier : tout reste dans l'harmonie. Sans piste PADS, Prog ne quantise rien.
 
 **Follow T1 à T4** (0.16.42, GLO, SCALE après Flip) : la même idée pour n'importe quelle piste qui joue des accords,
-choisie à la main. SCALE ne s'arrête que sur les pistes qui en jouent : PADS, POLY, REV3, OTIS, VOCODER (ses accords
+choisie à la main. SCALE ne s'arrête que sur les pistes qui en jouent : PADS, POLY, REV3, VOCODER (ses accords
 de pas, ceux de ses touches, de son CHORD, de ses progressions). La piste suivie mène : elle n'est pas quantisée (ses
 notes font l'harmonie) ; à chacun de ses accords (deux notes ou plus), les autres passent à **la gamme de l'accord** :
 ses notes, et les notes de passage de la gamme majeure la plus proche qui les contient toutes (celle de ROOT d'abord,
@@ -600,61 +602,53 @@ parallèles sortiraient de la gamme).
 | **OSC** (13 réglages) | **CUTOFF** (20 Hz à 20 kHz) | **RESO** | **DECAY** (50 ms à 20 s ; au bout, Hold) | **VINTAGE** (Clean, puis les premières révisions) | **ENV** (− : avec une attaque, + : pincée) | **POLY-MOD** (− : l'enveloppe sur A, + : B sur A) | **CHORD** (− : l'harmonie, + : une mémoire d'accords ; Off : le clavier) |
 
 Choisir REV3 met ces réglages aux siens (deux dents de scie un peu écartées, un filtre de cuivre, une voix par
-trig) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 4,7 % d'un bloc (quatre : 16 %). Depuis la 0.13, ZERO, les batteries, la FM, POLY, REV3 et OTIS partagent la
+trig) et garde l'OCTAVE de la piste. Une voix coûte au FM-1 environ 4,7 % d'un bloc (quatre : 16 %). Depuis la 0.13, ZERO, les batteries, la FM, POLY, REV3 (et les machines venues après) partagent la
 mémoire d'une piste (une piste ne joue qu'une machine à la fois) : passer d'une machine à l'autre la refait à neuf.
 
-**OTIS** (0.16.14 sous le nom SQ-1, renommé en 0.16.16 ; ALGORITHM après REV3, la banque MIFM1, à la place de
-CHIPTUNE et FORMANT) : un **Ensoniq de poche**, d'après le SQ-1 (1990, un VFX-SD allégé : trois voix par son, des
-filtres numériques sans résonance, ses **Transwaves**), et nommé d'après sa puce, **OTIS** (l'ES5505, dont MAME documente
-le fonctionnement). Ses manières, pas ses sons : ses ondes sont celles de MIFM1. Quatre voix par piste (une par trig,
-les précédentes résonnent dessous).
+**CHOIR** (0.16.43 ; ALGORITHM après VOCODER, la banque MIFM1, à la place d'OTIS) : une **voix chantée** par
+formants, à la manière de **CHANT**, la synthèse de la voix chantée de l'IRCAM (Xavier Rodet, Yves Potard et
+Jean-Baptiste Barrière ; *Computer Music Journal* 8(3), 1984). Une source, la glotte, dans les cinq formants du conduit
+vocal en parallèle, chacun à la fréquence, à la largeur et au niveau que lui donne la table de formants du manuel de
+Csound pour cette voix et cette voyelle (son annexe D, celle qui accompagne son opcode `fof`, d'après CHANT). Une
+soprano seule, ou un chœur à quatre voix.
 
-- **La lecture** : des cycles 16 bits lus par un accumulateur de phase, linéairement entre deux échantillons, comme la
-  puce. Une **Transwave** : 32 cycles de 256 échantillons qui changent peu à peu (pour une cloche, 8 boucles de quatre
-  périodes, ses partiels arrondis au quart de la note : de l'inharmonique qui boucle juste). Une note lit un cycle entier
-  et prend le suivant **à sa fin**, comme la puce déplaçait ses points de boucle : la Transwave avance par marches, elle
-  ne se fond pas (le pas adouci sur 8 échantillons, pas plus).
-- **Les Transwaves** (0.16.16 : quinze, faites à partir de recettes ; entre parenthèses, les programmes qui les jouent).
-  **Huit classiques** : une résonance qui monte (Res Bass, Sweeper), une FM dont l'indice grandit (E.Piano), les modes
-  d'une barre (Metal, Gong, Mallet), ceux d'un verre (Glass, Crystal), des touches, un clavier électrique et ses barres
-  (Tines), les grappes d'une nappe (Pad), des voyelles a, e, i, o, u (Vox, Choir), une sync dure (Grind). **Sept plus
-  granuleuses** : des cycles au hasard (un commun à tous, et le sien, de plus en plus vers la fin) lissés de moins en
-  moins, d'un remous sombre à un buzz brut (Dust, Static) ; un sinus et une scie écrasés, tenus sur 1 à 16
-  échantillons, sur 64 à 2 niveaux (Crusher, Click) ; un glissando dans chaque cycle, de la note jusqu'à 1 à 41
-  harmoniques, dans une fenêtre en sinus (Chirp) ; le **VOSIM** (Kaegi et Tempelaars, 1978) : trois impulsions en
-  sinus carré, chacune plus douce, leur hauteur le formant (3 à 28 harmoniques), puis le silence jusqu'à la fin du cycle
-  (Grains) ; des harmoniques rebattues, gardées ou non d'un cycle à l'autre (moins nombreuses, plus haut), leurs signes
-  au hasard (Shard) ; la note par deux sinus 2 à 32 fois plus haut, et une fois et demie autant : un fracas de
-  modulateur en anneau (Ring, Perc) ; une FM rebouclée sur elle-même (de 0,3 à 5) : son sinus, puis un cri, puis un
-  bruit qui tient, le même à chaque cycle (Chaos, Machine). Le repli, l'impulsion qui s'affine, l'escalier et deux des
-  trois FM de 0.16.14 sont partis.
-- **Où elles vivent** : dans la mémoire de la voix Plaits de la piste (16 Ko de cycles, 2 Ko pour la ligne de SPACE),
-  prêtée tant que la piste joue OTIS. Changer de programme refait la Transwave **un peu à chaque bloc** (environ 5 % du
-  FM-1 pendant ce temps, le cycle joué en premier) : la première note est là en quelques millisecondes, la Transwave
-  entière en 0,1 à 0,4 s ; deux programmes sur la même Transwave (Res Bass et Sweeper, par exemple) n'attendent rien.
-- **Les filtres** : ceux d'OTIS, des pôles simples sans résonance : deux ou quatre passe-bas, un passe-haut ; COLOR
-  les règle, le clavier et l'enveloppe les ouvrent un peu. Les ondes les plus brillantes replient à l'aigu (au-dessus
-  de do 5), comme sur l'original ; le passe-bas descend alors sous le repli.
+- **La source** : le débit de la glotte d'après Rosenberg (une ouverture en demi-cosinus, une fermeture en quart de
+  cosinus, puis fermée), sa dérivée (ce que rayonnent les lèvres), sa fermeture un saut adouci par un polyBLEP : les
+  aigus de la voix sans repliement (−43 dB au pire, en do 6). **TIMBRE** règle le temps où elle est ouverte et sa
+  vitesse de fermeture : à gauche une voix douce et ronde (la première harmonique 10 dB au-dessus de la deuxième), à
+  droite une voix pressée et brillante (les deux aussi fortes, les aigus 12 dB plus haut).
+- **Les formants** : cinq passe-bandes aux niveaux de la table, un sur deux à l'envers (la branche parallèle de Klatt :
+  les flancs de deux voisins ne s'annulent pas entre eux) : chaque pic à 1 ou 2 dB de la table. Le premier monte avec
+  la note quand elle le dépasse, comme le fait une soprano dans l'aigu (ses notes hautes aussi fortes). Le niveau est
+  tenu (la puissance des formants suivie sur 0,3 s) : une voyelle, une hauteur, un TIMBRE sonnent aussi fort que les
+  autres. **VOWEL** passe de A à E, I, O, U en les fondant l'une dans l'autre ; les formants glissent, ne sautent pas.
+- **Le souffle** (**BREATH**, coupé par défaut) : un bruit dont les graves sont coupés, plus fort quand la glotte est
+  ouverte, dans les mêmes formants ; il ouvre un peu la glotte avec lui. Le même souffle à tous les TIMBRE.
+- **La hauteur** : un vibrato (~5,6 Hz, qui arrive après le début de la note, à moitié pendant un glissé), deux
+  jitters (un rapide de 2 cents, un lent qui dérive de quelques cents), une attaque un peu par en dessous à chaque
+  nouvelle note. **Le legato** : une note qui arrive pendant qu'une autre chante encore (le doigt glissé d'un pad à
+  l'autre au clavier, des pas qui se suivent) **y glisse**, au temps de GLIDE, sans nouvelle attaque ; après un silence, la note
+  part de sa hauteur. Elle chante **deux octaves au-dessus** de la note de la piste (un do 3 : le do 5 d'une soprano),
+  dans la gamme du projet (SCALE, Prog et Follow compris).
+- **Le chœur** (**VOICES** : Solo, Duo, Trio, Choir) : chaque partie a son chanteur (les formants de son registre :
+  soprano, alto, ténor, basse ; sa vitesse de vibrato, quelques cents à côté, quelques millisecondes en retard). Leurs
+  notes : celles de l'accord du pas s'il y en a un (du haut vers le bas), sinon **la mélodie harmonisée dans la
+  gamme**, sous elle : la soprano chante la note, l'alto une tierce dessous, le ténor une quinte dessous, la basse une
+  octave sous le ténor (en do majeur, sur mi : mi, do, la, et le la grave). En Solo, le registre suit la hauteur
+  (soprano à partir de mi 4, puis alto, ténor, basse en descendant).
 
-| WAVE | INDEX | SWEEP | MOTION | COLOR | SHAPE | STACK | SPACE |
+| 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| le programme (24) | où la note démarre dans la Transwave | une enveloppe l'y déplace (milieu : rien ; à droite vers le haut, à gauche vers le bas) | un LFO dessus (sa vitesse et sa profondeur ensemble ; après 50 % un léger vibrato, après 70 % instable) | à gauche plus sombre (les passe-bas se ferment), Open au milieu, à droite plus fin (le passe-haut monte) | l'enveloppe : Perc, Pluck, Keys (basses, claviers), Swell, Pad ; la durée du balayage avec | la deuxième couche (sa part, son désaccord : ailleurs dans la Transwave, à l'octave ou à la quinte), puis la troisième (un clic, un souffle, un tintement) | un chorus, puis l'effet du programme : phaser, peigne accordé sur la note, saturation |
+| **VOWEL** (A, E, I, O, U, et entre elles : A-E…) | **VOICES** (Solo, Duo, Trio, Choir) | **TIMBRE** (doux à gauche, pressé à droite) | **BREATH** (Off : aucun souffle) | **GLIDE** (5 ms à 0,6 s) | **VIBRATO** (sa profondeur : Off à 100 cents) | **ATTACK** (5 ms à 1,5 s) | **RELEASE** (30 ms à 4 s) |
 
-Les **24 programmes**, trois par famille (0.16.16) : **Grit Bass** (Res Bass, Crusher, Chaos), **Electric** (E.Piano,
-Tines, Shard), **Metallic** (Metal, Ring, Gong), **Glass** (Glass, Chirp, Crystal), **Voices** (Vox, Grains, Choir),
-**Evolving Pad** (Pad, Dust, Sweeper), **Industrial** (Grind, Static, Machine), **Percussive** (Perc, Mallet,
-Click). Chacun choisit sa Transwave, ses couches, l'échelle de son enveloppe, le sens de son balayage
-(une pincée retombe vers INDEX, une nappe monte depuis), ses pôles et son effet ; leurs niveaux sont égalisés. Le
-premier écran dessine **le cycle que la voix lit**, en direct, et sa place (« Electric · 13 / 32 »).
+Choisir CHOIR met ses réglages aux siens (une soprano seule sur A, un vibrato de 36 cents, aucun souffle, une attaque
+douce) et garde l'OCTAVE de la piste. Mesuré (`make test` et le banc d'essai) : en do 3, elle chante un do 5 (522 Hz
+pour 523, vibrato compris) ; un glissé d'une quinte arrive en ~0,2 s ; le vibrato bat à 5,6 Hz, ±36 cents ; son niveau
+reste le même d'une voyelle, d'un TIMBRE ou d'une hauteur à l'autre, seule ou à quatre. Une voix seule coûte au FM-1
+environ 4,7 % d'un bloc, le chœur à quatre environ 18 %. Les projets et les sons enregistrés d'avant qui jouaient OTIS passent à POLY
+(ses réglages).
 
-Au clavier, OTIS joue les accords à la main (0.16.15) : une voix par touche tenue, quatre au plus, chacune relâchée avec
-sa touche ; les pas de la piste se taisent tant qu'une touche est tenue ; depuis 0.16.16, il joue aussi les accords des pas. Choisir OTIS met ses réglages aux siens
-(E.Piano, un peu de balayage, un chorus). Une voix coûte au FM-1 environ 3 %
-d'un bloc avec ses trois couches, SPACE à fond et le reste environ 5,5 % (quatre voix, trois couches, SPACE à fond :
-environ 19 % ; REV3, quatre voix : 16 %). Les projets et les sons enregistrés d'avant qui jouaient CHIPTUNE ou FORMANT passent à OTIS avec ses
-réglages ; les autres modèles de Plaits sont renumérotés.
-
-**TAURUS** (0.16.20 ; ALGORITHM après OTIS, la banque MIFM1) : une **basse monophonique**, une voix par piste, d'après
+**TAURUS** (0.16.20 ; ALGORITHM après REV3, la banque MIFM1) : une **basse monophonique**, une voix par piste, d'après
 les pédales **Taurus** de Moog (le modèle 205A, 1975-1981, dessiné par David Luce) telles que leur manuel les décrit, et
 le **Minimoog** (1970). Du Taurus : deux oscillateurs en dent de scie, B contre A (son intervalle, un battement de
 quelques cents, leur dosage), l'**échelle à transistors** brevetée par Moog (24 dB/octave, sa résonance, EMPHASIS,
@@ -735,7 +729,7 @@ MOD sur Off : la porteuse seule, une machine à cordes à quatre voix.
 Choisir VOCODER met ses réglages aux siens : MOD sur Off (à tourner vers la piste qui parle), les cordes, l'ensemble à
 70, une attaque de 27 ms, un relâchement d'un tiers de seconde, FOLLOW à 40 ms, AIR à 35. Il coûte au FM-1 environ
 4,5 % d'un bloc avec une voix, 7 % avec quatre, et ses bandes 12 % de plus quand MOD prend une piste (quatre voix
-vocodées : environ 19 %, autant qu'OTIS). Les projets et les sons enregistrés avec la 0.16.20 se relisent : VOCODER
+vocodées : environ 19 %). Les projets et les sons enregistrés avec la 0.16.20 se relisent : VOCODER
 prend la place 17, SPEECH et les autres modèles de Plaits passent un cran plus loin.
 
 **STATIC** (0.16.24 ; refaite en 0.16.27 ; ALGORITHM après VOCODER, la banque MIFM1) : une machine d'**événements
@@ -819,7 +813,7 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
 | **SEQ** | tapé : les pas de la piste (NOTE, PROB, SPEED, LENGTH ; puis RATCHETS : RATCH, SPAN, CURVE, DIR ; puis CLIMB : CLIMB, NOTES, ON, SHAPE ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns** (touches noires : la banque, blanches : le pattern, plusieurs : un enchaînement ; REC tenu : efface) |
 | **ARP** | Endless, celui de la piste (voir plus bas) ; à nouveau : ses options (STRIDE, REST, HOLES, LEAP) |
-| **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leur SPREAD, leurs filtres (EQ), le DUCK, puis le bus master (COMP, OTT) ; ALGORITHM sur COMP ou OTT : le mode du bus (OFF, COMP, OTT) |
+| **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leur SPREAD, leurs filtres (EQ), le DUCK, puis le bus master (COMP) ; ALGORITHM sur COMP : le compresseur allumé ou coupé |
 | **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps, chacun sur sa première face, **les envois des pistes** (0.16.39 ; avant, ses potards) ; SELECT parcourt leurs faces (les envois, leurs potards, leurs pas). Revenu d'ailleurs, FX retrouve la face où l'on était |
 | **ENV** | tout ce qui est enveloppe sur la piste active : l'enveloppe de Plaits (DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV) ; ENV encore (ou SELECT) : P.ENV et l'enveloppe du filtre (F.ATK, F.DECAY, PING) |
 | **PLAY** | le séquenceur tourne ou s'arrête ; **deux fois de suite** (STOP STOP, en moins de 0,4 s) : arrêté, et tout le son coupé, les queues du delay et de la réverbe comprises |
@@ -893,9 +887,9 @@ tourner un potard pose un P-lock** sur ce pas : pour une piste, sur n'importe qu
 son niveau, ses envois, son pan, sa note…) ; pour un effet, sur ses potards. Le potard montre alors la valeur du pas
 (LOCK dessous). **Tenir un pas et tourner ALGORITHM** (0.16.40) lui donne **un autre modèle de la famille de la
 piste**, joué de son trig au suivant : les six moteurs de Plaits entre eux (SPEECH, SWARM, NOISE, PARTICLES, STRING,
-MODAL), les six batteries entre elles (KICK, SNARE, CLAP, HAT, TOM, PERC), les quatre batteries FM entre elles ; ses
+MODAL), les six batteries entre elles (KICK, SNARE, CLAP, HAT, TOM, PERC), les deux batteries FM entre elles ; ses
 potards restent ceux de la piste (« STEP 5  STRING » ; revenir au modèle de la piste enlève le lock). Les autres
-machines (ZERO, FM, PADS, POLY, REV3, OTIS, TAURUS, VOCODER, STATIC) ont chacune leur mémoire et leurs potards à elles :
+machines (ZERO, FM, PADS, POLY, REV3, TAURUS, VOCODER, CHOIR, STATIC) ont chacune leur mémoire et leurs potards à elles :
 pas de modèle par pas. Le clavier joue toujours le modèle de la piste ; changer la piste de famille enlève les modèles
 de ses pas. Tenir un pas et taper SEL efface ses locks. **Tenir un trig une seconde, puis appuyer sur un pas plus
 loin** (0.16.15 ; la seconde depuis 0.16.38, l'en-tête passe alors de « STEP 5 » à « STEP 5 LEN ») lui donne sa
@@ -909,7 +903,7 @@ mi-intensité (le troisième niveau des LED du FM-1, entre éteint et allumé : 
 restant pleins. **Tenir un trig et appuyer sur REC** (0.16.16) montre **ses notes** : l'écran
 dessine un clavier de deux ou trois octaves, les notes du pas pleines, et le nom de l'accord (« STEP 5  Cm7 ») ; une
 touche du clavier ajoute sa note ou l'enlève (on l'entend ; quatre au plus, une au moins), les potards 1 à 4 déplacent
-chacune d'un demi-ton ; **REC** à nouveau revient aux pas. POLY en Poly, REV3 sans accord et OTIS jouent tout
+chacune d'un demi-ton ; **REC** à nouveau revient aux pas. POLY en Poly, REV3 sans accord et CHOIR (VOICES au-delà de Solo) jouent
 l'accord ; une machine à une seule voix joue la plus grave, l'écran dit « MONO: THE LOWEST » et dessine les autres en
 pointillé. NOTE reste la plus grave, les autres sont des locks du pas (des intervalles au-dessus d'elle, jusqu'à huit
 octaves), effacés avec les autres ; un trig joué au clavier ou par Endless n'a pas d'accord. La piste de pas suit la page : aller sur le delay (FX) montre les pas du delay.
@@ -1095,11 +1089,9 @@ couleur. Le kick n'est plus obligé d'être sur T1, et on peut faire plonger les
 source elle-même ne plonge jamais ; ses locks de profondeur sont gardés et reviennent quand elle n'est plus la
 source.
 
-**Le bus master** (HOME, sixième et septième faces) : ALGORITHM choisit le mode, OFF, **COMP** ou **OTT** ; les
-potards de la face qui ne joue pas sont grisés. COMP : THRESH (0 à −36 dB), RATIO (1:1 à 20:1), RELEASE (20 ms à 1,3 s),
-GAIN (±12 dB) ; à droite, la réduction de gain. OTT : DEPTH (le mélange avec le son direct), TIME (les temps d'attaque
-et de release, ×1 au milieu, de ×1/4 à ×4), DRIVE (l'entrée) et LEVEL (la sortie) ; à droite, ses trois bandes,
-montées (rose) ou écrasées (bleu). Après les deux, toujours, le limiteur de stmlib.
+**Le bus master** (HOME, sixième face) : ALGORITHM allume ou coupe le **COMP** (coupé, ses potards sont grisés) :
+THRESH (0 à −36 dB), RATIO (1:1 à 20:1), RELEASE (20 ms à 1,3 s), GAIN (±12 dB) ; à droite, la réduction de gain. Après
+lui, toujours, le limiteur de stmlib. (Le mode OTT, ses trois bandes, est parti en 0.16.43.)
 
 Sur les pages des quatre pistes (niveaux, pans, SPREAD, EQ, envois, duck), le nom de la piste active est en défonce. Et en
 haut à droite, toujours au même endroit, quatre carrés numérotés : celui de la piste que joue le clavier est rempli
@@ -1291,7 +1283,7 @@ rien ne boucle. **La dose suit une courbe** (son carré) : au début de la cours
 ±6 demi-tons à 100 %) et la transposition (±7) sautent par demi-tons entiers, puis sur les notes de la gamme choisie ;
 ce qui en sortirait n'est jamais tiré : l'enveloppe de hauteur (son glissando), le PING du filtre (une résonance
 qui sonne à n'importe quelle hauteur), HARMONICS là où c'est un intervalle (l'écart de SWARM
-et de PARTICLE), WAVE d'OTIS (un programme : sa Transwave refaite), RATIO de la FM dans ou vers ses accords, le décalage de Warps en décaleur de
+et de PARTICLE), RATIO de la FM dans ou vers ses accords, le décalage de Warps en décaleur de
 fréquence. Le reste : HARMONICS ailleurs, TIMBRE, MORPH, DECAY, COLOUR et les enveloppes de Plaits (sur une batterie
 FM, ses réglages), la gate, les bits (CLOCK, BITS, MASK, SHAPE) et le glitch (GLITCH, SIZE, BEND, DROP : à forte dose, des notes qui
 bégaient), le
@@ -1384,7 +1376,7 @@ qualité de Warps, le thème reste quand on charge un autre projet ; il est gard
 **Le clavier** relance la note à chaque touche, même jouée legato, et une touche tapée très vite sonne quand même.
 Depuis 0.16.15, il **garde les touches tenues** : une voix seule (la FM, ZERO, Plaits, les batteries, POLY en Mono…)
 joue la **dernière** touche appuyée, et quand on la lâche alors qu'une autre est encore tenue, **elle revient sur
-celle-ci** (un nouveau trig) ; Endless fait de même avec sa transposition. POLY en Poly, REV3 sans accord et OTIS
+celle-ci** (un nouveau trig) ; Endless fait de même avec sa transposition. POLY en Poly et REV3 sans accord
 jouent toutes les touches tenues, une voix chacune : des accords à la main.
 
 La 0.16.17 avait mis **ROBOVOX** (une puce de parole qui chante, d'après le Robovox de Kraftwerk) à la place de
@@ -1412,14 +1404,14 @@ Chaque moteur de MIFM1 doit quelque chose à une machine, et le site le raconte,
   Canada** ;
 - POLY : le **SH-101** de Roland (1982) et l'**AIRA S-1** (2023) ; REV3 : le **Prophet-5** de Sequential Circuits (1978),
   sa Rev 3 et le bouton Vintage de la Rev 4 (2020) ;
-- OTIS : l'**Ensoniq SQ-1** (1990), le **VFX** (1989) et ses Transwaves (ses filtres n'avaient pas de résonance :
-  elles étaient le seul moyen d'en avoir une), la puce **OTIS** (ES5505) ; avant eux, le **Mirage** (1984, un
-  échantillonneur 8 bits à 1 695 dollars) et l'**ESQ-1** (trois oscillateurs par voix sur la puce DOC de Robert Yannes,
-  celui du SID du Commodore 64) ;
 - TAURUS : les pédales **Taurus** de Moog (le 205A de David Luce, 1975 ; sous Genesis, Rush, Yes, Pink Floyd, The Police,
   U2) et le **Minimoog** (1970) ;
 - VOCODER : le **Vocoder Plus VP-330** de Roland (1979-1980 ; sous Vangelis, Yellow Magic Orchestra, Laurie Anderson,
   Underworld), et avant lui le vocodeur de **Homer Dudley** (Bell Labs, 1937) ;
+- CHOIR : **CHANT** de l'IRCAM (Xavier Rodet, Yves Potard, Jean-Baptiste Barrière ; Kaija Saariaho en a fait *Vers le
+  blanc*, 1982) et la table de formants du manuel de **Csound**, la source glottique de **Rosenberg** (1971), la
+  synthèse en parallèle de **Dennis Klatt** (1980), et la soprano qui accorde son premier formant sur sa note
+  (**Johan Sundberg**) ;
 - STATIC : **ARC/01**, le cahier des charges DSP de Yoann (novembre 2026) ; **Ryoji Ikeda** (*+/−*, 1996 : des
   sinus et du bruit blanc, rien d'autre), **Pan Sonic** (Mika Vainio et Ilpo Väisänen, Turku, 1992 : un minimalisme
   dur et fort, sur des machines construites pour eux), et le sample and hold de l'**ECHON 6** de Morphor (2025) ;
@@ -1458,7 +1450,6 @@ Sources : [Pretty Hate Machine](https://en.wikipedia.org/wiki/Pretty_Hate_Machin
 [Music Has the Right to Children](https://en.wikipedia.org/wiki/Music_Has_the_Right_to_Children),
 [MusicRadar sur The Campfire Headphase](https://www.musicradar.com/artists/its-our-take-on-a-pop-record-pop-music-that-has-been-melted-on-a-hot-dashboard-in-the-sun-how-boards-of-canada-brewed-a-serene-genre-blurring-classic),
 [Ensoniq Mirage](https://en.wikipedia.org/wiki/Ensoniq_Mirage), [ESQ-1](https://en.wikipedia.org/wiki/Ensoniq_ESQ-1),
-[VFX](https://en.wikipedia.org/wiki/Ensoniq_VFX),
 [le pseudo-stéréo, de Lauridsen à Kendall](https://csoundjournal.com/issue14/PseudoStereo.html),
 [le brevet d'Orban](https://patents.google.com/patent/US3670106A/en),
 [le manuel de Wider](https://polyversemusic.com/downloads/manuals/Wider%20Manual.pdf),
@@ -1468,6 +1459,10 @@ Sources : [Pretty Hate Machine](https://en.wikipedia.org/wiki/Pretty_Hate_Machin
 [Roland VP-330](https://en.wikipedia.org/wiki/Roland_VP-330),
 [Vintage Synth Explorer sur le VP-330](https://www.vintagesynth.com/roland/vocoder.php),
 [Vocoder](https://en.wikipedia.org/wiki/Vocoder),
+[la table de formants du manuel de Csound](https://csound.com/docs/manual/MiscFormants.html),
+[son opcode fof, d'après CHANT](https://csound.com/manual/opcodes/fof/),
+[les articles de CHANT à l'IRCAM](https://support.ircam.fr/docs/om-libraries/om-chant/co/Resources.html),
+[Landon Morrison sur Saariaho et CHANT](https://mtosmt.org/issues/mto.21.27.3/mto.21.27.3.morrison.pdf),
 [le Muziekgebouw sur les sinus et le bruit blanc de Ryoji Ikeda](https://www.muziekgebouw.nl/en/ryoji-ikeda-s-sine-waves-and-white-noise-lz3y),
 [Pan Sonic au CTM](https://archive.ctm-festival.de/index.php?id=3622),
 [MusicTech sur l'ECHON 6](https://musictech.com/reviews/hardware-instruments/morphor-echon-6-review/) ; les autres sur le site.
