@@ -160,7 +160,7 @@ troisième, sur la page elle-même, qui ne joue jamais : réglée comme l'exempl
 - **Ratchets** : les charlestons seuls sur les contretemps, un pas agrandi : où tombent ses coups (CURVE les
   rapproche ou les écarte), à quel volume, à quelle hauteur (CLIMB).
 
-TAURUS, STATIC, TRAUMA, la dose d'aléatoire et Warps gardent pour l'instant leur écran noir (spectre ou niveau en
+TAURUS, STATIC et Warps gardent pour l'instant leur écran noir (spectre ou niveau en
 direct, leurs 16 pas dessous) et leurs potards : ils seront dessinés à leur tour. Depuis la 0.16.44, trois de plus,
 sur le même écran :
 - **CHOIR** : la soprano seule sur une ligne lente en fa mineur (un pas par croche), chaque note tenue jusqu'à la
@@ -171,9 +171,10 @@ sur le même écran :
 - **METAL** : les stabs de la démo, ouverts et une octave plus haut, envoyés loin dans la réverbe ; DECAY (jusqu'à
   Freeze), SIZE, TONE, et MODE pour passer à SHIMMER.
 
-En 0.16.45, TAURUS joue une **boucle EBM** : le kick sur chaque temps, la caisse claire sur le deux et le quatre, la
-basse qui galope entre les kicks sur les doubles croches (fa mineur, ses sauts d'octave), la dent de scie du Minimoog
-poussée dans l'échelle ; CUTOFF, EMPH, CONTOUR, DECAY. Et les potards des filtres **glissent** (~10 ms, par 16
+En 0.16.45, TAURUS joue une boucle (sans légende depuis la 0.16.46) : le kick sur chaque temps, la caisse claire sur
+le deux et le quatre, la basse qui galope entre les kicks sur les doubles croches (fa mineur, ses sauts d'octave), la
+dent de scie du Minimoog poussée dans l'échelle ; CUTOFF, EMPH, CONTOUR, DECAY. TRAUMA et la dose d'aléatoire n'ont
+plus d'exemple depuis la 0.16.46 : un peu de mystère. Et les potards des filtres **glissent** (~10 ms, par 16
 échantillons) : un doigt qui tire le dessin envoie ses valeurs par à-coups (~60 par seconde), RESO et DRIVE sautaient
 et crépitaient sur un téléphone ; la recherche du réglage juste sous l'auto-oscillation (la courbe dessinée quand le
 filtre chante) se fait par moitiés, 7 mesures au lieu de 50 par image.
@@ -182,6 +183,13 @@ Les histoires des machines récentes (POLY, REV3, TAURUS, VOCODER, CHOIR, STATIC
 0.16.44, et METAL la sienne : la plaque EMT 140 (1957), puis l'Erbe-Verb de Tom Erbe et Make Noise (2014). Un seul son à la fois sur la page : un
 exemple lancé arrête celui d'avant et met la machine en pause là où elle en est ; toucher la machine, « Essayer » ou
 l'allumer arrête l'exemple et la relance.
+
+**Le sommaire et les carrousels** (0.16.46). Passé le sommaire, une barre reste en haut de la page : les sept chapitres,
+celui qu'on lit marqué, et le lien vers Audiotrauma. Les machines, les filtres et les effets sont des **carrousels** :
+une slide par machine (ou par groupe : les six batteries, les deux batteries FM, les bruits et modèles physiques), avec
+tout ce qui la concerne, sa fiche, son exemple, son histoire et ses photos ; on passe de l'une à l'autre par ses
+onglets, les flèches, un glissement du doigt ou les flèches du clavier. Le carrousel prend la hauteur de la slide
+montrée.
 
 **La charge affichée est celle du FM-1, estimée.** Un navigateur ne peut pas mesurer le temps que le FM-1 mettrait (son
 horloge avance d'un bloc à la fois, et sa vitesse n'est pas celle du FM-1) : dans cette version, l'horloge du moteur
