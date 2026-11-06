@@ -206,6 +206,12 @@ const ModelDef kModelDef[ENG_MODELS] = {
   {"SWARM", "SWRM", MK_PLAITS, 16, 4}, {"NOISE", "NOIS", MK_PLAITS, 17, 4}, {"PARTICLES", "PART", MK_PLAITS, 18, 4},
   {"STRING", "STRG", MK_PLAITS, 19, 4}, {"MODAL", "MODL", MK_PLAITS, 20, 4},
 };
+// (0.16.31) each model's level, so that they come out together: their own sounds as ALGORITHM brings them, measured
+// (BS.1770 loudness: the loudest 400 ms of a held note, and of quarter notes), brought to -21 LUFS for the synths (they
+// were spread from -16, ZERO, to -30, POLY and SPEECH), -22 the kicks, -24 the snares and the toms, -25 the clap, -26 the
+// perc, -28 the cymbal, -29 the hats (from -20 to -35). In quarter decibels, on the voice as it comes out (before its
+// bits, its filter, Warps)
+const int8_t kModelTrim[ENG_MODELS] = {13, 10, 13, 18, 3, 8, -7, 0, -4, 24, -21, -17, -12, 30, 20, 6, 8, -3, 8, 35, 1, 14, 10, 32, -8};
 const char* const kBankNames[ENG_BANKS] = {"DRUMS", "FM DRUMS", "MIFM1", "PLAITS", "NOISE & PHYSICAL"};
 inline const ModelDef& mdef(int m) { return kModelDef[m < 0 ? 0 : m >= ENG_MODELS ? ENG_MODELS - 1 : m]; }
 
@@ -331,6 +337,11 @@ float step_clk;                         // samples into the sixteenth
 int32_t tick;                           // sixteenths since PLAY
 uint32_t fill_trigs[ENG_TRACKS];        // the dose's fills' trigs each track played (the tests)
 int cur_step[ENG_LANES];
+int8_t rec_skip[ENG_TRACKS];            // (0.16.31) live recording: a step the keys wrote just ahead (heard already)
+int32_t count_in;                       // the next PLAY's count-in, sixteenths
+uint8_t click_on, clk_hi;               // the metronome: on, the beat's ping (at sample clk_at, -1 none; the bar's
+int32_t clk_at = -1;                    // higher), its resonator
+float clk_c, clk_y1, clk_y2;
 int gl_at[ENG_TRACKS];                  // the glitch: this block's sixteenth (the sample it starts at; -1 none)
 int gl_busy[ENG_TRACKS];                // its slice taken or repeating (the voice does not rest meanwhile)
 float gl_six = 5000.0f;                 // a sixteenth, samples
@@ -1354,8 +1365,10 @@ void sequence(uint32_t n) {
   float sl = step_len_now();
   if (restart) {
     restart = 0;
-    step_clk = 1e9f;                    // the first sixteenth at once
-    tick = -1;
+    step_clk = 1e9f;                    // the first sixteenth at once (counting in: so many before it)
+    tick = -1 - count_in;
+    count_in = 0;
+    for (int t = 0; t < ENG_TRACKS; ++t) rec_skip[t] = -1;
     for (int l = 0; l < ENG_LANES; ++l) lane_cnt[l] = lane_grid[l] = -1, lane_spd[l] = static_cast<int8_t>(lane_speed(l));
     climb_fresh();
     pad_pos = -1;                       // (PADS: its first trig its first chord; VOCODER's too)
@@ -1393,6 +1406,7 @@ void sequence(uint32_t n) {
       step_clk -= six_len(sl);
       ++tick;
       if (step_clk >= six_len(sl)) step_clk = 0.0f;
+      if (click_on && !(tick & 3)) clk_at = static_cast<int32_t>(k * static_cast<uint32_t>(fl)), clk_hi = !(tick & 15);
       if (proj.dice && tick % 4 == 0) make_dice();   // (the dose: the effects thrown anew at each beat)
       if (proj.trauma && tick % 4 == 0 && warps_track() < 0) trauma_warps();   // (TRAUMA: Warps on its oscillator,
                                                                               // a beat at a time)
@@ -1419,6 +1433,11 @@ void sequence(uint32_t n) {
           lane_grid[l] = g;
           ++lane_cnt[l];
           cur_step[l] = lane_next(l);
+        }
+        if (adv && l < ENG_TRACKS && rec_skip[l] >= 0) {   // (0.16.31) the step the keys wrote just ahead: heard
+          int sk = rec_skip[l];
+          rec_skip[l] = -1;
+          if (sk == cur_step[l]) continue;
         }
         if (!(adv && eng_trig(l, cur_step[l])) && !(l < ENG_TRACKS && fhit[l])) continue;
         if (l >= ENG_TRACKS) new_trig(l, cur_step[l], 1);
@@ -1959,6 +1978,7 @@ struct Bend {
   float hold, cnt;                      // the sample held, the count to the next
   int pos, zc;                          // the zero crossings: above, their count
   float dx, dy;                         // the coupling capacitor
+  float ei, eo, lg;                     // (0.16.31) its level: what goes in and out (followed), the gain given back
 };
 Bend bend[ENG_TRACKS];
 
@@ -1981,6 +2001,7 @@ void set_bend(int t) {
   int on = g.shape != BS_OFF || g.rate < 1.0f || g.steps > 0.0f || g.mask != 0;
   int dc = g.shape == BS_RECT || g.shape == BS_SWAP || g.mask != 0;
   if (dc && !g.dc) g.dx = g.dy = 0.0f;
+  if (on && !g.on) g.ei = g.eo = 0.0f, g.lg = 1.0f;   // (its level: as it was, then followed)
   g.on = on;
   g.dc = dc;
 }
@@ -2031,10 +2052,25 @@ inline float bend_one(Bend& g, float x) {
   return z;
 }
 
+// (0.16.31) the bits keep the track's level: what comes out brought back to what went in, both followed over ~50 ms
+// (a mask, or few bits on a quiet sound, made it up to 13 dB louder): down as far as it takes, up 3 dB at most
+void level_keep(float* x, uint32_t n, float ei, float eo, float* fi, float* fo, float* lg, float a, float up) {
+  *fi += (ei - *fi) * a;
+  *fo += (eo - *fo) * a;
+  float k = *fo > 1e-9f ? fm_minf(fm_sqrtf(*fi / *fo), up) : 1.0f;
+  *lg += (k - *lg) * 0.3f;              // (a gain a block, glided from block to block: the bits' steps stay steps)
+  for (uint32_t i = 0; i < n; ++i) x[i] *= *lg;
+}
 void apply_bend(int t, float* x, uint32_t n) {
   Bend& g = bend[t];
   if (!g.on) return;
-  for (uint32_t i = 0; i < n; ++i) x[i] = bend_one(g, x[i]);
+  float ei = 0.0f, eo = 0.0f;
+  for (uint32_t i = 0; i < n; ++i) {
+    ei += x[i] * x[i];
+    x[i] = bend_one(g, x[i]);
+    eo += x[i] * x[i];
+  }
+  level_keep(x, n, ei, eo, &g.ei, &g.eo, &g.lg, 0.06f, 1.41f);
 }
 
 // the glitch (after Qu-Bit's Data Bender, a circuit-bent buffer): at each sixteenth, GLITCH's chance that the track
@@ -2354,6 +2390,11 @@ void render_voice(int t, uint32_t n) {
       else for (uint32_t i = pos; i < n; ++i) vbuf[t][i] = 0.0f;
     }
     else mp_render(voice[t], &vbuf[t][pos], &vaux[t][pos], n - pos);
+  }
+  {
+    const int m = proj.algo[PG_TRACK(t, 0)];
+    const float tg = fm_exp2f(static_cast<float>(kModelTrim[m < ENG_MODELS ? m : 0]) * 0.0415241f);   // (2^(1/24.08))
+    for (uint32_t i = 0; i < n; ++i) vbuf[t][i] *= tg;
   }
   apply_bend(t, vbuf[t], n);
   uint32_t fq = plat_ticks24();
@@ -2736,6 +2777,7 @@ volatile uint32_t task_ticks[kTasks];
 float task_cost[kTasks] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 float warps_chunk_cost = 1.0f;           // Warps' cost a Process call: a block makes 2 or 3 of them (mw_calls)
 uint32_t warps_calls;
+float w_ei, w_eo, w_lg;                  // (0.16.31) its level: what goes in and out (followed), the gain given back
 
 void run_task(int i, uint32_t n) {
   uint32_t q = plat_ticks24();
@@ -2746,6 +2788,12 @@ void run_task(int i, uint32_t n) {
     WEB_SPEND(kWebWarps[proj.warps_hq ? 1 : 0][a < 0 ? 0 : a > 5 ? 5 : a] * static_cast<float>(n) / 128.0f);
 #endif
     mw_render(warps, w_car, w_mod, w_din, w_out, w_dry, n);
+    // (0.16.31) Warps keeps the level: its output brought to its two inputs' together (what the carrier and the
+    // modulator played before it took their place), followed over ~0.2 s: it came out up to 20 dB over a quiet
+    // track. Down as far as it takes, up 6 dB at most
+    float ei = 0.0f, eo = 0.0f;
+    for (uint32_t k = 0; k < n; ++k) ei += w_car[k] * w_car[k] + w_mod[k] * w_mod[k], eo += w_out[k] * w_out[k];
+    level_keep(w_out, n, ei, eo, &w_ei, &w_eo, &w_lg, 0.015f, 2.0f);
   }
   else fx_job(fx_n);
   task_ticks[i] = plat_ticks24() - q;
@@ -5517,6 +5565,21 @@ void eng_render(float* l, float* r, uint32_t n) {
   } else {
     for (uint32_t i = 0; i < n; ++i) l[i] = r[i] = 0.0f;
   }
+  if (clk_at >= 0 || clk_y1 != 0.0f) {  // (0.16.31) the metronome: a ping at each beat (C6), the bar's a fifth up, ~25 ms
+    for (uint32_t i = 0; i < n; ++i) {
+      if (static_cast<int32_t>(i) == clk_at) {
+        clk_c = clk_hi ? 1.9485305f : 1.9760169f;
+        clk_y1 += clk_hi ? 0.0775f : 0.0371f;   // (0.35 and 0.25 at their peaks)
+      }
+      float y = clk_c * clk_y1 - 0.9981876f * clk_y2;
+      clk_y2 = clk_y1;
+      clk_y1 = y;
+      l[i] += y;
+      r[i] += y;
+    }
+    clk_at = -1;
+    if (clk_y1 * clk_y1 + clk_y2 * clk_y2 < 1e-10f) clk_y1 = clk_y2 = 0.0f;
+  }
   usb_ok = usb_now && fx_n == n;
   if (cut_req == 1) {                   // STOP twice: faded out over this block, the modules made new at the next
     float g = 1.0f, dg = 1.0f / static_cast<float>(n);
@@ -5899,6 +5962,18 @@ int eng_step_locked(int lane, int step) {
 int eng_step_now(int lane) {
   return playing && lane >= 0 && lane < ENG_LANES && tick >= 0 ? cur_step[lane] : -1;
 }
+// (0.16.31) live recording: a lane's place since PLAY in its own steps (whole: the steps it took; the fraction: how far
+// into the one playing), -1 stopped or counting in; the step the keys wrote just ahead of it (not played when it gets
+// there: the key was heard); the next PLAY's count-in; the metronome
+float eng_lane_pos(int lane) {
+  if (!playing || restart || tick < 0 || lane < 0 || lane >= ENG_LANES) return -1.0f;
+  return (static_cast<float>(tick) + fm_minf(step_clk / six_len(step_len_now()), 0.999f)) * kSpeedMul[lane_speed(lane)];
+}
+void eng_rec_skip(int lane, int step) {
+  if (lane >= 0 && lane < ENG_TRACKS) rec_skip[lane] = static_cast<int8_t>(step);
+}
+void eng_count_in(int sixteenths) { count_in = sixteenths; }
+void eng_click(int on) { click_on = on != 0; }
 float eng_lane_open(int lane) {
   return lane >= ENG_TRACKS && lane < ENG_LANES ? fx_open[lane - ENG_TRACKS] : 1.0f;
 }

@@ -5850,6 +5850,53 @@ int main(int argc, char** argv) {
     if (!texts || !steps || !lead || !round || !again || !mono) ++failures, printf("FAIL: VOCODER PLAY\n");
   }
 
+  {  // (0.16.31) live recording: the count-in (a bar, the steps not yet), the metronome's pings (at the beats, the bar's
+     // higher), the lane's place, a step written just ahead not played there (played the next time round)
+    eng_blank(p);
+    eng_fresh();
+    p->val[PG_MIX * 4 + 0] = 1.0f;
+    eng_trig_set(0, 1, 1);
+    eng_play(0);
+    eng_cut();                           // (the tests before: their tails gone)
+    for (int b = 0; b < 400; ++b) eng_render(l, r, n);
+    eng_count_in(16);
+    eng_click(1);
+    eng_play(0);
+    eng_play(1);
+    const uint32_t r0 = eng_rises(0);
+    const int bar = static_cast<int>(2.0f * 44100.0f / static_cast<float>(n));   // (120 BPM: a bar 2 s)
+    float pk_in = 0.0f, pos_in = -1.0f;
+    int pings = 0, quiet_n = 21;
+    for (int b = 0; b < bar - 4; ++b) {
+      eng_render(l, r, n);
+      float pk = 0.0f;
+      for (uint32_t i = 0; i < n; ++i) pk = std::max(pk, std::fabs(l[i]));
+      pk_in = std::max(pk_in, pk);
+      pings += pk > 0.1f && quiet_n > 20;
+      quiet_n = pk > 0.1f ? 0 : quiet_n + 1;
+      pos_in = std::max(pos_in, eng_lane_pos(0));
+    }
+    const uint32_t r_in = eng_rises(0) - r0;
+    for (int b = 0; b < 12; ++b) eng_render(l, r, n);   // (the bar's first step, past)
+    float pos = eng_lane_pos(0);
+    // step 1 written ahead: not played there this time, the next time it is
+    eng_rec_skip(0, 1);
+    for (int b = 0; b < bar / 4; ++b) eng_render(l, r, n);   // (to step 4)
+    const uint32_t r_skip = eng_rises(0) - r0;
+    for (int b = 0; b < bar; ++b) eng_render(l, r, n);
+    const uint32_t r_next = eng_rises(0) - r0;
+    eng_click(0);
+    eng_play(0);
+    for (int b = 0; b < 100; ++b) eng_render(l, r, n);
+    eng_defaults(p);
+    eng_fresh();
+    printf("live recording: counting in %d pings (peak %.2f), the lane at %.1f, %u trigs; then at %.2f; a step written "
+           "ahead: %u trigs that pass, %u the next\n", pings, pk_in, pos_in, r_in, pos, r_skip, r_next);
+    if (pings != 4 || pk_in < 0.15f || pk_in > 0.6f || pos_in >= 0.0f || r_in || pos < 0.0f || pos > 0.5f || r_skip ||
+        r_next != 1)
+      ++failures, printf("FAIL: live recording\n");
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

@@ -231,6 +231,11 @@ static struct {
     int trauma;                          /* OCT+ held, SELECT turned: TRAUMA, on its own screen */
     uint32_t trauma_at;
     int combo;                           /* REC and SEL held together: every cable erased (REC's hold) */
+    int lrec, lr_combo, noclick;         /* (0.16.31) live recording (REC and PLAY); REC's release taken; no metronome */
+    int lr_s, lr_t;                      /* the step it wrote last, its track, the lane's place then (keys within a */
+    float lr_last;                       /* step: a chord) */
+    float lr_at[NKEYS];                  /* each key held: the lane's place at its press, its step, its track + 1 */
+    int8_t lr_step[NKEYS], lr_trk[NKEYS];
     int oct_was, spage_was;              /* the octave, the steps' page before an OCT press (both: put back) */
     uint32_t play_at;                    /* PLAY's last press (again within CUT_MS: every sound cut) */
     uint32_t keys, btn;
@@ -3321,6 +3326,20 @@ static int track_lit(int t)              /* a track's LED: its gate, or a trig i
     return (int)((eng_gates() >> t) & 1u) || (int32_t)(until[t] - now) > 0;
 }
 
+
+/* (0.16.15) the steps of the page shown that the track's trigs hold (their lengths), a bit each */
+static __attribute__((noinline)) uint32_t held_steps(int t, int len)
+{
+    uint8_t tie[ENG_STEPS];
+    uint32_t m = 0;
+    eng_step_ties(t, tie);
+    for (int s0 = 0; s0 < len && s0 < ENG_STEPS; s0++)
+        for (int q = s0 + 1; tie[s0] && q <= s0 + tie[s0] && eng_trig(t, s0); q++)
+            if ((uint32_t)(q % len - ui.spage * 16) < 16u)
+                m |= 1u << (q % len - ui.spage * 16);
+    return m;
+}
+
 static void foot_steps(int t)            /* the steps of a page: a trig lit, a lock dotted, the playing one ringed */
 {
     project_t *p = eng_project();
@@ -3361,18 +3380,10 @@ static void foot_steps(int t)            /* the steps of a page: a trig lit, a l
             cv_rect(x, 28, 11, 1, DIM);  /* the beats */
     }
     if (t < ENG_TRACKS) {                /* (0.16.15) a trig held over the steps after it: a bar through them */
-        uint8_t tie[ENG_STEPS];
-        eng_step_ties(t, tie);
-        for (int s0 = 0; s0 < len && s0 < ENG_STEPS; s0++) {
-            if (!tie[s0] || !eng_trig(t, s0))
-                continue;
-            for (int q = s0 + 1; q <= s0 + tie[s0]; q++) {
-                int i = q % len - ui.spage * 16;
-                if (i < 0 || i >= 16)
-                    continue;
-                cv_rect(9 + i * 13 - 2, 14, i ? 15 : 13, 6, q % len == ui.held_step ? HI : ac);
-            }
-        }
+        uint32_t m = held_steps(t, len);
+        for (int i = 0; i < 16; i++)
+            if ((m >> i) & 1u)
+                cv_rect(9 + i * 13 - 2, 14, i ? 15 : 13, 6, ui.spage * 16 + i == ui.held_step ? HI : ac);
     }
     for (int j = 0; j < 4; j++)          /* the pages */
         if (j * 16 < len)
@@ -5092,12 +5103,26 @@ static void module_button(int b)
     }
 }
 
+static void lrec_set(int on);
 static void button_down(int b)
 {
     ui.used[b] = 0;
     switch (b) {
     case B_PLAY:                         /* the clock runs or stops; again at once (STOP twice): stopped, every sound
                                           * cut, the effects' tails too */
+        if (held(B_GLO)) {               /* (0.16.31) GLO and PLAY: the metronome on or off */
+            ui.noclick = !ui.noclick;
+            ui.used[B_GLO] = 1;
+            eng_click(ui.lrec && !ui.noclick);
+            app_say("METRONOME", ui.noclick ? "OFF" : "ON");
+            break;
+        }
+        if (held(B_REC)) {               /* (0.16.31) REC and PLAY: live recording, on or off */
+            ui.lr_combo = 1;
+            ui.long_done[B_REC] = 1;
+            lrec_set(!ui.lrec);
+            break;
+        }
         if (ui.play_at && plat_ms() - ui.play_at < CUT_MS) {
             eng_cut();
             ui.play_at = 0;
@@ -5106,6 +5131,8 @@ static void button_down(int b)
             eng_play(!eng_playing());
             ui.play_at = plat_ms();
         }
+        if (ui.lrec && !eng_playing())   /* (stopped: no more recording) */
+            lrec_set(0);
         break;
     case B_OCTDN: case B_OCTUP:          /* the keyboard's octave; STEP mode: the steps' page. Both held: SELECT turns
                                           * the random dose (the first one's octave put back) */
@@ -5327,6 +5354,10 @@ static void button_up(int b)
         ui.full = 1;
         break;
     case B_REC:                          /* KEY or STEP mode; on Endless' page it records, then plays */
+        if (ui.lr_combo) {               /* (REC and PLAY: let go, nothing else) */
+            ui.lr_combo = 0;
+            break;
+        }
         if (ui.combo) {                  /* (REC and SEL: let go, nothing else) */
             if (!held(B_SEL))
                 ui.combo = 0;
@@ -5334,6 +5365,10 @@ static void button_up(int b)
         }
         if (ui.long_done[b])
             break;
+        if (ui.lrec) {                   /* (0.16.31) live recording: off, the steps playing on */
+            lrec_set(0);
+            break;
+        }
         if (ui.erec >= 0) {              /* Endless: recorded, it plays */
             char n[8];
             eng_endless_rec(ui.erec, 0);
@@ -5710,6 +5745,64 @@ static int endless_keys(int note, int down)
     return ui.ekn && was == note ? ui.ekeys[ui.ekn - 1] : -1;
 }
 
+/* (0.16.31) live recording (REC and PLAY): what the keys play written on the track's steps, at the nearest one (ahead:
+ * not played when it gets there, the key was heard), its note (keys pressed within a step: a chord, four at most), held
+ * over steps its length; PLAY red, REC blinking. The metronome (GLO and PLAY: on or off) counts a bar in from the stop */
+static void lrec_set(int on)
+{
+    const char *m = on ? "ON" : "OFF";
+    ui.lrec = on;
+    ui.lr_s = -1;
+    memset(ui.lr_trk, 0, sizeof ui.lr_trk);
+    plat_play_red(on);
+    eng_click(on && !ui.noclick);
+    if (on) {
+        ui.grid = ui.mod = ui.cview = 0;
+        ui.held_step = -1;
+        if (!eng_playing()) {            /* (from the stop, the metronome on: a bar to come in) */
+            eng_count_in(ui.noclick ? 0 : 16);
+            eng_play(1);
+            ui.play_at = 0;
+            m = ui.noclick ? m : "AFTER 1 BAR";
+        }
+        ui.full = 1;
+    }
+    app_say("LIVE REC", m);
+}
+static void lrec_key(int k, int note, int down)
+{
+    int t = down ? ui.track : ui.lr_trk[k] - 1, len, s, nt[4], n;
+    float pos = t >= 0 ? eng_lane_pos(t) : -1.0f;
+    if (pos < 0.0f)                      /* (counting in, stopped) */
+        return;
+    len = lane_len(t);
+    if (!down) {                         /* held over so many steps: its length */
+        n = (int)(pos - ui.lr_at[k] + 0.5f);
+        if (n >= 2)
+            eng_step_tie_set(t, ui.lr_step[k], (n > len ? len : n) - 1);
+        ui.lr_trk[k] = 0;
+        return;
+    }
+    s = eng_step_now(t);
+    if (s < 0 || s >= len)
+        return;
+    if (pos - (float)(int)pos >= 0.5f && eng_project()->dir[t] == DIR_FWD) {   /* nearer the next: there */
+        s = (s + 1) % len;
+        eng_rec_skip(t, s);
+    }
+    n = s == ui.lr_s && t == ui.lr_t && pos - ui.lr_last < 1.0f ? eng_step_notes(t, s, nt) : 0;
+    if (n < 4)
+        nt[n++] = note - 48;
+    eng_trig_set(t, s, 1);
+    if (eng_step_notes_set(t, s, nt, n) == -1)
+        app_say("LIVE REC", "NO ROOM");
+    if (n == 1)
+        eng_step_tie_set(t, s, 0);
+    ui.lr_s = s, ui.lr_t = t, ui.lr_last = pos;
+    ui.lr_at[k] = pos, ui.lr_step[k] = (int8_t)s, ui.lr_trk[k] = (int8_t)(t + 1);
+    dirty = 1;
+}
+
 static void poll_keys(void)
 {
     uint32_t keys = plat_keys(), k;
@@ -5767,6 +5860,8 @@ static void poll_keys(void)
             }
         } else {
             eng_key(ui.track, note, down);
+            if (ui.lrec)
+                lrec_key((int)k, note, down);
         }
     }
     if (!keys) {                         /* (0.16.13: every key let go, the ARPs' not latched too; 0.16.15: the keys
@@ -5994,14 +6089,14 @@ static void input(void)
             [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO, [PT_PLAY] = B_SEQ, [PT_ARP2] = B_ARP,
             [PT_CLIMB] = B_SEQ, [PT_ARP3] = B_ARP, [PT_SPREAD] = B_HOME};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
-        uint32_t bb = ui.dice ? 1u << B_OCTDN : ui.trauma ? 1u << B_OCTUP : 0, kk = ui.keys;
+        uint32_t bb = ui.dice ? 1u << B_OCTDN : ui.trauma ? 1u << B_OCTUP : 0, kk = ui.keys, mk = 0;
         int pt = ptype(ui.page);
         if (!ui.matrix)
             bb |= 1u << ((pt == PT_EUC || pt == PT_PLAY) && ptrack(ui.page) < 0 ? B_FX : track_cat(ui.page) == CAT_ENV ? B_ENV
                          : track_cat(ui.page) != CAT_NONE ? B_EDIT : PAGE_BTN[pt]);
         if (ui.mod || ui.matrix)
             bb |= 1u << B_SEL;
-        if (ui.grid || ui.page == VP_SYS || (ui.erec >= 0 && (now / 250u) & 1u))   /* recording Endless: it blinks */
+        if (ui.grid || ui.page == VP_SYS || ((ui.erec >= 0 || ui.lrec) && (now / 250u) & 1u))   /* recording: it blinks */
             bb |= 1u << B_REC;
         if (eng_playing())
             bb |= LED_PLAY_GREEN;
@@ -6009,10 +6104,13 @@ static void input(void)
             bb |= 1u << B_SAVE;
         if (ui.grid) {                   /* the lane's steps, its key; OCT- OCT+ lit when there are pages that way */
             int len = lane_len(ui.lane), st = eng_step_now(ui.lane);
+            uint32_t m = ui.lane < ENG_TRACKS ? held_steps(ui.lane, len) : 0;
             kk = 0;
             for (int i = 0; i < 16; i++)
                 if (eng_trig(ui.lane, ui.spage * 16 + i))
                     kk |= 1u << W[i];
+                else if ((m >> i) & 1u)  /* (0.16.31) a long note: the steps it holds, half lit */
+                    mk |= 1u << W[i];
             if (st >= ui.spage * 16 && st < ui.spage * 16 + 16)
                 kk ^= 1u << W[st - ui.spage * 16];
             kk |= 1u << Bk[ui.lane];
@@ -6026,6 +6124,7 @@ static void input(void)
                     kk |= 1u << W[i];
         }
         plat_leds(bb, kk);
+        plat_lights_mid(0, mk);
         plat_glow(1);
     }
 }
