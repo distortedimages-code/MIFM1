@@ -230,13 +230,17 @@ l'USB, son taux et les trous depuis le début de la prise (« USB 48k, 0 lost »
 paquet que l'enregistreur n'a pas trouvé, une réserve vide ou pleine, l'enregistreur parti plus de 20 ms ; chacun
 s'entend comme un clic.
 
-**L'écran plus lent pendant qu'on enregistre** (0.16.36) : une vidéo faite à l'iPhone (en 48 kHz, « 0 lost ») avait
-encore des clics, que le casque n'avait pas : à chacun, quelques échantillons tombés à zéro, l'onde reprenant ensuite
-où elle allait (rien de perdu, rien de décalé), ~253 ms entre deux (l'en-tête redessine la charge toutes les 250 ms,
-dès qu'elle change, donc tant que le son joue) et à chaque touche (l'écran redessiné). L'écran recevait ses pixels à
-60 MHz, en DMA ; tant qu'un enregistreur lit l'USB, il les reçoit à 12 MHz (la vitesse de Felucca et de JIANT) : un
-écran plus lent le temps de la prise, peut-être une image qui se déchire. La cause est une hypothèse (l'écran et l'USB
-se partageant le bus), que la prochaine vidéo confirmera ou non.
+**Des paquets réguliers** (0.16.37) : deux vidéos faites à l'iPhone (en 48 kHz, « 0 lost ») avaient encore des
+clics, que le casque n'avait pas. À chacun, 2 à 6 échantillons à zéro **insérés** dans le son (l'onde reprend ensuite
+avec ce retard), toutes les ~250 ms tant que le son joue (dans un silence, on ne l'entend pas). L'horloge du FM-1 va
+0,04 % plus vite que celle de l'enregistreur : ~48 019 images par seconde pour 48 000. Il envoyait ce surplus par à-coups
+: des paquets de 48 tant que sa réserve restait sous le haut de sa bande, puis une rafale de paquets de 49 en la
+franchissant, toutes les ~260 ms. L'iPhone lit au rythme moyen du flux avec très peu d'avance : avant chaque rafale il
+se trouvait à sec, et comblait avec des zéros. Le FM-1 envoie maintenant ce surplus une image à la fois, régulièrement
+(un paquet de 49 toutes les ~52 ms à 48 kHz ; 45 au lieu de 44 au même rythme à 44,1) : une boucle lente règle le débit
+sur sa réserve et apprend en quelques secondes l'écart des horloges. Un lecteur au rythme moyen a besoin d'1,1 image
+d'avance, contre 6 avant (`make uac-stereo`, 60 s à chaque taux). L'écran ralenti de la 0.16.36 (une première piste,
+écartée : les clics restaient) est retiré.
 
 Sur
 Windows, les DAW en ASIO passent par FlexASIO ou ASIO4ALL (ou leur mode WASAPI). Le sens inverse (l'ordinateur qui joue

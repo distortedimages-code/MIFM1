@@ -8,6 +8,10 @@
  * rate 60 s of streaming as on the FM-1, renders of 128 frames at the I2S clock (~44,117.6 Hz), each writing the ring
  * when it ends (95 % of its time: the deep ring's case; then a render now and then a whole block late), packets at
  * the host's 1 ms: every frame recorded once, in order, none repeated or lost; the ring's fill and its latency.
+ * (0.16.37) Then 60 s more at each rate, no render late, for the packets' pace (uac_pace): a host that reads at the
+ * stream's average rate needs how many frames in hand, past the first 5 s (the loop settled), so that the stream
+ * never falls behind it: 1 or 2 (the extra frame one packet at a time); the band's edges alone, before, 6 (48-frame
+ * packets, then a burst of 49s, ~every 260 ms: an iPhone's camera ran dry before each and filled in zeros).
  *   cc -std=c99 -O2 -Ibase/bsp/chip -Ibase/bsp/boards/fm1 tools/uac_stereo_test.c */
 #include <stdio.h>
 #include <stdint.h>
@@ -76,8 +80,10 @@ static const uint8_t *find(const uint8_t *d, uint32_t len, uint8_t type, uint8_t
     return 0;
 }
 
-/* 60 s at the rate hz: the frames the host recorded */
-static void run(uint32_t hz)
+/* 60 s at the rate hz (late: a render now and then a whole block late): the frames the host recorded; without late
+ * renders, what a steady reader needs in hand */
+static uint8_t sizes[60000];
+static void run(uint32_t hz, int late)
 {
     int16_t pkt[UA_MAXF * CH];
     uint32_t expect = 0, got = 0, maxb = 0, held = 0, nr = 0;
@@ -105,14 +111,16 @@ static void run(uint32_t hz)
         } else if (t == next_render) {                /* a render starts; it takes 95 % of its time, and every
                                                        * 400th starts a whole block late (its end with the next's) */
             uac_render_start();
-            tap_at = t + (++nr % 400u ? 0.95 : 1.95) * render;
+            tap_at = t + (++nr % 400u || !late ? 0.95 : 1.95) * render;
             next_render += render;
-            if (nr % 400u == 0u) {                    /* (the late one: the next render starts after it) */
+            if (late && nr % 400u == 0u) {            /* (the late one: the next render starts after it) */
                 next_render += render;
                 tap_at = next_render - 0.05 * render;
             }
         } else {                                      /* the host's IN token, every ms */
-            uint32_t n = uac_packet((uint32_t *)pkt), f, c;
+            uint32_t n = uac_packet((uint32_t *)pkt), f, c, ms = (uint32_t)(t * 1000.0);
+            if (ms < 60000u)
+                sizes[ms] = (uint8_t)n;
             if (n * CH * 2u > maxb)
                 maxb = n * CH * 2u;
             for (f = 0; f < n; f++) {
@@ -142,10 +150,38 @@ static void run(uint32_t hz)
         fail("holds, underruns, overruns", (long)(held + uac.underruns + uac.overruns), 0);
     if (got < per_ms * 1000u * 59u)
         fail("frames recorded in 60 s", (long)got, (long)per_ms * 60000L);
-    printf("USB audio, stereo, the app's frames, two halves in hand, at %.1f kHz: %u frames in order, packets up to "
-           "%u B, ring fill %u..%u (%.1f ms at the least), %u up %u down\n", hz / 1000.0, (unsigned)got,
-           (unsigned)maxb, (unsigned)uac.fill_lo, (unsigned)uac.fill_hi, uac.fill_lo / (hz / 1000.0),
-           (unsigned)uac.adj_up, (unsigned)uac.adj_down);
+    if (late) {
+        printf("USB audio, stereo, the app's frames, two halves in hand, at %.1f kHz, a render late now and then: %u "
+               "frames in order, packets up to %u B, ring fill %u..%u (%.1f ms at the least), %u up %u down\n",
+               hz / 1000.0, (unsigned)got, (unsigned)maxb, (unsigned)uac.fill_lo, (unsigned)uac.fill_hi,
+               uac.fill_lo / (hz / 1000.0), (unsigned)uac.adj_up, (unsigned)uac.adj_down);
+        return;
+    }
+    {   /* the pace past 5 s: the stream against a straight line (its average rate, least squares), the gap between its
+         * furthest ahead and furthest behind; the packets' sizes */
+        double sx = 0, sy = 0, sxx = 0, sxy = 0, c = 0, a, b, lo = 1e9, hi = -1e9, m = 0;
+        uint32_t k, cnt[64] = {0};
+        for (k = 5000; k < 60000; k++) {
+            c += sizes[k];
+            sx += k, sy += c, sxx += (double)k * k, sxy += (double)k * c, m++;
+            cnt[sizes[k] & 63u]++;
+        }
+        b = (m * sxy - sx * sy) / (m * sxx - sx * sx);
+        a = (sy - b * sx) / m;
+        for (c = 0, k = 5000; k < 60000; k++) {
+            double d;
+            c += sizes[k];
+            d = c - (a + b * k);
+            lo = d < lo ? d : lo;
+            hi = d > hi ? d : hi;
+        }
+        printf("USB audio at %.1f kHz, the pace: %.4f frames a ms; packets of %u: %u, of %u: %u, others %u; a reader at "
+               "that rate needs %.1f frames in hand\n", hz / 1000.0, b, hz / 1000u, (unsigned)cnt[hz / 1000u],
+               hz / 1000u + 1u, (unsigned)cnt[hz / 1000u + 1u],
+               (unsigned)(55000u - cnt[hz / 1000u] - cnt[hz / 1000u + 1u]), hi - lo);
+        if (hi - lo > 2.0 || cnt[hz / 1000u] + cnt[hz / 1000u + 1u] != 55000u)
+            fail("the pace: frames a steady reader needs in hand (x10)", (long)((hi - lo) * 10), 20);
+    }
 }
 
 int main(void)
@@ -176,8 +212,10 @@ int main(void)
 
     usb.up = 1;
     usb.config = 1;
-    run(44100u);
-    run(48000u);
+    run(44100u, 1);
+    run(48000u, 1);
+    run(44100u, 0);
+    run(48000u, 0);
     if (fails)
         return 1;
     printf("ok\n");
