@@ -228,7 +228,15 @@ phase, plat jusqu'à 19 kHz, −0,5 dB à 20 ; ce qui en revient replié dans la
 **Ce que l'enregistrement perd** : la dernière ligne de la page machine (GLO, SELECT) dit, tant qu'un enregistreur lit
 l'USB, son taux et les trous depuis le début de la prise (« USB 48k, 0 lost » ; en rouge dès qu'il y en a un) : un
 paquet que l'enregistreur n'a pas trouvé, une réserve vide ou pleine, l'enregistreur parti plus de 20 ms ; chacun
-s'entend comme un clic. Un clic dans la vidéo avec « 0 lost » vient donc de l'enregistreur, pas du câble.
+s'entend comme un clic.
+
+**L'écran plus lent pendant qu'on enregistre** (0.16.36) : une vidéo faite à l'iPhone (en 48 kHz, « 0 lost ») avait
+encore des clics, que le casque n'avait pas : à chacun, quelques échantillons tombés à zéro, l'onde reprenant ensuite
+où elle allait (rien de perdu, rien de décalé), ~253 ms entre deux (l'en-tête redessine la charge toutes les 250 ms,
+dès qu'elle change, donc tant que le son joue) et à chaque touche (l'écran redessiné). L'écran recevait ses pixels à
+60 MHz, en DMA ; tant qu'un enregistreur lit l'USB, il les reçoit à 12 MHz (la vitesse de Felucca et de JIANT) : un
+écran plus lent le temps de la prise, peut-être une image qui se déchire. La cause est une hypothèse (l'écran et l'USB
+se partageant le bus), que la prochaine vidéo confirmera ou non.
 
 Sur
 Windows, les DAW en ASIO passent par FlexASIO ou ASIO4ALL (ou leur mode WASAPI). Le sens inverse (l'ordinateur qui joue

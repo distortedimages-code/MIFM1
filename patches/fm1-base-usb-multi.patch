@@ -3,8 +3,52 @@ The USB audio input's channels given by the app (FELUCCA_UAC_SOURCE): past two (
 four tracks and the effects' return, 10 channels, set aside; tools/uac_multi_test.c), or two (FM1B_UAC_APP: the
 master mix without the metronome, a margin under full scale; tools/uac_stereo_test.c), at 44.1 or 48 kHz (the
 host's choice; at 48 the app's own resampled frames, FELUCCA_UAC_SOURCE48: no uac_fir.h); two halves more in hand
-(FELUCCA_UAC_DEEP 2); plat_usb_audio_info, the stream's rate and what the host lost.
+(FELUCCA_UAC_DEEP 2); plat_usb_audio_info, the stream's rate and what the host lost; the screen's SPI at the app's
+LCD_BAUD_REC while a host records (lcd.c, main_fm1.c).
 
+diff --git a/device/lcd.c b/device/lcd.c
+index b82c594..6447230 100644
+--- a/device/lcd.c
++++ b/device/lcd.c
+@@ -15,8 +15,15 @@
+                                     * timing writes to it did not stop the tearing on hardware. */
+ #endif
+ 
++#ifndef LCD_BAUD_REC
++#define LCD_BAUD_REC LCD_BAUD      /* (MIFM1) while a host records the USB audio input (main_fm1.c sets lcd_baud_want):
++                                    * an app's own. MIFM1's recordings, at 60 MHz, had a few samples gone to zero in a
++                                    * packet each time the screen sent pixels (none lost, the headphones clean) */
++#endif
++
+ static uint8_t lcd_small[64];
+ static uint8_t lcd_busy;           /* a lcd_data DMA may still run; CS is low */
++static uint8_t lcd_baud_now = LCD_BAUD, lcd_baud_want = LCD_BAUD;   /* (MIFM1) changed between transfers only */
+ #if FM1B_MIRROR
+ /* screen mirroring over USB (mirror.c): every blit and fill copied while a host watches */
+ static uint8_t mirror_on;
+@@ -52,6 +59,8 @@ static void lcd_data(const void *p, uint32_t n)
+     if (!n)
+         return;                    /* SPI_CNT = 0 never completes */
+     lcd_sync();
++    if (lcd_baud_now != lcd_baud_want)
++        fm1_lcd_baud(lcd_baud_now = lcd_baud_want);
+     fm1_lcd_send_data(p, n);
+     lcd_busy = 1;                  /* completed by lcd_sync */
+ }
+diff --git a/device/main_fm1.c b/device/main_fm1.c
+index 89d4069..0840d8e 100644
+--- a/device/main_fm1.c
++++ b/device/main_fm1.c
+@@ -1050,6 +1050,9 @@ static void fm1_main(void)
+             enter_uboot("UBOOT (USB)");
+ #if FM1B_CDC
+         cdc_task();
++#endif
++#if FELUCCA_UAC
++        lcd_baud_want = uac.alt && usb.config && uac.flowing ? LCD_BAUD_REC : LCD_BAUD;   /* (MIFM1) lcd.c */
+ #endif
+         if (fm1_ms - last_frame >= 16u) {           /* ~60 frames/s at most; input in between */
+             last_frame = fm1_ms;
 diff --git a/device/plat_fm1.c b/device/plat_fm1.c
 index 137e72d..7b0b98c 100644
 --- a/device/plat_fm1.c

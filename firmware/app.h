@@ -28,6 +28,11 @@ void app_splash(void);
 /* (0.16.35) 44.1 or 48 kHz, the host's choice (it asks, SET_CUR; 44.1 until it does): at 48 the app's resampler
  * (usb48.h; the patch's FELUCCA_UAC_SOURCE48), packets of 48 frames (+-1: 196 bytes at most) */
 #define FM1B_UAC_48K 1
+/* (0.16.36) the screen's SPI at 12 MHz while a host records (lsb / (4 + 1); 60 MHz otherwise, fm1-base's LCD_BAUD 0):
+ * at 60 its pixels' DMA left a few samples at zero in a USB packet each time it ran (a recording on an iPhone: clicks
+ * ~253 ms apart, the header's load redrawn every 250 ms, and at each key, none lost, the headphones clean). 12 MHz is
+ * Felucca's and JIANT's speed; the screen slower meanwhile */
+#define LCD_BAUD_REC 4u
 /* the browser emulator (tools/build.py --web, tools/web/README.md): the second core is the engine's own simulation
  * there, on the FM-1's modelled clock (mi/engine.cc PLAT_WEB, mi/web_costs.h) */
 #ifdef PLAT_WEB
