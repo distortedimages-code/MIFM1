@@ -225,6 +225,7 @@ static struct {
     uint32_t anim_at;                    /* a page changed: its names written again, letters at random first */
     int anim;
     int held_step, step_new, step_edit;  /* a step held (-1: none), made by this press, locked meanwhile */
+    uint32_t step_at;                    /* (0.16.38) when it was pressed (step_span_armed) */
     int ekeys[8], ekn;                   /* (0.16.15) the keys held on Endless, the newest last (its transposition) */
     int cview, cstep, clane;             /* (0.16.16) a step's notes shown (a step held and REC): the step, its lane */
     int erec;                            /* the track Endless records (-1: none) */
@@ -1349,6 +1350,7 @@ static int load_now(void)                /* the busier core, in % */
  * held step); on the right, always in the same place, the keyboard's track: four squares, its own filled in its
  * colour (STEP mode on an effect's lane: that effect), then the clock, the load */
 #define SQ_X 135                         /* the squares: 11 px, 3 apart (135..188) */
+static int step_span_armed(void);
 static void draw_header(void)
 {
     static int load = -1;
@@ -1361,7 +1363,8 @@ static void draw_header(void)
         load = load_now();
         load_at = plat_ms();
     }
-    int32_t s[6] = {ui.page | ui.matrix << 8 | mode << 10 | (ui.held_step & 127) << 13 | key << 20, load,
+    int32_t s[6] = {ui.page | ui.matrix << 8 | mode << 10 | (ui.held_step & 127) << 13 | key << 20 |
+                        (mode == 5 && step_span_armed()) << 26, load,
                     eng_playing() | dirty << 1 | page_count(ui.page) << 2 | algo_here(ui.page) << 6,
                     (int32_t)lane_accent(key) | ui.track << 16 | ui.grid << 19, ac, 0};
     const char *name = ui.matrix ? "Matrix" : module_name(ui.page);
@@ -1384,6 +1387,8 @@ static void draw_header(void)
             int_text(ui.held_step + 1, v);
             text_cat(m, "STEP ", sizeof m);
             text_cat(m, v, sizeof m);
+            if (step_span_armed())       /* (0.16.38) held a second: another step now gives it its length */
+                text_cat(m, " LEN", sizeof m);
         } else if (mode) {
             text_cat(m, M[mode], sizeof m);
         }
@@ -5700,6 +5705,15 @@ static void panel_chord(void)            /* the step's notes on two octaves of k
     blit(0, PANEL_Y);
 }
 
+/* (0.16.38) a trig held this long before another step pressed gives it its length (step_span): a step pressed sooner
+ * is a step of its own (two steps put in quickly, the second pressed before the first was let go, made a long trig) */
+#define STEP_SPAN_MS 1000u
+static int step_span_armed(void)
+{
+    return ui.held_step >= 0 && ui.lane < ENG_TRACKS && eng_trig(ui.lane, ui.held_step) &&
+           plat_ms() - ui.step_at >= STEP_SPAN_MS;
+}
+
 /* (0.16.15) a trig held (a), another step pressed (b): its length up to b (b before it: its own step again); with
  * ratchets, their span instead (its hits over those steps) */
 static void step_span(int l, int a, int b)
@@ -5748,12 +5762,14 @@ static void grid_key(int k, int down)
         int st = ui.spage * 16 + w;
         if (st >= len)
             return;
-        if (down && ui.held_step >= 0 && st != ui.held_step && ln < ENG_TRACKS && eng_trig(ln, ui.held_step)) {
-            step_span(ln, ui.held_step, st);   /* (0.16.15) a step held, another pressed: its length to there */
+        if (down && st != ui.held_step && step_span_armed()) {
+            step_span(ln, ui.held_step, st);   /* (0.16.15) a step held (0.16.38: a second), another pressed: its
+                                                * length to there */
             return;
         }
         if (down) {
             ui.held_step = st;
+            ui.step_at = plat_ms();
             ui.step_edit = 0;
             ui.step_new = !eng_trig(ln, st);
             if (ui.step_new) {

@@ -692,9 +692,9 @@ VOCODER lui-même : quatre voix par piste, jouées par les pas, leurs accords, l
   un lock ou un câble oui (une progression par pas, si on veut).
 
 - **La porteuse** : trois dents de scie par voix (anti-repliées), et TONE qui va des **scies** grasses (désaccordées de
-  18 cents, la troisième dessous) aux **cordes** (6 cents, la troisième une octave au-dessus : le 4 pieds, adoucies)
-  puis au **chœur** (3,5 cents, plus sombre, les formants d'un « a » : 650, 1 080 et 2 650 Hz). ATTACK et RELEASE font
-  son enveloppe.
+  18 cents, la troisième dessous) aux **cordes** (6 cents, la troisième une octave au-dessus : le 4 pieds, adoucies
+  au-dessus de 7 kHz) puis au **chœur** (3,5 cents, plus sombre, adouci au-dessus de 3,5 kHz, les formants d'un « a » :
+  650, 1 080 et 2 650 Hz). ATTACK et RELEASE font son enveloppe.
 - **Le vocodeur** : 12 bandes d'une demi-octave, de 130 Hz à 6,3 kHz (deux filtres d'état de Chamberlin de Q 2,2
   chacune : l'octave d'à côté 21 dB plus bas). La voix est analysée au huitième ou à la moitié de la fréquence
   d'échantillonnage selon la bande, la porteuse filtrée à la moitié ou à plein régime : c'est ce qui le rend abordable.
@@ -705,6 +705,12 @@ VOCODER lui-même : quatre voix par piste, jouées par les pas, leurs accords, l
   criée, une boucle de batterie, le même volume, seule leur forme compte. **SHIFT** décale les bandes de la voix
   jusqu'à trois (une octave et demie) vers le bas ou le haut : une voix plus grave ou plus petite. **AIR** laisse
   passer les aigus de la voix (au-dessus de 4,5 kHz : les « s » et les « t », plus intelligibles).
+- **Plus brillant** (0.16.38) : les bandes de la porteuse montent de 1,5 dB chacune (3 dB par octave, l'unité vers
+  450 Hz), comme l'accentuation des aigus des vocodeurs. La voix et la porteuse perdent toutes deux de l'énergie en
+  montant : SPEECH vocodé sur un do 3 sortait ses 2 à 5 kHz 21 dB sous ses 0,5 à 2 kHz, sourd ; il en sort maintenant
+  10 dB de plus, 12 de plus entre 5 et 10 kHz, au même niveau. Les cordes sont adoucies plus haut (7 kHz au lieu de
+  4,5 ; le chœur à 3,5 au lieu de 2,7). Joué plus haut, il reste plus clair : OCTAVE (EDIT, puis SELECT : GATE,
+  TRANSP, OCTAVE) le monte d'une ou plusieurs octaves sans toucher aux notes.
 - **L'ensemble** : trois prises sur une ligne de 6 ms balayée par deux LFO (0,63 et 5,9 Hz), décalées d'un tiers de
   tour, comme les ensembles à lignes à retard des machines à cordes ; ENSEMBLE dose sa profondeur et son mélange.
 
@@ -872,10 +878,13 @@ réverbe, 7 Warps (l'écran passe sur la piste ou l'effet choisi) ; OCT− et OC
 jusqu'à 64). Appuyer sur un pas pose un trig ; appuyer sur un trig l'enlève (avec ses locks). **Tenir un pas et
 tourner un potard pose un P-lock** sur ce pas : pour une piste, sur n'importe quelle page qui est la sienne (Plaits,
 son niveau, ses envois, son pan, sa note…) ; pour un effet, sur ses potards. Le potard montre alors la valeur du pas
-(LOCK dessous). Tenir un pas et taper SEL efface ses locks. **Tenir un trig et appuyer sur un pas plus loin**
-(0.16.15) lui donne sa **longueur** : la note tient jusqu'à ce pas (sur ce pas, la part qu'en donne GATE), une barre
+(LOCK dessous). Tenir un pas et taper SEL efface ses locks. **Tenir un trig une seconde, puis appuyer sur un pas plus
+loin** (0.16.15 ; la seconde depuis 0.16.38, l'en-tête passe alors de « STEP 5 » à « STEP 5 LEN ») lui donne sa
+**longueur** : la note tient jusqu'à ce pas (sur ce pas, la part qu'en donne GATE), une barre
 la montre sur les pas qu'elle couvre ; un trig qui a des **ratchets** les étale sur ces pas à la place (ses coups sur
-autant de pas, SPAN ; l'écran dit lequel). Un pas avant le trig le ramène à son seul pas. La longueur est un lock du
+autant de pas, SPAN ; l'écran dit lequel). Un pas avant le trig le ramène à son seul pas. Un pas pressé avant la
+seconde est un pas comme un autre : deux pas posés vite, le second avant d'avoir lâché le premier, ne font plus une
+note longue par mégarde. La longueur est un lock du
 pas (effacée avec les autres). Depuis 0.16.31, **les pas qu'une note longue tient s'allument aussi sur le clavier**, à
 mi-intensité (le troisième niveau des LED du FM-1, entre éteint et allumé : ses touches n'ont qu'une couleur), les trigs
 restant pleins. **Tenir un trig et appuyer sur REC** (0.16.16) montre **ses notes** : l'écran

@@ -111,6 +111,7 @@ struct Band {
   float f, q, g;
 };
 Band band_v[kBands], band_c[kBands];    // (the voice's, the carrier's)
+float band_w[kBands];                   // (0.16.38) the carrier's bands' emphasis (make_bands)
 int bands_made;
 const float kBandQ = 2.2f;
 inline float cos_cyc(float ph) {        // (a cosine of a phase in cycles, 0..0.75)
@@ -129,6 +130,10 @@ MI_COLD void make_bands() {
     band_v[i] = band_at(hz, i < kLow ? kSr / 8.0f : kSr / 2.0f);
     band_c[i] = band_at(hz, i < kLow ? kSr / 2.0f : kSr);
   }
+  // (0.16.38) the bands emphasised, 1.5 dB a band (3 dB an octave), 1 between the 4th and the 5th (~450 Hz): the
+  // voice's highs and the carrier's both fall with the frequency, its 2 to 5 kHz came out 21 dB under its 0.5 to 2,
+  // dull, the more so played low; now 12 (SPEECH vocoded at C3: 2-5 kHz +10 dB, 5-10 kHz +12, its level the same)
+  for (int i = 0; i < kBands; ++i) band_w[i] = fm_exp2f((static_cast<float>(i) - 3.5f) * 0.25f);
   bands_made = 1;
 }
 inline int mod_of(float u) {            // MOD: 0 Off, 1..4 a track
@@ -523,7 +528,8 @@ MI_COLD void voc_render(int t, float* out, uint32_t n) {   // (its glue for size
   // the third saw: under the others by as much (fat saws), then an octave over (the strings' 4'), quieter (the choir)
   const float r3 = a < 1.0f ? fm_exp2f(-det * (1.0f / 1200.0f)) * (1.0f - a) + 2.0f * a : 2.0f;
   const float g3 = a < 1.0f ? 1.0f - 0.45f * a : 0.55f - 0.25f * b;
-  const float soft = 15000.0f - 10500.0f * a - 1800.0f * b;   // (its softening's cutoff: 15 kHz, 4.5, 2.7)
+  const float soft = 15000.0f - 8000.0f * a - 3500.0f * b;   // (its softening's cutoff: 15 kHz, 7, 3.5; 0.16.38:
+                                                              // the strings' 4.5 and the choir's 2.7 before)
   const float form = b;                             // (the choir's formants)
   const float att = attack_s(s.k[3]), rel = release_s(s.k[4]);
   const float ainc = static_cast<float>(n) / (att * kSr), rk = fm_expf(-static_cast<float>(n) / (rel * kSr));
@@ -595,8 +601,8 @@ MI_COLD void voc_render(int t, float* out, uint32_t n) {   // (its glue for size
       float src = clampf(static_cast<float>(i) - shift, 0.0f, static_cast<float>(kBands) - 1.001f);
       const int si = static_cast<int>(src);
       const float fr = src - static_cast<float>(si);
-      e0[i] = a0 * (lv0[si] + (lv0[si + 1] - lv0[si]) * fr);
-      e1[i] = s.agc * (lv1[si] + (lv1[si + 1] - lv1[si]) * fr);
+      e0[i] = a0 * band_w[i] * (lv0[si] + (lv0[si + 1] - lv0[si]) * fr);
+      e1[i] = s.agc * band_w[i] * (lv1[si] + (lv1[si + 1] - lv1[si]) * fr);
     }
     speak(m, car, out, static_cast<int>(n), e0, e1);
     const float air = s.k[7] * s.k[7];   // AIR: the voice's highs let through
