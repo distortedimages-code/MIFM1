@@ -172,6 +172,10 @@ int eng_voc_chord(int t, float *out);   /* its chord now (PLAY on Manual or a pr
 void eng_static_mode(int param, float before);   /* (0.16.27) a knob turned from before: STATIC's MODE to another
                                          * generator, its other knobs that one's */
 void eng_set_model(int t, int model);    /* a track's model (an FM drum new to it: its kit on those knobs) */
+int eng_model_lockable(int t, int m);    /* (0.16.40) 1: m may be a step's model on track t: its family's (Plaits'
+                                          * six, the six drums, the four FM drums) */
+int eng_model_lock(int lane, int step);  /* a step's model (played from its trig to the next), -1 none */
+int eng_model_lock_set(int lane, int step, int m);   /* 0 ok, -1 no room or not its family; m -1 or the track's: none */
 /* the presets (0.15.1): a track's sound, all of what plays it but its mixing, its steps and its cables: its eight pages'
  * knobs and choices (Plaits' three: the sound, the envelope, the pitch; the bits; the filter's three; the glitch), their
  * knobs' randoms, a name. Saved by the screen (app.c, pat_store.h), read onto any track */

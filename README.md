@@ -879,7 +879,13 @@ réverbe, 7 Warps (l'écran passe sur la piste ou l'effet choisi) ; OCT− et OC
 jusqu'à 64). Appuyer sur un pas pose un trig ; appuyer sur un trig l'enlève (avec ses locks). **Tenir un pas et
 tourner un potard pose un P-lock** sur ce pas : pour une piste, sur n'importe quelle page qui est la sienne (Plaits,
 son niveau, ses envois, son pan, sa note…) ; pour un effet, sur ses potards. Le potard montre alors la valeur du pas
-(LOCK dessous). Tenir un pas et taper SEL efface ses locks. **Tenir un trig une seconde, puis appuyer sur un pas plus
+(LOCK dessous). **Tenir un pas et tourner ALGORITHM** (0.16.40) lui donne **un autre modèle de la famille de la
+piste**, joué de son trig au suivant : les six moteurs de Plaits entre eux (SPEECH, SWARM, NOISE, PARTICLES, STRING,
+MODAL), les six batteries entre elles (KICK, SNARE, CLAP, HAT, TOM, PERC), les quatre batteries FM entre elles ; ses
+potards restent ceux de la piste (« STEP 5  STRING » ; revenir au modèle de la piste enlève le lock). Les autres
+machines (ZERO, FM, PADS, POLY, REV3, OTIS, TAURUS, VOCODER, STATIC) ont chacune leur mémoire et leurs potards à elles :
+pas de modèle par pas. Le clavier joue toujours le modèle de la piste ; changer la piste de famille enlève les modèles
+de ses pas. Tenir un pas et taper SEL efface ses locks. **Tenir un trig une seconde, puis appuyer sur un pas plus
 loin** (0.16.15 ; la seconde depuis 0.16.38, l'en-tête passe alors de « STEP 5 » à « STEP 5 LEN ») lui donne sa
 **longueur** : la note tient jusqu'à ce pas (sur ce pas, la part qu'en donne GATE), une barre
 la montre sur les pas qu'elle couvre ; un trig qui a des **ratchets** les étale sur ces pas à la place (ses coups sur

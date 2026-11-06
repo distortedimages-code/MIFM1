@@ -1044,12 +1044,17 @@ uint8_t trig_tie[ENG_LANES];            // the trig playing's
 // OTIS) play them all, the others NOTE alone
 const int kTpNote2 = ENG_NTP + 1;
 uint8_t trig_iv[ENG_TRACKS][3], trig_cn[ENG_TRACKS];   // the trig playing's
+// (0.16.40) a step's model: a lock of its own (tp kTpModel, its value the model's number), another model of the
+// track's family (Plaits' six engines, the six drums, the four FM drums: one voice that changes its engine at a trig,
+// its knobs as they are), played from that trig to the next
+const int kTpModel = ENG_NTP + 4;
+uint8_t trig_model[ENG_TRACKS];         // the trig playing's: its model + 1 (0: the track's)
 void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_param, lane_lockable, the bounds)
   int16_t at[ENG_NTP];
   for (int tp = 0; tp < ENG_NTP; ++tp) at[tp] = -1;
   if (lock_gen_seen != lock_gen) make_lock_steps();
   trig_tie[lane] = 0;
-  uint8_t iv[3] = {0, 0, 0};
+  uint8_t iv[3] = {0, 0, 0}, tm = 0;
   if (locks && step >= 0 && step < ENG_STEPS && ((lock_steps[lane][step / 32] >> (step % 32)) & 1u))
     for (int i = 0; i < ENG_PLOCKS; ++i)
       if (proj.lock[i].lane == lane && proj.lock[i].step == step) {
@@ -1057,7 +1062,9 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
         if (tp < ENG_NTP) at[tp] = static_cast<int16_t>(i);
         else if (tp == kTpTie) trig_tie[lane] = proj.lock[i].v;
         else if (tp >= kTpNote2 && tp < kTpNote2 + 3) iv[tp - kTpNote2] = proj.lock[i].v;
+        else if (tp == kTpModel) tm = static_cast<uint8_t>(proj.lock[i].v + 1);
       }
+  if (lane < ENG_TRACKS) trig_model[lane] = tm;
   if (lane < ENG_TRACKS) {              // (its chord's notes over NOTE, in order)
     int c = 0;
     for (int j = 0; j < 3; ++j)
@@ -1646,6 +1653,11 @@ void fx_lanes(uint32_t n, float* open) {
 // parameters after FREQ (1..8: HARMONICS, TIMBRE, MORPH, DECAY, COLOUR, T.ENV, M.ENV, P.ENV)
 inline int track_kind(int t) { return mdef(proj.algo[PG_TRACK(t, 0)]).kind; }
 inline int track_sub(int t) { return mdef(proj.algo[PG_TRACK(t, 0)]).sub; }
+inline int family(int kind) { return kind == MK_PLAITS || kind == MK_DRUM || kind == MK_LXR; }   // (0.16.40)
+inline int voice_model(int t) {         // (0.16.40) the model the voice plays: its trig's (the track's family), else
+  const int a = proj.algo[PG_TRACK(t, 0)], m = trig_model[t] - 1;   // the track's
+  return m >= 0 && m < ENG_MODELS && family(mdef(a).kind) && mdef(m).kind == mdef(a).kind ? m : a;
+}
 // a model with its own eight knobs (an FM drum, a drum, ZERO): each 0..1 (a bipolar knob from its middle), the
 // track's parameters after FREQ (1..8: HARMONICS, TIMBRE, MORPH, DECAY, COLOUR, T.ENV, M.ENV, P.ENV)
 int lx_model(int t) { return track_kind(t) == MK_LXR ? track_sub(t) : -1; }
@@ -1917,7 +1929,7 @@ void set_voice(int t) {
   if (own_knobs(t)) {
     float k[LX_KNOBS];
     for (int i = 0; i < LX_KNOBS; ++i) k[i] = lx_u(lx_param(t, i), E(t, 1 + i));
-    int kind = track_kind(t), sub = track_sub(t);
+    int kind = track_kind(t), sub = mdef(voice_model(t)).sub;   // (0.16.40: its trig's model, a drum's)
     float note = vnote[t] + (kind == MK_VOCODER ? 0.0f : 24.0f * E(t, 0));   // (VOCODER: FREQ's place its PLAY)
     if (scale_on()) note = static_cast<float>(quantize(iround(note)));
     if (kind == MK_ZERO) zero_set(t, note, k);
@@ -1954,7 +1966,7 @@ void set_voice(int t) {
   }
   // the models whose MORPH is their decay (string, modal, the drums: their own envelope, no LPG) take DECAY too, around
   // its middle: the envelope page's DECAY, its locks and its random move every model's decay
-  int m = track_sub(t);                 // (Plaits' engine)
+  int m = mdef(voice_model(t)).sub;     // (Plaits' engine; 0.16.40: its trig's)
   float morph = E(t, 3);
   if (m >= 19) morph = clampf(morph + E(t, 4) - 0.5f, 0.0f, 1.0f);
   float note = vnote[t] + 24.0f * E(t, 0);   // FREQ (its cables, its locks) over the note: with SCALE on, in it too
@@ -2401,7 +2413,7 @@ void render_voice(int t, uint32_t n) {
     else mp_render(voice[t], &vbuf[t][pos], &vaux[t][pos], n - pos);
   }
   {
-    const int m = proj.algo[PG_TRACK(t, 0)];
+    const int m = voice_model(t);       // (0.16.40: its trig's model's level)
     const float tg = fm_exp2f(static_cast<float>(kModelTrim[m < ENG_MODELS ? m : 0]) * 0.0415241f);   // (2^(1/24.08))
     for (uint32_t i = 0; i < n; ++i) vbuf[t][i] *= tg;
   }
@@ -3381,6 +3393,38 @@ void eng_set_model(int t, int m) {
   int was = proj.algo[PG_TRACK(t, 0)];
   proj.algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(m);
   if (eng_model_own(m) && m != was) lx_kit(&proj, t);
+  if (mdef(m).kind != mdef(was).kind)   // (0.16.40: another family: its steps' models gone)
+    for (int i = 0; i < ENG_PLOCKS; ++i)
+      if (proj.lock[i].lane == t && proj.lock[i].tp == kTpModel) proj.lock[i].lane = 0xFF, ++lock_gen;
+}
+int eng_model_lockable(int t, int m) {   // (0.16.40) 1: m may be a step's model on track t (its family's)
+  if (t < 0 || t >= ENG_TRACKS || m < 0 || m >= ENG_MODELS) return 0;
+  const int k = mdef(proj.algo[PG_TRACK(t, 0)]).kind;
+  return family(k) && mdef(m).kind == k;
+}
+int eng_model_lock(int lane, int step) {   // a step's model, -1 none
+  if (lane < 0 || lane >= ENG_TRACKS) return -1;
+  int i = lock_find(lane, step, kTpModel);
+  return i >= 0 ? proj.lock[i].v : -1;
+}
+int eng_model_lock_set(int lane, int step, int m) {   // 0 ok, -1 no room or not its family; m -1 or the track's: none
+  if (lane < 0 || lane >= ENG_TRACKS || step < 0 || step >= ENG_STEPS) return -1;
+  int i = lock_find(lane, step, kTpModel);
+  if (m < 0 || m == proj.algo[PG_TRACK(lane, 0)]) {
+    if (i >= 0) proj.lock[i].lane = 0xFF, ++lock_gen;
+    return 0;
+  }
+  if (!eng_model_lockable(lane, m)) return -1;
+  if (i < 0)
+    for (int j = 0; j < ENG_PLOCKS && i < 0; ++j)
+      if (proj.lock[j].lane == 0xFF) i = j;
+  if (i < 0) return -1;
+  proj.lock[i].v = static_cast<uint8_t>(m);
+  proj.lock[i].step = static_cast<uint8_t>(step);
+  proj.lock[i].tp = static_cast<uint8_t>(kTpModel);
+  proj.lock[i].lane = static_cast<uint8_t>(lane);
+  ++lock_gen;
+  return 0;
 }
 
 // the presets (0.15.1): a track's sound
@@ -4312,6 +4356,8 @@ MI_COLD void models_from(project_t* p, int at) {   // a machine come in at at: t
     const int o = p->algo[PG_TRACK(t, 0)];         // MODAL 21; 0.16.21: VOCODER at 17, 0.16.20's SPEECH 17 ..)
     if (o >= at) p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(o + 1 < ENG_MODELS ? o + 1 : 0);
   }
+  for (int i = 0; i < ENG_PLOCKS; ++i)             // (0.16.40: a step's model too)
+    if (p->lock[i].lane < ENG_TRACKS && p->lock[i].tp == kTpModel && p->lock[i].v >= at) ++p->lock[i].v;
 }
 MI_COLD void taurus_in(project_t* p) { models_from(p, 16); }   // (0.16.20)
 MI_COLD void vocoder_in(project_t* p) { models_from(p, 17); }  // (0.16.21)
@@ -4703,6 +4749,7 @@ int eng_pattern_pos(void) { return playing && tick >= 0 ? static_cast<int>(tick 
 
 void eng_key(int track, int note, int on) {
   if (track < 0 || track >= ENG_TRACKS) return;
+  if (on) trig_model[track] = 0;        // (0.16.40: the keys play the track's model, not the last trig's)
   int n = kb_n[track], j = 0;           // (0.16.15) the keys held: this one out, then on top if pressed
   for (int i = 0; i < n; ++i)
     if (kb_note[track][i] != note) kb_note[track][j++] = kb_note[track][i];

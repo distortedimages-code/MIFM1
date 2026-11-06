@@ -5440,6 +5440,65 @@ int main(int argc, char** argv) {
       ++failures, printf("FAIL: live recording\n");
   }
 
+  {  // (0.16.40) a step's model: another of the track's family played from its trig to the next, the track's after;
+     // another family on the track: the steps' models gone; none outside the families
+    project_t* p = eng_project();
+    const uint32_t n = 128;
+    float l[128], r[128];
+    const int sp = eng_model_find(MK_PLAITS, 15), str = eng_model_find(MK_PLAITS, 19), kick = eng_model_find(MK_DRUM, 0),
+              fdr = eng_model_find(MK_LXR, 0), fhat = eng_model_find(MK_LXR, 3), fmm = eng_model_find(MK_FM, 0);
+    // a bar with a trig on steps 0 and 4, the second locked to lk (-1 none): each trig's first 100 ms, its level and
+    // its share over 2 kHz (the second difference's over the signal's)
+    auto bar = [&](int model, int lk, float* lv, float* hf) {
+      eng_defaults(p);
+      eng_fresh();
+      for (int t = 0; t < ENG_TRACKS; ++t)
+        for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(t, st, 0);
+      eng_set_model(0, model);
+      p->val[PG_MIX * 4 + 0] = 1.0f;
+      eng_trig_set(0, 0, 1);
+      eng_trig_set(0, 4, 1);
+      if (lk >= 0) eng_model_lock_set(0, 4, lk);
+      eng_cut();
+      for (int b = 0; b < 200; ++b) eng_render(l, r, n);
+      eng_play(1);
+      const int step_blocks = static_cast<int>(0.125f * 44100.0f / n + 0.5f);
+      float e[2] = {0, 0}, d[2] = {0, 0}, prev = 0, prev2 = 0;
+      for (int b = 0; b < 16 * step_blocks + 40; ++b) {
+        eng_render(l, r, n);
+        int w = b < 34 ? 0 : (b >= 4 * step_blocks && b < 4 * step_blocks + 34) ? 1 : -1;
+        for (uint32_t i = 0; i < n; ++i) {
+          if (w >= 0) e[w] += l[i] * l[i], d[w] += (l[i] - 2 * prev + prev2) * (l[i] - 2 * prev + prev2);
+          prev2 = prev, prev = l[i];
+        }
+      }
+      eng_play(0);
+      for (int k = 0; k < 2; ++k) lv[k] = std::sqrt(e[k] / (34.0f * n)), hf[k] = d[k] / (e[k] + 1e-12f);
+    };
+    float lv0[2], hf0[2], lv1[2], hf1[2], lv2[2], hf2[2], lv3[2], hf3[2];
+    bar(sp, -1, lv0, hf0);
+    bar(sp, str, lv1, hf1);
+    bar(fdr, -1, lv2, hf2);
+    bar(fdr, fhat, lv3, hf3);
+    // the lock's step another sound, the first step the same; the API's bounds
+    const int plaits = std::fabs(lv1[1] / lv0[1] - 1.0f) > 0.3f && std::fabs(lv1[0] / lv0[0] - 1.0f) < 0.05f &&
+                       std::fabs(hf1[0] / hf0[0] - 1.0f) < 0.1f;
+    const int drums = hf3[1] > 2.0f * hf2[1] && std::fabs(hf3[0] / hf2[0] - 1.0f) < 0.15f;
+    eng_set_model(0, sp);
+    int api = eng_model_lockable(0, str) && !eng_model_lockable(0, kick) && eng_model_lock_set(0, 4, kick) == -1 &&
+              eng_model_lock_set(0, 4, str) == 0 && eng_model_lock(0, 4) == str;
+    eng_set_model(0, fmm);              // (another family: the steps' models gone)
+    api &= eng_model_lock(0, 4) == -1 && !eng_model_lockable(0, fmm);
+    eng_set_model(0, sp);
+    api &= eng_model_lock_set(0, 4, str) == 0 && eng_model_lock_set(0, 4, sp) == 0 && eng_model_lock(0, 4) == -1;
+    eng_defaults(p);
+    eng_fresh();
+    printf("a step's model: SPEECH, step 5 on STRING: its level x%.2f (the first step's x%.2f, its highs x%.2f); FM DRUM, "
+           "step 5 on FM HI-HAT: its highs x%.1f (the first step's x%.2f); the calls %s\n", lv1[1] / lv0[1],
+           lv1[0] / lv0[0], hf1[0] / hf0[0], hf3[1] / hf2[1], hf3[0] / hf2[0], api ? "ok" : "WRONG");
+    if (!plaits || !drums || !api) ++failures, printf("FAIL: a step's model\n");
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

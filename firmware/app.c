@@ -5717,6 +5717,38 @@ static void panel_chord(void)            /* the step's notes on two octaves of k
     blit(0, PANEL_Y);
 }
 
+/* (0.16.40) a step held, ALGORITHM turned: the step's model, a detent a model of the track's family (Plaits' six, the
+ * six drums, the four FM drums), from the track's; back on the track's, the lock gone. Returns what is left of e */
+static int32_t step_model_turn(int t, int st, int32_t e)
+{
+    int a = eng_project()->algo[PG_TRACK(t, 0)], m = eng_model_lock(t, st), n;
+    char v[24], s[12];
+    if (!eng_model_lockable(t, a)) {
+        app_say("ALGO LOCK", "PLAITS AND DRUMS ONLY");
+        return 0;
+    }
+    m = m < 0 ? a : m;
+    n = m + (e > 0 ? 1 : -1);
+    if (n < 0 || n >= ENG_MODELS || !eng_model_lockable(t, n))
+        n = m;                           /* (the family's end) */
+    if (eng_model_lock_set(t, st, n) != 0) {
+        app_say("ALGO LOCK", "NO ROOM");
+        return 0;
+    }
+    ui.step_edit = 1;                    /* (let go, the trig stays) */
+    dirty = 1;
+    int_text(st + 1, v);
+    s[0] = 0;
+    text_cat(s, "STEP ", sizeof s);
+    text_cat(s, v, sizeof s);
+    v[0] = 0;
+    text_cat(v, eng_algo_name(PG_TRACK(t, 0), n), sizeof v);
+    if (n == a)
+        text_cat(v, " (TRACK)", sizeof v);
+    app_say(s, v);
+    return 0;
+}
+
 /* (0.16.38) a trig held this long before another step pressed gives it its length (step_span): a step pressed sooner
  * is a step of its own (two steps put in quickly, the second pressed before the first was let go, made a long trig) */
 #define STEP_SPAN_MS 1000u
@@ -6064,6 +6096,11 @@ static void input(void)
     e = plat_enc(EN_ALGO);
     if (e && held(B_EDIT))
         pre_used = 1;
+    if (e && ui.held_step >= 0 && ui.lane < ENG_TRACKS && !ui.matrix) {   /* (0.16.40) a step held, ALGORITHM turned:
+                                          * the step's model, another of the track's family (a lock: from its trig
+                                          * to the next; back to the track's, none) */
+        e = step_model_turn(ui.lane, ui.held_step, e);
+    }
     if (e && !ui.matrix && (ptype(ui.page) == PT_WARPS1 || ptype(ui.page) == PT_WARPS2)) {
         /* Warps: ALGORITHM from mark to mark (its six cross-modulations, a fifth of the knob apart) */
         float *v = &eng_project()->val[PG_WARPS(0) * 4 + 2];
