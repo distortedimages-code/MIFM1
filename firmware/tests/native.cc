@@ -16,6 +16,7 @@ extern "C" {
 }
 #include "mi/engine.h"
 #include "mi/bridge.h"
+#include "mi/mi_metal.h"
 #include "mi/res_tables.h"
 #include "Soundengine/DSPAudio/SlopeEg2.h"
 extern "C" int mi_res_check(const uint8_t* payload, uint32_t len);
@@ -5497,6 +5498,157 @@ int main(int argc, char** argv) {
            "step 5 on FM HI-HAT: its highs x%.1f (the first step's x%.2f); the calls %s\n", lv1[1] / lv0[1],
            lv1[0] / lv0[0], hf1[0] / hf0[0], hf3[1] / hf2[1], hf3[0] / hf2[0], api ? "ok" : "WRONG");
     if (!plaits || !drums || !api) ++failures, printf("FAIL: a step's model\n");
+  }
+
+  {  // (0.16.41) the reverb's METAL and SHIMMER (mi_metal.h), through bridge.h as the engine runs them: their decays,
+     // the freeze, the shimmer's octaves, as loud as Clouds' (octave bands of noise, the same T60), the switch between
+     // them faded, a runaway silenced; the engine's names and texts
+    const uint32_t n = 128;
+    float in[128], l[128], r[128];
+    void* rv = std::malloc(mrv_size());
+    unsigned rs = 9;
+    auto noise = [&]() { rs = rs * 1664525u + 1013904223u; return ((rs >> 9) * (1.0f / 8388608.0f) - 1.0f) * 0.5f; };
+    struct Bp {                          // a band pass (RBJ, Q 1.4), twice
+      double b0, b2, a1, a2, s[2][4];
+      explicit Bp(double f) {
+        double w = 2 * M_PI * f / 44100, al = std::sin(w) / 2.8, a0 = 1 + al;
+        b0 = al / a0, b2 = -al / a0, a1 = -2 * std::cos(w) / a0, a2 = (1 - al) / a0;
+        std::memset(s, 0, sizeof s);
+      }
+      float p(float x) {
+        double y = x;
+        for (int k = 0; k < 2; ++k) {
+          double o = b0 * y + b2 * s[k][1] - a1 * s[k][2] - a2 * s[k][3];
+          s[k][1] = s[k][0], s[k][0] = y, s[k][3] = s[k][2], s[k][2] = o, y = o;
+        }
+        return static_cast<float>(y);
+      }
+    };
+    // a run: mode and knobs, src's input for in_s seconds, then silence; the left's rms in 0.25 s windows
+    float w[64];
+    auto run = [&](int mode, float a, float b, float c, float secs, float in_s, int src, float* w) {
+      mrv_init(rv);
+      mrv_set(rv, mode, a, b, c);
+      Bp bp(500.0);
+      double e = 0;
+      int cnt = 0, nw = 0, nb = static_cast<int>(secs * 44100.0f / n);
+      for (int k = 0; k < nb; ++k) {
+        for (uint32_t i = 0; i < n; ++i) {
+          const float t = static_cast<float>(k * n + i) / 44100.0f;
+          float x = src == 0 ? noise() : src == 1 ? bp.p(noise()) : 0.3f * std::sin(2.0f * static_cast<float>(M_PI) * 440.0f * t);
+          in[i] = t < in_s ? x : 0.0f;
+        }
+        mrv_process(rv, in, l, r, n);
+        for (uint32_t i = 0; i < n; ++i) e += l[i] * l[i], ++cnt;
+        if (cnt >= 11025 && nw < 64) w[nw++] = static_cast<float>(std::sqrt(e / cnt)), e = 0, cnt = 0;
+      }
+    };
+    // its T60: the slope between 0.25 s and 1.25 s after the input (two windows' levels), against the DECAY's (TONE at
+    // its right: no absorption)
+    float t60[2], aim[2] = {mifm1::MetalVerb::Decay(0.48f), mifm1::MetalVerb::Decay(0.75f)};
+    for (int k = 0; k < 2; ++k) {
+      run(RV_METAL, k ? 0.75f : 0.48f, 0.6f, 1.0f, 4.0f, 1.0f, 0, w);
+      const float db = 20.0f * std::log10(w[5] / w[9]);   // (1.25..1.5 s, 2.25..2.5 s)
+      t60[k] = 60.0f / db;
+    }
+    const int decays = std::fabs(t60[0] / aim[0] - 1.0f) < 0.3f && std::fabs(t60[1] / aim[1] - 1.0f) < 0.3f;
+    // the freeze: DECAY at its end after the input, then more input (not let in); the tail 10 s on
+    mrv_init(rv);
+    mrv_set(rv, RV_METAL, 0.6f, 0.6f, 0.5f);
+    float f0 = 0, f1 = 0;
+    int fin = 1;
+    for (int k = 0; k < static_cast<int>(12.0f * 44100.0f / n); ++k) {
+      if (k == static_cast<int>(1.0f * 44100.0f / n)) mrv_set(rv, RV_METAL, 1.0f, 0.6f, 0.5f);
+      const int open = k < static_cast<int>(1.0f * 44100.0f / n) || k > static_cast<int>(3.0f * 44100.0f / n);
+      for (uint32_t i = 0; i < n; ++i) in[i] = open ? noise() : 0.0f;
+      mrv_process(rv, in, l, r, n);
+      double e = 0;
+      for (uint32_t i = 0; i < n; ++i) e += l[i] * l[i], fin &= std::isfinite(l[i]) && std::isfinite(r[i]);
+      if (k >= static_cast<int>(1.5f * 44100.0f / n) && k < static_cast<int>(2.5f * 44100.0f / n)) f0 += static_cast<float>(e);
+      if (k >= static_cast<int>(11.0f * 44100.0f / n)) f1 += static_cast<float>(e);
+    }
+    const float fdb = 10.0f * std::log10(f1 / f0);
+    const int frozen = fdb > -3.0f && fdb < 0.5f && fin;
+    // SHIMMER: 440 Hz in, the tail's 880 and 1760 against METAL's (Goertzel over 1..2 s)
+    auto tone_at = [&](int mode, float f) {
+      mrv_init(rv);
+      mrv_set(rv, mode, 0.7f, 0.7f, 0.5f);
+      double sr = 0, si = 0;
+      for (int k = 0; k < static_cast<int>(2.0f * 44100.0f / n); ++k) {
+        for (uint32_t i = 0; i < n; ++i) {
+          const int j = k * static_cast<int>(n) + static_cast<int>(i);
+          in[i] = j < 22050 ? 0.3f * std::sin(2.0f * static_cast<float>(M_PI) * 440.0f * j / 44100.0f) : 0.0f;
+        }
+        mrv_process(rv, in, l, r, n);
+        for (uint32_t i = 0; i < n; ++i) {
+          const int j = k * static_cast<int>(n) + static_cast<int>(i);
+          if (j >= 44100) sr += l[i] * std::cos(2 * M_PI * f * j / 44100.0), si += l[i] * std::sin(2 * M_PI * f * j / 44100.0);
+        }
+      }
+      return std::sqrt(sr * sr + si * si) / 22050.0;
+    };
+    const double m880 = tone_at(RV_METAL, 880), s880 = tone_at(RV_SHIMMER, 880), m1760 = tone_at(RV_METAL, 1760),
+                 s1760 = tone_at(RV_SHIMMER, 1760), s440 = tone_at(RV_SHIMMER, 440);
+    const int shim = s880 + s1760 > 5.0 * (m880 + m1760) && s1760 < s440;   // (its octaves; under the note)
+    // as loud as Clouds: 500 Hz's octave of noise, METAL's DECAY 0.48 (2.5 s) and Clouds' TIME 0.3 (2.9 s)
+    run(RV_METAL, 0.48f, 0.6f, 0.5f, 3.0f, 3.0f, 1, w);
+    const float lm = 0.5f * (w[8] + w[10]);
+    run(RV_CLOUDS, 0.3f, 0.5f, 0.5f, 3.0f, 3.0f, 1, w);
+    const float lc = 0.5f * (w[8] + w[10]), ldb = 20.0f * std::log10(lm / lc);
+    const int level = std::fabs(ldb) < 3.0f;
+    // the switch, Clouds to METAL and back, a tail ringing: faded over a block (no step past a few times the tail's
+    // own), then the other's from silence
+    mrv_init(rv);
+    mrv_set(rv, RV_CLOUDS, 0.6f, 0.5f, 0.5f);
+    float jump = 0, ring = 0, prev = 0, after = 0;
+    for (int k = 0; k < 400; ++k) {
+      if (k == 200) mrv_set(rv, RV_METAL, 0.6f, 0.5f, 0.5f);
+      if (k == 300) mrv_set(rv, RV_CLOUDS, 0.6f, 0.5f, 0.5f);
+      for (uint32_t i = 0; i < n; ++i) in[i] = k < 190 || (k > 205 && k < 290) ? noise() : 0.0f;
+      mrv_process(rv, in, l, r, n);
+      for (uint32_t i = 0; i < n; ++i) {
+        if (k >= 195 && k < 200) ring = std::max(ring, std::fabs(l[i] - prev));
+        if (k == 200 || k == 201 || k == 300 || k == 301) jump = std::max(jump, std::fabs(l[i] - prev));
+        if (k == 201) after = std::max(after, std::fabs(l[i]));
+        prev = l[i];
+      }
+    }
+    const int swap = jump < 2.0f * ring + 1e-4f && after < 1e-6f;
+    // a runaway: a send far past full scale: bounded, finite, then silent again
+    mrv_init(rv);
+    mrv_set(rv, RV_SHIMMER, 0.5f, 0.2f, 1.0f);
+    float big = 0, quiet = 0;
+    fin = 1;
+    for (int k = 0; k < static_cast<int>(20.0f * 44100.0f / n); ++k) {
+      for (uint32_t i = 0; i < n; ++i) in[i] = k < 400 ? 50.0f * noise() : 0.0f;
+      mrv_process(rv, in, l, r, n);
+      for (uint32_t i = 0; i < n; ++i) {
+        fin &= std::isfinite(l[i]) && std::isfinite(r[i]);
+        big = std::max(big, std::max(std::fabs(l[i]), std::fabs(r[i])));
+        if (k >= static_cast<int>(19.0f * 44100.0f / n)) quiet = std::max(quiet, std::fabs(l[i]));
+      }
+    }
+    const int bounded = fin && big < 8.0f && quiet < 1e-5f;
+    std::free(rv);
+    // the engine's: the names, METAL's knobs and texts, CLOUDS' back
+    project_t* p = eng_project();
+    char tx[3][16];
+    p->algo[PG_REVERB] = RV_METAL;
+    eng_param_text(PG_REVERB * 4, 1.0f, tx[0], 16);
+    eng_param_text(PG_REVERB * 4, 0.48f, tx[1], 16);
+    eng_param_text(PG_REVERB * 4 + 2, 1.0f, tx[2], 16);
+    int names = eng_algo_count(PG_REVERB) == 3 && !std::strcmp(eng_algo_name(PG_REVERB, 1), "METAL") &&
+                !std::strcmp(eng_algo_name(PG_REVERB, 2), "SHIMMER") && !std::strcmp(eng_pdef(PG_REVERB * 4)->name, "Decay") &&
+                !std::strcmp(eng_pdef(PG_REVERB * 4 + 1)->name, "Size") && !std::strcmp(tx[0], "Freeze") &&
+                !std::strcmp(tx[1], "2.9 s") && !std::strcmp(tx[2], "+100");
+    p->algo[PG_REVERB] = RV_CLOUDS;
+    names &= !std::strcmp(eng_pdef(PG_REVERB * 4)->name, "Time") && !std::strcmp(eng_algo_name(PG_REVERB, 0), "CLOUDS");
+    printf("METAL: T60 %.2f s (aimed %.2f), %.1f s (%.1f); FREEZE 10 s on %+.1f dB, the input shut; SHIMMER: 880 Hz x%.0f, "
+           "1760 Hz x%.0f of METAL's; 500 Hz's band %+.1f dB of Clouds'; the switch: a step %.4f (the tail's %.4f), "
+           "silent after %s; a send at 50: peak %.2f, after 20 s %.1e; texts %s %s %s %s\n", t60[0], aim[0], t60[1], aim[1],
+           fdb, s880 / (m880 + 1e-12), s1760 / (m1760 + 1e-12), ldb, jump, ring, after < 1e-6f ? "yes" : "NO", big, quiet,
+           tx[0], tx[1], tx[2], names ? "ok" : "WRONG");
+    if (!decays || !frozen || !shim || !level || !swap || !bounded || !names) ++failures, printf("FAIL: METAL\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

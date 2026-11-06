@@ -79,7 +79,8 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   sans jamais toucher une note, et ne fait rien à 0 ;
 - **trois effets, chacun avec sa propre piste de pas** : un **delay** inspiré des potards du Zen Delay (temps en
   divisions du tempo ou libre en millisecondes, feedback, filtre passe-bas / passe-haut avec résonance, drive, mono ou ping-pong, une légère
-  modulation de bande), la **réverbe de Clouds** et **Warps**. Sans pas, l'effet est toujours ouvert ; avec des pas,
+  modulation de bande), une **réverbe** (celle de Clouds, ou depuis 0.16.41 **METAL** et **SHIMMER**, d'après
+  l'Erbe-Verb de Make Noise : de la boîte de conserve au freeze, l'octave en plus) et **Warps**. Sans pas, l'effet est toujours ouvert ; avec des pas,
   chaque trig l'ouvre et il se referme avec son DECAY (jusqu'à 1 − DEPTH), et ses P-locks changent ses réglages pas
   par pas (le temps du delay, l'algorithme de Warps…) ;
 - **Warps** entre deux pistes (ou une piste et son oscillateur interne) : ses 6 modulations croisées et son easter
@@ -199,8 +200,8 @@ piste stéréo, le MIDI par le même câble.
 saturation douce), mais entre deux échantillons le signal monte plus haut ; la démo, à −1,8 dBFS d'échantillon, a des
 crêtes vraies à −0,9 dBTP (mesuré à 4× sur l'émulateur). Un iPhone le convertit puis le compresse en AAC, deux étapes
 qui peuvent faire passer ces crêtes au-dessus de 0 et les écrêter (d'où la règle des masters : −1 dBTP au plus) : la
-cause probable de l'écrêtage entendu sur les attaques et les basses de TAURUS dans la vidéo, pas au casque. À −3 dB, la
-démo reste sous −3,9 dBTP ; le souffle du 16 bits est toujours à plus de 90 dB dessous.
+cause de l'écrêtage entendu sur les attaques et les basses de TAURUS dans la vidéo, pas au casque (confirmé : à −3 dB,
+il n'y est plus). À −3 dB, la démo reste sous −3,9 dBTP ; le souffle du 16 bits est toujours à plus de 90 dB dessous.
 
 **Depuis 0.16.33.** Avant, l'USB envoyait les quatre pistes séparées et le retour des effets (10 entrées), sans le bus
 master : un iPhone n'en prenait que les deux premières, la piste 1 seule (constaté). Les pistes séparées sont mises de
@@ -1015,6 +1016,37 @@ puis **RESONANCE**, **MODE** (Mono ou Ping-pong : gauche au temps, droite au dou
 puis arrondie, et son gain ne s'ajoute pas au feedback (elle colore, elle ne pousse pas), dans une ligne
 de 1,2 s. Quand le temps change, la lecture glisse jusqu'au nouveau, comme une bande.
 
+**La réverbe** (FX) : **ALGORITHM** choisit **CLOUDS**, **METAL** ou **SHIMMER** (0.16.41 ; les potards gardent leur
+place d'un algorithme à l'autre, et les projets d'avant restent sur CLOUDS). CLOUDS est celle du module (TIME, DAMP,
+DIFFUSE, RETURN). **METAL** est la réverbe de MIFM1, d'après ce que fait l'**Erbe-Verb** de Make Noise (des tailles
+d'une boîte de conserve à une salle, une queue qui bouge, un decay infini), écrite pour le FM-1 : huit lignes de retard
+mêlées par une matrice de Hadamard (chaque ligne nourrit les huit, rien ne se perd), chacune lue par une prise qui
+ondule lentement (la queue ne se fige jamais), sa perte réglée sur sa longueur (toutes meurent au même rythme) et un
+filtre de Jot (les aigus meurent plus vite que les graves d'autant, quelle que soit la taille). Elle tourne à la moitié
+de la fréquence (22,05 kHz : moitié moins de calcul, sa queue s'arrête sous 11 kHz comme celle des vieilles réverbes
+numériques), dans les 32 Ko de cellules 16 bits de Clouds (passer de l'une à l'autre efface la queue, en fondu sur
+2,9 ms). Ses potards :
+
+- **DECAY** : de 0,3 s à 30 s (le temps de chute de 60 dB des graves), puis tout au bout (97 %) **Freeze** : les lignes
+  sans perte, l'entrée fermée, la queue tenue telle quelle (−0,7 dB en 10 s, mesuré) ; le panneau écrit le temps, ou
+  FREEZE ;
+- **SIZE** : la longueur moyenne des lignes, de 2,2 ms (un tuyau, une cuve : leurs résonances s'entendent, métalliques)
+  à 74 ms (une grande salle) ; tourné pendant que ça sonne, les prises glissent et la hauteur plie comme sur une bande ;
+- **TONE** (−100 à +100) : vers la gauche, les aigus meurent plus vite (jusqu'à 16 fois : une cave) ; au milieu 4 fois ;
+  vers la droite, aussi vite que les graves, moins de diffusion et d'ondulation : les résonances des lignes ressortent
+  (métal, industriel) ;
+- **RETURN**, comme pour CLOUDS.
+
+**SHIMMER**, c'est METAL avec la queue renvoyée dedans une octave plus haut (deux prises qui glissent dans une ligne de
+93 ms, en fondu), les octaves qui montent à mesure qu'elle sonne ; ce qui y part est filtré (sous ~4 kHz, et sans ses
+graves sous ~150 Hz : une octave au-dessus, une basse reste une basse et le continu reste du continu, ils grossiraient
+sans fin) et son gain est tenu sous 1 quel que soit DECAY. Sur 600 réglages essayés (DECAY, SIZE, TONE, METAL et
+SHIMMER, un envoi normal et un envoi 40 fois trop fort), toutes les queues meurent. Le gel coupe l'octave (ce qui sonne
+la porte déjà). Au même envoi et au même temps de chute, METAL sonne aussi fort que CLOUDS (à 1 dB près par octave de
+125 Hz à 4 kHz) ; la fin d'une queue s'éteint vers −75 à −95 dB au lieu de souffler. Elle compte 1,4 fois les instructions de
+CLOUDS (1,6 avec SHIMMER) : sur le FM-1, d'après l'émulateur, 78 µs de plus par bloc de 2,9 ms (2,7 %), 114 µs avec
+SHIMMER (3,9 %).
+
 **Le SPREAD** (HOME, troisième face, 0.16.19) : un potard par piste pour l'ouvrir en largeur. À 0 (Off), la piste
 est un point, là où son pan la met ; en tournant, elle s'étale de part et d'autre. Le principe est celui du
 pseudo-stéréo à peignes complémentaires (Lauridsen, 1954) : on fabrique une « différence » à partir de la piste
@@ -1376,7 +1408,8 @@ Chaque moteur de MIFM1 doit quelque chose à une machine, et le site le raconte,
   dur et fort, sur des machines construites pour eux), et le sample and hold de l'**ECHON 6** de Morphor (2025) ;
 - les filtres : l'échelle de **Moog**, le Korg 35 du **MS-20**, le **SEM** d'Oberheim ; le circuit bending : le
   **Biscuit** d'OTO et le **Data Bender** de Qu-Bit ; le delay : les potards du **Zen Delay** ; la réverbe et Warps :
-  **Clouds** et **Warps** de Mutable Instruments ;
+  **Clouds** et **Warps** de Mutable Instruments ; METAL et SHIMMER : l'**Erbe-Verb** de Make Noise (conçue avec
+  **Tom Erbe**, de SoundHack), les réseaux de lignes de retard de **Jean-Marc Jot** (1991) ;
 - le séquenceur : les P-locks d'**Elektron**, Endless de l'**OP-1**, les chaînes des **Pocket Operators**, les rythmes
   euclidiens de Toussaint et Bjorklund ;
 - le SPREAD : le pseudo-stéréo de **H. Lauridsen** (radio danoise, 1954) et de **Robert Orban** (son Stereo
@@ -1429,7 +1462,7 @@ Sources : [Pretty Hate Machine](https://en.wikipedia.org/wiki/Pretty_Hate_Machin
     matrice, le quantiseur, les effets et leurs pistes de pas, le mixer ; les voix et Warps partagés entre les deux
     cœurs) ; `mi/mi_*.cc` : un pont C par module Mutable, et les machines de MIFM1 (`mi/mi_shared.cc` : ce qu'elles
     partagent, les textes de leurs potards et leur sortie) ; `mi/mi_reverb.h` : la réverbe de Clouds, ses lignes de
-    retard en flottants ; `mi/mi_delay.h` : le delay (le SVF et la saturation de stmlib dans une ligne 16 bits)
+    retard en flottants ; `mi/mi_metal.h` : METAL et SHIMMER ; `mi/mi_delay.h` : le delay (le SVF et la saturation de stmlib dans une ligne 16 bits)
   - `third_party/` : le code Mutable Instruments utilisé, copié tel quel ; les retouches sont dans `PATCHES.md` ;
     `third_party/lxr/` : les voix du LXR-02 (leurs retouches dans `MIFM1.md`), `lxr_port.h` / `.cc` ce sur quoi
     elles tournent ; `mi/mi_lxr.cc` : leur pont

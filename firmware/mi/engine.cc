@@ -24,6 +24,7 @@ extern "C" {
 }
 #include "bridge.h"
 #include "engine.h"
+#include "mi_metal.h"
 #include <new>
 #include "stmlib/dsp/filter.h"
 
@@ -159,6 +160,8 @@ const eng_pdef_t kPages[NPT][4] = {
 const char* const kBusModes[3] = {"OFF", "COMP", "OTT"};
 const char* const kDelayAlgos[2] = {"SYNC", "FREE"};
 const eng_pdef_t kDelayFreeTime = {"Time", K_UNI, 0, 0, 0};   // the delay's TIME when FREE: 1 ms..1.2 s
+const char* const kReverbAlgos[RV_ALGOS] = {"CLOUDS", "METAL", "SHIMMER"};
+const eng_pdef_t kMetalKnobs[3] = {{"Decay", K_UNI, 0, 0, 0}, {"Size", K_UNI, 0, 0, 0}, {"Tone", K_UNI, 0, 0, 0}};
 
 // an effect lane's parameters: its effect's knobs, then its step page's DECAY, PROB and DEPTH
 const int kLaneKnobs[ENG_LANES] = {0, 0, 0, 0, 8, 4, 8};
@@ -2738,6 +2741,8 @@ void fx_job(uint32_t n) {
     }
     if (fm_fabsf(E(LANE_DELAY, 2)) > 0.01f) us += kWebFxDelay;
     if (mj.dst >= 0 && !mj.idle) us += kWebFxWarps;
+    if (proj.algo[PG_REVERB] == RV_METAL || proj.algo[PG_REVERB] == RV_SHIMMER)   // (0.16.41) METAL's over Clouds'
+      us += kWebFxMetal[proj.algo[PG_REVERB] - RV_METAL];
     web_spend(us * static_cast<float>(n) / 128.0f);
   }
 #endif
@@ -3141,7 +3146,7 @@ int eng_voc_chord(int t, float* out) {  // (0.16.28) VOCODER's chord now (Manual
   return vc_n[t];
 }
 
-const char* eng_param_name(int param) {
+MI_COLD const char* eng_param_name(int param) {
   if (voc_play_param(param)) return "Play";
   int lk = eng_lx_knob(param);
   if (lk >= 0) {
@@ -3276,7 +3281,7 @@ void eng_chord_name(const int* notes, int nn, char* b, int n) {   // (a step's: 
   }
   chord_name(f, m, 0, b, n);
 }
-void eng_pads_line(char* b, int n) {    // the progression, its place, the chord: "Tintin 3/8 Am"
+MI_COLD void eng_pads_line(char* b, int n) {    // the progression, its place, the chord: "Tintin 3/8 Am"
   if (n <= 0) return;
   b[0] = 0;
   const int t = pad_track;
@@ -3340,7 +3345,7 @@ int eng_model_find(int kind, int sub) {
   return -1;
 }
 
-float eng_lx_step(int param, float v, int detents) {
+MI_COLD float eng_lx_step(int param, float v, int detents) {
   if (voc_play_param(param)) {          // (VOCODER's PLAY: a choice a detent; Mono at the left end)
     int c = voc_play(v) + detents;
     c = c < -1 ? -1 : c > 27 ? 27 : c;
@@ -3388,7 +3393,7 @@ MI_COLD void eng_static_mode(int param, float before) {
   }
 }
 
-void eng_set_model(int t, int m) {
+MI_COLD void eng_set_model(int t, int m) {
   if (t < 0 || t >= ENG_TRACKS || m < 0 || m >= ENG_MODELS) return;
   int was = proj.algo[PG_TRACK(t, 0)];
   proj.algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(m);
@@ -3529,6 +3534,8 @@ const eng_pdef_t* eng_pdef(int param) {   // (a table, made once: the render ask
   static const eng_pdef_t* table[ENG_NPARAMS];
   if (param < 0 || param >= ENG_NPARAMS) param = 0;
   if (param == PG_DELAY(0) * 4 && proj.algo[PG_DELAY(0)] == DL_FREE) return &kDelayFreeTime;   // (FREE: in ms)
+  if (param >= PG_REVERB * 4 && param < PG_REVERB * 4 + 3 && proj.algo[PG_REVERB] != RV_CLOUDS)   // (METAL's, SHIMMER's)
+    return &kMetalKnobs[param - PG_REVERB * 4];
   if (!table[param]) table[param] = &kPages[page_type(param / 4)][param % 4];
   return table[param];
 }
@@ -3860,6 +3867,21 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
         put_end(b, n, " s");
       }
     }
+  } else if (pt == PT_REVERB && k < 3 && proj.algo[PG_REVERB] != RV_CLOUDS) {   // METAL's: DECAY in s (Freeze at
+    if (k == 0 && mifm1::MetalVerb::Frozen(v)) {                                  // its end), SIZE in ms, TONE
+      put(b, n, "Freeze");                                                        // from the middle (-100 the
+    } else if (k == 0) {                                                          // darkest, +100 the metal)
+      const float t = mifm1::MetalVerb::Decay(v);
+      put_num(b, n, static_cast<int32_t>(t < 10.0f ? t * 10.0f + 0.5f : t + 0.5f), t < 10.0f ? 1 : 0, 0);
+      put_end(b, n, " s");
+    } else if (k == 1) {
+      const float ms = mifm1::MetalVerb::SizeMs(v);
+      put_num(b, n, static_cast<int32_t>(ms < 10.0f ? ms * 10.0f + 0.5f : ms + 0.5f), ms < 10.0f ? 1 : 0, 0);
+      put_end(b, n, " ms");
+    } else {
+      const float c = (v - 0.5f) * 200.0f;
+      put_num(b, n, static_cast<int32_t>(c + (c < 0.0f ? -0.5f : 0.5f)), 0, 1);
+    }
   } else if (pt == PT_DELAY1 && k == 1 && v >= 0.99f) {   // FEEDBACK at the end: the loop (held for good)
     put(b, n, "Loop");
   } else if (pt == PT_DELAY1 && k == 0) {   // the delay's TIME, FREE: ms
@@ -3885,6 +3907,7 @@ int eng_algo_count(int page) {
     case PT_PLAITS1: return ENG_MODELS;
     case PT_FILT1: return MF_MODELS;
     case PT_DELAY1: return 2;
+    case PT_REVERB: return RV_ALGOS;
     case PT_COMP: return 3;
     default: return 0;
   }
@@ -3895,6 +3918,7 @@ MI_COLD const char* eng_algo_name(int page, int a) {
   if (!n) return "";
   a = a < 0 ? 0 : a >= n ? n - 1 : a;
   if (page_type(page) == PT_FILT1) return mf_model_name(a);
+  if (page_type(page) == PT_REVERB) return kReverbAlgos[a];
   return page_type(page) == PT_PLAITS1 ? kModelDef[a].name : page_type(page) == PT_COMP ? kBusModes[a] : kDelayAlgos[a];
 }
 
@@ -4306,7 +4330,7 @@ void eng_trauma(int dose, float* gain, float* fm, float* warps, float* delay) {
   if (delay) *delay = 0.45f * ramp01(d, 0.6f, 1.0f);
 }
 
-void eng_bend_preview(int t, float* y, int n) {   // a cycle of a sine through the bits as they are (CLOCK: its
+MI_COLD void eng_bend_preview(int t, float* y, int n) {   // a cycle of a sine through the bits as they are (CLOCK: its
   if (t < 0 || t >= ENG_TRACKS || n < 2) return; // multiple of the cycle)
   Bend g = bend[t];
   g.hold = g.cnt = 0.0f;
@@ -4642,7 +4666,7 @@ MI_COLD int eng_init(void) {
 // their buffers silent: nothing sounds until the next trig (a drum ringing on a decay a cable holds at full, the
 // effects' tails: gone)
 volatile int cut_req;                   // 1: asked; 2: faded out, the modules next
-void cut_now() {
+MI_COLD void cut_now() {
   lx_init();                            // (the FM drums too: started again from their kits at the next block)
   for (int t = 0; t < ENG_TRACKS; ++t) {   // (each track's machine: ZERO silent until its next trig, its loops kept)
     const int k = mowner[t];
@@ -5111,7 +5135,7 @@ void eng_render(float* l, float* r, uint32_t n) {
   // the next block's early tasks' knobs: Warps' (and whether it runs), the effects' and the master bus's (they will
   // play this block's mix)
   set_warps();
-  mrv_set(reverb, E(LANE_REVERB, 0), E(LANE_REVERB, 1), E(LANE_REVERB, 2));
+  mrv_set(reverb, proj.algo[PG_REVERB], E(LANE_REVERB, 0), E(LANE_REVERB, 1), E(LANE_REVERB, 2));
   int div = iround(E(LANE_DELAY, 0));   // its time: a division of the tempo, or (FREE) in ms
   float dtime = proj.algo[PG_DELAY(0)] == DL_FREE ? delay_ms(E(LANE_DELAY, 0)) * kSr * 0.001f
                                                   : step_len_now() * kDivMult[div < 0 ? 0 : div >= kDivs ? kDivs - 1 : div];
@@ -5196,7 +5220,7 @@ int eng_note(int t) { return t >= 0 && t < ENG_TRACKS ? static_cast<int>(vnote[t
 uint32_t eng_load(int core) { return core ? load1 : load0; }
 
 // the delay's ALGORITHM, SYNC or FREE: its TIME the same (the division's length now in ms, or the nearest division)
-void eng_delay_mode(int mode) {
+MI_COLD void eng_delay_mode(int mode) {
   mode = mode == DL_FREE ? DL_FREE : DL_SYNC;
   if (mode == proj.algo[PG_DELAY(0)]) return;
   float& v = proj.val[PG_DELAY(0) * 4];
@@ -5365,7 +5389,7 @@ int eng_step_notes(int lane, int step, int* out) {
     }
   return n;
 }
-int eng_step_notes_set(int lane, int step, const int* notes, int n) {   // 0 ok; -1 no room, -2 out of NOTE's range
+MI_COLD int eng_step_notes_set(int lane, int step, const int* notes, int n) {   // 0 ok; -1 no room, -2 out of NOTE's range
   if (lane < 0 || lane >= ENG_TRACKS || step < 0 || step >= ENG_STEPS || n < 1) return -1;
   int s[4];
   n = n > 4 ? 4 : n;

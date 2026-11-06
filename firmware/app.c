@@ -446,7 +446,7 @@ static int algo_here(int page)           /* ALGO does something here: the header
 {
     int pt = ptype(page);
     return algo_page(page) >= 0 || pt == PT_WARPS1 || pt == PT_WARPS2 || pt == PT_DELAY1 || pt == PT_DELAY2 ||
-           pt == PT_DSEND || pt == PT_COMP || pt == PT_OTT;
+           pt == PT_DSEND || pt == PT_COMP || pt == PT_OTT || pt == PT_REVERB || pt == PT_RSEND;
 }
 
 static int page_at(int page, int face)   /* its module's page at face (wrapping) */
@@ -2313,10 +2313,24 @@ APP_SMALL static void panel_warps(void)            /* Warps: its algorithm, its 
     }
 }
 
-static void panel_reverb(void)
+APP_SMALL static void panel_reverb(void) /* the reverb: its algorithm (CLOUDS, METAL, SHIMMER); METAL's decay */
 {
+    int a = eng_project()->algo[PG_REVERB];
+    char s[48], v[16];
     hero_icon(IC_REV, AC3);
-    hero_line(hero_title("REVERB"), ui.page == PG_RSEND ? "FROM CLOUDS|THE SENDS" : "FROM CLOUDS");
+    int y = hero_title("REVERB");
+    s[0] = 0;
+    if (ui.page == PG_RSEND)
+        text_cat(s, "THE SENDS|", sizeof s);
+    if (a == RV_CLOUDS) {
+        text_cat(s, "FROM CLOUDS", sizeof s);
+    } else {
+        text_cat(s, a == RV_SHIMMER ? "SHIMMER|" : "METAL|", sizeof s);
+        eng_param_text(PG_REVERB * 4, eng_final(PG_REVERB * 4), v, sizeof v);
+        label_text(v, v, sizeof v);
+        text_cat(s, v, sizeof s);
+    }
+    hero_line(y, s);
 }
 
 static void panel_delay(void)            /* the delay: its time, its mode, its repeats */
@@ -2442,6 +2456,10 @@ APP_SMALL static void draw_panel(void)
     case PT_DELAY1: case PT_DELAY2: case PT_DSEND:
         s[2] = (int)p->val[PG_DELAY(0) * 4] | (int)p->val[PG_DELAY(1) * 4 + 1] << 5 |
                (int)(eng_final(PG_DELAY(0) * 4 + 1) * 100.0f) << 6;
+        break;
+    case PT_REVERB: case PT_RSEND:       /* (0.16.41: its algorithm; METAL's decay) */
+        s[1] = p->algo[PG_REVERB];
+        s[2] = (int)(eng_final(PG_REVERB * 4) * 1000.0f);
         break;
     case PT_ARP3:
         s[2] = p->arp_opt[tr];
@@ -6119,6 +6137,11 @@ static void input(void)
         dirty = 1;
         ui.touched_at[0] = now;
         ui.touched_k = ui.page == PG_DELAY(0) ? 0 : -1;
+    } else if (e && !ui.matrix && (ptype(ui.page) == PT_REVERB || ptype(ui.page) == PT_RSEND)) {
+        project_t *p = eng_project();    /* (0.16.41) the reverb: CLOUDS, METAL, SHIMMER (its knobs kept) */
+        p->algo[PG_REVERB] = (uint8_t)clamp((int32_t)p->algo[PG_REVERB] + (e > 0 ? 1 : -1), RV_CLOUDS, RV_SHIMMER);
+        dirty = 1;
+        ui.full = 1;                     /* (its knobs' names, its panel) */
     } else if (e && !ui.matrix && (ptype(ui.page) == PT_COMP || ptype(ui.page) == PT_OTT)) {
         int m = clamp(bus_mode() + (e > 0 ? 1 : -1), MB_OFF, MB_OTT);   /* the master bus: off, COMP, OTT (its face) */
         eng_project()->algo[PG_COMP] = (uint8_t)m;
