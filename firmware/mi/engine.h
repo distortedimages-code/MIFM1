@@ -401,7 +401,12 @@ void eng_render(float *l, float *r, uint32_t n);   /* audio interrupt: the last 
  * interleaved, T1 L R .. T4 L R (each track after its level, pan, filter, duck and Warps), then the delay's and the
  * reverb's return L R, at the master's scale on the USB: their sum is the master before its bus */
 #define ENG_USB_CH 10
+#ifndef ENG_USB_TRACKS
+#define ENG_USB_TRACKS 0                 /* (0.16.33) set aside: the USB records the master (app.h); 1 makes them again */
+#endif
+#if ENG_USB_TRACKS
 const int16_t *eng_usb_frames(uint32_t n, int live);
+#endif
 void eng_play(int on);                   /* the transport: the steps run or stop (from their start) */
 void eng_cut(void);                      /* STOP twice: stopped, every sound cut (the voices, Warps, the effects' tails:
                                           * silent until the next trig) */

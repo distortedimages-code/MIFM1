@@ -185,19 +185,21 @@ phrase ajoutée : son anglais dans la page, son élément un `data-t` (le numér
 `i18n-fr`, puis `python3 tools/web/i18n.py check firmware/web/emu/index.html`. Après un changement qui pèse sur le CPU (un module, un filtre), `python3
 tools/web/calibrate.py` recompte et réécrit la table.
 
-## Enregistrer dans un DAW (USB)
+## Enregistrer (USB)
 
-Branché en USB, le FM-1 est aussi une **carte son multipiste** (class compliant : aucun pilote, sur Mac, Windows,
-Linux, iPad), nommée « MIFM1 FM-1 » : **10 entrées**, 16 bits à 44,1 kHz, une paire stéréo par piste et une pour les
-effets.
+Branché en USB, le FM-1 est aussi une **carte son** (class compliant : aucun pilote, sur Mac, Windows, Linux, iPad,
+iPhone en USB-C), nommée « MIFM1 FM-1 » : **2 entrées, le mix master en stéréo**, 16 bits à 44,1 kHz, ce qu'on entend
+au casque (le bus master compris : compresseur ou OTT, limiteur ; le métronome aussi quand il bat). **À pleine
+échelle** : MASTER ne règle que le haut-parleur et le casque (on peut couper le FM-1 et écouter par l'enregistreur).
+Sur un iPhone, l'appareil photo l'enregistre avec la vidéo ; dans un DAW, une piste stéréo, le MIDI par le même câble.
 
-| Entrées | Ce qu'elles reçoivent |
-| --- | --- |
-| 1-2 | T1 |
-| 3-4 | T2 |
-| 5-6 | T3 |
-| 7-8 | T4 |
-| 9-10 | le retour des effets : delay et réverbe |
+**Depuis 0.16.33.** Avant, l'USB envoyait les quatre pistes séparées et le retour des effets (10 entrées), sans le bus
+master : un iPhone n'en prenait que les deux premières, la piste 1 seule. Les pistes séparées sont mises de côté pour
+l'instant (leur code reste, une option à la compilation : `ENG_USB_TRACKS`, `FM1B_UAC_CH`). Et le FM-1 garde maintenant
+**deux blocs d'avance** sur l'USB au lieu d'un (~8 ms de latence) : un bloc rendu en retard (un pic de calcul) ne
+s'entend plus dans l'enregistrement, quand il y laissait des échantillons répétés, un craquement (`make uac-stereo`, sur
+l'ordinateur : 60 s, un rendu sur 400 en retard d'un bloc entier ; à deux blocs d'avance aucun échantillon perdu ni
+répété, à un, 1 315 répétés).
 
 **Les niveaux** (0.16.31) : chaque moteur sort au même niveau. Le son de chacun, tel qu'ALGORITHM l'amène, a été mesuré
 (la sonie de la norme BS.1770 : les 400 ms les plus fortes d'une note tenue et d'une suite de noires) et ramené à
@@ -209,16 +211,9 @@ donne : ce qui en sort est ramené à ce qui y entre (suivi sur ~50 ms pour les 
 deux pistes ensemble), jamais plus de 3 dB (les bits) ou 6 dB (Warps) au-dessus ; un masque ou peu de bits sur un son
 faible le faisaient monter jusqu'à 13 dB, et Warps jusqu'à 20 dB au-dessus d'une piste douce.
 
-Chaque piste sort après son niveau, son pan, son EQ, le duck et son SPREAD, avec son circuit bending et Warps (quand Warps prend la place
-d'une piste, c'est lui qu'on entend sur elle), mais sans delay ni réverbe : ce sont des bus partagés, leur retour
-arrive sur 9-10. **La somme des 10 entrées, c'est le master avant son bus** (compresseur ou OTT, limiteur), à refaire
-dans le DAW si on le veut ; le master avec son bus n'est pas sur l'USB (la sortie casque l'a).
-
-Dans le DAW : 5 pistes stéréo, une par paire d'entrées, armées ensemble ; le MIDI passe par le même câble. Le
-niveau ne dépend pas de MASTER (le potard ne règle que le haut-parleur et le casque : on peut couper le FM-1 et
-écouter par le DAW). Projet en 44,1 kHz (le FM-1 ne propose que ce taux). Latence : environ 7 ms. Sur Windows, les
-DAW en ASIO passent par FlexASIO ou ASIO4ALL (ou leur mode WASAPI). Le sens inverse (l'ordinateur qui joue dans le
-FM-1) n'est pas activé.
+Projet en 44,1 kHz (le FM-1 ne propose que ce taux ; un enregistreur à 48 kHz, l'iPhone, convertit lui-même). Sur
+Windows, les DAW en ASIO passent par FlexASIO ou ASIO4ALL (ou leur mode WASAPI). Le sens inverse (l'ordinateur qui joue
+dans le FM-1) n'est pas activé.
 
 ## Jouer
 
@@ -869,7 +864,7 @@ plusieurs pas donne sa **longueur** à la note (comme un trig tenu avec un pas p
 ce qui est là : un pas joué remplace ses notes, les autres pas restent, et les autres locks du pas aussi. **PLAY passe au
 rouge** et REC clignote ; **REC** à nouveau arrête l'enregistrement (les pas continuent), PLAY arrête tout. Depuis
 l'arrêt, le **métronome compte une mesure** avant le premier pas : un ping à chaque temps (do 6), une quinte plus haut sur
-le premier de la mesure, ~25 ms, à la sortie (ni dans les effets ni sur l'USB) ; il bat ensuite tant qu'on enregistre.
+le premier de la mesure, ~25 ms, à la sortie (pas dans les effets ; sur l'USB aussi, qui enregistre le mix) ; il bat ensuite tant qu'on enregistre.
 **GLO tenu + PLAY** l'allume ou l'éteint (éteint : l'enregistrement part tout de suite). Le pas d'arrivée suit la
 SPEED de la piste ; dans une autre DIRECTION qu'en avant, une note va toujours au pas qui joue. Une piste en Endless ou
 en ARP joue les touches à sa manière : rien ne s'écrit sur ses pas.
@@ -984,7 +979,7 @@ l'oreille, de la largeur, sans le timbre « flanger » d'un peigne régulier. Au
 corrélés qu'à 0,22 ; la première moitié de la course fait déjà l'essentiel. Une piste tirée à fond d'un côté reste un
 point (il n'y a pas de place au-delà), et la largeur se resserre à mesure qu'on s'écarte du centre. Le SPREAD vient
 après l'EQ et le duck ; les envois au delay et à la réverbe n'en dépendent pas. Il ne se locke pas, mais un LFO peut
-le moduler (une piste qui respire en largeur). Sur l'USB, la paire de la piste est ouverte de la même façon. L'écran
+le moduler (une piste qui respire en largeur). L'écran
 montre chaque piste comme une barre dans l'image stéréo, à sa place et à sa largeur du moment. Ses lignes tiennent
 dans 8,8 Ko de mémoire, et il ne calcule que pour les pistes ouvertes (environ 2,5 % du processeur par piste).
 

@@ -435,9 +435,14 @@ float wet_l[kN], wet_r[kN], echo_l[kN], echo_r[kN];
 // Warps; no delay, no reverb, no master bus), then the effects' return (the delay's and the reverb's), 16-bit at the
 // master's own scale on the USB (1.0: 8,300,000 at 24 bits, 32,422 at 16): their sum is the master before its bus.
 // Made only while the host records (usb_req, from eng_usb_frames' calls, counted down a block at a time)
+#if ENG_USB_TRACKS
 alignas(4) int16_t usb_ch[kN * ENG_USB_CH];
 volatile uint8_t usb_req;
 uint8_t usb_now, usb_ok;                // this block's mix makes them; they hold this block's (else silence)
+#else                                   // (0.16.33: set aside, the USB records the master: none made, nothing kept)
+int16_t* const usb_ch = nullptr;
+const uint8_t usb_now = 0, usb_ok = 0;
+#endif
 const float kUsbScale = 8300000.0f / 256.0f;
 inline int16_t usb16(float x) {
   float v = x * kUsbScale;
@@ -4734,6 +4739,7 @@ void eng_cut(void) {
 }
 int eng_cut_pending(void) { return cut_req != 0; }
 
+#if ENG_USB_TRACKS
 const int16_t* eng_usb_frames(uint32_t n, int live) {
   usb_req = 2;                          // the host records: the next blocks make them
   if (!live || !usb_ok || n > kN) {     // (none made for this block: silence)
@@ -4742,9 +4748,12 @@ const int16_t* eng_usb_frames(uint32_t n, int live) {
   }
   return usb_ch;
 }
+#endif
 
 void eng_render(float* l, float* r, uint32_t n) {
+#if ENG_USB_TRACKS
   usb_ok = 0;
+#endif
   if (!ready || n > kN || n < kFrames || !eng_check(&proj)) {
     for (uint32_t i = 0; i < n; ++i) l[i] = r[i] = 0.0f;
     return;
@@ -4759,8 +4768,10 @@ void eng_render(float* l, float* r, uint32_t n) {
   // 0. what can start at once, on core 1 while core 0 prepares the block: the effects (the last block's mix) and
   // Warps (the last block's carrier and modulator), their knobs set at the end of the last block
   job_n = n;
+#if ENG_USB_TRACKS
   usb_now = usb_req != 0;               // the host records: the effects' job (the last block's mix) makes its channels
   if (usb_req) usb_req = static_cast<uint8_t>(usb_req - 1u);
+#endif
   uint32_t early = fx_n ? 1u << kTaskFx : 0u;
   if (w_job) {
     early |= 1u << kTaskWarps;
@@ -4967,7 +4978,9 @@ void eng_render(float* l, float* r, uint32_t n) {
     clk_at = -1;
     if (clk_y1 * clk_y1 + clk_y2 * clk_y2 < 1e-10f) clk_y1 = clk_y2 = 0.0f;
   }
+#if ENG_USB_TRACKS
   usb_ok = usb_now && fx_n == n;
+#endif
   if (cut_req == 1) {                   // STOP twice: faded out over this block, the modules made new at the next
     float g = 1.0f, dg = 1.0f / static_cast<float>(n);
     for (uint32_t i = 0; i < n; ++i) {

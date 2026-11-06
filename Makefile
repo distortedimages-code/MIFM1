@@ -10,7 +10,7 @@ OUT = build
 SRC = $(wildcard firmware/mi/*.cc) $(shell find firmware/third_party -name '*.cc')
 OBJ = $(patsubst %.cc,$(OUT)/obj/%.o,$(SRC))
 
-.PHONY: pat-store all test lxr-check uac-multi base-patch device-check firmware host web clean
+.PHONY: pat-store all test lxr-check uac-multi uac-stereo base-patch device-check firmware host web clean
 all: test
 
 $(OUT)/obj/%.o: %.cc
@@ -24,7 +24,7 @@ $(OUT)/native: firmware/tests/native.cc $(OBJ)
 	$(CC) $(OUT)/obj/native.o $(OBJ) -lm -o $@
 
 # the engine on a computer: the default patch plays, every track and model sounds, no NaN; WAVs in build/wav
-test: $(OUT)/native lxr-check uac-multi pat-store
+test: $(OUT)/native lxr-check uac-multi uac-stereo pat-store
 	@mkdir -p $(OUT)/wav
 	$(OUT)/native $(OUT)/wav 16
 
@@ -58,6 +58,12 @@ uac-multi: base-patch
 	@mkdir -p $(OUT)
 	$(CC) -std=c99 -O2 -w -I$(BASE)/bsp/chip -I$(BASE)/bsp/boards/fm1 tools/uac_multi_test.c -o $(OUT)/uac_multi_test
 	$(OUT)/uac_multi_test
+
+# (0.16.33) the USB audio input as the firmware has it: the master in stereo, two halves in hand, a render late now and then
+uac-stereo: base-patch
+	@mkdir -p $(OUT)
+	$(CC) -std=c99 -O2 -w -I$(BASE)/bsp/chip -I$(BASE)/bsp/boards/fm1 tools/uac_stereo_test.c -o $(OUT)/uac_stereo_test
+	$(OUT)/uac_stereo_test
 
 # the browser emulator (README: Dans le navigateur): the firmware in WebAssembly, by Zig's clang (pip install ziglang)
 # through tools/web/emcc, with MIFM1's page; firmware/build/emu/ (serve it over HTTP)

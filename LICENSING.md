@@ -12,7 +12,7 @@ repository, at the commit the package names.
 | MIFM1's own code | `firmware/app.c`, `firmware/mi/` (but `mi_lxr.cc`), `firmware/tests/`, `firmware/shim/`, `tools/` (but `vendor_lxr.py`, `lxr_check.cc`; `tools/web/` the browser emulator's build and its FM-1 load) | MPL-2.0 (`LICENSE`): MPL-2.0 files may be part of a GPL work (its section 3.3) and stay MPL-2.0 file by file |
 | The ladder filter's equations, after Stefano D'Angelo's reference code (MoogLadders' ImprovedModel.h, Copyright 2012 Stefano D'Angelo) | in `firmware/mi/mi_filter.cc` (MPL-2.0), its notice at the end of that file | ISC |
 | fm1-base and felucca-bsp | `base/` (a submodule) | MPL-2.0 |
-| MIFM1's changes to them (the USB audio input's 10 channels), applied to `base/` before a build | `patches/`, `tools/patch_base.sh` | MPL-2.0, as the files they change |
+| MIFM1's changes to them (the USB audio input: its margin, two halves in hand; its 10 channels, set aside), applied to `base/` before a build | `patches/`, `tools/patch_base.sh` | MPL-2.0, as the files they change |
 | The browser emulator's page, fm1-base's (Copyright Charles Vestal) in French and with MIFM1's parts; its worklet part and exports | `firmware/web/emu/index.html`, `firmware/web/emu/app_worklet.js`, `firmware/web.c` | MPL-2.0 |
 | The page's photographs (the lab), Yoann's; the historical photographs are not in the repository: the page shows them from Wikimedia Commons, each linked to its page (its author, its licence) | `firmware/web/emu/img/` | Yoann's, for MIFM1's page: not under the code's licences |
 | Mutable Instruments' code (Emilie Gillet) | `firmware/third_party/` (stmlib, Plaits, Clouds, Warps, Tides 2, Marbles) | MIT (`firmware/third_party/LICENSE-eurorack`, `LICENSE-stmlib`) |

@@ -1941,6 +1941,7 @@ int main(int argc, char** argv) {
     eng_cut();
   }
 
+#if ENG_USB_TRACKS   // (0.16.33: set aside, the USB records the master)
   // 37. the USB audio input's 10 channels (eng_usb_frames): silence until the host has recorded a block, then the
   // four tracks and the effects' return, each sounding, their sum the master before its bus (to the 16-bit steps,
   // where none of them is clipped); on the demo patch and on the stress test (Warps in a track's place, OTT)
@@ -1990,6 +1991,7 @@ int main(int argc, char** argv) {
     }
     eng_play(0);
   }
+#endif
 
   // 42. ZERO (mi_zero.cc, 0.8.1): on a track, its name, its knobs (named, its defaults, written as it writes them), its
   // sound through the engine; the voice itself: INDEX 0 a pure sine on the note (its harmonics under -90 dB); deep
@@ -4508,6 +4510,7 @@ int main(int argc, char** argv) {
         for (int k = 0; k < 128; ++k) L[which][b * 128 + k] = l[k], R[which][b * 128 + k] = r[k];
         if (which < 2)
           for (int k = 0; k < 128; ++k) ML[which][b * 128 + k] = eng_test_prebus[0][k], MR[which][b * 128 + k] = eng_test_prebus[1][k];
+#if ENG_USB_TRACKS
         if (which == 1) {                 // (the USB input's channels: T1's pair with its side, their sum the master)
           const int16_t* u = eng_usb_frames(128, 1);
           for (int k = 0; b >= 2 && k < 128; ++k) {
@@ -4519,6 +4522,7 @@ int main(int argc, char** argv) {
             usb_side = std::max(usb_side, std::fabs(static_cast<float>(u[k * ENG_USB_CH] - u[k * ENG_USB_CH + 1])) / kUsb);
           }
         }
+#endif
       }
       eng_key(0, 33, 0);
       if (which == 1)                     // (let go: its echoes die away, then nothing, never the subnormals)
@@ -4571,17 +4575,18 @@ int main(int argc, char** argv) {
     const int mono = sum_pk > 0.05 && sum_err < 1e-5 * sum_pk, lows = m55 > 0.0 && s55 < 0.03 * m55;
     const int highs = side_hi > 0.7 && side_hi < 0.85 && corr_hi > 0.12 && corr_hi < 0.32;
     const int sides = same0 < 1e-6 * sum_pk && hard < 1e-4 && pk4 > 0.01 && same4 < 1e-6 * sum_pk;
-    const int usb = usb_err < 6.0f / kUsb && usb_side > 0.01f;
+    const int usb = !ENG_USB_TRACKS || (usb_err < 6.0f / kUsb && usb_side > 0.01f);
     const int rest = tail < 1e-9f && !tail_sub;
     const int knob = !strcmp(txt[0], "Off") && !strcmp(txt[1], "50") && !strcmp(txt[2], "100") &&
                      !strcmp(eng_param_name(PG_SPREAD_PARAM(0)), "Spread") && std::fabs(width[1] - 0.8f) < 0.01f &&
                      width[3] < 1e-4f && width[0] == 0.0f;
     printf("SPREAD: the sum to mono as it was (%.1e of its peak) %s; its lows at 55 Hz apart %.4f %s; its highs: the "
            "side %.2f of the middle, the sides correlated %.2f %s; at 0 the same, hard right %.1e on the left, back to 0 "
-           "the same %s; the knob %s %s %s, width %.2f %s; USB: T1's sides apart, the sum %.1f steps off %s\n",
+           "the same %s; the knob %s %s %s, width %.2f %s; USB%s: T1's sides apart, the sum %.1f steps off %s\n",
            sum_err / (sum_pk + 1e-30), mono ? "ok" : "WRONG", s55 / (m55 + 1e-30), lows ? "ok" : "WRONG", side_hi,
            corr_hi, highs ? "ok" : "WRONG", hard, sides ? "ok" : "WRONG", txt[0], txt[1], txt[2], width[1],
-           knob ? "ok" : "WRONG", usb_err * kUsb, usb ? "ok" : "WRONG");
+           knob ? "ok" : "WRONG", ENG_USB_TRACKS ? "" : " (its tracks set aside, not run)", usb_err * kUsb,
+           usb ? "ok" : "WRONG");
     printf("SPREAD let go: 2 s later its sides apart %.1e %s\n", tail, rest ? "ok" : "WRONG");
     if (!mono || !lows || !highs || !sides || !knob || !usb || !rest) ++failures, printf("FAIL: SPREAD\n");
     eng_defaults(p);

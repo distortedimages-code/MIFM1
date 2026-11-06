@@ -55,5 +55,5 @@ static const float kWebWarps[2][6] = {   /* Warps, its algorithm's mark (Eco, HQ
 static const float kWebFx[3] = {551.4f, 575.1f, 720.7f};   /* the effects, the mix and the master bus (OFF, COMP, OTT) */
 static const float kWebFxEq = 37.3f, kWebFxDuck = 6.9f, kWebFxDelay = 15.9f;   /* a track's EQ (playing), the duck on a track, the delay's filter and drive */
 static const float kWebFxWarps = 88.4f;   /* Warps in the mix (the rest of the stress test's effects) */
-static const float kWebFxSpread = 75.7f;   /* (0.16.19) a track's SPREAD */
-static const float kWebPrep = 364.9f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.9f;   /* the preparation: its floor, a track playing, a cable */
+static const float kWebFxSpread = 75.2f;   /* (0.16.19) a track's SPREAD */
+static const float kWebPrep = 364.8f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.9f;   /* the preparation: its floor, a track playing, a cable */

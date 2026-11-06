@@ -69,7 +69,8 @@ index 92ba646..a300105 100644
 +#define UA_W (FELUCCA_UAC_CH / 2u)   /* ring words a frame */
 +#if FELUCCA_UAC_DEEP && (FELUCCA_UAC_CH == 2 || HALF_FRAMES > 128u)
  #define UA_N 1024u               /* ring, frames (16-bit L | R << 16); a power of two */
- #define UA_DEEP HALF_FRAMES
+-#define UA_DEEP HALF_FRAMES
++#define UA_DEEP (FELUCCA_UAC_DEEP * HALF_FRAMES)   /* (MIFM1: 2, two halves more in hand, the ring holding them) */
 +#elif FELUCCA_UAC_DEEP
 +#define UA_N 512u
 +#define UA_DEEP HALF_FRAMES
