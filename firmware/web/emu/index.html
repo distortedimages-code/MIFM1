@@ -748,10 +748,11 @@ body { counter-reset: part; }
 .dock { position: fixed; z-index: 30; top: 0; left: 0; right: 0; background: rgba(228, 229, 224, .94); -webkit-backdrop-filter: blur(8px);
         backdrop-filter: blur(8px); border-bottom: 2px solid #000; transform: translateY(-110%); transition: transform .35s cubic-bezier(.2, .7, .1, 1); }
 .dock.on { transform: none; }
-.dock-in { display: flex; gap: 2px; max-width: 1180px; margin: 0 auto; padding: 0 12px; overflow-x: auto; scrollbar-width: none; }
+.dock-in { display: flex; gap: 2px; max-width: 1180px; margin: 0 auto; padding: 0 12px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+           overscroll-behavior: contain; touch-action: pan-x; }   /* (0.16.48: a finger slides it sideways only) */
 .dock-in::-webkit-scrollbar { display: none; }
 .dock a { flex: none; display: flex; align-items: baseline; gap: .45rem; padding: 12px 12px 10px; color: #000; text-decoration: none;
-          font-size: 13px; font-weight: 700; white-space: nowrap; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+          font-size: 13px; font-weight: 700; white-space: nowrap; border-bottom: 3px solid transparent; }
 .dock a .dn { font-weight: 900; font-stretch: 125%; color: var(--grey); }
 .dock a:hover, .dock a[aria-current="true"] { border-bottom-color: var(--orange); }
 .dock a[aria-current="true"] .dn { color: var(--orange); }
@@ -762,7 +763,8 @@ section[id], h2[id] { scroll-margin-top: 64px; }
 .car { margin-top: 1.4rem; }
 .car-bar { display: flex; align-items: center; gap: 10px; position: sticky; top: 46px; z-index: 5; padding: 8px 0;
            background: linear-gradient(var(--alu) 80%, rgba(228, 229, 224, 0)); }
-.car-tabs { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+.car-tabs { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; padding: 2px;
+            overscroll-behavior-x: contain; }
 .car-tabs::-webkit-scrollbar { display: none; }
 .car-tab { flex: none; display: inline-flex; align-items: center; gap: 6px; font: 700 13px "Archivo", Arial, sans-serif; letter-spacing: .03em;
            color: #000; background: var(--paper); border: 1.5px solid #000; border-radius: 999px; padding: 6px 12px 6px 8px; cursor: pointer; }
