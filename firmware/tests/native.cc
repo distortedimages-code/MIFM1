@@ -5651,6 +5651,93 @@ int main(int argc, char** argv) {
     if (!decays || !frozen || !shim || !level || !swap || !bounded || !names) ++failures, printf("FAIL: METAL\n");
   }
 
+  {  // (0.16.42) the duck's source chosen (T2's trigs duck T1, T3, T4; T2 never), its knobs the others'; SCALE following
+     // a track's chord (FOLLOW T2: D major on T2's step, the others in G major's notes but G, a half step over F#), the
+     // leading track free; SCALE turned past the tracks that play no chords
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    for (int l2 = 0; l2 < ENG_LANES; ++l2)
+      for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(l2, st, 0);
+    // the duck: T1 the FM held (its level steady), T2 a kick on step 4 only, the source
+    eng_set_model(0, eng_model_find(MK_FM, 0));
+    eng_set_model(1, eng_model_find(MK_DRUM, 0));
+    p->val[PG_TRACK(0, 2) * 4 + 1] = 1.0f;        // (GATE long: held from step 0 on)
+    p->val[PG_MIX * 4 + 1] = 0.0f;                // (T2 silent: T1 alone heard)
+    eng_trig_set(0, 0, 1);
+    eng_trig_set(1, 4, 1);
+    p->algo[PG_DUCK] = 1;                         // T2 ducks
+    p->val[PG_DUCK * 4 + 0] = 0.3f;
+    p->val[PG_DUCK * 4 + 1] = 1.0f;               // the first knob: T1's depth
+    int api = eng_duck_track(0) == 1 && eng_duck_track(1) == 0 && eng_duck_track(2) == 2 && eng_duck_track(3) == 3;
+    int lane = -1;
+    api &= eng_param_tp(PG_DUCK * 4 + 1, &lane) >= 0 && lane == 0;
+    api &= eng_track_param(0, TP_DUCK) == PG_DUCK * 4 + 1 && eng_track_param(3, TP_DUCK) == PG_DUCK * 4 + 3;
+    api &= !eng_tp_lockable(1, TP_DUCK) && eng_tp_lockable(0, TP_DUCK);
+    auto level = [&](float* before, float* after) {   // T1's level over step 3, then just after T2's trig on step 4
+      eng_play(1);
+      const int sb = static_cast<int>(0.125f * 44100.0f / 128 + 0.5f);   // (a step's blocks at 120)
+      double e0 = 0, e1 = 0;
+      for (int b = 0; b < 6 * sb; ++b) {
+        eng_render(l, r, 128);
+        for (uint32_t i = 0; i < 128; ++i) {
+          if (b >= 3 * sb && b < 4 * sb) e0 += l[i] * l[i];
+          if (b >= 4 * sb + 1 && b < 4 * sb + 4) e1 += l[i] * l[i];
+        }
+      }
+      eng_play(0);
+      for (int b = 0; b < 40; ++b) eng_render(l, r, 128);
+      *before = static_cast<float>(std::sqrt(e0 / sb / 128.0)), *after = static_cast<float>(std::sqrt(e1 / 3 / 128.0));
+    };
+    float b2, a2, b0, a0, b1, a1, c1, d1;
+    level(&b2, &a2);
+    p->val[PG_DUCK * 4 + 1] = 0.0f;               // (the same, T1's depth 0)
+    level(&b0, &a0);
+    p->algo[PG_DUCK] = 0;                         // (T1 the source, every depth full: T1 never ducked)
+    for (int k = 1; k < 4; ++k) p->val[PG_DUCK * 4 + k] = 1.0f;
+    level(&b1, &a1);
+    for (int k = 1; k < 4; ++k) p->val[PG_DUCK * 4 + k] = 0.0f;
+    level(&c1, &d1);
+    a2 /= a0 + 1e-9f, a1 /= d1 + 1e-9f;
+    const int ducked = a2 < 0.5f && a1 > 0.95f && a1 < 1.05f;
+    // FOLLOW T2: T2 POLY, D major on its step 0; T1 a drum
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    for (int l2 = 0; l2 < ENG_LANES; ++l2)
+      for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(l2, st, 0);
+    eng_set_model(0, eng_model_find(MK_DRUM, 0));
+    eng_set_model(1, eng_model_find(MK_POLY, 0));
+    eng_set_model(2, eng_model_find(MK_DRUM, 1));
+    eng_set_model(3, eng_model_find(MK_DRUM, 2));
+    p->val[PG_GLOBAL * 4 + 2] = 0.0f;             // ROOT C
+    eng_trig_set(1, 0, 1);
+    const int dmaj[3] = {2, 6, 9};
+    int fol = eng_step_notes_set(1, 0, dmaj, 3) == 0;
+    p->val[PG_GLOBAL * 4 + 1] = 17.0f;            // Flip, then turned: FOLLOW T2, the only one
+    const int up1 = eng_scale_step(17, 1), up2 = eng_scale_step(up1, 1), down = eng_scale_step(up1, -1);
+    fol &= up1 == 19 && up2 == 19 && down == 17 && eng_lead_ok(1) && !eng_lead_ok(0);
+    p->val[PG_GLOBAL * 4 + 1] = static_cast<float>(up1);
+    eng_play(1);
+    for (int b = 0; b < 30; ++b) eng_render(l, r, 128);
+    eng_play(0);
+    const int q[5] = {eng_quantize(65), eng_quantize(66), eng_quantize(67), eng_quantize(62), eng_quantize(60)};
+    fol &= q[0] == 64 && q[1] == 66 && q[2] == 66 && q[3] == 62 && q[4] == 60;
+    char sname[16];
+    eng_param_text(PG_GLOBAL * 4 + 1, static_cast<float>(up1), sname, sizeof sname);
+    fol &= !std::strcmp(sname, "Follow T2");
+    eng_defaults(p);
+    eng_fresh();
+    (void)b2, (void)b0, (void)b1, (void)c1;
+    printf("the duck from T2: T1 x%.2f just after T2's trig (from T1, its depths full: x%.2f; levels %.3f %.3f %.3f %.3f); its knobs, its locks %s; "
+           "FOLLOW T2 on D major: F -> %d, F# -> %d, G -> %d, D %d, C %d; SCALE turned %d %d %d (%s) %s\n", a2, a1,
+           b2, b0, b1, c1, api ? "ok" : "WRONG", q[0], q[1], q[2], q[3], q[4], up1, up2, down, sname,
+           fol ? "ok" : "WRONG");
+    if (!ducked || !api || !fol) ++failures, printf("FAIL: the duck's source, FOLLOW\n");
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

@@ -112,7 +112,7 @@ enum { TP_DECAY = 4, TP_PITCHENV = 8, TP_LENGTH, TP_TRANSPOSE, TP_OCTAVE, TP_LEV
        TP_FDECAY, TP_FDRIVE, TP_PING, TP_FM, TP_KEY, TP_FTYPE, TP_NOISE, TP_COLOR, TP_FATTACK, TP_GLITCH, TP_GSIZE,
        TP_GBEND, TP_GDROP, TP_CURVE, TP_CLIMB, ENG_NTP };   /* (0.7: the grit's four the bits', the glitch's four
                                          * after the filter's; 0.16: the ratchets' CURVE; 0.16.7: CLIMB) */
-                                         /* (T1 has no TP_DUCK: it ducks the others) */
+                                         /* (the duck's source, T1 or the one chosen, has no TP_DUCK) */
 int eng_track_param(int lane, int tp);   /* its parameter (an effect lane: its effect's knob tp) */
 int eng_param_tp(int param, int *lane);  /* a parameter's tp and lane, -1 if none */
 int eng_tp_lockable(int lane, int tp);   /* 1: a lock or a random may move it */
@@ -164,6 +164,9 @@ int eng_fm_shaped(int t);                /* its SHAPE now: the operators it move
 float eng_fm_shape(int t, int op, float x);   /* operator op's level in it at x (its units), -1..1 */
 int eng_model_free(int t, int m);        /* 0: a model once a project (PADS) another track holds */
 int eng_pads_track(void);                /* the track PADS is on, -1 none */
+int eng_duck_track(int k);               /* (0.16.42) the duck: 0 its source, 1..3 the track of that depth knob */
+int eng_lead_ok(int t);                  /* (0.16.42) a track that plays chords (SCALE FOLLOW can lead from it) */
+int eng_scale_step(int sc, int e);       /* (0.16.42) SCALE turned e detents (past FOLLOW's tracks without chords) */
 void eng_pads_chord(char *b, int n);     /* its chord now, named (Am7, F, Gsus4...); its place: eng_pads_pos */
 int eng_pads_pos(void);                  /* the progression's chord now (0..), -1 before its first trig */
 void eng_pads_line(char *b, int n);      /* the progression, its place, the chord: "Tintin 3/8 Am" */

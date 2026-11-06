@@ -20,7 +20,7 @@ static const float kWebModel[25] = {   /* a voice playing, by model */
     216.9f,  /* 12 PADS */
     311.1f,  /* 13 POLY */
     424.9f,  /* 14 REV3 */
-    445.7f,  /* 15 OTIS */
+    445.8f,  /* 15 OTIS */
     186.1f,  /* 16 TAURUS */
     177.8f,  /* 17 VOCODER */
     127.1f,  /* 18 STATIC */
@@ -57,4 +57,4 @@ static const float kWebFxEq = 37.3f, kWebFxDuck = 6.9f, kWebFxDelay = 15.9f;   /
 static const float kWebFxWarps = 88.4f;   /* Warps in the mix (the rest of the stress test's effects) */
 static const float kWebFxSpread = 75.2f;   /* (0.16.19) a track's SPREAD */
 static const float kWebFxMetal[2] = {78.3f, 113.6f};   /* (0.16.41) the reverb METAL, SHIMMER: over Clouds' */
-static const float kWebPrep = 367.9f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.8f;   /* the preparation: its floor, a track playing, a cable */
+static const float kWebPrep = 369.0f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.8f;   /* the preparation: its floor, a track playing, a cable */

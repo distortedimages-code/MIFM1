@@ -83,12 +83,14 @@ const char* const kLfoWaves[LW_N] = {"Sine",  "Triangle", "Saw",   "Ramp",   "Sq
                                      "Stairs", "Clave",   "Bounce", "Rises", "Falls",  "Zigzag", "Chaos",  "Follow"};
 const char* const kLfoModes[6] = {"Free", "Sync", "T1", "T2", "T3", "T4"};
 const char* const kOnOff[2] = {"Off", "On"};
-const char* const kScaleNames[18] = {"Off", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
+const char* const kScaleNames[22] = {"Off", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
                                      "Locrian", "Harm. minor", "Mel. minor", "Maj. penta", "Min. penta", "Blues",
-                                     "Whole tone", "Hirajoshi", "Prog", "Phryg. dom", "Flip"};
+                                     "Whole tone", "Hirajoshi", "Prog", "Phryg. dom", "Flip",
+                                     "Follow T1", "Follow T2", "Follow T3", "Follow T4"};
 // (Prog: PADS' chord, as it goes; 0.16.12, after it (the projects' scales where they were): the phrygian dominant
-// (its major third over the flat second), FLIP (minor one bar, dorian the next: the sixth flat, then not))
-const int kScaleProg = 15, kScaleFlip = 17, kScales = 18;
+// (its major third over the flat second), FLIP (minor one bar, dorian the next: the sixth flat, then not); 0.16.42,
+// FOLLOW T1..T4: that track's chord, whatever plays it (a track that plays chords: SCALE turns past the others))
+const int kScaleProg = 15, kScaleFlip = 17, kScaleT1 = 18, kScales = 22;
 const uint16_t kScaleMasks[17] = {0xFFF, 0xAB5, 0x5AD, 0x6AD, 0x5AB, 0xAD5, 0x6B5, 0x56B, 0x9AD, 0xAAD, 0x295, 0x4A9,
                                   0x4E9, 0x555, 0x18D, 0, 0x5B3};   // bit i: i semitones over the root
 const char* const kNoteName[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
@@ -685,6 +687,11 @@ float from_u_fast(int param, float u) { // from_u on the bounds in RAM (the rend
 }
 
 // a lane parameter as the trig plays it: its knob and cables, then the trig's lock and random
+// (0.16.42) the duck's source, the DUCK page's ALGORITHM (T1..T4: its trigs duck the others); the depth knobs the three
+// others', in order (T1's source: T2, T3, T4 as before)
+inline int duck_src() { return proj.algo[PG_DUCK] & 3; }
+inline int duck_slot(int t) { return t < duck_src() ? t + 1 : t; }       // a track's depth's knob (1..3)
+inline int duck_knob_track(int k) { return k - 1 < duck_src() ? k - 1 : k; }   // a knob's track
 int16_t lane_param[ENG_LANES][ENG_NTP];  // eng_track_param's answers, made once (E is asked ~150 times a block)
 void trauma_knobs() {                   // TRAUMA's knobs: the filters' DRIVE, Warps' now, the delay's DRIVE
   float d = trauma01();
@@ -716,6 +723,20 @@ void make_lock_steps() {
 float E(int lane, int tp) {
   int param = lane_param[lane][tp];
   return clamp_fast(param, fin[param] + tdelta[lane][tp]);
+}
+
+// (0.16.42) the duck's depths where its source puts them: each track's TP_DUCK on its knob (the source's on DECAY, not
+// lockable), made again when the source changes
+int duck_mapped = -1;
+void duck_map() {
+  if (duck_src() == duck_mapped) return;
+  duck_mapped = duck_src();
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    lane_param[t][TP_DUCK] = static_cast<int16_t>(eng_track_param(t, TP_DUCK));
+    if (eng_tp_lockable(t, TP_DUCK)) lane_lockable[t][TP_DUCK >> 5] |= 1u << (TP_DUCK & 31);
+    else lane_lockable[t][TP_DUCK >> 5] &= ~(1u << (TP_DUCK & 31));
+    tp_dice[t][TP_DUCK] = static_cast<uint8_t>(dice_span(lane_param[t][TP_DUCK]) * 20.0f + 0.5f);
+  }
 }
 
 uint32_t rand_u32() {                   // xorshift32
@@ -759,8 +780,40 @@ uint16_t base_mask(int sc) {            // a scale's notes, not PADS' chord's (O
   if (sc == kScaleFlip) return playing && tick >= 0 && (tick / 16) % 2 ? kScaleMasks[3] : kScaleMasks[2];
   return sc > 0 && sc < kScaleFlip && sc != kScaleProg ? kScaleMasks[sc] : 0u;
 }
+// (0.16.42) FOLLOW T1..T4: the track's chord leads. Each track's last chord (two notes or more: their pitch classes
+// over ROOT) and the scale it makes: its notes, and the passing notes of the nearest major scale that holds them all
+// (ROOT's own first, then a fifth away, then two...; none: the chord's notes alone), the avoid notes out (a half step
+// over a chord note); PADS' its own (Prog's). The leading track is not quantized: its notes are the harmony
+uint16_t lead_cm[ENG_TRACKS], lead_scale[ENG_TRACKS];
+int8_t lead_root[ENG_TRACKS] = {-1, -1, -1, -1};
+inline int lead_track() {
+  const int sc = Pi(PG_GLOBAL, 1);
+  return sc >= kScaleT1 && sc < kScales ? sc - kScaleT1 : -1;
+}
+void lead_chord(int t, const float* notes, int n) {
+  if (n < 2) return;
+  const int root = Pi(PG_GLOBAL, 2);
+  uint16_t cm = 0;
+  for (int i = 0; i < n; ++i) cm |= static_cast<uint16_t>(1u << (((iround(notes[i]) - root) % 12 + 12) % 12));
+  if (cm == lead_cm[t] && root == lead_root[t]) return;
+  int ch[12], cn = 0;
+  for (int i = 0; i < 12; ++i)
+    if ((cm >> i) & 1u) ch[cn++] = i;
+  if (cn < 2) return;
+  lead_cm[t] = cm;
+  lead_root[t] = static_cast<int8_t>(root);
+  uint16_t m = 0;
+  for (int f = 0; f <= 6 && !m; ++f)    // (a fifth up, a fifth down, ...)
+    for (int sg = 1; sg >= -1 && !m; sg -= 2) {
+      const int k = ((sg * f * 7) % 12 + 12) % 12;
+      const uint16_t mj = static_cast<uint16_t>(((0xAB5u << k) | (0xAB5u >> (12 - k))) & 0xFFFu);
+      if ((mj & cm) == cm) m = mj;
+    }
+  lead_scale[t] = pads_chord_scale(ch, cn, m, -1);
+}
 uint32_t scale_mask(int sc) {           // SCALE's notes (Prog: the chord's, none without PADS)
   if (sc == kScaleProg) return pad_track >= 0 ? pad_mask : 0u;
+  if (sc >= kScaleT1 && sc < kScales) return sc - kScaleT1 == pad_track ? pad_mask : lead_scale[sc - kScaleT1];
   return base_mask(sc);
 }
 void pads_now(float note);              // (its chord now: after track_kind, further down)
@@ -786,6 +839,8 @@ int quantize(int n) {
 int scale_on() {                        // SCALE not Off: every pitch in it
   return scale_mask(Pi(PG_GLOBAL, 1)) != 0u;
 }
+inline int scale_on_t(int t) { return t != lead_track() && scale_on(); }   // (the leading track: free)
+inline int quantize_t(int t, int n) { return t == lead_track() ? n : quantize(n); }
 
 int warps_note(float level1) { return quantize(iround(12.0f + 60.0f * level1)); }   // its oscillator's (LEVEL 1)
 
@@ -1552,7 +1607,7 @@ void sequence(uint32_t n) {
                                                                                                      // length over
                                                                                                      // the steps)
         ratchet_layout(t);
-        tnote[t] = static_cast<float>(quantize(iround(48.0f + 12.0f * static_cast<float>(iround(E(t, TP_OCTAVE))) +
+        tnote[t] = static_cast<float>(quantize_t(t, iround(48.0f + 12.0f * static_cast<float>(iround(E(t, TP_OCTAVE))) +
                                                       static_cast<float>(iround(E(t, TP_TRANSPOSE))) +
                                                       E(t, TP_NOTE)) + fdn[t]));
         climb_t[t] = -1;                // CLIMB (0.16.7): a trig that plays, its step's count
@@ -1578,7 +1633,7 @@ void sequence(uint32_t n) {
           ratchet_layout(t);
           lane_sl[t] = keep;
         }
-        tnote[t] = static_cast<float>(quantize(e_note[t] + (am == AM_LOOP ? proj.endless_key[t] : 0) + Pi(PG_ARP(t), 3) +
+        tnote[t] = static_cast<float>(quantize_t(t, e_note[t] + (am == AM_LOOP ? proj.endless_key[t] : 0) + Pi(PG_ARP(t), 3) +
                                                12 * iround(E(t, TP_OCTAVE)) + iround(E(t, TP_TRANSPOSE)) +
                                                iround(tdelta[t][TP_NOTE])));
       }
@@ -1614,7 +1669,7 @@ void sequence(uint32_t n) {
       } else if (key_on[t] || key_hold[t] > 0) {   // the keyboard plays over; a new key, a new trig
         g = !(key_retrig[t] && k == 0);
         trig_cn[t] = 0;                 // (a key alone, not the step's chord)
-        fnote[t][k] = static_cast<float>(quantize(key_note[t] + 12 * iround(E(t, TP_OCTAVE)) +
+        fnote[t][k] = static_cast<float>(quantize_t(t, key_note[t] + 12 * iround(E(t, TP_OCTAVE)) +
                                                   iround(E(t, TP_TRANSPOSE))));   // (OCTAVE too, as the steps)
         if (key_hold[t] > 0) --key_hold[t];
       }
@@ -1624,7 +1679,7 @@ void sequence(uint32_t n) {
         pads_now(fnote[t][k]);
       }
       last_g[t] = g;
-      if (t == 0) {                     // T1: a rise ducks the others
+      if (t == duck_src()) {            // the duck's source (T1 unless chosen): a rise ducks the others
         duck_hit[k] = static_cast<uint8_t>(g && !duck_prev);
         duck_prev = g;
       }
@@ -1895,11 +1950,12 @@ void keys_to_voices(int t, int kind) {
     if (!n && key_hold[t] > 0) ids[n++] = key_note[t];
     const float fq = kind == MK_VOCODER ? 0.0f : 24.0f * E(t, 0);   // (VOCODER: FREQ's place its PLAY)
     for (int i = 0; i < n; ++i) {
-      float nn = static_cast<float>(quantize(ids[i] + 12 * iround(E(t, TP_OCTAVE)) + iround(E(t, TP_TRANSPOSE)))) + fq;
-      if (scale_on()) nn = static_cast<float>(quantize(iround(nn)));
+      float nn = static_cast<float>(quantize_t(t, ids[i] + 12 * iround(E(t, TP_OCTAVE)) + iround(E(t, TP_TRANSPOSE)))) + fq;
+      if (scale_on_t(t)) nn = static_cast<float>(quantize(iround(nn)));
       nt[i] = nn;
     }
     if (n) vnote[t] = nt[n - 1];
+    lead_chord(t, nt, n);               // (0.16.42: the keys' chord, the harmony when the track leads)
     if (key_new[t]) {                   // (a key: the filter's envelope and ping, the trig's)
       key_new[t] = 0;
       set_filter(t);
@@ -1921,7 +1977,7 @@ int step_chord(int t, float note, float* out) {
   if (!kb_poly(t)) return n;
   for (int i = 0; i < trig_cn[t] && i < 3; ++i) {
     float x = note + static_cast<float>(trig_iv[t][i]);
-    if (scale_on()) x = static_cast<float>(quantize(iround(x)));
+    if (scale_on_t(t)) x = static_cast<float>(quantize(iround(x)));
     out[n++] = x;
   }
   return n;
@@ -1934,7 +1990,7 @@ void set_voice(int t) {
     for (int i = 0; i < LX_KNOBS; ++i) k[i] = lx_u(lx_param(t, i), E(t, 1 + i));
     int kind = track_kind(t), sub = mdef(voice_model(t)).sub;   // (0.16.40: its trig's model, a drum's)
     float note = vnote[t] + (kind == MK_VOCODER ? 0.0f : 24.0f * E(t, 0));   // (VOCODER: FREQ's place its PLAY)
-    if (scale_on()) note = static_cast<float>(quantize(iround(note)));
+    if (scale_on_t(t)) note = static_cast<float>(quantize(iround(note)));
     if (kind == MK_ZERO) zero_set(t, note, k);
     else if (kind == MK_DRUM) drum_set(t, sub, note, k);
     else if (kind == MK_FM) fm4_set(t, note, k);
@@ -1942,15 +1998,20 @@ void set_voice(int t) {
       if (t == pad_track) pads_set(note, k, pad_chord, pad_n, Pi(PG_GLOBAL, 2));
     } else if (kind == MK_POLY) {       // (0.16.15: one note; its chords the keys', 0.16.16 the step's)
       float sc[4];
-      poly_set(t, sc, step_chord(t, note, sc), k);
+      const int cn = step_chord(t, note, sc);
+      lead_chord(t, sc, cn);
+      poly_set(t, sc, cn, k);
     } else if (kind == MK_PROPHET) {    // (its chord: the S-1's memory, the harmony; Off: the step's, 0.16.16)
       float nn[4];
       int cn = poly_notes(k[7], note, pad_chord, pad_track >= 0 ? pad_n : 0, harmony_mask(), Pi(PG_GLOBAL, 2), nn);
       if (cn == 1) cn = step_chord(t, note, nn);
+      lead_chord(t, nn, cn);
       pro_set(t, nn, cn, k);
     } else if (kind == MK_SQ1) {
       float sc[4];
-      sq_set(t, sc, step_chord(t, note, sc), k);
+      const int cn = step_chord(t, note, sc);
+      lead_chord(t, sc, cn);
+      sq_set(t, sc, cn, k);
     } else if (kind == MK_TAURUS) {
       taurus_set(t, note, k);
     } else if (kind == MK_STATIC) {
@@ -1961,6 +2022,7 @@ void set_voice(int t) {
       int cn = pl > 0 ? vc_n[t] : 0;
       for (int i = 0; i < cn; ++i) sc[i] = vc_ch[t][i];
       if (!cn) cn = step_chord(t, note, sc);
+      lead_chord(t, sc, cn);
       voc_set(t, sc, cn, pl < 0, k);
     }
     else lx_set(t, sub, note, k);
@@ -1973,7 +2035,7 @@ void set_voice(int t) {
   float morph = E(t, 3);
   if (m >= 19) morph = clampf(morph + E(t, 4) - 0.5f, 0.0f, 1.0f);
   float note = vnote[t] + 24.0f * E(t, 0);   // FREQ (its cables, its locks) over the note: with SCALE on, in it too
-  if (scale_on()) note = static_cast<float>(quantize(iround(note)));
+  if (scale_on_t(t)) note = static_cast<float>(quantize(iround(note)));
   mp_set(voice[t], m, note, E(t, 1), E(t, 2), morph, E(t, 4), E(t, 5));
   mp_amounts(voice[t], E(t, TP_PITCHENV), E(t, 6), E(t, 7));   // the envelope on the pitch (Plaits' FM attenuverter)
 }
@@ -2653,7 +2715,7 @@ void mix_job(uint32_t n) {
       }
     }
   }
-  {                                     // the duck: T1's rises (their frames), DECAY, each track's depth
+  {                                     // the duck: its source's rises (their frames), DECAY, each track's depth
     float rel = mj.duck_rel;
     uint32_t fr = n / kFrames;
     for (uint32_t i = 0; i < n; ++i) {
@@ -2663,7 +2725,7 @@ void mix_job(uint32_t n) {
       duckv[i] = duck_s;
     }
     if (duck_s < 1e-5f && duck_d < 1e-5f) duck_s = duck_d = 0.0f;   // (never down into the subnormals: slow)
-    for (int t = 1; t < ENG_TRACKS; ++t) {   // (before the sends: what a track sends ducks with it)
+    for (int t = 0; t < ENG_TRACKS; ++t) {   // (before the sends: what a track sends ducks with it; the source's 0)
       float d0 = mj.duck0[t], d1 = mj.duck1[t], dd = (d1 - d0) * inv;
       if (d0 <= 0.0f && d1 <= 0.0f) continue;
       for (uint32_t i = 0; i < n; ++i) {
@@ -2736,7 +2798,7 @@ void fx_job(uint32_t n) {
     float us = kWebFx[bus];
     for (int t = 0; t < ENG_TRACKS; ++t) {
       if ((mj.eq[t] <= -kEqDead || mj.eq[t] >= kEqDead) && quiet[t] < kQuiet) us += kWebFxEq;
-      if (t && (mj.duck0[t] > 0.0f || mj.duck1[t] > 0.0f)) us += kWebFxDuck;
+      if (mj.duck0[t] > 0.0f || mj.duck1[t] > 0.0f) us += kWebFxDuck;
       if (mj.sp0[t] > 0.0f || mj.sp1[t] > 0.0f) us += kWebFxSpread;
     }
     if (fm_fabsf(E(LANE_DELAY, 2)) > 0.01f) us += kWebFxDelay;
@@ -3059,7 +3121,8 @@ int eng_track_param(int lane, int tp) {
   if (tp == TP_SEND) return PG_RSEND * 4 + lane;
   if (tp == TP_PAN) return PG_PAN * 4 + lane;
   if (tp == TP_DSEND) return PG_DSEND * 4 + lane;
-  if (tp == TP_DUCK) return PG_DUCK * 4 + lane;   // (T1's: the duck's DECAY, not a parameter of T1's: not lockable)
+  if (tp == TP_DUCK) return PG_DUCK * 4 + (lane == duck_src() ? 0 : duck_slot(lane));   // (the source's: the duck's
+                                                                                        // DECAY, not lockable)
   if (tp == TP_EQ) return PG_EQ * 4 + lane;
   if (tp == TP_CURVE) return PG_CURVE * 4 + lane;
   if (tp == TP_CLIMB) return PG_EUC(lane) * 4 + 2;
@@ -3092,7 +3155,7 @@ int eng_param_tp(int param, int* lane) {
     l = LANE_WARPS;
     tp = (page - PG_WARPS(0)) * 4 + k;
   } else if (page == PG_DUCK && k > 0) {
-    l = k;
+    l = duck_knob_track(k);
     tp = TP_DUCK;
   } else if (page == PG_EQ) {
     l = k;
@@ -3118,7 +3181,7 @@ int eng_param_tp(int param, int* lane) {
 }
 
 int eng_tp_lockable(int lane, int tp) {   // (not Warps' patching: CARRIER, MOD, MODE; nor a filter's TYPE)
-  return tp >= 0 && tp < eng_lane_params(lane) && !(lane == 0 && tp == TP_DUCK) && !(lane < ENG_TRACKS && tp == TP_FTYPE) &&
+  return tp >= 0 && tp < eng_lane_params(lane) && !(lane == duck_src() && tp == TP_DUCK) && !(lane < ENG_TRACKS && tp == TP_FTYPE) &&
          !(lane == LANE_WARPS && (tp == 0 || tp == 1 || tp == 7));
 }
 
@@ -3205,6 +3268,21 @@ int eng_model_free(int t, int m) {
   return 1;
 }
 int eng_pads_track(void) { return pad_track; }
+int eng_duck_track(int k) { return k <= 0 ? duck_src() : duck_knob_track(k); }   // (0.16.42)
+int eng_lead_ok(int t) {                // (0.16.42) a track that plays chords: SCALE can follow it
+  const int k = t >= 0 && t < ENG_TRACKS ? track_kind(t) : -1;
+  return k == MK_PADS || k == MK_POLY || k == MK_PROPHET || k == MK_SQ1 || k == MK_VOCODER;
+}
+int eng_scale_step(int sc, int e) {     // (0.16.42) SCALE turned e detents, past FOLLOW's tracks that play no chords
+  const int d = e > 0 ? 1 : -1;
+  for (int i = 0; i < (e < 0 ? -e : e); ++i) {
+    int n = sc + d;
+    while (n >= kScaleT1 && n < kScales && !eng_lead_ok(n - kScaleT1)) n += d;
+    if (n < 0 || n >= kScales) break;
+    sc = n;
+  }
+  return sc;
+}
 int eng_pads_pos(void) { return pad_track >= 0 ? pad_pos : -1; }
 // a chord's name from its notes (semitones, its root first; pc0: the pitch class of 0): its root, its quality (m, dim,
 // +, sus2, sus4, 5), its extension (7, Maj7, 9, 11, add9, 6, b6); a note none of them explains: + (0.16.12)
@@ -4638,6 +4716,7 @@ MI_COLD int eng_init(void) {
   for (int t = 0; t < ENG_TRACKS; ++t)  // the random dose's spans
     for (int tp = 0; tp < ENG_NTP; ++tp)
       tp_dice[t][tp] = static_cast<uint8_t>(dice_span(lane_param[t][tp]) * 20.0f + 0.5f);
+  duck_map();
   n_fx_dice = 0;
   for (int i = 0; i < ENG_NPARAMS && n_fx_dice < kFxDice; ++i) {
     int lane;
@@ -5108,7 +5187,7 @@ void eng_render(float* l, float* r, uint32_t n) {
     mix_send[t] = ts;
     mix_dsend[t] = td;
     mj.duck0[t] = duck_depth[t];        // the duck's depth (T2..T4)
-    mj.duck1[t] = duck_depth[t] = t ? E(t, TP_DUCK) : 0.0f;
+    mj.duck1[t] = duck_depth[t] = t != duck_src() ? E(t, TP_DUCK) : 0.0f;
     eq_s[t] += (E(t, TP_EQ) - eq_s[t]) * 0.5f;
     mj.eq[t] = eq_s[t];
     // SPREAD: the side at the middle's gain on its quieter side (none hard to one side: a point stays a point), the
@@ -5135,6 +5214,7 @@ void eng_render(float* l, float* r, uint32_t n) {
   // the next block's early tasks' knobs: Warps' (and whether it runs), the effects' and the master bus's (they will
   // play this block's mix)
   set_warps();
+  duck_map();
   mrv_set(reverb, proj.algo[PG_REVERB], E(LANE_REVERB, 0), E(LANE_REVERB, 1), E(LANE_REVERB, 2));
   int div = iround(E(LANE_DELAY, 0));   // its time: a division of the tempo, or (FREE) in ms
   float dtime = proj.algo[PG_DELAY(0)] == DL_FREE ? delay_ms(E(LANE_DELAY, 0)) * kSr * 0.001f

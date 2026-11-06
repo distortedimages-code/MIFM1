@@ -62,7 +62,8 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
 - sur chaque trig : **probabilité**, **ratchets**, **longueur**, et un **aléatoire** sur n'importe quel réglage de la
   piste (à droite nouveau à chaque trig, à gauche en boucle) ; un **swing** global ; des **rythmes euclidiens** sur
   chaque piste de pas ;
-- un **quantiseur global** (15 gammes et la tonique, et Prog : les accords de PADS) : aucune fausse note, sur toutes
+- un **quantiseur global** (15 gammes et la tonique, Prog : les accords de PADS, et Follow T1 à T4 : l'accord d'une
+  piste, 0.16.42) : aucune fausse note, sur toutes
   les pistes et au clavier, FREQ, la transposition et l'oscillateur de Warps compris ;
 - **trois LFO** comme modulateurs (sinus, triangle, dent de scie, rampe, carré, S&H, aléatoire lissé ; depuis
   0.16.22, sept formes rythmiques et le chaos de Lorenz), chacun libre, calé sur le tempo ou relancé par les trigs d'une
@@ -100,8 +101,8 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   donne l'autre moitié aux tranches du glitch) ;
 - un **SPREAD** par piste (0.16.19) : la piste s'ouvre en largeur autour de son pan, ses graves restent au milieu, et
   sa somme en mono reste exactement la piste (voir plus bas) ;
-- un **duck** : T2, T3 et T4 baissent à chaque trig de T1 (sa profondeur par piste, un DECAY commun), avant leurs
-  envois : ce qu'elles envoient au delay et à la réverbe baisse avec elles ;
+- un **duck** : les autres pistes baissent à chaque trig de sa source (T1, ou celle choisie : 0.16.42 ; sa profondeur
+  par piste, un DECAY commun), avant leurs envois : ce qu'elles envoient au delay et à la réverbe baisse avec elles ;
 - un **bus master** : un compresseur (seuil, ratio, release, gain) ou un mode **OTT** (trois bandes compressées vers
   le haut et vers le bas, d'après le preset d'Ableton que le plug-in de Xfer a rendu célèbre : DEPTH, TIME, DRIVE,
   LEVEL), puis le limiteur de stmlib (celui de Rings et d'Elements).
@@ -506,6 +507,16 @@ accord**, en temps réel : à chaque trig de PADS, le quantiseur passe à la **g
 de passage de la gamme (celle du projet, ou le mode de la progression), moins celles qui frottent (un demi-ton
 au-dessus d'une note de l'accord : la quarte sur un accord majeur). Une basse, un arpège, la dose d'aléatoire, le
 clavier : tout reste dans l'harmonie. Sans piste PADS, Prog ne quantise rien.
+
+**Follow T1 à T4** (0.16.42, GLO, SCALE après Flip) : la même idée pour n'importe quelle piste qui joue des accords,
+choisie à la main. SCALE ne s'arrête que sur les pistes qui en jouent : PADS, POLY, REV3, OTIS, VOCODER (ses accords
+de pas, ceux de ses touches, de son CHORD, de ses progressions). La piste suivie mène : elle n'est pas quantisée (ses
+notes font l'harmonie) ; à chacun de ses accords (deux notes ou plus), les autres passent à **la gamme de l'accord** :
+ses notes, et les notes de passage de la gamme majeure la plus proche qui les contient toutes (celle de ROOT d'abord,
+puis à une quinte, à deux…), moins celles qui frottent (un demi-ton au-dessus d'une note de l'accord). Sur un ré
+majeur, ROOT en do : la gamme de sol majeur sans le sol, fa tombe sur mi, sol sur fa#. Une note seule de la piste
+suivie garde l'accord d'avant ; un accord qu'aucune gamme majeure ne contient (augmenté, diminué) donne ses seules
+notes. Avec PADS sur la piste suivie, c'est Prog.
 
 Choisir PADS met ces réglages aux siens (Tintin, des triades ouvertes, tenues, une montée lente, un peu sombre, en
 ensemble, sans texture) et garde l'OCTAVE de la piste. Elle coûte au FM-1 de 5 % d'un bloc (une triade, une dent de
@@ -1077,7 +1088,12 @@ piste active par-dessus.
 **Le duck** (HOME, cinquième face) : DECAY (20 ms à 2,6 s), puis la profondeur de T2, T3 et T4. À chaque trig de
 T1 (un pas, un ratchet, une touche), ces pistes baissent d'autant et remontent avec DECAY. Le duck agit sur la piste
 avant ses envois : ses échos et sa réverbe partent baissés avec elle (les queues déjà dans les effets continuent).
-Sa profondeur se locke pas par pas, comme le reste de la piste.
+Sa profondeur se locke pas par pas, comme le reste de la piste. **La source** (0.16.42) : sur cette page, ALGORITHM
+choisit la piste dont les trigs font plonger les autres, de T1 à T4 (le panneau écrit « AT T2'S TRIGS ») ; les trois
+potards de profondeur deviennent ceux des trois autres pistes, dans l'ordre (source T2 : T1, T3, T4), chacun à sa
+couleur. Le kick n'est plus obligé d'être sur T1, et on peut faire plonger les pistes sous n'importe quel son. La
+source elle-même ne plonge jamais ; ses locks de profondeur sont gardés et reviennent quand elle n'est plus la
+source.
 
 **Le bus master** (HOME, sixième et septième faces) : ALGORITHM choisit le mode, OFF, **COMP** ou **OTT** ; les
 potards de la face qui ne joue pas sont grisés. COMP : THRESH (0 à −36 dB), RATIO (1:1 à 20:1), RELEASE (20 ms à 1,3 s),
@@ -1212,7 +1228,8 @@ sauvegardé garde les siennes). **ENV tenu
 à la note de la gamme la plus proche : Off, Major, Minor, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Harmonic et
 Melodic minor, Major et Minor pentatonic, Blues, Whole tone, Hirajoshi, Prog : l'accord que joue PADS, voir plus
 haut ; puis, depuis 0.16.12, **Phryg. dom** (le phrygien dominant : la seconde mineure et la tierce majeure) et
-**Flip** (mineur une mesure, dorien la suivante : la sixte bémol, puis naturelle ; mineur à l'arrêt)), SWING (50 % : droit ; 75 % : les
+**Flip** (mineur une mesure, dorien la suivante : la sixte bémol, puis naturelle ; mineur à l'arrêt) ; depuis 0.16.42,
+**Follow T1** à **Follow T4** : l'accord d'une piste, voir plus haut), SWING (50 % : droit ; 75 % : les
 contretemps retardés d'une demi-double croche). Quand une gamme est choisie, tout ce qui fait une hauteur y reste :
 FREQ (et ce que les câbles et la dose d'aléatoire en font : un LFO sur FREQ joue en escalier dans la gamme), la
 transposition, la note de l'oscillateur de Warps. Seul P.ENV glisse encore d'une note à l'autre : c'est l'enveloppe

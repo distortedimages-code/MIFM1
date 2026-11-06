@@ -446,7 +446,7 @@ static int algo_here(int page)           /* ALGO does something here: the header
 {
     int pt = ptype(page);
     return algo_page(page) >= 0 || pt == PT_WARPS1 || pt == PT_WARPS2 || pt == PT_DELAY1 || pt == PT_DELAY2 ||
-           pt == PT_DSEND || pt == PT_COMP || pt == PT_OTT || pt == PT_REVERB || pt == PT_RSEND;
+           pt == PT_DSEND || pt == PT_COMP || pt == PT_OTT || pt == PT_REVERB || pt == PT_RSEND || pt == PT_DUCK;
 }
 
 static int page_at(int page, int face)   /* its module's page at face (wrapping) */
@@ -627,7 +627,7 @@ static uint16_t page_accent(int page)
     switch (ptype(page)) {
     case PT_STEP: case PT_RND: case PT_ARP: case PT_ARP2: case PT_ARP3: case PT_CLIMB: return track_accent(ptrack(page));
     case PT_PAN: case PT_SPREAD: case PT_GLOBAL: case PT_SYS: case PT_MIX: case PT_EQ: return AC1;
-    case PT_DUCK: return track_accent(0);    /* T1's: it ducks the others */
+    case PT_DUCK: return track_accent(eng_duck_track(0));   /* its source's: it ducks the others */
     case PT_COMP: return AC2;
     case PT_OTT: return AC3;
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_BEND: case PT_GLITCH: case PT_FILT1: case PT_FILT2: case PT_FILT3:
@@ -1755,13 +1755,15 @@ static int meter_lit(int t) { return (int)(fm_clampf(eng_meter(t) * 1.25f, 0.0f,
 
 static int bus_mode(void) { return eng_project()->algo[PG_COMP] % 3; }   /* MB_OFF, MB_COMP, MB_OTT */
 
-static void panel_duck(void)             /* the duck: T1's trigs, its decay */
+static void panel_duck(void)             /* the duck: its source's trigs (0.16.42: ALGORITHM, T1..T4), its decay */
 {
     char s[40], v[16];
-    hero_icon(IC_DUCK, track_accent(0));
+    int src = eng_duck_track(0);
+    hero_icon(IC_DUCK, track_accent(src));
     int y = hero_title("DUCK");
     s[0] = 0;
     text_cat(s, "AT T1'S TRIGS|DECAY ", sizeof s);
+    s[4] = (char)('1' + src);
     eng_param_text(PG_DUCK * 4, eng_final(PG_DUCK * 4), v, sizeof v);
     text_cat(s, v, sizeof s);
     hero_line(y, s);
@@ -2382,7 +2384,7 @@ static void fx_meter(int force)
         cv_begin(10, 52, BG);
         if (pt == PT_DUCK) {             /* down from the top: how much the tracks are ducked */
             cv_rect(2, 0, 6, 52, TRACK);
-            cv_rect(2, 0, 6, h[0], track_accent(0));
+            cv_rect(2, 0, 6, h[0], track_accent(eng_duck_track(0)));
         } else if (mode == MB_COMP) {    /* down from the top: the reduction (18 dB the whole bar) */
             cv_rect(2, 0, 6, 52, TRACK);
             cv_rect(2, 0, 6, h[0], AC2);
@@ -2426,7 +2428,7 @@ APP_SMALL static void draw_panel(void)
     if (pt == PT_COMP || pt == PT_OTT)
         s[1] = bus_mode();
     if (pt == PT_DUCK)
-        s[2] = (int)(p->val[PG_DUCK * 4] * 1000.0f);
+        s[2] = (int)(p->val[PG_DUCK * 4] * 1000.0f), s[1] = p->algo[PG_DUCK];
     switch (pt) {                        /* what the display shows, to draw it again only when it changes */
     case PT_PLAITS2: s[2] = (int)(eng_final(ui.page * 4) * 200.0f) | (int)(eng_final(ui.page * 4 + 1) * 8.0f) << 8 |
                             (int)(eng_final(ui.page * 4 + 2) * 8.0f + 8.0f) << 12; break;   /* (the FM: SHAPE) */
@@ -2716,7 +2718,8 @@ static const char *ring_short(const char *s)
         {"MAJOR", "MAJ"}, {"MINOR", "MIN"}, {"DORIAN", "DOR"}, {"PHRYGIAN", "PHR"}, {"LYDIAN", "LYD"},
         {"MIXOLYDIAN", "MIX"}, {"LOCRIAN", "LOC"}, {"HARM. MINOR", "HMIN"}, {"MEL. MINOR", "MMIN"},
         {"MAJ. PENTA", "PMAJ"}, {"MIN. PENTA", "PMIN"}, {"WHOLE TONE", "WHOLE"}, {"HIRAJOSHI", "HIRA"},
-        {"DIGITAL", "DIGI"}, {"COMPAR", "COMP"}, {"2 FWD 1 BACK", "+2-1"}};
+        {"DIGITAL", "DIGI"}, {"COMPAR", "COMP"}, {"2 FWD 1 BACK", "+2-1"}, {"FOLLOW T1", "T1"}, {"FOLLOW T2", "T2"},
+        {"FOLLOW T3", "T3"}, {"FOLLOW T4", "T4"}};
     for (uint32_t i = 0; i < sizeof M / sizeof M[0]; i++)
         if (text_eq(s, M[i][0]))
             return M[i][1];
@@ -3070,9 +3073,10 @@ static void draw_knob_at(int page, int k, int force)
         ac = mc = DIM;
     vc = view == KV_RND ? (rnd < 0 ? mc : ac) : locked ? mc : ac;
     int tk = track_knobs(page) && view == KV_VALUE && !(ptype(page) == PT_DUCK && k == 0);
-    int act = tk && k == (ui.grid && ui.lane < ENG_TRACKS ? ui.lane : ui.track);   /* the track played: knocked out */
+    int kt = ptype(page) == PT_DUCK ? eng_duck_track(k) : k;   /* (the duck's: the tracks but its source, 0.16.42) */
+    int act = tk && kt == (ui.grid && ui.lane < ENG_TRACKS ? ui.lane : ui.track);   /* the track played: knocked out */
     if (tk)
-        lab[0] = 0, text_cat(lab, LANE_SHORT[k], sizeof lab);
+        lab[0] = 0, text_cat(lab, LANE_SHORT[kt], sizeof lab);
     else
         label_text(knob_name(page, k, param), lab, sizeof lab);
     int32_t s[4] = {(int32_t)(view == KV_RND ? (float)(rnd + 100) : knob_u(param, v) * 270.0f) |
@@ -3086,11 +3090,11 @@ static void draw_knob_at(int page, int k, int force)
         return;                          /* sliding, not on the screen */
     cv_begin(KNOB_W, KNOB_H, BG);
     {                                    /* its name (touched: white, underlined) */
-        uint16_t lc = hot ? HI : view != KV_VALUE ? vc : tk ? track_accent(k) : MUTED;
+        uint16_t lc = hot ? HI : view != KV_VALUE ? vc : tk ? track_accent(kt) : MUTED;
         const felucca_font_t *lf = text_w(&FONT_S, lab) <= 58 ? &FONT_S : &FONT_XS;
         int w = text_w(lf, lab);
         if (act) {                       /* the active track: its name knocked out of a block of its colour */
-            cv_rect(30 - w / 2 - 5, 0, w + 10, 17, track_accent(k));
+            cv_rect(30 - w / 2 - 5, 0, w + 10, 17, track_accent(kt));
             lc = BG;
         }
         cv_text(30 - w / 2, 0, lf, lab, lc);
@@ -5001,6 +5005,8 @@ static float step_value(int param, float v, int32_t e)
     int32_t a = e > 1 || e < -1 ? e * 3 : e;
     if (eng_lx_knob(param) >= 0 || eng_voc_play(param))   /* an FM drum's (VOCODER's PLAY): its values, one a detent */
         return eng_lx_step(param, v, (int)a);
+    if (param == PG_GLOBAL * 4 + 1)      /* SCALE: FOLLOW's tracks that play chords only (0.16.42) */
+        return (float)eng_scale_step((int)(v + 0.5f), e);
     if (d->kind == K_UNI)
         return fm_clampf(v + 0.01f * (float)a, 0.0f, 1.0f);
     if (d->kind == K_BIP)
@@ -6137,6 +6143,11 @@ static void input(void)
         dirty = 1;
         ui.touched_at[0] = now;
         ui.touched_k = ui.page == PG_DELAY(0) ? 0 : -1;
+    } else if (e && !ui.matrix && ptype(ui.page) == PT_DUCK) {
+        project_t *p = eng_project();    /* (0.16.42) the duck's source: T1..T4 (the others its depths' knobs) */
+        p->algo[PG_DUCK] = (uint8_t)clamp((int32_t)(p->algo[PG_DUCK] & 3) + (e > 0 ? 1 : -1), 0, ENG_TRACKS - 1);
+        dirty = 1;
+        ui.full = 1;
     } else if (e && !ui.matrix && (ptype(ui.page) == PT_REVERB || ptype(ui.page) == PT_RSEND)) {
         project_t *p = eng_project();    /* (0.16.41) the reverb: CLOUDS, METAL, SHIMMER (its knobs kept) */
         p->algo[PG_REVERB] = (uint8_t)clamp((int32_t)p->algo[PG_REVERB] + (e > 0 ? 1 : -1), RV_CLOUDS, RV_SHIMMER);
