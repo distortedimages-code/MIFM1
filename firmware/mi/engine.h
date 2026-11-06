@@ -390,6 +390,10 @@ void eng_steps_clear(int lane);          /* the lane's pattern: every trig and l
 void eng_fresh(void);                    /* another project loaded: the last one's trigs' locks and randoms gone */
 int eng_step_locked(int lane, int step); /* how many locks it has */
 int eng_step_now(int lane);              /* the step playing, -1 stopped */
+float eng_lane_pos(int lane);            /* (0.16.31) its place since PLAY, in its steps (-1 stopped, counting in) */
+void eng_rec_skip(int lane, int step);   /* live recording: a step written just ahead of it, not played there */
+void eng_count_in(int sixteenths);       /* the next PLAY's count-in */
+void eng_click(int on);                  /* the metronome: a ping at each beat (the bar's a fifth up) */
 float eng_lane_open(int lane);           /* an effect lane's opening now, 0..1 (1: no steps) */
 int eng_quantize(int note);              /* a note in the global scale */
 uint32_t eng_rises(int t);               /* the trigs track t played (a ratchet's each), since power-on */

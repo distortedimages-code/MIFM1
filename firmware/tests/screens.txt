@@ -9,7 +9,8 @@
 # erased, the dark pad on another track), a new project (INIT: GLO, SELECT, REC held), the saved one back, the stress test (on
 # Plaits, then on the FM drums: their pages, a model chosen bringing its kit; ZERO, its knobs; the FM: its three pages,
 # another algorithm (its drawing), a chord, a SHAPE drawn; PADS, its progression playing, SCALE Prog; POLY, its MODE; REV3, its sweep; OTIS, its cycle drawn, a pad; TAURUS), an FM-1 without the
-# module tables, then the tables arriving. Screenshots in the output folder.
+# module tables, then the tables arriving; before them, a live recording (REC and PLAY: counted in, notes, a chord, a long
+# note; the steps and their keys after) and the metronome off (GLO and PLAY). Screenshots in the output folder.
 wait 1500
 shot 00_intro.png
 wait 500
@@ -911,6 +912,53 @@ wait 400
 shot 18zr_static_spark_2.png
 turn SELECT -1
 tap PLAY
+wait 300
+tap GLO
+wait 200
+turn SELECT 1
+wait 300
+turn K1 -5
+wait 200
+press REC
+wait 1500
+release REC
+wait 300
+tap SEQ
+wait 400
+press REC
+tap PLAY
+release REC
+wait 300
+shot 18zs_live_rec.png
+wait 1750
+key 0 down
+wait 280
+key 0 up
+wait 220
+key 4 down
+key 7 down
+wait 60
+key 4 up
+key 7 up
+wait 440
+key 9 down
+wait 870
+key 9 up
+wait 400
+tap REC
+wait 200
+tap PLAY
+wait 300
+tap REC
+wait 500
+shot 18zt_live_rec_steps.png
+leds
+press GLO
+tap PLAY
+release GLO
+wait 300
+shot 18zu_metronome_off.png
+tap REC
 wait 300
 res 0
 reboot

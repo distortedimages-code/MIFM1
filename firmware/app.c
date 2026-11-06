@@ -53,6 +53,13 @@
  * until it holds this build's, the engine does not run (it would read erased flash) and the screen says so. */
 #include "fastmath.h"
 #include "mi/engine.h"
+/* (0.16.31) the screens seen less often drawn small rather than fast (their pixels are gfx.c's, as fast as ever): the
+ * machine's, the matrix, the panels of the bits, the glitch, the filter, the envelopes, the LFOs, the mixer, Warps,
+ * Endless and the Euclidean rhythms. A few kilobytes of program flash for a little time a frame there */
+#define APP_SMALL __attribute__((minsize))
+/* (0.16.31) the screen's parts drawn small rather than fast (their pixels are gfx.c's, as fast as ever): 4 KB of
+ * program flash, for a few microseconds a frame */
+#define APP_SMALL __attribute__((minsize))
 #include "mi/bridge.h"                   /* (the filters' models and types: MF_*) */
 
 const void *mi_res_where(void);          /* mi/res_symbols.cc: where the moved tables are (FM-1: the region) */
@@ -231,6 +238,11 @@ static struct {
     int trauma;                          /* OCT+ held, SELECT turned: TRAUMA, on its own screen */
     uint32_t trauma_at;
     int combo;                           /* REC and SEL held together: every cable erased (REC's hold) */
+    int lrec, lr_combo, noclick;         /* (0.16.31) live recording (REC and PLAY); REC's release taken; no metronome */
+    int lr_s, lr_t;                      /* the step it wrote last, its track, the lane's place then (keys within a */
+    float lr_last;                       /* step: a chord) */
+    float lr_at[NKEYS];                  /* each key held: the lane's place at its press, its step, its track + 1 */
+    int8_t lr_step[NKEYS], lr_trk[NKEYS];
     int oct_was, spage_was;              /* the octave, the steps' page before an OCT press (both: put back) */
     uint32_t play_at;                    /* PLAY's last press (again within CUT_MS: every sound cut) */
     uint32_t keys, btn;
@@ -1638,7 +1650,7 @@ static void enum_cat(char *s, int param, uint32_t max)   /* a choice's name, in 
 }
 
 /* an LFO: its wave in the ring, what it did these 1.4 s on a scope (lfo_scope, drawn live), its rate, how it runs */
-static void panel_lfo(int i)
+APP_SMALL static void panel_lfo(int i)
 {
     project_t *p = eng_project();
     int pg = PG_LFO(i), w = clamp((int)(p->val[pg * 4] + 0.5f), 0, LW_N - 1), m = (int)(p->val[pg * 4 + 2] + 0.5f);
@@ -1723,7 +1735,7 @@ static void panel_duck(void)             /* the duck: T1's trigs, its decay */
 
 /* (0.16.19) SPREAD: a knob a track, its highs apart on both sides, its lows in the middle. Each track's image, a row
  * each: where its pan sets it, as wide as it is now (a cable, the pan: hard to one side, a point), in its colour */
-static void panel_spread(void)
+APP_SMALL static void panel_spread(void)
 {
     hero_icon(IC_SPREAD, AC1);
     hero_line(hero_title("SPREAD"), "LOWS MONO");
@@ -1753,7 +1765,7 @@ static float eq_db(float v, float hz)
     r8 *= r8;
     return -10.0f * 0.30103f * fm_log2f(1.0f + r8);
 }
-static void panel_eq(void)
+APP_SMALL static void panel_eq(void)
 {
     hero_icon(IC_EQ, AC1);
     hero_line(hero_title("EQ"), "LP|HP|24 DB");
@@ -1798,7 +1810,7 @@ static float filt_db(int m, int ty, float w, float q)   /* its response at w (th
     return 10.0f * fm_log2f(fm_maxf(a, 1e-9f)) * 0.30103f;
 }
 
-static void panel_filter(int t, uint16_t ac)
+APP_SMALL static void panel_filter(int t, uint16_t ac)
 {
     project_t *p = eng_project();
     int m = p->algo[PG_FILT(t, 0)], ty = clamp((int32_t)(p->val[PG_FILT(t, 2) * 4] + 0.5f), 0, MF_TYPES - 1);
@@ -1874,7 +1886,7 @@ static void panel_filter(int t, uint16_t ac)
 
 /* the filter's envelope (ENV's second page): its vactrol's rise (ATTACK) and fall (DECAY), the ping its trigs give
  * (a spike), where it is now (the ring); the filter OFF: dim */
-static void panel_env2(int t, uint16_t ac)
+APP_SMALL static void panel_env2(int t, uint16_t ac)
 {
     project_t *p = eng_project();
     int on = p->algo[PG_FILT(t, 0)] != MF_OFF, y0 = 68, h = 48;
@@ -1911,7 +1923,7 @@ static void panel_env2(int t, uint16_t ac)
 /* the bending's bits (CLOCK, BITS, MASK, SHAPE): a cycle of a sine through them, as the engine has them now, and
  * the 8-bit word's switches as Biscuit shows them (the most significant first): lit on, the accent inverted, dim
  * muted */
-static void panel_bend(int t)
+APP_SMALL static void panel_bend(int t)
 {
     char s[48], v[16];
     int pg = PG_BEND(t);
@@ -1969,7 +1981,7 @@ static void panel_bend(int t)
 
 /* the bending's glitch (GLITCH, SIZE, BEND, DROP): its chance, then a beat of what it does, the slice repeated its
  * size wide, each repeat lower or higher (BEND), the dropped ones dotted (DROP); lit while it repeats */
-static void panel_glitch(int t)
+APP_SMALL static void panel_glitch(int t)
 {
     char s[48], v[16];
     int pg = PG_GLITCH(t), reps = 0;
@@ -2016,7 +2028,7 @@ static void panel_glitch(int t)
 }
 
 /* the Euclidean rhythm: FILLS over LENGTH, ROTATE; a ring of the lane's steps, its trigs lit, the one playing ringed */
-static void panel_euclid(int l)
+APP_SMALL static void panel_euclid(int l)
 {
     project_t *p = eng_project();
     char s[48], n[8];
@@ -2059,7 +2071,7 @@ static void panel_bus(int ott)           /* the master bus: this face's mode, on
     hero_line(y, s);
 }
 
-static void panel_mixer(int pan)
+APP_SMALL static void panel_mixer(int pan)
 {
     hero_icon(IC_MIX, AC1);
     hero_line(hero_title(pan ? "PAN" : "MIXER"), "4 TRACKS");
@@ -2157,7 +2169,7 @@ static void panel_random(int t)
     hero_line(hero_title("RANDOM"), "RIGHT: NEW|LEFT: LOOP");
 }
 
-static void panel_endless(int t)         /* Endless: recording, or how many notes, the key's transposition */
+APP_SMALL static void panel_endless(int t)         /* Endless: recording, or how many notes, the key's transposition */
 {
     project_t *p = eng_project();
     char s[48], n[8];
@@ -2230,7 +2242,7 @@ static void panel_global(void)           /* the tempo, the scale, the swing */
     hero_line(y, s);
 }
 
-static void panel_warps(void)            /* Warps: its algorithm, its marks, what it takes and where it goes */
+APP_SMALL static void panel_warps(void)            /* Warps: its algorithm, its marks, what it takes and where it goes */
 {
     project_t *p = eng_project();
     int a = eng_warps_algo(), car = (int)(p->val[PG_WARPS(0) * 4] + 0.5f), mod = (int)(p->val[PG_WARPS(0) * 4 + 1] + 0.5f);
@@ -2352,7 +2364,7 @@ static void fx_meter(int force)
 
 static void panel_chord(void);
 static void draw_chord_knob(int k, int force);
-static void draw_panel(void)
+APP_SMALL static void draw_panel(void)
 {
     project_t *p = eng_project();
     if (ui.cview) {                      /* (0.16.16) a step's notes */
@@ -3095,7 +3107,7 @@ static void draw_lines(int y, int h, const char *const *lines, const uint16_t *c
     }
 }
 
-static void draw_matrix(void)
+APP_SMALL static void draw_matrix(void)
 {
     static int shown = -1;
     project_t *p = eng_project();
@@ -3139,7 +3151,7 @@ static void draw_matrix(void)
     draw_lines(PANEL_Y + 24, 19, lines, col, 8, ui.msel - first);
 }
 
-static void draw_projects(void)          /* the projects REC held loads, in the module's display */
+APP_SMALL static void draw_projects(void)          /* the projects REC held loads, in the module's display */
 {
     static int shown = -1;
     static const char *const P[5] = {"New: 4 FM, nothing patched", "The demo groove", "The saved project",
@@ -3161,7 +3173,7 @@ static void draw_projects(void)          /* the projects REC held loads, in the 
     }
 }
 
-static void draw_machine(int force)      /* the machine, where the knobs are */
+APP_SMALL static void draw_machine(int force)      /* the machine, where the knobs are */
 {
     static uint32_t at;
     char v[32];
@@ -3321,6 +3333,20 @@ static int track_lit(int t)              /* a track's LED: its gate, or a trig i
     return (int)((eng_gates() >> t) & 1u) || (int32_t)(until[t] - now) > 0;
 }
 
+
+/* (0.16.15) the steps of the page shown that the track's trigs hold (their lengths), a bit each */
+static __attribute__((noinline)) uint32_t held_steps(int t, int len)
+{
+    uint8_t tie[ENG_STEPS];
+    uint32_t m = 0;
+    eng_step_ties(t, tie);
+    for (int s0 = 0; s0 < len && s0 < ENG_STEPS; s0++)
+        for (int q = s0 + 1; tie[s0] && q <= s0 + tie[s0] && eng_trig(t, s0); q++)
+            if ((uint32_t)(q % len - ui.spage * 16) < 16u)
+                m |= 1u << (q % len - ui.spage * 16);
+    return m;
+}
+
 static void foot_steps(int t)            /* the steps of a page: a trig lit, a lock dotted, the playing one ringed */
 {
     project_t *p = eng_project();
@@ -3361,18 +3387,10 @@ static void foot_steps(int t)            /* the steps of a page: a trig lit, a l
             cv_rect(x, 28, 11, 1, DIM);  /* the beats */
     }
     if (t < ENG_TRACKS) {                /* (0.16.15) a trig held over the steps after it: a bar through them */
-        uint8_t tie[ENG_STEPS];
-        eng_step_ties(t, tie);
-        for (int s0 = 0; s0 < len && s0 < ENG_STEPS; s0++) {
-            if (!tie[s0] || !eng_trig(t, s0))
-                continue;
-            for (int q = s0 + 1; q <= s0 + tie[s0]; q++) {
-                int i = q % len - ui.spage * 16;
-                if (i < 0 || i >= 16)
-                    continue;
-                cv_rect(9 + i * 13 - 2, 14, i ? 15 : 13, 6, q % len == ui.held_step ? HI : ac);
-            }
-        }
+        uint32_t m = held_steps(t, len);
+        for (int i = 0; i < 16; i++)
+            if ((m >> i) & 1u)
+                cv_rect(9 + i * 13 - 2, 14, i ? 15 : 13, 6, ui.spage * 16 + i == ui.held_step ? HI : ac);
     }
     for (int j = 0; j < 4; j++)          /* the pages */
         if (j * 16 < len)
@@ -3396,7 +3414,7 @@ static int gcd(int a, int b)
 /* Endless's notes, 16 at a time: a bar as high as the note, a rest a dot; the one playing white. Its options seen
  * (0.16.3): the notes STRIDE never reaches dim; REST's pause and a hole (HOLES) the playing one in a frame, empty; a
  * leap (LEAP) its bar raised, a mark over it */
-static void foot_endless(int t)
+APP_SMALL static void foot_endless(int t)
 {
     project_t *p = eng_project();
     static uint8_t arp[32];
@@ -5092,12 +5110,26 @@ static void module_button(int b)
     }
 }
 
+static void lrec_set(int on);
 static void button_down(int b)
 {
     ui.used[b] = 0;
     switch (b) {
     case B_PLAY:                         /* the clock runs or stops; again at once (STOP twice): stopped, every sound
                                           * cut, the effects' tails too */
+        if (held(B_GLO)) {               /* (0.16.31) GLO and PLAY: the metronome on or off */
+            ui.noclick = !ui.noclick;
+            ui.used[B_GLO] = 1;
+            eng_click(ui.lrec && !ui.noclick);
+            app_say("METRONOME", ui.noclick ? "OFF" : "ON");
+            break;
+        }
+        if (held(B_REC)) {               /* (0.16.31) REC and PLAY: live recording, on or off */
+            ui.lr_combo = 1;
+            ui.long_done[B_REC] = 1;
+            lrec_set(!ui.lrec);
+            break;
+        }
         if (ui.play_at && plat_ms() - ui.play_at < CUT_MS) {
             eng_cut();
             ui.play_at = 0;
@@ -5106,6 +5138,8 @@ static void button_down(int b)
             eng_play(!eng_playing());
             ui.play_at = plat_ms();
         }
+        if (ui.lrec && !eng_playing())   /* (stopped: no more recording) */
+            lrec_set(0);
         break;
     case B_OCTDN: case B_OCTUP:          /* the keyboard's octave; STEP mode: the steps' page. Both held: SELECT turns
                                           * the random dose (the first one's octave put back) */
@@ -5327,6 +5361,10 @@ static void button_up(int b)
         ui.full = 1;
         break;
     case B_REC:                          /* KEY or STEP mode; on Endless' page it records, then plays */
+        if (ui.lr_combo) {               /* (REC and PLAY: let go, nothing else) */
+            ui.lr_combo = 0;
+            break;
+        }
         if (ui.combo) {                  /* (REC and SEL: let go, nothing else) */
             if (!held(B_SEL))
                 ui.combo = 0;
@@ -5334,6 +5372,10 @@ static void button_up(int b)
         }
         if (ui.long_done[b])
             break;
+        if (ui.lrec) {                   /* (0.16.31) live recording: off, the steps playing on */
+            lrec_set(0);
+            break;
+        }
         if (ui.erec >= 0) {              /* Endless: recorded, it plays */
             char n[8];
             eng_endless_rec(ui.erec, 0);
@@ -5710,6 +5752,64 @@ static int endless_keys(int note, int down)
     return ui.ekn && was == note ? ui.ekeys[ui.ekn - 1] : -1;
 }
 
+/* (0.16.31) live recording (REC and PLAY): what the keys play written on the track's steps, at the nearest one (ahead:
+ * not played when it gets there, the key was heard), its note (keys pressed within a step: a chord, four at most), held
+ * over steps its length; PLAY red, REC blinking. The metronome (GLO and PLAY: on or off) counts a bar in from the stop */
+static void lrec_set(int on)
+{
+    const char *m = on ? "ON" : "OFF";
+    ui.lrec = on;
+    ui.lr_s = -1;
+    memset(ui.lr_trk, 0, sizeof ui.lr_trk);
+    plat_play_red(on);
+    eng_click(on && !ui.noclick);
+    if (on) {
+        ui.grid = ui.mod = ui.cview = 0;
+        ui.held_step = -1;
+        if (!eng_playing()) {            /* (from the stop, the metronome on: a bar to come in) */
+            eng_count_in(ui.noclick ? 0 : 16);
+            eng_play(1);
+            ui.play_at = 0;
+            m = ui.noclick ? m : "AFTER 1 BAR";
+        }
+        ui.full = 1;
+    }
+    app_say("LIVE REC", m);
+}
+static void lrec_key(int k, int note, int down)
+{
+    int t = down ? ui.track : ui.lr_trk[k] - 1, len, s, nt[4], n;
+    float pos = t >= 0 ? eng_lane_pos(t) : -1.0f;
+    if (pos < 0.0f)                      /* (counting in, stopped) */
+        return;
+    len = lane_len(t);
+    if (!down) {                         /* held over so many steps: its length */
+        n = (int)(pos - ui.lr_at[k] + 0.5f);
+        if (n >= 2)
+            eng_step_tie_set(t, ui.lr_step[k], (n > len ? len : n) - 1);
+        ui.lr_trk[k] = 0;
+        return;
+    }
+    s = eng_step_now(t);
+    if (s < 0 || s >= len)
+        return;
+    if (pos - (float)(int)pos >= 0.5f && eng_project()->dir[t] == DIR_FWD) {   /* nearer the next: there */
+        s = (s + 1) % len;
+        eng_rec_skip(t, s);
+    }
+    n = s == ui.lr_s && t == ui.lr_t && pos - ui.lr_last < 1.0f ? eng_step_notes(t, s, nt) : 0;
+    if (n < 4)
+        nt[n++] = note - 48;
+    eng_trig_set(t, s, 1);
+    if (eng_step_notes_set(t, s, nt, n) == -1)
+        app_say("LIVE REC", "NO ROOM");
+    if (n == 1)
+        eng_step_tie_set(t, s, 0);
+    ui.lr_s = s, ui.lr_t = t, ui.lr_last = pos;
+    ui.lr_at[k] = pos, ui.lr_step[k] = (int8_t)s, ui.lr_trk[k] = (int8_t)(t + 1);
+    dirty = 1;
+}
+
 static void poll_keys(void)
 {
     uint32_t keys = plat_keys(), k;
@@ -5767,6 +5867,8 @@ static void poll_keys(void)
             }
         } else {
             eng_key(ui.track, note, down);
+            if (ui.lrec)
+                lrec_key((int)k, note, down);
         }
     }
     if (!keys) {                         /* (0.16.13: every key let go, the ARPs' not latched too; 0.16.15: the keys
@@ -5994,14 +6096,14 @@ static void input(void)
             [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO, [PT_PLAY] = B_SEQ, [PT_ARP2] = B_ARP,
             [PT_CLIMB] = B_SEQ, [PT_ARP3] = B_ARP, [PT_SPREAD] = B_HOME};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
-        uint32_t bb = ui.dice ? 1u << B_OCTDN : ui.trauma ? 1u << B_OCTUP : 0, kk = ui.keys;
+        uint32_t bb = ui.dice ? 1u << B_OCTDN : ui.trauma ? 1u << B_OCTUP : 0, kk = ui.keys, mk = 0;
         int pt = ptype(ui.page);
         if (!ui.matrix)
             bb |= 1u << ((pt == PT_EUC || pt == PT_PLAY) && ptrack(ui.page) < 0 ? B_FX : track_cat(ui.page) == CAT_ENV ? B_ENV
                          : track_cat(ui.page) != CAT_NONE ? B_EDIT : PAGE_BTN[pt]);
         if (ui.mod || ui.matrix)
             bb |= 1u << B_SEL;
-        if (ui.grid || ui.page == VP_SYS || (ui.erec >= 0 && (now / 250u) & 1u))   /* recording Endless: it blinks */
+        if (ui.grid || ui.page == VP_SYS || ((ui.erec >= 0 || ui.lrec) && (now / 250u) & 1u))   /* recording: it blinks */
             bb |= 1u << B_REC;
         if (eng_playing())
             bb |= LED_PLAY_GREEN;
@@ -6009,10 +6111,13 @@ static void input(void)
             bb |= 1u << B_SAVE;
         if (ui.grid) {                   /* the lane's steps, its key; OCT- OCT+ lit when there are pages that way */
             int len = lane_len(ui.lane), st = eng_step_now(ui.lane);
+            uint32_t m = ui.lane < ENG_TRACKS ? held_steps(ui.lane, len) : 0;
             kk = 0;
             for (int i = 0; i < 16; i++)
                 if (eng_trig(ui.lane, ui.spage * 16 + i))
                     kk |= 1u << W[i];
+                else if ((m >> i) & 1u)  /* (0.16.31) a long note: the steps it holds, half lit */
+                    mk |= 1u << W[i];
             if (st >= ui.spage * 16 && st < ui.spage * 16 + 16)
                 kk ^= 1u << W[st - ui.spage * 16];
             kk |= 1u << Bk[ui.lane];
@@ -6026,6 +6131,7 @@ static void input(void)
                     kk |= 1u << W[i];
         }
         plat_leds(bb, kk);
+        plat_lights_mid(0, mk);
         plat_glow(1);
     }
 }

@@ -55,6 +55,8 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   ou les mêmes seize en boucle (voir plus bas) ;
 - un **séquenceur pas à pas** à la Elektron, 64 pas par piste, avec P-locks, et deux modes de jeu : **KEY** (le
   clavier joue la piste) et **STEP** (le clavier est la grille, les touches noires choisissent la piste ou l'effet) ;
+  depuis 0.16.31, un **enregistrement en direct** (REC + PLAY : ce qu'on joue au clavier écrit sur les pas, avec un
+  métronome) ;
 - **Endless** sur chaque piste, comme sur l'OP-1 : on enregistre des notes et des silences un par un, ils tournent
   en boucle, une touche les transpose ; séquenceur arrêté, une touche tenue les joue (0.16.11) ;
 - sur chaque trig : **probabilité**, **ratchets**, **longueur**, et un **aléatoire** sur n'importe quel réglage de la
@@ -196,6 +198,16 @@ effets.
 | 5-6 | T3 |
 | 7-8 | T4 |
 | 9-10 | le retour des effets : delay et réverbe |
+
+**Les niveaux** (0.16.31) : chaque moteur sort au même niveau. Le son de chacun, tel qu'ALGORITHM l'amène, a été mesuré
+(la sonie de la norme BS.1770 : les 400 ms les plus fortes d'une note tenue et d'une suite de noires) et ramené à
+**−21 LUFS pour les synthés** (ils allaient de −16, ZERO, à −30, POLY et SPEECH), −22 pour les kicks, −24 pour les
+caisses claires et les toms, −25 le clap, −26 la percussion, −28 la cymbale, −29 les charlestons (ils allaient de −20 à
+−35) : une table d'un quart de décibel près, sur la voix telle qu'elle sort (avant ses bits, son filtre et Warps). La
+démo sort 1 dB plus bas qu'avant. **Les bits** (le circuit bending) et **Warps** gardent maintenant le niveau qu'on leur
+donne : ce qui en sort est ramené à ce qui y entre (suivi sur ~50 ms pour les bits, ~0,2 s pour Warps, qu'on compare à ses
+deux pistes ensemble), jamais plus de 3 dB (les bits) ou 6 dB (Warps) au-dessus ; un masque ou peu de bits sur un son
+faible le faisaient monter jusqu'à 13 dB, et Warps jusqu'à 20 dB au-dessus d'une piste douce.
 
 Chaque piste sort après son niveau, son pan, son EQ, le duck et son SPREAD, avec son circuit bending et Warps (quand Warps prend la place
 d'une piste, c'est lui qu'on entend sur elle), mais sans delay ni réverbe : ce sont des bus partagés, leur retour
@@ -777,7 +789,9 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps ; SELECT parcourt leurs faces (leurs potards, les envois des pistes, leurs pas) |
 | **ENV** | tout ce qui est enveloppe sur la piste active : l'enveloppe de Plaits (DECAY, LPG COLOUR, TIMBRE ENV, MORPH ENV) ; ENV encore (ou SELECT) : P.ENV et l'enveloppe du filtre (F.ATK, F.DECAY, PING) |
 | **PLAY** | le séquenceur tourne ou s'arrête ; **deux fois de suite** (STOP STOP, en moins de 0,4 s) : arrêté, et tout le son coupé, les queues du delay et de la réverbe comprises |
-| **REC** | **KEY** ↔ **STEP** (voir plus bas) ; sur la page d'Endless, l'enregistrement |
+| **REC tenu + PLAY** | (0.16.31) **l'enregistrement en direct** de la piste active, ou son arrêt (voir plus bas) |
+| **GLO tenu + PLAY** | (0.16.31) le **métronome** de l'enregistrement en direct, allumé ou éteint (allumé au démarrage) |
+| **REC** | **KEY** ↔ **STEP** (voir plus bas) ; sur la page d'Endless, l'enregistrement ; pendant l'enregistrement en direct, son arrêt (les pas continuent) |
 | **clavier** | en KEY, joue la piste active, même à l'arrêt, avec sa TRANSP et son OCTAVE ; **OCT− / OCT+** pour l'octave du clavier (en STEP : la page de pas) ; en MOD, les trois premières touches blanches sont les LFO |
 | **OCT− tenu + SELECT** | la **dose d'aléatoire**, sur son écran (voir plus bas) |
 | **OCT+ tenu + SELECT** | **TRAUMA**, la dose de saturation, sur son écran (voir plus bas) |
@@ -846,7 +860,9 @@ son niveau, ses envois, son pan, sa note…) ; pour un effet, sur ses potards. L
 (0.16.15) lui donne sa **longueur** : la note tient jusqu'à ce pas (sur ce pas, la part qu'en donne GATE), une barre
 la montre sur les pas qu'elle couvre ; un trig qui a des **ratchets** les étale sur ces pas à la place (ses coups sur
 autant de pas, SPAN ; l'écran dit lequel). Un pas avant le trig le ramène à son seul pas. La longueur est un lock du
-pas (effacée avec les autres). **Tenir un trig et appuyer sur REC** (0.16.16) montre **ses notes** : l'écran
+pas (effacée avec les autres). Depuis 0.16.31, **les pas qu'une note longue tient s'allument aussi sur le clavier**, à
+mi-intensité (le troisième niveau des LED du FM-1, entre éteint et allumé : ses touches n'ont qu'une couleur), les trigs
+restant pleins. **Tenir un trig et appuyer sur REC** (0.16.16) montre **ses notes** : l'écran
 dessine un clavier de deux ou trois octaves, les notes du pas pleines, et le nom de l'accord (« STEP 5  Cm7 ») ; une
 touche du clavier ajoute sa note ou l'enlève (on l'entend ; quatre au plus, une au moins), les potards 1 à 4 déplacent
 chacune d'un demi-ton ; **REC** à nouveau revient aux pas. POLY en Poly, REV3 sans accord et OTIS jouent tout
@@ -854,6 +870,19 @@ l'accord ; une machine à une seule voix joue la plus grave, l'écran dit « MON
 pointillé. NOTE reste la plus grave, les autres sont des locks du pas (des intervalles au-dessus d'elle, jusqu'à huit
 octaves), effacés avec les autres ; un trig joué au clavier ou par Endless n'a pas d'accord. La piste de pas suit la page : aller sur le delay (FX) montre les pas du delay.
 **REC** à nouveau : retour au mode KEY.
+
+**L'enregistrement en direct** (0.16.31) : **tenir REC et appuyer sur PLAY**, puis jouer au clavier. Chaque note tombe
+sur le pas le plus proche de la piste active, avec sa hauteur (sa NOTE, comme le dirait la vue des notes d'un pas) ;
+**juste avant un pas**, elle y est écrite et ce pas ne la rejoue pas quand le séquenceur y arrive (on l'a déjà
+entendue) ; des touches pressées dans le même pas font un **accord** (quatre notes au plus) ; une touche **tenue** sur
+plusieurs pas donne sa **longueur** à la note (comme un trig tenu avec un pas plus loin en STEP). On enregistre par-dessus
+ce qui est là : un pas joué remplace ses notes, les autres pas restent, et les autres locks du pas aussi. **PLAY passe au
+rouge** et REC clignote ; **REC** à nouveau arrête l'enregistrement (les pas continuent), PLAY arrête tout. Depuis
+l'arrêt, le **métronome compte une mesure** avant le premier pas : un ping à chaque temps (do 6), une quinte plus haut sur
+le premier de la mesure, ~25 ms, à la sortie (ni dans les effets ni sur l'USB) ; il bat ensuite tant qu'on enregistre.
+**GLO tenu + PLAY** l'allume ou l'éteint (éteint : l'enregistrement part tout de suite). Le pas d'arrivée suit la
+SPEED de la piste ; dans une autre DIRECTION qu'en avant, une note va toujours au pas qui joue. Une piste en Endless ou
+en ARP joue les touches à sa manière : rien ne s'écrit sur ses pas.
 
 Les pages d'une section se suivent sous SELECT (ou en retapant son bouton) ; depuis 0.16.6, une barre sous l'en-tête
 les montre, une part par page, celle qu'on regarde allumée.
