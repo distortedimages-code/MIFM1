@@ -343,6 +343,8 @@ float seq_at;                           // the sixteenths since PLAY, as the seq
 uint8_t click_on, clk_hi;               // the metronome: on, the beat's ping (at sample clk_at, -1 none; the bar's
 int32_t clk_at = -1;                    // higher), its resonator
 float clk_c, clk_y1, clk_y2;
+float clk_out[ENG_CLICK_N];              // (0.16.34) this block's click, apart: the USB records the mix without it
+uint8_t clk_n;                           // its samples this block (0: none)
 int gl_at[ENG_TRACKS];                  // the glitch: this block's sixteenth (the sample it starts at; -1 none)
 int gl_busy[ENG_TRACKS];                // its slice taken or repeating (the voice does not rest meanwhile)
 float gl_six = 5000.0f;                 // a sixteenth, samples
@@ -4963,7 +4965,9 @@ void eng_render(float* l, float* r, uint32_t n) {
   } else {
     for (uint32_t i = 0; i < n; ++i) l[i] = r[i] = 0.0f;
   }
-  if (clk_at >= 0 || clk_y1 != 0.0f) {  // (0.16.31) the metronome: a ping at each beat (C6), the bar's a fifth up, ~25 ms
+  clk_n = 0;
+  if (clk_at >= 0 || clk_y1 != 0.0f) {  // (0.16.31) the metronome: a ping at each beat (C6), the bar's a fifth up, ~25 ms;
+    clk_n = static_cast<uint8_t>(n <= ENG_CLICK_N ? n : 0);   // (0.16.34) apart too: the USB records the mix without it
     for (uint32_t i = 0; i < n; ++i) {
       if (static_cast<int32_t>(i) == clk_at) {
         clk_c = clk_hi ? 1.9485305f : 1.9760169f;
@@ -4972,6 +4976,7 @@ void eng_render(float* l, float* r, uint32_t n) {
       float y = clk_c * clk_y1 - 0.9981876f * clk_y2;
       clk_y2 = clk_y1;
       clk_y1 = y;
+      if (clk_n) clk_out[i] = y;
       l[i] += y;
       r[i] += y;
     }
@@ -4987,6 +4992,7 @@ void eng_render(float* l, float* r, uint32_t n) {
       g -= dg;
       l[i] *= g;
       r[i] *= g;
+      if (clk_n) clk_out[i] *= g;
       if (usb_ok)
         for (uint32_t c = 0; c < ENG_USB_CH; ++c) {
           int16_t* u = &usb_ch[i * ENG_USB_CH + c];
@@ -5374,6 +5380,7 @@ void eng_rec_skip(int lane, int step) {
 }
 void eng_count_in(int sixteenths) { count_in = sixteenths; }
 void eng_click(int on) { click_on = on != 0; }
+const float* eng_click_out(void) { return clk_n ? clk_out : nullptr; }
 float eng_lane_open(int lane) {
   return lane >= ENG_TRACKS && lane < ENG_LANES ? fx_open[lane - ENG_TRACKS] : 1.0f;
 }

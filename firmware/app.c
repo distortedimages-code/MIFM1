@@ -798,6 +798,19 @@ void app_backup_restored(void)
 
 /* ---------------------------------------------------------------- audio --- */
 static float eng_l[APP_BLOCK], eng_r[APP_BLOCK];
+/* (0.16.34) the USB audio input's frames (app.h FM1B_UAC_APP): the last render's mix without the metronome, APP_USB_GAIN
+ * under full scale, 16-bit, rounded; uac_tap takes them right after app_render, block for block */
+static int16_t usb_lr[2 * APP_BLOCK] __attribute__((aligned(4)));
+const int16_t *app_uac_frames(uint32_t n)
+{
+    (void)n;
+    return usb_lr;
+}
+static int16_t usb16(float x)
+{
+    x = fm_clampf(x * (APP_USB_GAIN * 32767.0f), -32767.0f, 32767.0f);
+    return (int16_t)(x + (x < 0.0f ? -0.5f : 0.5f));
+}
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
@@ -807,10 +820,18 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         n = APP_BLOCK;
     if (halted || !data_ok || !engine_ok) {
         for (i = 0; i < 2u * n; i++)
-            lr[i] = 0;
+            lr[i] = 0, usb_lr[i] = 0;
         return;
     }
     eng_render(eng_l, eng_r, n);
+    {
+        const float *ck = eng_click_out();
+        for (i = 0; i < n; i++) {
+            float c = ck ? ck[i] : 0.0f;
+            usb_lr[2 * i] = usb16(eng_l[i] - c);
+            usb_lr[2 * i + 1] = usb16(eng_r[i] - c);
+        }
+    }
     for (i = 0; i < n; i++) {
         lr[2 * i] = (int32_t)(fm_clampf(eng_l[i], -1.0f, 1.0f) * g);
         lr[2 * i + 1] = (int32_t)(fm_clampf(eng_r[i], -1.0f, 1.0f) * g);

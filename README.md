@@ -189,13 +189,21 @@ tools/web/calibrate.py` recompte et réécrit la table.
 
 Branché en USB, le FM-1 est aussi une **carte son** (class compliant : aucun pilote, sur Mac, Windows, Linux, iPad,
 iPhone en USB-C), nommée « MIFM1 FM-1 » : **2 entrées, le mix master en stéréo**, 16 bits à 44,1 kHz, ce qu'on entend
-au casque (le bus master compris : compresseur ou OTT, limiteur ; le métronome aussi quand il bat). **À pleine
-échelle** : MASTER ne règle que le haut-parleur et le casque (on peut couper le FM-1 et écouter par l'enregistreur).
-Sur un iPhone, l'appareil photo l'enregistre avec la vidéo ; dans un DAW, une piste stéréo, le MIDI par le même câble.
+au casque (le bus master compris : compresseur ou OTT, limiteur), **sauf le métronome**, qui ne bat que dans le casque
+et le haut-parleur. MASTER ne règle que le haut-parleur et le casque : l'enregistrement garde son niveau (on peut couper
+le FM-1 et écouter par l'enregistreur). Sur un iPhone, l'appareil photo l'enregistre avec la vidéo ; dans un DAW, une
+piste stéréo, le MIDI par le même câble.
+
+**3 dB sous la pleine échelle** (0.16.34) : les crêtes du FM-1 ne dépassent jamais −0,1 dBFS (son limiteur, puis une
+saturation douce), mais entre deux échantillons le signal monte plus haut ; la démo, à −1,8 dBFS d'échantillon, a des
+crêtes vraies à −0,9 dBTP (mesuré à 4× sur l'émulateur). Un iPhone le convertit puis le compresse en AAC, deux étapes
+qui peuvent faire passer ces crêtes au-dessus de 0 et les écrêter (d'où la règle des masters : −1 dBTP au plus) : la
+cause probable de l'écrêtage entendu sur les attaques et les basses de TAURUS dans la vidéo, pas au casque. À −3 dB, la
+démo reste sous −3,9 dBTP ; le souffle du 16 bits est toujours à plus de 90 dB dessous.
 
 **Depuis 0.16.33.** Avant, l'USB envoyait les quatre pistes séparées et le retour des effets (10 entrées), sans le bus
-master : un enregistreur stéréo (l'appareil photo d'un iPhone) n'en prend d'ordinaire que les deux premières, la piste 1. Les pistes séparées sont mises de côté pour
-l'instant (leur code reste, une option à la compilation : `ENG_USB_TRACKS`, `FM1B_UAC_CH`). Et le FM-1 garde maintenant
+master : un iPhone n'en prenait que les deux premières, la piste 1 seule (constaté). Les pistes séparées sont mises de
+côté pour l'instant (leur code reste, une option à la compilation : `ENG_USB_TRACKS`, `FM1B_UAC_CH`). Et le FM-1 garde
 **deux blocs d'avance** sur l'USB au lieu d'un (~8 ms de latence) : un bloc rendu en retard (un pic de calcul) ne
 s'entend plus dans l'enregistrement, quand il y laissait des échantillons répétés, un craquement (`make uac-stereo`, sur
 l'ordinateur : 60 s, un rendu sur 400 en retard d'un bloc entier ; à deux blocs d'avance aucun échantillon perdu ni
@@ -864,7 +872,7 @@ plusieurs pas donne sa **longueur** à la note (comme un trig tenu avec un pas p
 ce qui est là : un pas joué remplace ses notes, les autres pas restent, et les autres locks du pas aussi. **PLAY passe au
 rouge** et REC clignote ; **REC** à nouveau arrête l'enregistrement (les pas continuent), PLAY arrête tout. Depuis
 l'arrêt, le **métronome compte une mesure** avant le premier pas : un ping à chaque temps (do 6), une quinte plus haut sur
-le premier de la mesure, ~25 ms, à la sortie (pas dans les effets ; sur l'USB aussi, qui enregistre le mix) ; il bat ensuite tant qu'on enregistre.
+le premier de la mesure, ~25 ms, au casque et au haut-parleur seulement (ni dans les effets ni sur l'USB, qui enregistre le mix sans lui) ; il bat ensuite tant qu'on enregistre.
 **GLO tenu + PLAY** l'allume ou l'éteint (éteint : l'enregistrement part tout de suite). Le pas d'arrivée suit la
 SPEED de la piste ; dans une autre DIRECTION qu'en avant, une note va toujours au pas qui joue. Une piste en Endless ou
 en ARP joue les touches à sa manière : rien ne s'écrit sur ses pas.

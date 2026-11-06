@@ -16,11 +16,15 @@ void app_splash(void);
 #define APP_PALETTE 2                     /* gfx.c's CYAN */
 #define APP_BLOCK 128u                    /* frames per audio block: 2.9 ms at 44.1 kHz, the control rate's step */
 #define APP_CANVAS_PX (240u * 84u)        /* gfx.c's canvas: the module's display (240 x 82), a knob (60 x 100) */
-/* the USB audio input (fm1.toml usb_audio_in): (0.16.33) the master output in stereo, what the headphones hear, at full
- * level (plat_usb_audio_full: MASTER for the speaker and the headphones only); the tracks apart (10 channels,
+/* the USB audio input (fm1.toml usb_audio_in): (0.16.33) the master output in stereo, what the headphones hear, MASTER
+ * aside (plat_usb_audio_full: MASTER for the speaker and the headphones only); (0.16.34) the app's frames
+ * (FM1B_UAC_APP, app_uac_frames: the patch's), the mix without the metronome, APP_USB_GAIN under full scale (its peaks
+ * at -0.1 dB came out of a phone's conversion and AAC over it). The tracks apart (10 channels,
  * patches/fm1-base-usb-multi.patch, FM1B_UAC_CH 10 and mi/engine.h ENG_USB_TRACKS) set aside. Two halves more in hand
  * (FM1B_UAC_DEEP 2: the patch's; ~8 ms of latency), the renders taking most of their time; its ring (1024 frames of
  * 2: 4 KB) in RAM, not the pool */
+#define FM1B_UAC_APP 1
+#define APP_USB_GAIN 0.7079458f            /* -3 dB */
 /* the browser emulator (tools/build.py --web, tools/web/README.md): the second core is the engine's own simulation
  * there, on the FM-1's modelled clock (mi/engine.cc PLAT_WEB, mi/web_costs.h) */
 #ifdef PLAT_WEB

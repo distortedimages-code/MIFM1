@@ -5401,12 +5401,18 @@ int main(int argc, char** argv) {
     eng_play(1);
     const uint32_t r0 = eng_rises(0);
     const int bar = static_cast<int>(2.0f * 44100.0f / static_cast<float>(n));   // (120 BPM: a bar 2 s)
-    float pk_in = 0.0f, pos_in = -1.0f;
-    int pings = 0, quiet_n = 21;
+    float pk_in = 0.0f, pos_in = -1.0f, rest_in = 0.0f;   // (0.16.34: the mix without the click, what the USB takes)
+    int pings = 0, quiet_n = 21, ck_miss = 0;
     for (int b = 0; b < bar - 4; ++b) {
       eng_render(l, r, n);
+      const float* ck = eng_click_out();
       float pk = 0.0f;
-      for (uint32_t i = 0; i < n; ++i) pk = std::max(pk, std::fabs(l[i]));
+      for (uint32_t i = 0; i < n; ++i) {
+        pk = std::max(pk, std::fabs(l[i]));
+        rest_in = std::max(rest_in, std::fabs(l[i] - (ck ? ck[i] : 0.0f)));
+        rest_in = std::max(rest_in, std::fabs(r[i] - (ck ? ck[i] : 0.0f)));
+      }
+      ck_miss += pk > 0.1f && !ck;
       pk_in = std::max(pk_in, pk);
       pings += pk > 0.1f && quiet_n > 20;
       quiet_n = pk > 0.1f ? 0 : quiet_n + 1;
@@ -5426,10 +5432,11 @@ int main(int argc, char** argv) {
     for (int b = 0; b < 100; ++b) eng_render(l, r, n);
     eng_defaults(p);
     eng_fresh();
-    printf("live recording: counting in %d pings (peak %.2f), the lane at %.1f, %u trigs; then at %.2f; a step written "
-           "ahead: %u trigs that pass, %u the next\n", pings, pk_in, pos_in, r_in, pos, r_skip, r_next);
-    if (pings != 4 || pk_in < 0.15f || pk_in > 0.6f || pos_in >= 0.0f || r_in || pos < 0.0f || pos > 0.5f || r_skip ||
-        r_next != 1)
+    printf("live recording: counting in %d pings (peak %.2f; without them, the USB's, %.1e, %d blocks not apart), the "
+           "lane at %.1f, %u trigs; then at %.2f; a step written ahead: %u trigs that pass, %u the next\n", pings, pk_in,
+           rest_in, ck_miss, pos_in, r_in, pos, r_skip, r_next);
+    if (pings != 4 || pk_in < 0.15f || pk_in > 0.6f || rest_in > 1e-5f || ck_miss || pos_in >= 0.0f || r_in ||
+        pos < 0.0f || pos > 0.5f || r_skip || r_next != 1)
       ++failures, printf("FAIL: live recording\n");
   }
 

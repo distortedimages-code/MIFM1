@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Yoann */
-/* (0.16.33) MIFM1's USB audio input as it is now: the master output in stereo, two halves more in hand
- * (FELUCCA_UAC_DEEP 2, firmware/patches/fm1-base-usb-multi.patch on felucca-bsp's usb.c), on a computer: the
+/* (0.16.33) MIFM1's USB audio input as it is now: the master mix in stereo, two halves more in hand
+ * (FELUCCA_UAC_DEEP 2, firmware/patches/fm1-base-usb-multi.patch on felucca-bsp's usb.c); (0.16.34) its frames the
+ * app's (FELUCCA_UAC_SOURCE: the mix without the metronome, under full scale), not the master output's, which is
+ * never read. On a computer: the
  * descriptors (2 channels, EP4's 184 bytes), then 60 s of streaming as on the FM-1, renders of 128 frames at the I2S
  * clock (~44,117.6 Hz), each writing the ring when it ends (95 % of its time: the deep ring's case; then a render
  * now and then a whole block late), packets at the host's 1 ms: every frame recorded once, in order, none repeated
@@ -18,6 +20,8 @@
 #define FELUCCA_UAC_DEEP 2
 #define FELUCCA_UAC_CH 2
 #define HALF_FRAMES 128u
+static const int16_t *test_frames(uint32_t n);
+#define FELUCCA_UAC_SOURCE test_frames
 static void fm1_delay_ms(uint32_t ms) { (void)ms; }
 #include "usb.c"
 
@@ -29,14 +33,23 @@ static void fail(const char *what, long got, long want)
         printf("FAIL %s: got %ld, want %ld\n", what, got, want);
 }
 
-/* the render's frames, 24-bit as the I2S takes them: frame f (from 1), channel c: f's 11 low bits and c */
+/* the render: the app's frames, 16-bit, frame f (from 1), channel c: f's 11 low bits and c; the master output beside
+ * them something else (the tap must not take it) */
 static uint32_t made = 1;
+static int16_t app16[2u * HALF_FRAMES] __attribute__((aligned(4)));
+static const int16_t *test_frames(uint32_t n)
+{
+    (void)n;
+    return app16;
+}
 static void render_into(int32_t *o, uint32_t n)
 {
     uint32_t i, c;
     for (i = 0; i < n; i++, made++)
-        for (c = 0; c < CH; c++)
-            o[i * CH + c] = (int32_t)((int16_t)(((made & 0x7FFu) << 4) | c)) * 256;
+        for (c = 0; c < CH; c++) {
+            app16[i * CH + c] = (int16_t)(((made & 0x7FFu) << 4) | c);
+            o[i * CH + c] = 0x7FFF00;
+        }
 }
 
 static const uint8_t *find(const uint8_t *d, uint32_t len, uint8_t type, uint8_t sub)   /* a class descriptor */
@@ -134,7 +147,7 @@ int main(void)
         fail("holds, underruns, overruns", (long)(held + uac.underruns + uac.overruns), 0);
     if (got < 44000u * 59u)
         fail("frames recorded in 60 s", (long)got, 44100L * 60);
-    printf("USB audio, stereo, two halves in hand: %u frames in order, packets up to %u B, ring fill %u..%u (%.1f ms "
+    printf("USB audio, stereo, the app's frames, two halves in hand: %u frames in order, packets up to %u B, ring fill %u..%u (%.1f ms "
            "at the least), %u up %u down\n", (unsigned)got, (unsigned)maxb, (unsigned)uac.fill_lo, (unsigned)uac.fill_hi,
            uac.fill_lo / 44.1, (unsigned)uac.adj_up, (unsigned)uac.adj_down);
     if (fails)

@@ -59,7 +59,7 @@ uac-multi: base-patch
 	$(CC) -std=c99 -O2 -w -I$(BASE)/bsp/chip -I$(BASE)/bsp/boards/fm1 tools/uac_multi_test.c -o $(OUT)/uac_multi_test
 	$(OUT)/uac_multi_test
 
-# (0.16.33) the USB audio input as the firmware has it: the master in stereo, two halves in hand, a render late now and then
+# (0.16.33) the USB audio input as the firmware has it: the master mix in stereo (0.16.34: the app's frames), two halves in hand, a render late now and then
 uac-stereo: base-patch
 	@mkdir -p $(OUT)
 	$(CC) -std=c99 -O2 -w -I$(BASE)/bsp/chip -I$(BASE)/bsp/boards/fm1 tools/uac_stereo_test.c -o $(OUT)/uac_stereo_test

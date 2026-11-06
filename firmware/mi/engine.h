@@ -377,6 +377,8 @@ float eng_lane_pos(int lane);            /* (0.16.31) its place since PLAY, in i
 void eng_rec_skip(int lane, int step);   /* live recording: a step written just ahead of it, not played there */
 void eng_count_in(int sixteenths);       /* the next PLAY's count-in */
 void eng_click(int on);                  /* the metronome: a ping at each beat (the bar's a fifth up) */
+#define ENG_CLICK_N 128                  /* (0.16.34) the click apart: the last eng_render's (blocks up to this), in its */
+const float *eng_click_out(void);        /* l and r too; null when silent (the USB takes the mix without it: app.c) */
 float eng_lane_open(int lane);           /* an effect lane's opening now, 0..1 (1: no steps) */
 int eng_quantize(int note);              /* a note in the global scale */
 uint32_t eng_rises(int t);               /* the trigs track t played (a ratchet's each), since power-on */
