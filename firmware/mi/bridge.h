@@ -222,6 +222,19 @@ void taurus_knob_text(int k, float u, char *b, int n);
  * play), MOD Off: the carrier alone. Its memory the track's Plaits voice's, lent (mf_voice_mem). Its eight knobs (k:
  * 0..1, SHIFT bipolar from its middle): MOD (Off, T1..T4), TONE, ENSEMBLE, ATTACK, RELEASE, FOLLOW, SHIFT, AIR ---- */
 void voc_init(void);
+/* ---- SDS (0.16.49, mi_sds.cc): drums after Simmons' SDS 8, one voice (a triangle and its bend, a noise through a
+ * four-pole low pass, a click, an OTA), four models its kits (KICK, SNARE, TOM, PERC). Its eight knobs (k: 0..1, BEND
+ * from its middle): FILTER, BALANCE, CLICK, DECAY, N.DECAY, HIT, DRIVE, BEND ---- */
+#define SDS_MODELS 4
+void sds_reset(int t);
+void sds_silence(int t);
+void sds_set(int t, int model, float note, const float *k);
+void sds_gate(int t, int g);             /* a rise: a hit (at the next block) */
+void sds_render(int t, float *out, uint32_t n);
+const char *sds_model_name(int m);
+const char *sds_knob_name(int k);
+void sds_defaults(int m, float *k);
+void sds_knob_text(int k, float u, char *b, int n);
 void voc_reset(int t);
 void voc_silence(int t);
 void voc_set(int t, const float *notes, int n, int mono, const float *k);   /* (mono: one voice, its last) */   /* a chord, 4 notes at most */

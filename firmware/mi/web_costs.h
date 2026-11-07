@@ -4,30 +4,34 @@
  * (2902 us), from the instructions it runs (tools/web/calibrate.py writes this file: see there how). */
 #pragma once
 static const float kWebRest = 2.7f;   /* a resting voice */
-static const float kWebModel[23] = {   /* a voice playing, by model */
+static const float kWebModel[27] = {   /* a voice playing, by model */
     202.2f,  /*  0 KICK */
     200.1f,  /*  1 SNARE */
     201.1f,  /*  2 CLAP */
     158.0f,  /*  3 HAT */
-    196.6f,  /*  4 TOM */
+    196.7f,  /*  4 TOM */
     221.9f,  /*  5 PERC */
     235.2f,  /*  6 FM DRUM */
     193.5f,  /*  7 FM SNARE */
-    317.9f,  /*  8 ZERO */
-    379.3f,  /*  9 FM */
-    216.9f,  /* 10 PADS */
-    311.1f,  /* 11 POLY */
-    424.9f,  /* 12 REV3 */
-    186.1f,  /* 13 TAURUS */
-    177.8f,  /* 14 VOCODER */
-    172.9f,  /* 15 CHOIR */
-    127.1f,  /* 16 STATIC */
-    303.7f,  /* 17 SPEECH */
-    491.7f,  /* 18 SWARM */
-    402.0f,  /* 19 NOISE */
-    615.8f,  /* 20 PARTICLES */
-    516.1f,  /* 21 STRING */
-    781.7f,  /* 22 MODAL */
+    212.3f,  /*  8 SDS KICK */
+    212.0f,  /*  9 SDS SNARE */
+    212.4f,  /* 10 SDS TOM */
+    212.3f,  /* 11 SDS PERC */
+    317.9f,  /* 12 ZERO */
+    379.3f,  /* 13 FM */
+    217.0f,  /* 14 PADS */
+    311.1f,  /* 15 POLY */
+    424.9f,  /* 16 REV3 */
+    186.1f,  /* 17 TAURUS */
+    177.8f,  /* 18 VOCODER */
+    172.9f,  /* 19 CHOIR */
+    127.2f,  /* 20 STATIC */
+    303.7f,  /* 21 SPEECH */
+    491.7f,  /* 22 SWARM */
+    402.1f,  /* 23 NOISE */
+    615.8f,  /* 24 PARTICLES */
+    516.2f,  /* 25 STRING */
+    781.7f,  /* 26 MODAL */
 };
 static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, VOX): plain, its FM's extra, its NOISE's */
     {0.0f, 0.0f, 0.0f},
@@ -42,7 +46,7 @@ static const float kWebPoly[2] = {33.6f, 76.6f};   /* POLY: its floor, a voice *
 static const float kWebPro[2] = {34.0f, 108.4f};   /* REV3: its floor, a voice */
 static const float kWebChoir[2] = {18.7f, 154.2f};   /* CHOIR: its floor, a part */
 static const float kWebVoc[3] = {111.6f, 23.4f, 352.6f};   /* VOCODER: its floor, a voice, its bands (MOD on) */
-static const float kWebStatic[3] = {127.1f, 131.5f, 113.2f};   /* STATIC: BODY, ARC, SPARK (held) */
+static const float kWebStatic[3] = {127.2f, 131.5f, 113.2f};   /* STATIC: BODY, ARC, SPARK (held) */
 static const float kWebBend = 87.4f;   /* the bits, one of their knobs up */
 static const float kWebTrauma = 43.4f;   /* TRAUMA's drive on a track */
 static const float kWebGlitch = 9.0f;   /* the glitch, taking or repeating its slice (estimated: a few loads a sample) */

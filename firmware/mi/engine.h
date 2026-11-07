@@ -139,17 +139,18 @@ const char *eng_param_name(int param);   /* its name as the module prints it: Pl
 int eng_model_enveloped(int model);      /* 1: a Plaits model with its own envelope, the LPG bypassed (6-op FM,
                                           * string, modal, the drums), or an FM drum */
 /* the models (0.10.1), in ALGORITHM's order, by bank: MIFM1's six drums (mi_drum.cc), the LXR-02's two FM drums
- * (mi_lxr.cc; 0.16.43: its cymbal and hi-hat gone), MIFM1's own voices (ZERO, mi_zero.cc; the FM, four operators and
+ * (mi_lxr.cc; 0.16.43: its cymbal and hi-hat gone), the SDS' four (0.16.49, mi_sds.cc), MIFM1's own voices (ZERO, mi_zero.cc; the FM, four operators and
  * eight algorithms: mi_fm4.cc; ... 0.16.43: CHOIR, mi_choir.cc, in OTIS' place, gone), then Plaits' (its speech, its
  * noises and physical models). A model with its own knobs (a drum, an FM drum,
  * ZERO, the FM) takes its eight parameters from the knobs after FREQ: HARMONICS, TIMBRE, MORPH, the envelope page's
  * four, the pitch envelope's. Its kind says what plays it, its sub its index there (Plaits' engine, the LXR's voice,
  * the drum, the FM's kit) */
 enum { MK_PLAITS, MK_LXR, MK_ZERO, MK_DRUM, MK_FM, MK_PADS, MK_POLY, MK_PROPHET, MK_CHOIR, MK_TAURUS, MK_VOCODER,
-       MK_STATIC };
-#define ENG_MODELS 23                    /* (0.16.43: FM CYMBAL, FM HI-HAT, OTIS gone; CHOIR at 15, after VOCODER;
-                                          * STATIC at 16, Plaits' from 17) */
-#define ENG_BANKS 5
+       MK_STATIC, MK_SDS };
+#define ENG_MODELS 27                    /* (0.16.43: FM CYMBAL, FM HI-HAT, OTIS gone; CHOIR at 15, after VOCODER;
+                                          * STATIC at 16, Plaits' from 17. 0.16.49: the SDS' four at 8, after the FM
+                                          * drums: the models from 8 four further on) */
+#define ENG_BANKS 6                      /* (0.16.49: SDS the sixth, its models after the FM drums') */
 int eng_model_kind(int m);
 int eng_model_sub(int m);
 int eng_model_bank(int m);
@@ -183,7 +184,8 @@ int eng_model_lock_set(int lane, int step, int m);   /* 0 ok, -1 no room or not 
  * knobs' randoms, a name. Saved by the screen (app.c, pat_store.h), read onto any track */
 #define SND_PAGES 8
 #define SND_MAGIC 0x31444E53u            /* "SND1" */
-#define SND_VERSION 8                    /* (7: 0.16.24's to 0.16.42's: FM CYMBAL, FM HI-HAT, OTIS there (gone): read as
+#define SND_VERSION 9                    /* (8: 0.16.43's to 0.16.48's: the SDS (0.16.49) not yet at 8: read, the models
+                                          * from 8 four further on; 7: 0.16.24's to 0.16.42's: FM CYMBAL, FM HI-HAT, OTIS there (gone): read as
                                           * HAT, HAT, POLY from their kits, the others to their places; 6: 0.16.21's to 0.16.23's, STATIC (0.16.24) not yet at 18: read, the
                                           * models from 18 one further on, as the older ones after theirs; 5: 0.16.20's, VOCODER (0.16.21) not yet at 17: read, the models from 17 one
                                           * further on, as 1 to 4's after theirs; 4: 0.16.18's and 0.16.19's, TAURUS
@@ -230,7 +232,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 35u              /* (34: 0.16.24's to 0.16.42's: FM CYMBAL, FM HI-HAT, OTIS there (0.16.43:
+#define PROJECT_VERSION 36u              /* (35: 0.16.43's to 0.16.48's: the SDS (0.16.49) not yet at 8: read, the
+                                          * models from 8 four further on (a step's model too); 34: 0.16.24's to 0.16.42's: FM CYMBAL, FM HI-HAT, OTIS there (0.16.43:
                                           * gone): read, as HAT, HAT, POLY from their kits, the others to their places;
                                           * 33: 0.16.23's: STATIC (0.16.24) not yet at 18: read, the models from 18
                                           * one further on, as the older ones after theirs; 32: 0.16.21's and 0.16.22's: 68 pages, 380 locks, no followers: read,

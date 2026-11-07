@@ -923,8 +923,9 @@ int main(int argc, char** argv) {
     }
     printf("master bus: off rms %.3f peak %.2f; comp (-22 dB, 3:1, +4 dB) rms %.3f peak %.2f, %.1f dB at most; OTT's "
            "number (gone) rms %.3f, the compressor's %s\n", rms[0], pk[0], rms[1], pk[1], gr, rms[2],
-           std::fabs(rms[2] / rms[1] - 1.0) < 0.02 ? "ok" : "WRONG");
-    if (gr > -6.0f || pk[0] > 1.0f || pk[1] > 1.0f || pk[2] > 1.0f || std::fabs(rms[2] / rms[1] - 1.0) > 0.02)
+           std::fabs(rms[2] / rms[1] - 1.0) < 0.05 ? "ok" : "WRONG");
+    // (0.16.49: within 5 %, the patch's randoms making a run not quite the last; off would be 60 % louder)
+    if (gr > -6.0f || pk[0] > 1.0f || pk[1] > 1.0f || pk[2] > 1.0f || std::fabs(rms[2] / rms[1] - 1.0) > 0.05)
       ++failures, printf("FAIL: the master bus\n");
     eng_defaults(p);
   }
@@ -4410,8 +4411,8 @@ int main(int argc, char** argv) {
     // (4) renumbered (SPEECH 16 now where it is, OTIS 15 POLY since 0.16.43, MODAL the last)
     const int tm = eng_model_find(MK_TAURUS, 0);
     const int speech = eng_model_find(MK_PLAITS, 15), modal = eng_model_find(MK_PLAITS, 20);
-    int ok = tm == 13 && ENG_MODELS >= 23 && eng_model_bank(tm) == 2 && eng_model_own(tm) && speech > tm &&
-             modal == ENG_MODELS - 1 && eng_model_find(MK_CHOIR, 0) == 15;
+    int ok = tm == 17 && ENG_MODELS >= 27 && eng_model_bank(tm) == 2 && eng_model_own(tm) && speech > tm &&
+             modal == ENG_MODELS - 1 && eng_model_find(MK_CHOIR, 0) == 19;   // (0.16.49's numbers: the SDS at 8)
     project_t* p = eng_project();
     eng_defaults(p);
     eng_fresh();
@@ -4544,8 +4545,8 @@ int main(int argc, char** argv) {
     // (SPEECH on T1 after it, sounding); a project of 0.16.20 (31) and a sound (5) renumbered (TAURUS 16 kept, SPEECH
     // 17 now 18, MODAL the last)
     const int vm = eng_model_find(MK_VOCODER, 0), speech = eng_model_find(MK_PLAITS, 15);
-    int ok = vm == 14 && ENG_MODELS == 23 && eng_model_bank(vm) == 2 && eng_model_own(vm) && speech == 17 &&
-             eng_model_find(MK_TAURUS, 0) == 13;   // (0.16.43's numbers)
+    int ok = vm == 18 && ENG_MODELS == 27 && eng_model_bank(vm) == 2 && eng_model_own(vm) && speech == 21 &&
+             eng_model_find(MK_TAURUS, 0) == 17;   // (0.16.49's numbers: the SDS at 8)
     project_t* p = eng_project();
     eng_defaults(p);
     eng_fresh();
@@ -4705,7 +4706,8 @@ int main(int argc, char** argv) {
     q.algo[PG_TRACK(1, 0)] = 17;
     q.algo[PG_TRACK(2, 0)] = 22;
     as_v32(&q, 31);                     // (0.16.22's layout: 68 pages, 380 locks)
-    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == 13 &&
+    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) &&
+                        q.algo[PG_TRACK(0, 0)] == eng_model_find(MK_TAURUS, 0) &&
                         q.algo[PG_TRACK(1, 0)] == speech && q.algo[PG_TRACK(2, 0)] == ENG_MODELS - 1;
     eng_defaults(p);
     eng_fresh();
@@ -4904,7 +4906,7 @@ int main(int argc, char** argv) {
   // no NaN, no peak over the soft knee's 1.2, at any knobs; a project of 0.16.23 (33) and a sound (6) renumbered
   {
     const int sm = eng_model_find(MK_STATIC, 0), speech = eng_model_find(MK_PLAITS, 15);
-    int ok = sm == 16 && ENG_MODELS == 23 && eng_model_bank(sm) == 2 && eng_model_own(sm) && speech == 17;
+    int ok = sm == 20 && ENG_MODELS == 27 && eng_model_bank(sm) == 2 && eng_model_own(sm) && speech == 21;
     project_t* p = eng_project();
     eng_defaults(p);
     eng_fresh();
@@ -5078,7 +5080,8 @@ int main(int argc, char** argv) {
     q.algo[PG_TRACK(1, 0)] = 23;
     q.algo[PG_TRACK(2, 0)] = 17;
     const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == speech &&
-                        q.algo[PG_TRACK(1, 0)] == ENG_MODELS - 1 && q.algo[PG_TRACK(2, 0)] == 14;
+                        q.algo[PG_TRACK(1, 0)] == ENG_MODELS - 1 &&
+                        q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_VOCODER, 0);
     eng_sound_t snd;
     eng_sound_get(1, &snd);
     snd.version = 6;
@@ -5555,7 +5558,7 @@ int main(int argc, char** argv) {
     static float l[128], r[128];
     static float buf[44100];
     const int cm = eng_model_find(MK_CHOIR, 0);
-    int ok = cm == 15 && ENG_MODELS == 23 && eng_model_bank(cm) == 2 && eng_model_own(cm) &&
+    int ok = cm == 19 && ENG_MODELS == 27 && eng_model_bank(cm) == 2 && eng_model_own(cm) &&
              !std::strcmp(eng_algo_name(PG_TRACK(0, 0), cm), "CHOIR") && eng_model_find(MK_LXR, 2) < 0 &&
              eng_model_find(MK_LXR, 1) == 7;
     auto knob = [&](int t, int i, float u) {
@@ -5688,6 +5691,192 @@ int main(int argc, char** argv) {
            choir_ok ? "ok" : "WRONG", proj_ok ? "ok" : "WRONG", snd_ok ? "ok" : "WRONG");
     if (!ok || !texts || !solo || !glide || !parts || !choir_ok || !proj_ok || !snd_ok)
       ++failures, printf("FAIL: CHOIR\n");
+  }
+
+  {  // (0.16.49) the SDS (mi_sds.cc), after the FM drums (8..11), their bank the sixth: on a track, their kits (knobs
+     // named, written as they are), each sounding; one kit on a track (a step's model among the four, not a drum's);
+     // the voice: the tone at its kit's pitch (BEND Off), the bend down (the pitch falling, still at 0.3 s) and up
+     // (rising); CLICK's burst, HIT's strength (quieter and darker struck softly); a hit over a ringing TOM without a
+     // step; any setting finite and bounded; 0.16.48's project (35) and sound (8) renumbered
+    static float l[128], r[128];
+    static float buf[44128];
+    const uint32_t n = 128;
+    const int s0 = eng_model_find(MK_SDS, 0), speech = eng_model_find(MK_PLAITS, 15);
+    int ok = s0 == 8 && ENG_MODELS == 27 && eng_model_bank(s0) == 5 && eng_model_own(s0) && speech == 21 &&
+             !std::strcmp(eng_bank_name(5), "SDS") && eng_model_find(MK_LXR, 1) == 7 && eng_model_find(MK_ZERO, 0) == 12;
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    int kit_ok = 1, sound_ok = 1;
+    float pk[SDS_MODELS];
+    for (int m = 0; m < SDS_MODELS; ++m) {
+      eng_set_model(0, eng_model_find(MK_SDS, m));
+      float kd[8];
+      sds_defaults(m, kd);
+      for (int i = 0; i < 8; ++i) {
+        int param = PG_TRACK(0, 0) * 4 + 1 + i;
+        float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
+        if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), sds_knob_name(i)) != 0) kit_ok = 0;
+        if (eng_param_centered(param) != (i == 7)) kit_ok = 0;
+      }
+      if (std::strcmp(eng_algo_name(PG_TRACK(0, 0), eng_model_find(MK_SDS, m)), sds_model_name(m)) != 0) kit_ok = 0;
+      eng_cut();
+      for (int b = 0; b < 3; ++b) eng_render(l, r, n);
+      pk[m] = 0.0f;
+      for (int b = 0; b < 200; ++b) {
+        if (b % 50 == 0) eng_key(0, 48, 1);
+        if (b % 50 == 10) eng_key(0, 48, 0);
+        eng_render(l, r, n);
+        for (uint32_t i = 0; i < n; ++i) {
+          if (!std::isfinite(l[i])) sound_ok = 0;
+          pk[m] = std::max(pk[m], std::fabs(l[i]));
+        }
+      }
+      if (pk[m] < 0.02f) sound_ok = 0;
+    }
+    const int fam =
+        eng_model_lockable(0, eng_model_find(MK_SDS, 1)) && !eng_model_lockable(0, eng_model_find(MK_DRUM, 1));
+    struct { int k; float u; const char* s; } tx[] = {
+        {0, 0.0f, "60Hz"}, {0, 1.0f, "14.3k"}, {1, 0.0f, "Tone"}, {1, 1.0f, "Noise"}, {1, 0.3f, "N 30%"},
+        {4, 0.5f, "x1.00"}, {4, 0.0f, "x0.25"}, {7, 0.5f, "Off"}, {7, 1.0f, "Dn 48"}, {7, 0.0f, "Up 48"},
+        {5, 0.75f, "75%"}};
+    int texts = 1;
+    for (auto& x : tx) {
+      char b[24];
+      sds_knob_text(x.k, x.u, b, sizeof b);
+      if (std::strcmp(b, x.s) != 0) texts = 0, printf("  SDS text %d %.2f: %s (%s)\n", x.k, x.u, b, x.s);
+    }
+    eng_defaults(p);
+    eng_cut();
+    // the voice: a hit of SDS TOM (C3) held 1 s, its pitch from its zero crossings over a window (the tone alone)
+    float k[8];
+    auto hit = [&](int m, const float* kk, uint32_t len) {
+      sds_reset(0);
+      sds_set(0, m, 48.0f, kk);
+      sds_gate(0, 1);
+      for (uint32_t i = 0; i < len; i += 32) sds_render(0, &buf[i], 32);
+      sds_gate(0, 0);
+    };
+    auto hz_at = [&](float t0, float t1) {
+      int zc = 0;
+      const uint32_t a = static_cast<uint32_t>(t0 * 44100.0f), b = static_cast<uint32_t>(t1 * 44100.0f);
+      uint32_t first = 0, last = 0;
+      for (uint32_t i = a + 1; i < b; ++i)
+        if (buf[i - 1] < 0.0f && buf[i] >= 0.0f) last = i, first = first ? first : i, ++zc;
+      return zc > 1 ? 44100.0f * static_cast<float>(zc - 1) / static_cast<float>(last - first) : 0.0f;
+    };
+    sds_defaults(2, k);
+    k[1] = 0.0f, k[2] = 0.0f, k[3] = 0.9f, k[7] = 0.5f;   // (the tone alone, no click, long, BEND Off)
+    hit(2, k, 44100);
+    const float tom_hz = hz_at(0.1f, 0.5f);
+    k[7] = 0.85f;                                         // (down)
+    hit(2, k, 44100);
+    const float down0 = hz_at(0.01f, 0.06f), down1 = hz_at(0.3f, 0.36f), down2 = hz_at(0.6f, 0.66f);
+    k[7] = 0.2f;                                          // (up)
+    hit(2, k, 44100);
+    const float up0 = hz_at(0.01f, 0.06f), up1 = hz_at(0.3f, 0.36f);
+    const int pitch = std::fabs(tom_hz - 190.0f) < 3.0f && down1 < down0 * 0.79f && down2 < down1 && up1 > up0 * 1.12f;
+    // CLICK: the highs (first differences) of the first 4 ms, with it and without (the noise silent: BALANCE 0)
+    auto highs = [&](uint32_t a, uint32_t b) {
+      double e = 0.0;
+      for (uint32_t i = a + 1; i < b; ++i) e += (buf[i] - buf[i - 1]) * (buf[i] - buf[i - 1]);
+      return e;
+    };
+    sds_defaults(0, k);
+    k[1] = 0.0f, k[2] = 0.0f;
+    hit(0, k, 4416);
+    const double c0 = highs(0, 176);
+    k[2] = 1.0f;
+    hit(0, k, 4416);
+    const double c1 = highs(0, 176), c1_late = highs(1764, 1940);
+    k[2] = 0.0f;
+    hit(0, k, 4416);
+    const double c0_late = highs(1764, 1940);
+    const float click_db = static_cast<float>(10.0 * std::log10((c1 + 1e-12) / (c0 + 1e-12)));
+    const int click = click_db > 10.0f && c1_late < 2.0 * c0_late + 1e-9;   // (gone after 40 ms)
+    // HIT: SDS SNARE struck softly and hard: its level (rms of 100 ms), its highs' share
+    auto rms_hi = [&](float* lv, float* hi) {
+      double e = 0.0, d = 0.0;
+      for (uint32_t i = 1; i < 4410; ++i) e += buf[i] * buf[i], d += (buf[i] - buf[i - 1]) * (buf[i] - buf[i - 1]);
+      *lv = static_cast<float>(10.0 * std::log10(e / 4410.0 + 1e-20));
+      *hi = static_cast<float>(10.0 * std::log10((d + 1e-20) / (e + 1e-20)));
+    };
+    float lv_soft, hi_soft, lv_hard, hi_hard;
+    sds_defaults(1, k);
+    k[6] = 0.0f;                                          // (DRIVE low: the level as struck)
+    k[5] = 0.15f;
+    hit(1, k, 4416);
+    rms_hi(&lv_soft, &hi_soft);
+    k[5] = 1.0f;
+    hit(1, k, 4416);
+    rms_hi(&lv_hard, &hi_hard);
+    const int dyn = lv_hard - lv_soft > 8.0f && hi_hard > hi_soft + 1.0f;
+    // a hit over a ringing TOM: its largest step around it, against a fresh hit's first ones
+    sds_defaults(2, k);
+    hit(2, k, 4416);
+    float typ = 0.0f, step = 0.0f;
+    for (uint32_t i = 1; i < 60; ++i) typ = std::max(typ, std::fabs(buf[i] - buf[i - 1]));
+    sds_gate(0, 1);
+    for (uint32_t i = 4416; i < 8832; i += 32) sds_render(0, &buf[i], 32);
+    for (uint32_t i = 4380; i < 4480; ++i) step = std::max(step, std::fabs(buf[i] - buf[i - 1]));
+    const int retrig = step <= 1.5f * typ + 0.02f;
+    // anything: 300 settings, a hit each
+    uint32_t sd = 4242u;
+    auto rnd = [&]() { sd = sd * 1664525u + 1013904223u; return static_cast<float>(sd >> 8) / 16777216.0f; };
+    float pk_any = 0.0f;
+    int nan_any = 0;
+    for (int t = 0; t < 4; ++t) sds_reset(t);
+    for (int s2 = 0; s2 < 300; ++s2) {
+      for (int i = 0; i < 8; ++i) k[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();
+      sds_set(s2 & 3, s2 % SDS_MODELS, 12.0f + 100.0f * rnd(), k);
+      sds_gate(s2 & 3, 1);
+      for (int b = 0; b < 300; ++b) {
+        float tmp[32];
+        if (b == 20) sds_gate(s2 & 3, 0);
+        sds_render(s2 & 3, tmp, 32);
+        for (int i = 0; i < 32; ++i) {
+          if (!std::isfinite(tmp[i])) nan_any = 1;
+          pk_any = std::max(pk_any, std::fabs(tmp[i]));
+        }
+      }
+    }
+    for (int t = 0; t < 4; ++t) sds_reset(t);
+    // 0.16.48's project (35): TAURUS 13 on T1, SPEECH 17 on T2, FM SNARE 7 on T3; T3's step 2 on FM DRUM (6), step 4
+    // on CHOIR (15); its sound (8) of POLY (11)
+    static project_t q;
+    eng_defaults(&q);
+    q.version = 35;
+    q.algo[PG_TRACK(0, 0)] = 13;
+    q.algo[PG_TRACK(1, 0)] = 17;
+    q.algo[PG_TRACK(2, 0)] = 7;
+    for (int i = 0; i < ENG_PLOCKS; ++i) q.lock[i].lane = 0xFF;
+    q.lock[0] = plock_t{2, 2, static_cast<uint8_t>(ENG_NTP + 4), 6};
+    q.lock[1] = plock_t{2, 4, static_cast<uint8_t>(ENG_NTP + 4), 15};
+    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) &&
+                        q.algo[PG_TRACK(0, 0)] == eng_model_find(MK_TAURUS, 0) && q.algo[PG_TRACK(1, 0)] == speech &&
+                        q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_LXR, 1) && q.lock[0].v == 6 &&
+                        q.lock[1].v == eng_model_find(MK_CHOIR, 0);
+    eng_defaults(p);
+    eng_fresh();
+    static eng_sound_t snd;
+    eng_sound_get(1, &snd);
+    snd.version = 8;
+    snd.algo[0] = 11;
+    const int snd_ok = eng_sound_set(1, &snd) == 0 && p->algo[PG_TRACK(1, 0)] == eng_model_find(MK_POLY, 0);
+    eng_defaults(p);
+    eng_fresh();
+    printf("SDS: at %d of %d %s, kits %s, sounding %s (peaks %.2f %.2f %.2f %.2f), one kit a track %s, texts %s; TOM at "
+           "C3 %.1f Hz (190), bent down %.0f -> %.0f -> %.0f Hz, up %.0f -> %.0f Hz (%s); CLICK +%.1f dB of highs (%s); "
+           "HIT 0.15 to 1: %+.1f dB, highs %+.1f dB (%s); a hit over a TOM: a step of %.3f (a fresh hit's %.3f); 300 "
+           "settings: peak %.2f%s; 0.16.48's project %s, its sound %s\n",
+           s0, ENG_MODELS, ok ? "ok" : "WRONG", kit_ok ? "ok" : "WRONG", sound_ok ? "ok" : "NO", pk[0], pk[1], pk[2],
+           pk[3], fam ? "ok" : "WRONG", texts ? "ok" : "WRONG", tom_hz, down0, down1, down2, up0, up1,
+           pitch ? "ok" : "WRONG", click_db, click ? "ok" : "WRONG", lv_hard - lv_soft, hi_hard - hi_soft,
+           dyn ? "ok" : "WRONG", step, typ, pk_any, nan_any ? ", NaN" : "", proj_ok ? "ok" : "WRONG",
+           snd_ok ? "ok" : "WRONG");
+    if (!ok || !kit_ok || !sound_ok || !fam || !texts || !pitch || !click || !dyn || !retrig || nan_any ||
+        pk_any > 1.21f || !proj_ok || !snd_ok)
+      ++failures, printf("FAIL: the SDS\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

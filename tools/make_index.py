@@ -17,16 +17,16 @@ def t(en, fr, tag="span"):
     return f'<{tag} class="en" lang="en">{en}</{tag}><{tag} class="fr" lang="fr">{fr}</{tag}>'
 
 
-SUB_EN = ("Its own drums, those of the LXR-02, ZERO, a four-operator FM, PADS and its chord progressions, two "
-          "analog polysynths (POLY, REV3), a Moog bass (TAURUS), a vocoder (VOCODER), a singing voice and its choir "
-          "(CHOIR), electric events (STATIC), the best engines from Plaits: 23 machines. Four modeled analog "
-          "filters, a sequencer with P-locks and a random dose that reinvents every note. All the sound is open "
-          "source.")
-SUB_FR = ("Ses propres batteries, celles du LXR-02, ZERO, une FM à quatre opérateurs, PADS et ses progressions "
-          "d'accords, deux polyphoniques analogiques (POLY, REV3), une basse Moog (TAURUS), un vocodeur (VOCODER), "
-          "une voix chantée et son chœur (CHOIR), des événements électriques (STATIC), les meilleurs moteurs de "
-          "Plaits : 23 machines. Quatre filtres analogiques modélisés, un séquenceur à P-locks et une dose "
-          "d'aléatoire qui réinvente chaque note. Tout le son est open source.")
+SUB_EN = ("Its own drums, those of the LXR-02, the Simmons SDS 8's (SDS), ZERO, a four-operator FM, PADS and its "
+          "chord progressions, two analog polysynths (POLY, REV3), a Moog bass (TAURUS), a vocoder (VOCODER), a singing "
+          "voice and its choir (CHOIR), electric events (STATIC), the best engines from Plaits: 27 machines. Four "
+          "modeled analog filters, a sequencer with P-locks and a random dose that reinvents every note. All the sound "
+          "is open source.")
+SUB_FR = ("Ses propres batteries, celles du LXR-02, celles du Simmons SDS 8 (SDS), ZERO, une FM à quatre opérateurs, "
+          "PADS et ses progressions d'accords, deux polyphoniques analogiques (POLY, REV3), une basse Moog (TAURUS), un "
+          "vocodeur (VOCODER), une voix chantée et son chœur (CHOIR), des événements électriques (STATIC), les "
+          "meilleurs moteurs de Plaits : 27 machines. Quatre filtres analogiques modélisés, un séquenceur à P-locks et "
+          "une dose d'aléatoire qui réinvente chaque note. Tout le son est open source.")
 
 page = f"""<!doctype html>
 <html lang="en">

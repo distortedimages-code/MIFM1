@@ -41,8 +41,8 @@ __attribute__((used, visibility("default"))) void web_try(uint32_t kind, uint32_
  * project an example, made from the demo groove; up to four knobs, each on a parameter of that project (or TRAUMA's,
  * the random dose's), their texts the machine's own ---- */
 enum { LAB_LADDER, LAB_MS20, LAB_SEM, LAB_VOX, LAB_TAURUS, LAB_STATIC, LAB_KICK, LAB_TRAUMA, LAB_DICE, LAB_WARPS,
-       LAB_RATCH, LAB_PLOCK, LAB_EUCLID, LAB_CHOIR, LAB_VOCODER, LAB_METAL, LAB_N };
-       /* (0.16.30: the P-locks' kick, the Euclidean rhythm; 0.16.44: CHOIR, VOCODER, METAL) */
+       LAB_RATCH, LAB_PLOCK, LAB_EUCLID, LAB_CHOIR, LAB_VOCODER, LAB_METAL, LAB_SDS, LAB_N };
+       /* (0.16.30: the P-locks' kick, the Euclidean rhythm; 0.16.44: CHOIR, VOCODER, METAL; 0.16.49: the SDS) */
 #define LAB_P_TRAUMA (-1)
 #define LAB_P_DICE (-2)
 #define LAB_P_RVMODE (-3)                /* (0.16.44) the reverb's algorithm: METAL or SHIMMER */
@@ -281,6 +281,36 @@ __attribute__((used, visibility("default"))) uint32_t lab_setup(uint32_t id)
         p->val[eng_track_param(3, TP_SEND)] = 0.85f, p->val[eng_track_param(3, TP_DSEND)] = 0.0f;
         lab_lane = 3;
         lab_k(4, PG_REVERB * 4 + 0, PG_REVERB * 4 + 1, PG_REVERB * 4 + 2, LAB_P_RVMODE);
+    } else if (id == LAB_SDS) {          /* (0.16.49) the SDS on three tracks, as the SDS 8's channels: the kick (1, 9,
+                                          * 11), the snare on two and four (a ghost note struck softly: HIT locked),
+                                          * the toms' fill falling down the bar's end, a little of the reverb */
+        static const int8_t K[16] = {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0},
+                            S[16] = {0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0},
+                            T[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 3, -4};   /* (a tom: its note + 1) */
+        const int8_t *seq[3] = {K, S, T};
+        for (int t = 0; t < 3; t++) {
+            eng_set_model(t, eng_model_find(MK_SDS, t));
+            p->algo[PG_FILT(t, 0)] = MF_OFF;
+            for (int tp = 0; tp < ENG_NTP; tp++)
+                p->rnd[t][tp] = 0;       /* (the groove's randoms: none, every hit as written) */
+            p->val[PG_STEP(t) * 4 + 1] = 1.0f;
+            p->val[PG_PAN * 4 + t] = t == 2 ? -0.2f : 0.0f;
+            p->val[eng_track_param(t, TP_SEND)] = t ? 0.22f : 0.0f;
+            p->val[eng_track_param(t, TP_DSEND)] = 0.0f;
+            eng_steps_clear(t);
+            for (int st = 0; st < 16; st++)
+                if (seq[t][st]) {
+                    eng_trig_set(t, st, 1);
+                    if (t == 2)
+                        eng_lock_set(t, st, TP_NOTE, (float)(seq[t][st] - 1));
+                }
+        }
+        eng_lock_set(1, 7, lab_tp(lab_mparam(1, 5)), lab_value(lab_mparam(1, 5), 0.25f));   /* (the ghost note) */
+        lab_only(p, 1, 0.9f);
+        lab_unduck(p);
+        p->val[PG_MIX * 4 + 1] = 0.8f, p->val[PG_MIX * 4 + 2] = 0.85f;
+        lab_lane = 2;
+        lab_k(4, lab_mparam(2, 7), lab_mparam(2, 3), lab_mparam(1, 1), lab_mparam(0, 2));
     } else if (id == LAB_EUCLID) {       /* (0.16.30) a percussion alone, its Euclidean rhythm (5 over 16) */
         eng_set_model(0, eng_model_find(MK_DRUM, 5));
         p->algo[PG_FILT(0, 0)] = MF_OFF;

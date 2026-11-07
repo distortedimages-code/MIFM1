@@ -190,8 +190,9 @@ float warps_shift_hz(float pot) {       // the frequency shifter's shift (modula
 }
 
 // the models (0.9), in ALGORITHM's order: MIFM1's drums (mi_drum.cc, after Sonic Charge's Microtonic), the LXR-02's
-// FM drums (mi_lxr.cc), MIFM1's own voices (ZERO, mi_zero.cc), then Plaits' (mi_plaits.cc: its 1.2 bank, its pitched
-// one, its noises and physical models; its three drums gone to MIFM1's). What plays each (its kind), its index there,
+// FM drums (mi_lxr.cc), the SDS' (0.16.49, mi_sds.cc, after Simmons' SDS 8; their bank the sixth), MIFM1's own voices
+// (ZERO, mi_zero.cc), then Plaits' (mi_plaits.cc: its 1.2 bank, its pitched one, its noises and physical models; its
+// three drums gone to MIFM1's). What plays each (its kind), its index there,
 // its bank, its name in four letters or so (the tracks' row)
 struct ModelDef {
   const char* name;
@@ -202,6 +203,8 @@ const ModelDef kModelDef[ENG_MODELS] = {
   {"KICK", "KICK", MK_DRUM, 0, 0}, {"SNARE", "SNAR", MK_DRUM, 1, 0}, {"CLAP", "CLAP", MK_DRUM, 2, 0},
   {"HAT", "HAT", MK_DRUM, 3, 0}, {"TOM", "TOM", MK_DRUM, 4, 0}, {"PERC", "PERC", MK_DRUM, 5, 0},
   {"FM DRUM", "FDRM", MK_LXR, 0, 1}, {"FM SNARE", "FSNR", MK_LXR, 1, 1},
+  {"SDS KICK", "SKCK", MK_SDS, 0, 5}, {"SDS SNARE", "SSNR", MK_SDS, 1, 5}, {"SDS TOM", "STOM", MK_SDS, 2, 5},
+  {"SDS PERC", "SPRC", MK_SDS, 3, 5},
   {"ZERO", "ZERO", MK_ZERO, 0, 2},
   {"FM", "FM", MK_FM, 0, 2}, {"PADS", "PADS", MK_PADS, 0, 2}, {"POLY", "POLY", MK_POLY, 0, 2},
   {"REV3", "REV3", MK_PROPHET, 0, 2}, {"TAURUS", "TAUR", MK_TAURUS, 0, 2},
@@ -215,11 +218,13 @@ const ModelDef kModelDef[ENG_MODELS] = {
 // were spread from -16, ZERO, to -30, POLY and SPEECH), -22 the kicks, -24 the snares and the toms, -25 the clap, -26 the
 // perc, -28 the cymbal, -29 the hats (from -20 to -35). In quarter decibels, on the voice as it comes out (before its
 // bits, its filter, Warps). (0.16.43: CHOIR's a held C5 as loud as the synths' held notes, -16 LUFS on their
-// average here, measured)
-const int8_t kModelTrim[ENG_MODELS] = {13, 10, 13, 18, 3, 8, -7, 0, -21, -17, -12, 30, 20, 8, -3, 2, 8, 35, 1, 14, 10, 32, -8};
+// average here, measured; 0.16.49: the SDS' as MIFM1's drums, -22 the kick, -24 the snare and the tom, -26 the perc)
+const int8_t kModelTrim[ENG_MODELS] = {13, 10, 13, 18, 3, 8, -7, 0, -12, -23, -31, -30, -21, -17, -12, 30, 20, 8, -3, 2, 8,
+                                       35, 1, 14, 10, 32, -8};
 const int kModels34 = 25, kOtis34 = 15;   // (0.16.24 to 0.16.42's numbers: 25 models, OTIS 15)
 const int8_t kFrom34[kModels34] = {0, 1, 2, 3, 4, 5, 6, 7, 3, 3, 8, 9, 10, 11, 12, 11, 13, 14, 16, 17, 18, 19, 20, 21, 22};
-const char* const kBankNames[ENG_BANKS] = {"DRUMS", "FM DRUMS", "MIFM1", "PLAITS", "NOISE & PHYSICAL"};
+const char* const kBankNames[ENG_BANKS] = {"DRUMS", "FM DRUMS", "MIFM1", "PLAITS", "NOISE & PHYSICAL", "SDS"};
+const int kSdsAt = 8, kSdsN = 4;        // (0.16.49: the SDS' four at 8, the models from there four further on)
 inline const ModelDef& mdef(int m) { return kModelDef[m < 0 ? 0 : m >= ENG_MODELS ? ENG_MODELS - 1 : m]; }
 
 const char* const kSrcNames[NSRC] = {"-", "L1", "L2", "L3"};
@@ -1104,8 +1109,8 @@ uint8_t trig_tie[ENG_LANES];            // the trig playing's
 const int kTpNote2 = ENG_NTP + 1;
 uint8_t trig_iv[ENG_TRACKS][3], trig_cn[ENG_TRACKS];   // the trig playing's
 // (0.16.40) a step's model: a lock of its own (tp kTpModel, its value the model's number), another model of the
-// track's family (Plaits' six engines, the six drums, the two FM drums: one voice that changes its engine at a trig,
-// its knobs as they are), played from that trig to the next
+// track's family (Plaits' six engines, the six drums, the two FM drums, the SDS' four: one voice that changes its
+// engine at a trig, its knobs as they are), played from that trig to the next
 const int kTpModel = ENG_NTP + 4;
 uint8_t trig_model[ENG_TRACKS];         // the trig playing's: its model + 1 (0: the track's)
 void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_param, lane_lockable, the bounds)
@@ -1712,7 +1717,9 @@ void fx_lanes(uint32_t n, float* open) {
 // parameters after FREQ (1..8: HARMONICS, TIMBRE, MORPH, DECAY, COLOUR, T.ENV, M.ENV, P.ENV)
 inline int track_kind(int t) { return mdef(proj.algo[PG_TRACK(t, 0)]).kind; }
 inline int track_sub(int t) { return mdef(proj.algo[PG_TRACK(t, 0)]).sub; }
-inline int family(int kind) { return kind == MK_PLAITS || kind == MK_DRUM || kind == MK_LXR; }   // (0.16.40)
+inline int family(int kind) {           // (0.16.40; 0.16.49: the SDS' four, one kit on a track)
+  return kind == MK_PLAITS || kind == MK_DRUM || kind == MK_LXR || kind == MK_SDS;
+}
 inline int voice_model(int t) {         // (0.16.40) the model the voice plays: its trig's (the track's family), else
   const int a = proj.algo[PG_TRACK(t, 0)], m = trig_model[t] - 1;   // the track's
   return m >= 0 && m < ENG_MODELS && family(mdef(a).kind) && mdef(m).kind == mdef(a).kind ? m : a;
@@ -1815,6 +1822,7 @@ void mclaim(int t) {
   if (mowner[t] == k) return;
   if (k == MK_ZERO) zero_reset(t);
   else if (k == MK_DRUM) drum_reset(t);
+  else if (k == MK_SDS) sds_reset(t);
   else if (k == MK_FM) fm4_reset(t);
   else if (k == MK_POLY) poly_reset(t);
   else if (k == MK_PROPHET) pro_reset(t);
@@ -1843,6 +1851,7 @@ MI_COLD void kit_of(int m, float* k) {          // a model's knobs as its kit ha
   const ModelDef& d = mdef(m);
   if (d.kind == MK_ZERO) zero_defaults(k);
   else if (d.kind == MK_DRUM) drum_defaults(d.sub, k);
+  else if (d.kind == MK_SDS) sds_defaults(d.sub, k);
   else if (d.kind == MK_FM) fm4_defaults(k);
   else if (d.kind == MK_PADS) pads_defaults(k);
   else if (d.kind == MK_POLY) poly_defaults(k);
@@ -1863,8 +1872,9 @@ MI_COLD void lx_kit(project_t* p, int t) {      // its knobs as its kit has them
     int param = lx_param(t, i);
     p->val[param] = eng_pdef(param)->kind == K_BIP ? 2.0f * k[i] - 1.0f : k[i];
   }
-  if (d.kind == MK_DRUM || d.kind == MK_LXR)   // OCTAVE 0: C3 plays the kit's own pitch (a bass's -1 would halve a
-    p->val[PG_TRACK(t, 2) * 4 + 3] = 0.0f;     // kick; ZERO, the FM play the note as Plaits does: its octave kept)
+  if (d.kind == MK_DRUM || d.kind == MK_LXR || d.kind == MK_SDS)   // OCTAVE 0: C3 plays the kit's own pitch (a
+    p->val[PG_TRACK(t, 2) * 4 + 3] = 0.0f;     // bass's -1 would halve a kick; ZERO, the FM play the note as Plaits
+                                               // does: its octave kept)
 }
 
 // the presets (0.15.1): a track's sound, its eight pages (eng_sound_t) in this order: Plaits' three (the sound, the
@@ -2036,6 +2046,7 @@ void set_voice(int t) {
     if (scale_on_t(t)) note = static_cast<float>(quantize(iround(note)));
     if (kind == MK_ZERO) zero_set(t, note, k);
     else if (kind == MK_DRUM) drum_set(t, sub, note, k);
+    else if (kind == MK_SDS) sds_set(t, sub, note, k);
     else if (kind == MK_FM) fm4_set(t, note, k);
     else if (kind == MK_PADS) {
       if (t == pad_track) pads_set(note, k, pad_chord, pad_n, Pi(PG_GLOBAL, 2));
@@ -2454,7 +2465,7 @@ void render_voice(int t, uint32_t n) {
   int lx = kind == MK_LXR, ac = kind == MK_ZERO, dr = kind == MK_DRUM, fm = kind == MK_FM;   // drum, the FM, PADS:
   int pd = kind == MK_PADS, pd_on = pd && t == pad_track;   // their gate, their own render (PADS: one track's)
   int po = kind == MK_POLY, px = kind == MK_PROPHET, ch = kind == MK_CHOIR, tau = kind == MK_TAURUS;
-  int vc = kind == MK_VOCODER, stc = kind == MK_STATIC;
+  int vc = kind == MK_VOCODER, stc = kind == MK_STATIC, sd = kind == MK_SDS;
   uint32_t step = n / kFrames, pos = 0;
   for (uint32_t k = 0; k < kFrames; ++k) {
     int g = fg[t][k];
@@ -2464,6 +2475,7 @@ void render_voice(int t, uint32_t n) {
       if (lx) lx_render(t, &vbuf[t][pos], at - pos);
       else if (ac) zero_render(t, &vbuf[t][pos], at - pos);
       else if (dr) drum_render(t, &vbuf[t][pos], at - pos);
+      else if (sd) sds_render(t, &vbuf[t][pos], at - pos);
       else if (fm) fm4_render(t, &vbuf[t][pos], at - pos);
       else if (po) poly_render(t, &vbuf[t][pos], at - pos);
       else if (px) pro_render(t, &vbuf[t][pos], at - pos);
@@ -2488,6 +2500,7 @@ void render_voice(int t, uint32_t n) {
     }
     if (ac) zero_gate(t, g);
     else if (dr) drum_gate(t, g);
+    else if (sd) sds_gate(t, g);
     else if (fm) fm4_gate(t, g);
     else if (po) poly_gate(t, g);
     else if (px) pro_gate(t, g);
@@ -2506,6 +2519,7 @@ void render_voice(int t, uint32_t n) {
     if (lx) lx_render(t, &vbuf[t][pos], n - pos);
     else if (ac) zero_render(t, &vbuf[t][pos], n - pos);
     else if (dr) drum_render(t, &vbuf[t][pos], n - pos);
+    else if (sd) sds_render(t, &vbuf[t][pos], n - pos);
     else if (fm) fm4_render(t, &vbuf[t][pos], n - pos);
     else if (po) poly_render(t, &vbuf[t][pos], n - pos);
     else if (px) pro_render(t, &vbuf[t][pos], n - pos);
@@ -3257,6 +3271,7 @@ MI_COLD const char* eng_param_name(int param) {
   if (lk >= 0) {
     int t = param / 12;
     return zero_on(t) ? zero_knob_name(lk) : track_kind(t) == MK_DRUM ? drum_knob_name(lk)
+                                           : track_kind(t) == MK_SDS ? sds_knob_name(lk)
                                            : track_kind(t) == MK_FM ? fm4_knob_name(lk)
                                            : track_kind(t) == MK_PADS ? pads_knob_name(lk)
                                            : track_kind(t) == MK_POLY ? poly_knob_name(lk)
@@ -3291,6 +3306,7 @@ int eng_param_centered(int param) {
   if (k == MK_TAURUS) return lk == 5;   // (CONTOUR: a swell to the left, its depth to the right)
   if (k == MK_VOCODER) return lk == 6;  // (SHIFT: the voice lower or higher)
   if (k == MK_CHOIR) return 0;
+  if (k == MK_SDS) return lk == 7;      // (0.16.49: BEND down or up; HIT, DRIVE from the left)
   return c;
 }
 
@@ -3469,7 +3485,7 @@ MI_COLD float eng_lx_step(int param, float v, int detents) {
   int lk = eng_lx_knob(param), bip = eng_pdef(param)->kind == K_BIP;
   if (lk < 0) return v;
   int t = param / 12;
-  int n = zero_on(t) ? zero_knob_steps(lk) : track_kind(t) == MK_DRUM ? drum_knob_steps(lk)
+  int n = zero_on(t) ? zero_knob_steps(lk) : track_kind(t) == MK_DRUM || track_kind(t) == MK_SDS ? 128
                                             : track_kind(t) == MK_FM ? fm4_knob_steps(lk)
                                             : track_kind(t) == MK_PADS ? pads_knob_steps(lk)
                                             : track_kind(t) == MK_POLY ? poly_knob_steps(lk)
@@ -3599,6 +3615,7 @@ MI_COLD int eng_sound_set(int t, const eng_sound_t* s) {
     was_plaits |= m == 8 || m == 9 || m == kOtis34;
     m = m >= 0 && m < kModels34 ? kFrom34[m] : 0;
   }
+  if (s->version <= 8 && m >= kSdsAt) m += kSdsN;   // (0.16.49: the SDS at 8, the models from there four further on)
   m = m >= 0 && m < ENG_MODELS ? m : 0;
   if (!eng_model_free(t, m)) return -2;   // (PADS: once a project)
   for (int i = 0; i < SND_PAGES; ++i) {
@@ -3709,6 +3726,8 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
     zero_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0 && track_kind(param / 12) == MK_DRUM) {   // a drum's (times, Hz, semitones)
     drum_knob_text(track_sub(param / 12), lk, lx_u(param, v), b, n);
+  } else if (lk >= 0 && track_kind(param / 12) == MK_SDS) {   // the SDS' (Hz, the balance, times, semitones)
+    sds_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0 && track_kind(param / 12) == MK_FM) {     // the FM's (an algorithm, a voicing, cents, times, %)
     fm4_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0 && track_kind(param / 12) == MK_PADS) {   // PADS' (a progression, a color, a voicing, times, %)
@@ -4487,11 +4506,12 @@ MI_COLD void kit_fresh(project_t* p, int t) {
 }
 // (0.16.43) FM CYMBAL (8), FM HI-HAT (9) and OTIS (15) gone, CHOIR at 15 (after VOCODER): 0.16.24's to 0.16.42's
 // numbers to these; a track on a model gone plays the nearest (the cymbal, the hi-hat: HAT; OTIS: POLY) from its kit;
-// a step's model gone, none
+// a step's model gone, none. (0.16.49: to this version's numbers at once, the SDS' place made: sds_at)
+inline int sds_at(int m) { return m >= kSdsAt ? m + kSdsN : m; }   // (0.16.43's number: this version's)
 MI_COLD void models_v35(project_t* p) {
   for (int t = 0; t < ENG_TRACKS; ++t) {
     const int o = p->algo[PG_TRACK(t, 0)];
-    p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(o < kModels34 ? kFrom34[o] : 0);
+    p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(sds_at(o < kModels34 ? kFrom34[o] : 0));
     if (o == 8 || o == 9 || o == kOtis34) kit_fresh(p, t);
   }
   if (p->algo[PG_COMP] >= MB_OTT) p->algo[PG_COMP] = MB_COMP;   // (OTT gone too: the compressor)
@@ -4499,7 +4519,7 @@ MI_COLD void models_v35(project_t* p) {
     plock_t& k = p->lock[i];
     if (k.lane >= ENG_TRACKS || k.tp != kTpModel) continue;
     if (k.v >= kModels34 || k.v == 8 || k.v == 9 || k.v == kOtis34) k.lane = 0xFF;
-    else k.v = static_cast<uint8_t>(kFrom34[k.v]);
+    else k.v = static_cast<uint8_t>(sds_at(kFrom34[k.v]));
   }
 }
 MI_COLD void models_from(project_t* p, int at) {   // a machine come in at at: the numbers from there one further on
@@ -4509,6 +4529,13 @@ MI_COLD void models_from(project_t* p, int at) {   // a machine come in at at: t
   }
   for (int i = 0; i < ENG_PLOCKS; ++i)             // (0.16.40: a step's model too)
     if (p->lock[i].lane < ENG_TRACKS && p->lock[i].tp == kTpModel && p->lock[i].v >= at) ++p->lock[i].v;
+}
+MI_COLD void sds_in(project_t* p) {      // (0.16.49) 0.16.43's to 0.16.48's numbers: the SDS' four at 8, the models
+  for (int t = 0; t < ENG_TRACKS; ++t)   // from there four further on, a step's model too
+    p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(sds_at(p->algo[PG_TRACK(t, 0)]));
+  for (int i = 0; i < ENG_PLOCKS; ++i)
+    if (p->lock[i].lane < ENG_TRACKS && p->lock[i].tp == kTpModel)
+      p->lock[i].v = static_cast<uint8_t>(sds_at(p->lock[i].v));
 }
 MI_COLD void taurus_in(project_t* p) { models_from(p, 16); }   // (0.16.20)
 MI_COLD void vocoder_in(project_t* p) { models_from(p, 17); }  // (0.16.21)
@@ -4670,10 +4697,11 @@ int upgrade_any(project_t* p, int bytes);
 MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them, sizeof(project_t) >= the largest)
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   const int v = p->magic == PROJECT_MAGIC ? static_cast<int>(p->version) : 0;
-  if ((v == 33 || v == 34) && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+  if (v >= 33 && v <= 35 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
     p->version = PROJECT_VERSION;       // (0.16.23: its layout this one; STATIC at 18, the models from there one
-    if (v == 33) static_in(p);          // further on; 0.16.24 to 0.16.42: the models gone, CHOIR's place)
-    models_v35(p);
+    if (v == 33) static_in(p);          // further on; 0.16.24 to 0.16.42: the models gone, CHOIR's place; 0.16.43 to
+    if (v <= 34) models_v35(p);         // 0.16.48: the SDS' place)
+    else sds_in(p);
     return 1;
   }
   if (v >= 27 && v <= 32 && bytes == static_cast<int>(sizeof(project_v32)) && p->size == sizeof(project_v32)) {
@@ -4802,6 +4830,7 @@ MI_COLD void cut_now() {
     const int k = mowner[t];
     if (k == MK_ZERO) zero_silence(t);
     else if (k == MK_DRUM) drum_silence(t);
+    else if (k == MK_SDS) sds_silence(t);
     else if (k == MK_FM) fm4_silence(t);
     else if (k == MK_POLY) poly_silence(t);
     else if (k == MK_PROPHET) pro_silence(t);

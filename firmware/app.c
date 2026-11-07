@@ -562,6 +562,7 @@ static const char *module_name(int page)
                                                                         : track_kind(ptrack(page)) == MK_ZERO ? "Zero"
                                                                         : track_kind(ptrack(page)) == MK_DRUM ? "Drum"
                                                                         : track_kind(ptrack(page)) == MK_LXR ? "FM drum"
+                                                                        : track_kind(ptrack(page)) == MK_SDS ? "SDS"
                                                                         : track_kind(ptrack(page)) == MK_FM ? "FM"
                                                                         : track_kind(ptrack(page)) == MK_PADS ? "Pads"
                                                                         : track_kind(ptrack(page)) == MK_POLY ? "Poly"
@@ -1097,6 +1098,17 @@ static const vop_t ICONS[NICON][IOPS] = {
      {'L', 20, 12, 23, 17}},                                                                        /* FM drum */
     {{'R', 6, 13, 20, 11}, {'L', 6, 17, 26, 17}, {'L', 7, 9, 11, 5}, {'L', 11, 5, 15, 9}, {'L', 15, 9, 19, 5},
      {'L', 19, 5, 23, 9}},                                                                          /* FM snare */
+    {{'L', 16, 3, 27, 9}, {'L', 27, 9, 27, 23}, {'L', 27, 23, 16, 29}, {'L', 16, 29, 5, 23}, {'L', 5, 23, 5, 9},
+     {'L', 5, 9, 16, 3}, {'D', 16, 16, 3, 0}},                                                      /* SDS KICK: a
+                                                                                                     * Simmons pad */
+    {{'L', 16, 3, 27, 9}, {'L', 27, 9, 27, 23}, {'L', 27, 23, 16, 29}, {'L', 16, 29, 5, 23}, {'L', 5, 23, 5, 9},
+     {'L', 5, 9, 16, 3}, {'L', 10, 19, 22, 19}, {'L', 10, 14, 22, 14}},                             /* SDS SNARE */
+    {{'L', 16, 3, 27, 9}, {'L', 27, 9, 27, 23}, {'L', 27, 23, 16, 29}, {'L', 16, 29, 5, 23}, {'L', 5, 23, 5, 9},
+     {'L', 5, 9, 16, 3}, {'L', 9, 12, 16, 16}, {'L', 16, 16, 23, 18}},                              /* SDS TOM: its
+                                                                                                     * bend down */
+    {{'L', 16, 3, 27, 9}, {'L', 27, 9, 27, 23}, {'L', 27, 23, 16, 29}, {'L', 16, 29, 5, 23}, {'L', 5, 23, 5, 9},
+     {'L', 5, 9, 16, 3}, {'L', 9, 20, 16, 16}, {'L', 16, 16, 23, 10}},                              /* SDS PERC: up,
+                                                                                                     * the tabla */
     {{'C', 16, 16, 11, 0}, {'L', 6, 16, 9, 11}, {'L', 9, 11, 12, 11}, {'L', 12, 11, 16, 16}, {'L', 16, 16, 20, 21},
      {'L', 20, 21, 23, 21}, {'L', 23, 21, 26, 16}},                                                 /* ZERO: a sine
                                                                                                      * through zero */

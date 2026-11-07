@@ -7,7 +7,7 @@
 # transposed by a key), Warps (off, patched, its algorithms, its oscillator, the frequency shifter), a save kept across
 # a power-off and in a backup, the patterns (SEQ held) and the presets (EDIT held: a factory sound, one saved, one
 # erased, the dark pad on another track), a new project (INIT: GLO, SELECT, REC held), the saved one back, the stress test (on
-# Plaits, then on the FM drums: their pages, a model chosen bringing its kit; ZERO, its knobs; the FM: its three pages,
+# Plaits, then on the FM drums: their pages, a model chosen bringing its kit; the SDS: its pages, its tom, its perc; ZERO, its knobs; the FM: its three pages,
 # another algorithm (its drawing), a chord, a SHAPE drawn; PADS, its progression playing, SCALE Prog, then FOLLOW its track; POLY, its MODE; REV3, its sweep; TAURUS; VOCODER; CHOIR, alone and four), an FM-1 without the
 # module tables, then the tables arriving; before them, a live recording (REC and PLAY: counted in, notes, a chord, a long
 # note; the steps and their keys after) and the metronome off (GLO and PLAY). Screenshots in the output folder.
@@ -763,6 +763,28 @@ shot 18n_kick_back.png
 turn ALGO 4
 wait 400
 shot 18o_fm_snare_kit.png
+turn ALGO 1
+wait 400
+shot 18o1_sds_kick.png
+wav sds_kick.wav
+wait 3000
+wavstop
+turn SELECT 1
+wait 400
+shot 18o2_sds_env.png
+turn SELECT 1
+wait 400
+shot 18o3_sds_bend.png
+turn SELECT -2
+turn ALGO 2
+wait 400
+shot 18o4_sds_tom.png
+wav sds_tom.wav
+wait 3000
+wavstop
+turn ALGO 1
+wait 400
+shot 18o5_sds_perc.png
 turn ALGO 1
 wait 400
 shot 18p_zero.png

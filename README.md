@@ -127,7 +127,7 @@ laisser la page écrire les tables des modules après le firmware. Le firmware d
 machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
 pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
 en quatre gestes, le chemin du son (un schéma), le panneau (chaque numéro allume son repère sur la machine ;
-« Repères » les montre tous), les 23 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
+« Repères » les montre tous), les 27 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
 et ce qu'ils modélisent, leur histoire et des photos d'archives (Wikimedia Commons), les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le circuit bending,
 les effets, le séquenceur, la dose d'aléatoire, les spécifications, et des jauges de la charge du FM-1. « Essayer »,
 sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_try). Pour écouter MIFM1 sur un autre système (une
@@ -170,6 +170,11 @@ sur le même écran :
   un accord par mesure, le kick dessous ; TONE, ENSEMBLE, SHIFT, AIR ;
 - **METAL** : les stabs de la démo, ouverts et une octave plus haut, envoyés loin dans la réverbe ; DECAY (jusqu'à
   Freeze), SIZE, TONE, et MODE pour passer à SHIMMER.
+- **SDS** (0.16.49) : un SDS sur trois pistes, comme ses canaux : la grosse caisse (1, 9, 11), la caisse claire sur le
+  deux et le quatre (une note fantôme frappée doucement au pas 8 : HIT verrouillé), le roulement de toms qui descend la
+  fin de la mesure, un peu de réverbe ; le BEND et le DECAY des toms, la BALANCE de la caisse claire, le CLICK de la
+  grosse caisse. Sa slide a aussi l'histoire des hexagones (Dave Simmons, Richard James Burgess, Warren Cann qui essaie
+  le SDS 8 pour Electronics & Music Maker), le schéma de sa voix, la mesure du tom et deux photos.
 
 En 0.16.45, TAURUS joue une boucle (sans légende depuis la 0.16.46) : le kick sur chaque temps, la caisse claire sur
 le deux et le quatre, la basse qui galope entre les kicks sur les doubles croches (fa mineur, ses sauts d'octave), la
@@ -359,7 +364,51 @@ FM-1 n'a pas ; leur enveloppe d'amplitude garde exactement la valeur du double (
 en float, et `make lxr-check` compare les deux : 99,99 % des échantillons identiques à ceux du LXR-02, les autres à
 quelques pas de 16 bits (-111 dB).
 
-**ZERO** (0.8.1, à la place d'ARC, la voix de la 0.8.0 ; ALGORITHM après FM SNARE, la banque MIFM1) : la voix écrite
+**SDS** (0.16.49 ; ALGORITHM après FM SNARE, la banque SDS) : quatre batteries d'après le **Simmons SDS 8** (1984),
+le cerveau des pads hexagonaux. Son manuel donne la recette en une ligne : les sons sont « compiled from a controlled
+blend of tone and noise ». Une seule voix, comme les cinq canaux du SDS 8 étaient un seul circuit, et quatre kits :
+**SDS KICK** (la grosse caisse : en do 3, 105 Hz à la frappe, qui plonge), **SDS SNARE** (ton et bruit presque à
+parts égales, le bruit brillant et non balayé, comme sur le canal de caisse claire), **SDS TOM** (le « pew » : 190 Hz
+en do 3, la note de chaque pas l'accorde) et **SDS PERC** (le même circuit, aigu, son bruit qui sonne dans un filtre
+résonant, sa hauteur tirée vers le haut : le tabla que suggère le manuel). La voix :
+- le **ton** : un oscillateur triangle à cœur libre (chaque frappe le prend où il en est), sa montée un peu plus courte
+  que sa descente (la deuxième harmonique vers -20 dB : la chaleur qu'un triangle idéal n'a pas), passé dans un
+  passe-bas RC passif qui arrondit ses angles ; quelques cents de dérive, et deux frappes jamais identiques (±4 cents,
+  ±0,3 dB) ;
+- le **bend** : la hauteur à partir de la frappe, vers le bas (la peau qui se détend) ou vers le haut, vers sa
+  profondeur selon une exponentielle 2,4 fois plus lente que la décroissance : elle descend encore quand le son
+  s'éteint ;
+- le **bruit** : blanc, dans un passe-bas à quatre pôles résonant (la résonance tenue sous l'auto-oscillation, comme le
+  SSM2044 du SDS-V), ouvert par la frappe et qui se referme avec son enveloppe (la caisse claire : non balayé) ;
+- le **clic** : le bruit de ce même filtre à travers un VCA de quelques millisecondes, l'impulsion du trigger dedans
+  (« The brightness of the click is simultaneously affected by the Filter control ») ;
+- la sortie : des amplificateurs OTA qui saturent doucement (un peu polarisés : des harmoniques paires), le
+  condensateur de liaison.
+
+| 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **FILTER** (le bruit et le clic, 60 Hz à 14 kHz) | **BALANCE** (le ton, le bruit) | **CLICK** (son niveau) | **DECAY** (20 ms à 3,9 s) | **N.DECAY** (celle du bruit, x0,25 à x4 de DECAY) | **HIT** (la force du coup) | **DRIVE** (la saturation) | **BEND** (du milieu : Dn vers le bas, Up vers le haut, jusqu'à 48 demi-tons) |
+
+FILTER, BALANCE, CLICK, DECAY et BEND sont ceux de la façade du SDS 8, PITCH est FREQ (un pas en do 3 joue la hauteur
+du kit ; choisir un SDS met l'OCTAVE de la piste à 0). Les trois autres sont à MIFM1 : N.DECAY donne au bruit sa propre
+longueur (comme sur le SDS-V), **HIT** remplace la vélocité des pads (plus fort, un bruit plus brillant, plus de bend
+et plus de clic ; un lock ou un aléatoire par pas : la dynamique), DRIVE pousse les amplificateurs jusqu'à aplatir
+l'onde. Le modèle d'un pas peut être n'importe lequel des quatre (pas une batterie d'une autre banque) : tout un SDS
+sur une piste. Un trig sur un son qui sonne encore le relance sans clic. Ils coûtent au FM-1 7 % d'un bloc par voix ;
+leurs niveaux sont ceux des batteries de MIFM1 (-22 LUFS la grosse caisse, -24 la caisse claire et le tom, -26 la
+percussion).
+
+**Mesuré.** Aucun algorithme du SDS 8 n'est publié (GitHub n'a que des échantillons, et un émulateur du séquenceur du
+SDS6) ; sa voix a donc été prise au son, contre les quarante frappes d'un **SDS 1000** (1986) que Wolf Meijer partage
+sur GitHub : ses trois toms y sont encore analogiques (sa grosse caisse est calculée, sa caisse claire échantillonnée :
+elles n'ont servi qu'à l'équilibre du ton et du bruit). Sur les toms, la hauteur suit une exponentielle (à 0,05 à 0,1
+demi-ton près) deux à trois fois plus lente que la décroissance (par exemple 308 ms contre 151 ms), la deuxième
+harmonique est entre -20 et -24 dB, la troisième vers -27 dB, le clic dure quelques millisecondes (3 à 15) de bruit brillant. Accordé sur la
+même frappe, SDS TOM descend de 288 à 153 Hz en 300 ms quand le tom du SDS 1000 va de 289 à 166 Hz (la figure est sur
+le site). Les projets enregistrés avec les 0.16.43 à 0.16.48 et leurs sons se relisent : les modèles à partir de ZERO
+passent quatre crans plus loin (un pas réglé sur l'un d'eux aussi).
+
+**ZERO** (0.8.1, à la place d'ARC, la voix de la 0.8.0 ; ALGORITHM après SDS PERC, la banque MIFM1) : la voix écrite
 pour MIFM1, des sinusoïdes pures en **vraie FM à travers zéro**. Une sinusoïde porte la note ; un modulateur la module
 en fréquence linéairement, comme l'entrée FM « through zero » d'un oscillateur analogique : la fréquence de la porteuse
 est la note plus INDEX fois la note fois le modulateur. Au-delà d'INDEX 1, elle passe sous zéro et la phase repart à
@@ -1425,7 +1474,8 @@ Chaque moteur de MIFM1 doit quelque chose à une machine, et le site le raconte,
 ([distortedimages-code.github.io/MIFM1/emu](https://distortedimages-code.github.io/MIFM1/emu/)) :
 
 - les batteries : le **Microtonic** de Sonic Charge (Magnus Lidström, 2003) ; les batteries FM : le **LXR-02** d'Erica
-  Synths, héritier du LXR de Sonic Potions (son code) ;
+  Synths, héritier du LXR de Sonic Potions (son code) ; SDS : le **SDS 8** de Simmons (1984) et avant lui le **SDS-V**
+  (1981) de Dave Simmons et Richard James Burgess, ses pads hexagonaux ;
 - la FM : la puce **YM2612** de la Mega Drive (Yamaha, 1988) et les enveloppes du **DX7** (1983) ; ZERO : la FM à travers
   zéro, de John Chowning aux oscillateurs analogiques ;
 - PADS : le tintinnabuli d'**Arvo Pärt** (1976), les string machines, et pour sa TEXTURE les nappes usées de **Boards of
@@ -1495,7 +1545,16 @@ Sources : [Pretty Hate Machine](https://en.wikipedia.org/wiki/Pretty_Hate_Machin
 [l'Erbe-Verb retirée](https://synthanatomy.com/2024/05/make-noise-discontinued-erbe-verb.html),
 [le Muziekgebouw sur les sinus et le bruit blanc de Ryoji Ikeda](https://www.muziekgebouw.nl/en/ryoji-ikeda-s-sine-waves-and-white-noise-lz3y),
 [Pan Sonic au CTM](https://archive.ctm-festival.de/index.php?id=3622),
-[MusicTech sur l'ECHON 6](https://musictech.com/reviews/hardware-instruments/morphor-echon-6-review/) ; les autres sur le site.
+[MusicTech sur l'ECHON 6](https://musictech.com/reviews/hardware-instruments/morphor-echon-6-review/),
+[le manuel du SDS 8](https://thesnowfields.com/manuals/sds_8_user_guide.pdf),
+[Warren Cann, « The New Simmons Kits », E&MM, avril 1984](https://www.muzines.co.uk/articles/the-new-simmons-kits/7829),
+[Simmons SDS-V](https://en.wikipedia.org/wiki/Simmons_SDS-V),
+[Simmons](https://en.wikipedia.org/wiki/Simmons_(electronic_drum_company)),
+[le SDS 1000 dans Making Music, avril 1986](https://www.muzines.co.uk/articles/simmons-sds1000/4817),
+[les frappes du SDS 1000 (Wolf Meijer)](https://github.com/WMeijer14/Simmons-SDS1000-Decent-Sampler-),
+[le manuel du VSDSX d'Aly James](https://www.alyjameslab.com/ajlab_pdf/VSDSX_SIMMONS_SDSV_EXTENDED_USER_MANUAL.pdf),
+[Sonic State sur le SDS 8](https://www.sonicstate.com/synth/simmonds_sds8/),
+[la voix du SDS 7](https://xbs111.wordpress.com/2017/01/23/simmons-sds7-voice-architecture/) ; les autres sur le site.
 
 ## Le dépôt
 
