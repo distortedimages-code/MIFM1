@@ -2837,7 +2837,8 @@ static const char *ring_short(const char *s)
         {"FREQUENCY", "FREQ"}, {"MEDIUM", "MED"}, {"WARPS", "XMOD"}, {"FREQ SHIFT", "SHIFT"}, {"TRIANGLE", "TRI"},
         {"MAJOR", "MAJ"}, {"MINOR", "MIN"}, {"DORIAN", "DOR"}, {"PHRYGIAN", "PHR"}, {"LYDIAN", "LYD"},
         {"MIXOLYDIAN", "MIX"}, {"LOCRIAN", "LOC"}, {"HARM. MINOR", "HMIN"}, {"MEL. MINOR", "MMIN"},
-        {"MAJ. PENTA", "PMAJ"}, {"MIN. PENTA", "PMIN"}, {"WHOLE TONE", "WHOLE"}, {"HIRAJOSHI", "HIRA"},
+        {"MAJ. PENTA", "PMAJ"}, {"MIN. PENTA", "PMIN"}, {"WHOLE TONE", "WHOL"}, {"HIRAJOSHI", "HIRA"},
+        {"PHRYG. DOM", "PHDM"},          /* (0.16.61: every scale in the ring's big letters, none under it) */
         {"DIGITAL", "DIGI"}, {"COMPAR", "COMP"}, {"2 FWD 1 BACK", "+2-1"}, {"FOLLOW T1", "T1"}, {"FOLLOW T2", "T2"},
         {"FOLLOW T3", "T3"}, {"FOLLOW T4", "T4"}};
     for (uint32_t i = 0; i < sizeof M / sizeof M[0]; i++)

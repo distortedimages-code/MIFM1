@@ -1448,7 +1448,10 @@ Melodic minor, Major et Minor pentatonic, Blues, Whole tone, Hirajoshi, Prog : l
 haut ; puis, depuis 0.16.12, **Phryg. dom** (le phrygien dominant : la seconde mineure et la tierce majeure) et
 **Flip** (mineur une mesure, dorien la suivante : la sixte bémol, puis naturelle ; mineur à l'arrêt) ; depuis 0.16.42,
 **Follow T1** à **Follow T4** : l'accord d'une piste, voir plus haut), SWING (50 % : droit ; 75 % : les
-contretemps retardés d'une demi-double croche). Quand une gamme est choisie, tout ce qui fait une hauteur y reste :
+contretemps retardés d'une demi-double croche). Sur le potard, chaque gamme tient en quatre ou cinq lettres, dans
+l'anneau (OFF, MAJ, MIN, DOR, PHR, LYD, MIX, LOC, HMIN, MMIN, PMAJ, PMIN, BLUES, WHOL, HIRA, PROG, PHDM, FLIP, T1 à
+T4 ; depuis 0.16.61, Phryg. dom et Whole tone ne débordent plus en dessous) ; l'écran du dessus garde le nom entier.
+Quand une gamme est choisie, tout ce qui fait une hauteur y reste :
 FREQ (et ce que les câbles et la dose d'aléatoire en font : un LFO sur FREQ joue en escalier dans la gamme), la
 transposition, la note de l'oscillateur de Warps. Seul P.ENV glisse encore d'une note à l'autre : c'est l'enveloppe
 interne de Plaits, un glissando voulu.
