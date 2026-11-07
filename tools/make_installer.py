@@ -5,8 +5,7 @@
 front page in Markdown, a manual, the firmware in the browser). The same installer page (base/web/installer.html,
 with fm1ports.js, fm1pkg.js and fm1ota.js inlined): it writes the firmware, then the resource region (the Mutable
 Instruments tables, NAME-VERSION-res.bin, from beside the package), then offers m-bootloader. And the backup page
-(base/web/backup/index.html): the saved project to a file, and back; (0.16.53) the mirror's (base/web/mirror/index.html):
-the screen and the panel on the computer.
+(base/web/backup/index.html): the saved project to a file, and back.
 
     python3 tools/make_installer.py firmware/build/mifm1-0.1.fwsc 0.1 site
 
@@ -81,7 +80,7 @@ def main(pkg, version, out):
         raise SystemExit(f"base/web/installer.html: {' '.join(left)} not filled in")
     html = html.replace("/*LIB*/", lib).replace("/*META*/", meta).replace("/*APP*/", "null")
     (out / "install" / "index.html").write_text(html, encoding="utf-8")
-    for p, h in tool_pages(APP, conf).items():           # backup/index.html, mirror/index.html
+    for p, h in tool_pages(APP, conf).items():           # backup/index.html
         (out / p).parent.mkdir(parents=True, exist_ok=True)
         (out / p).write_text(h, encoding="utf-8")
     words = APP / "web" / "words"                        # the screen reader's words (the build writes them)
@@ -89,7 +88,7 @@ def main(pkg, version, out):
         shutil.copytree(words, out / "words")
     (out / ".nojekyll").write_text("")
     print(f"site: {out}: install/ ({product}, {file_name}, {res_name}: {len(payload)} B, m-bootloader "
-          f"{MBOOT_VERSION}), backup/, mirror/")
+          f"{MBOOT_VERSION}), backup/")
 
 
 if __name__ == "__main__":

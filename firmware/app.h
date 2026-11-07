@@ -45,9 +45,6 @@ enum { OBJ_PROJECT, OBJ_PANEL, OBJ_NOBJ };
 #define APP_BACKUP_MAGIC 0x3146494Du      /* "MIF1" */
 #define APP_BACKUP_VERSION 2u             /* (1: the v0.0 bench's results) */
 #define APP_BACKUP_WHAT "replaces the saved project"
-/* (0.16.53) the screen mirrored over USB (fm1.toml mirror = true: fm1-base's device/mirror.c, the site's mirror page):
- * what a slow link dropped, drawn again (app_redraw: the whole screen at the next frame) */
-#define APP_REDRAW
 
 /* the resource region: the biggest Mutable Instruments tables, out of the program flash, written by the installer
  * after the firmware; mi/res_tables.h, from tools/split_tables.py */
@@ -67,7 +64,6 @@ int app_backup_playing(void);
 void app_backup_flush(void);
 void app_backup_hold(int on);
 void app_backup_restored(void);
-void app_redraw(void);
 #ifdef PLAT_HOST
 #define APP_HOST_REBOOT                  /* the host simulator's "reboot": what RAM would forget, forgotten */
 void app_host_reboot(void);

@@ -65,12 +65,6 @@ usb_audio_out = false          # (a computer playing through it: not asked for, 
 cpu2 = true                    # the second core: tracks 3 and 4
 cpu2_fallback = true           # a failure of it: one core until power-off, not a restart
 backup = true                  # the project, to a file (and the resource region's transfer is the restore's)
-mirror = true                  # (0.16.53) the screen and the panel on a computer or an Android phone, over USB-MIDI
-                               # (fm1-base's device/mirror.c; the site's mirror/ page, Web MIDI: Chrome, Edge,
-                               # Firefox; not Safari, so no iPhone or iPad): ~5.5 KB of RAM and ~9.8 KB of the pool,
-                               # 6 of them the delay's line's (1.2 s to 1.13 s, mi_delay.cc); nothing while nobody
-                               # watches but a test at each blit, and while it mirrors the main loop's work, never the
-                               # sound's
 backup_ext = "mifm1"
 backup_holds = "the saved project"
 resources = "res/mi_tables.bin"   # the moved tables, as the FM-1 reads them in place (tools/split_tables.py)

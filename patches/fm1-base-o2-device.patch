@@ -7,8 +7,7 @@ nothing; a section attribute in the source would keep the compiler from inlining
 is not in the same section).
 
 Since 0.14.5 the RAM code's region is 42 KB (app.ld: RAMTEXT 0xA800, RAM and POOL after it; the pool 10 KB less,
-its spare 2 KB: fm1-base's 8 were room for a mirror; MIFM1's, since 0.16.53, is built in and counted in the pool),
-the build's RAM and pool figures with it.
+its spare 2 KB: MIFM1 builds no mirror), the build's RAM and pool figures with it.
 
 diff --git a/device/app.ld b/device/app.ld
 index 06002a2..1e032a5 100644

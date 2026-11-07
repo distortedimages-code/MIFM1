@@ -316,7 +316,7 @@ void mrv_set(void *r, int mode, float time, float damping, float diffusion);
 void mrv_process(void *r, const float *in, float *out_l, float *out_r, uint32_t n);
 
 /* ---- the delay (mi_delay.h: Mutable's filter and saturation in a 16-bit line, Zen Delay's knobs) ---- */
-uint32_t mdl_size(void);                 /* its 1.13 s line included */
+uint32_t mdl_size(void);                 /* its 1.2 s line included */
 void mdl_init(void *mem);
 /* time in samples, feedback 0..1, filter -1 (low pass) .. 1 (high pass), resonance, drive, mod 0..1 */
 void mdl_set(void *d, float time, float feedback, float filter, float resonance, float drive, int ping_pong,

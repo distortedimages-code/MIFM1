@@ -285,38 +285,6 @@ Sur
 Windows, les DAW en ASIO passent par FlexASIO ou ASIO4ALL (ou leur mode WASAPI). Le sens inverse (l'ordinateur qui joue
 dans le FM-1) n'est pas activé.
 
-## L'écran sur l'ordinateur (miroir)
-
-<https://distortedimages-code.github.io/MIFM1/mirror/> (0.16.53) : **l'écran et la façade du FM-1 en direct sur
-l'ordinateur**, par le câble USB (en SysEx, sur le MIDI du FM-1). Dans Chrome ou Edge : Connect, autoriser le MIDI ;
-la page trouve MIFM1 toute seule. Les boutons et les touches s'y allument comme leurs LED ; **Control** fait jouer le
-FM-1 depuis la page (un clic tient un bouton ou une touche, la molette tourne un potard) ; Save PNG garde l'écran. La
-page est celle de fm1-base. **Pas sur iPhone ni iPad** : Safari n'a pas Web MIDI, et sur iOS tous les navigateurs
-sont Safari dessous. Chrome sur Android l'a (pas essayé).
-
-**Ce qu'il coûte** : rien au son. Tant que personne ne regarde, un test à chaque dessin de l'écran ; quand une page
-regarde, le codage de ce qui change (une compression des pixels) dans la boucle principale, jamais dans le calcul
-du son, et l'USB envoie l'écran après les notes et l'horloge. En mémoire, ~5,5 Ko de RAM et ~9,8 Ko du pool (les
-empreintes de ce que la page a déjà, l'anneau d'envoi), que MIFM1 n'avait pas : **le delay les a donnés**, sa ligne
-passée de 1,2 s à 1,13 s (6 Ko ; la marge des moteurs, 11 Ko, gardée). ~3 Ko de flash.
-
-**Un écran en tuiles** : le miroir de fm1-base ne tenait une ligne pour juste qu'une fois reçue sur toute sa largeur ;
-MIFM1 dessine ses potards en tuiles de 60 pixels, donc ces lignes restaient « à refaire » pour toujours : la page
-demandait l'écran entier 20 fois par seconde, et chaque fois l'anneau d'envoi était plein avant les derniers potards et
-le bas de l'écran, qui n'arrivaient jamais (constaté dans le simulateur). MIFM1 le corrige dans fm1-base
-(`patches/fm1-base-mirror-tiles.patch`) : chaque segment de 30 pixels de chaque ligne est suivi (connu ou non, juste
-ou non), une tuile alignée sur eux est comparée et envoyée segment par segment comme une ligne entière. Dans le
-simulateur, au rythme de l'USB (un paquet par milliseconde, ~48 ko/s ; le FM-1 peut en faire deux) : l'écran entier en
-5 redemandes à l'ouverture (17 Ko), et à la fin de chaque séance (un lien seize fois plus lent pendant que ça joue, le
-tour des pages, l'écran des patterns, une LFO) l'écran de la page **identique au pixel près** à celui du FM-1, décodé
-par le code même de la page (`make mirror-check` : `firmware/tests/mirror.txt`, `tools/mirror_check.py` ; aussi dans
-la CI).
-
-**Le scope d'une LFO** bouge 50 fois par seconde : ~2,3 Ko à chaque image, il prenait à lui seul tout le débit. Pendant
-qu'une page regarde, il se redessine 15 fois par seconde au plus, et seulement quand l'anneau a de la place (ce qui
-manque à la page passe d'abord) ; sans page, comme avant. Il est aussi dessiné dans la bande du panneau (6 pixels plus
-à droite, de 90 à 232 : aligné sur les segments), et pas par-dessus : redessiner le panneau ne renvoie rien là.
-
 ## Jouer
 
 **À l'allumage**, l'écran reste noir pendant que la machine démarre, puis le nom MIFM1 s'écrit en Syne (ses lettres
@@ -1133,16 +1101,14 @@ pas : le temps du delay (avec la glissade de bande), son feedback, l'algorithme 
 réverbe…
 
 **Le delay** (FX) : **TIME** en divisions du tempo (1/32 à 1/1, triolets et pointées) ; ou, ALGORITHM tourné vers la
-droite, **FREE** : TIME en millisecondes (1 ms à 1,13 s ; 1,2 s avant la 0.16.53), détaché de l'horloge (vers la gauche : SYNC, la division la
+droite, **FREE** : TIME en millisecondes (1 ms à 1,2 s), détaché de l'horloge (vers la gauche : SYNC, la division la
 plus proche ; le temps est gardé d'un mode à l'autre). **FEEDBACK** (tout au bout,
 **Loop** : les répétitions tournent indéfiniment, sans monter ni baisser ; la boucle ne gagne jamais : ce que la
 résonance pousserait au-delà de −8 dB est tenu là, les répétitions sonnent en continu au lieu d'exploser), **FILTER** (à gauche passe-bas, à droite passe-haut, au milieu rien), **DRIVE** ;
 puis **RESONANCE**, **MODE** (Mono ou Ping-pong : gauche au temps, droite au double), **MOD** (un pleurage lent) et
 **RETURN**. Le filtre est celui des modules Mutable (le SVF de stmlib) ; la saturation (DRIVE) est propre jusqu'à mi-niveau
 puis arrondie, et son gain ne s'ajoute pas au feedback (elle colore, elle ne pousse pas), dans une ligne
-de 1,13 s (0.16.53 : ses 6 Ko de moins ont fait la place du miroir de l'écran ; une division plus longue que la
-ligne, en ping-pong plus longue que sa moitié, se joue une octave de temps plus court, comme avant). Quand le temps
-change, la lecture glisse jusqu'au nouveau, comme une bande.
+de 1,2 s. Quand le temps change, la lecture glisse jusqu'au nouveau, comme une bande.
 
 **La réverbe** (FX) : **ALGORITHM** choisit **CLOUDS**, **METAL** ou **SHIMMER** (0.16.41 ; les potards gardent leur
 place d'un algorithme à l'autre, et les projets d'avant restent sur CLOUDS). CLOUDS est celle du module (TIME, DAMP,

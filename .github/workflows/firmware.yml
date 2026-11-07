@@ -20,7 +20,7 @@ concurrency:                     # a newer push of the same branch replaces a ru
   group: firmware-${{ github.ref }}
   cancel-in-progress: true
 env:
-  VERSION: "0.16.53"
+  VERSION: "0.16.54"
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -46,10 +46,6 @@ jobs:
           (cd base && python3 tools/build.py ../firmware --host) > host.log 2>&1 || { tail -40 host.log; exit 1; }
           mkdir -p build/host_out
           firmware/build/host/mifm1_host firmware/tests/screens.txt build/host_out
-      - name: The screen mirrored over USB (the simulator's streams decoded as the mirror page decodes them, against the screen, pixel by pixel)
-        run: |
-          firmware/build/host/mifm1_host firmware/tests/mirror.txt build/host_out > mirror.log || { tail -20 mirror.log; exit 1; }
-          python3 tools/mirror_check.py build/host_out mirror_still mirror_slow mirror_tour mirror_lfo
       - uses: actions/upload-artifact@v4
         with:
           name: computer
@@ -104,7 +100,7 @@ jobs:
         run: python3 tools/check_res_links.py firmware/build/mifm1.elf firmware/res/symbols.txt
       - name: No static initializer in the modules as JieLi's compiler built them (the FM-1 never runs one)
         run: python3 tools/no_static_init.py firmware/build/o2/*.o
-      - name: The installer, the backup page and the mirror's
+      - name: The installer and the backup page
         run: |
           python3 tools/make_installer.py firmware/build/mifm1-"$VERSION".fwsc "$VERSION" site
           python3 tools/make_index.py site "$VERSION"

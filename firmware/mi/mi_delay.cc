@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 // Copyright (C) 2026 Yoann
-// MIFM1: the delay (mi_delay.h) behind bridge.h, its line 1.13 s of 16-bit samples (a ping-pong's echoes 0.565 s
-// apart at most; 1.2 s until 0.16.53, whose 6 KB went to the screen's mirror).
+// MIFM1: the delay (mi_delay.h) behind bridge.h, its line 1.2 s of 16-bit samples (a ping-pong's echoes 0.6 s apart
+// at most).
 #include <new>
 #include "bridge.h"
 #include "mi_delay.h"
 
 namespace {
 
-const uint32_t kLine = 49848u;           // 1.13 s at 44.1 kHz (and the 4 samples Delay::set keeps: FREE's 1130 ms)
+const uint32_t kLine = 52920u;           // 1.2 s at 44.1 kHz
 
 struct DelayMod {
   mifm1::Delay delay;

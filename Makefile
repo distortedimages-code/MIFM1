@@ -10,7 +10,7 @@ OUT = build
 SRC = $(wildcard firmware/mi/*.cc) $(shell find firmware/third_party -name '*.cc')
 OBJ = $(patsubst %.cc,$(OUT)/obj/%.o,$(SRC))
 
-.PHONY: usb48 pat-store all test lxr-check uac-multi uac-stereo base-patch device-check firmware host mirror-check web clean
+.PHONY: usb48 pat-store all test lxr-check uac-multi uac-stereo base-patch device-check firmware host web clean
 all: test
 
 $(OUT)/obj/%.o: %.cc
@@ -89,13 +89,6 @@ firmware: base-patch
 # fm1-base's host simulator, with the real platform code
 host: base-patch
 	cd $(BASE) && python3 tools/build.py ../firmware --host
-
-# (0.16.53) the screen mirrored over USB (fm1-base's device/mirror.c, patches/fm1-base-mirror-tiles.patch): the
-# simulator's streams (firmware/tests/mirror.txt) decoded as the site's mirror page decodes them, against the screen
-mirror-check: host
-	@mkdir -p $(OUT)/host_out
-	firmware/build/host/mifm1_host firmware/tests/mirror.txt $(OUT)/host_out > $(OUT)/mirror.log
-	python3 tools/mirror_check.py $(OUT)/host_out mirror_still mirror_slow mirror_tour mirror_lfo
 
 clean:
 	rm -rf $(OUT) firmware/build
