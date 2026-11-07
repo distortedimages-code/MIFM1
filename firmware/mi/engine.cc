@@ -645,29 +645,33 @@ void make_bounds() {
 }
 inline float clamp_fast(int i, float v) { return v < p_lo[i] ? p_lo[i] : v > p_hi[i] ? p_hi[i] : v; }
 
+// the random dose's knobs over the effects', each block it is up (0.16.51: in the flash, called from apply_cables in the
+// RAM: the RAM's code room full)
+__attribute__((noinline)) void dice_knobs() {
+  if (!dice_on) make_dice();
+  float a = dice_curve();
+  int shift = iround(proj.val[PG_WARPS(1) * 4 + 3]) == WM_SHIFT;
+  int osc = iround(proj.val[PG_WARPS(0) * 4 + 0]) >= WC_OSC1;   // (Warps' own oscillator: LEVEL 1 is its note)
+  // (0.16.51) Warps not thrown where a track the dose leaves alone goes through it (its carrier, its modulator)
+  const int w_out = (w_dst >= 0 && !dose_takes(w_dst)) || (w_mute >= 0 && !dose_takes(w_mute));
+  for (int j = 0; j < n_fx_dice; ++j) {
+    const int pg = fx_dice[j] / 4;
+    if (w_out && (pg == PG_WARPS(0) || pg == PG_WARPS(1))) continue;
+    if (!(shift && fx_dice[j] == PG_WARPS(0) * 4 + 2) && !(osc && fx_dice[j] == PG_WARPS(1) * 4 + 1))
+      fin[fx_dice[j]] += a * fx_off[j];   // (not the shift, not the oscillator's note: 0.8.6, Yoann's call)
+  }
+  // Warps' ALGORITHM on a mark (one cross-modulation): thrown to another mark, never between two (there Warps plays
+  // both algorithms, blended: twice its work)
+  const int wa = PG_WARPS(0) * 4 + 2;
+  float m = proj.val[wa] * 5.0f;
+  if (fm_fabsf(m - fm_floorf(m + 0.5f)) < 0.01f) fin[wa] = fm_floorf(fin[wa] * 5.0f + 0.5f) * 0.2f;
+}
+
 void apply_cables() {
   if (bounds_for != proj.algo[PG_DELAY(0)]) make_bounds();
   for (int i = 0; i < ENG_NPARAMS; ++i) fin[i] = proj.val[i];
   if (!proj.dice) dice_on = 0;
-  if (proj.dice) {                      // the random dose, over the knobs (under the cables): the effects' this beat
-    if (!dice_on) make_dice();
-    float a = dice_curve();
-    int shift = iround(proj.val[PG_WARPS(1) * 4 + 3]) == WM_SHIFT;
-    int osc = iround(proj.val[PG_WARPS(0) * 4 + 0]) >= WC_OSC1;   // (Warps' own oscillator: LEVEL 1 is its note)
-    // (0.16.51) Warps not thrown where a track the dose leaves alone goes through it (its carrier, its modulator)
-    const int w_out = (w_dst >= 0 && !dose_takes(w_dst)) || (w_mute >= 0 && !dose_takes(w_mute));
-    for (int j = 0; j < n_fx_dice; ++j) {
-      const int pg = fx_dice[j] / 4;
-      if (w_out && (pg == PG_WARPS(0) || pg == PG_WARPS(1))) continue;
-      if (!(shift && fx_dice[j] == PG_WARPS(0) * 4 + 2) && !(osc && fx_dice[j] == PG_WARPS(1) * 4 + 1))
-        fin[fx_dice[j]] += a * fx_off[j];   // (not the shift, not the oscillator's note: 0.8.6, Yoann's call)
-    }
-    // Warps' ALGORITHM on a mark (one cross-modulation): thrown to another mark, never between two (there Warps plays
-    // both algorithms, blended: twice its work)
-    const int wa = PG_WARPS(0) * 4 + 2;
-    float m = proj.val[wa] * 5.0f;
-    if (fm_fabsf(m - fm_floorf(m + 0.5f)) < 0.01f) fin[wa] = fm_floorf(fin[wa] * 5.0f + 0.5f) * 0.2f;
-  }
+  if (proj.dice) dice_knobs();          // the random dose, over the knobs (under the cables): the effects' this beat
   if (proj.trauma) trauma_knobs();      // TRAUMA, over the knobs (and the dose), under the cables
   for (int g = 0; g <= ENG_TRACKS; ++g) {
     for (int c = 0; c < ENG_CABLES; ++c) {
@@ -710,7 +714,8 @@ inline int duck_src() { return proj.algo[PG_DUCK] & 3; }
 inline int duck_slot(int t) { return t < duck_src() ? t + 1 : t; }       // a track's depth's knob (1..3)
 inline int duck_knob_track(int k) { return k - 1 < duck_src() ? k - 1 : k; }   // a knob's track
 int16_t lane_param[ENG_LANES][ENG_NTP];  // eng_track_param's answers, made once (E is asked ~150 times a block)
-void trauma_knobs() {                   // TRAUMA's knobs: the filters' DRIVE, Warps' now, the delay's DRIVE
+__attribute__((noinline)) void trauma_knobs() {   // TRAUMA's knobs: the filters' DRIVE, Warps' now, the delay's DRIVE
+                                        // (0.16.51: in the flash, as dice_knobs)
   float d = trauma01();
   for (int t = 0; t < ENG_TRACKS; ++t)
     if (trauma_takes(t) && proj.algo[PG_FILT(t, 0)] != MF_OFF) fin[lane_param[t][TP_FDRIVE]] += 0.45f * d;
