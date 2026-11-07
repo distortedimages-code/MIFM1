@@ -688,9 +688,10 @@ notes. Avec PADS sur la piste suivie, c'est Prog.
 Choisir PADS met ces réglages aux siens (Tintin, des triades ouvertes, tenues, une montée lente, un peu sombre, sans
 glide, la dent de scie, en ensemble, sans couche ni texture) et garde l'OCTAVE de la piste. Elle coûte au FM-1 de 6 %
 d'un bloc (une triade, une dent de scie par note) à 9 % (six notes, trois dents de scie chacune) ; sur ses réglages,
-7 %. WAVE ailleurs que sur Saw y ajoute 2,5 % sur une triade en ensemble (0,7 % en VINTAGE) ; une couche de 2,8 % (Bell,
-Vox) à 4,2 % (Chime ; Pluck 4,1, Air 3,9, Swell 3,5, Kalimba 3,5, Halo 3,3) ; TEXTURE sur Down 1,3 % (un sinus par
-note), sur Dust 1 %, les autres presque rien. Sans couche et sur Saw, la nappe coûte à peu près ce qu'elle coûtait (0,1 % de plus).
+7 %. WAVE ailleurs que sur Saw y ajoute 2,4 % sur une triade en ensemble (2 % en VINTAGE) ; une couche de 2,7 % (Vox ;
+Bell 2,9) à 4,2 % (Chime ; Pluck 4,1, Air 3,9, Swell 3,5, Kalimba 3,4, Halo 3,1) ; TEXTURE sur Down 1,3 % (un sinus par
+note), sur Dust 1 %, les autres presque rien. Sans couche et sur Saw, la nappe coûte à peu près ce qu'elle coûtait
+(0,3 % de plus : ses calculs d'un bloc appellent une seule copie de leurs fonctions, pour tenir dans la flash du FM-1).
 
 **POLY** (0.12 ; ALGORITHM après PADS, la banque MIFM1) : un petit synthé analogique polyphonique d'après le
 **SH-101** de Roland (1982 : un oscillateur, sa dent de scie, son impulsion et sa sous-octave mélangées, un filtre à

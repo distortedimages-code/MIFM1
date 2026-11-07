@@ -19,7 +19,7 @@ static const float kWebModel[27] = {   /* a voice playing, by model */
     212.3f,  /* 11 SDS PERC */
     317.9f,  /* 12 ZERO */
     379.3f,  /* 13 FM */
-    220.2f,  /* 14 PADS */
+    225.6f,  /* 14 PADS */
     311.1f,  /* 15 POLY */
     424.9f,  /* 16 REV3 */
     186.1f,  /* 17 TAURUS */
@@ -41,10 +41,10 @@ static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, 
     {113.7f, 155.4f, 32.0f},
 };
 static const float kWebFm[3] = {37.1f, 81.8f, 22.2f};   /* the FM's extra: its square, PW, SYNC */
-static const float kWebPads[3] = {128.3f, 12.1f, 21.3f};   /* PADS: its floor, a note (one saw, three) */
-static const float kWebPadsWave[2] = {7.0f, 24.4f};   /* (0.16.57) PADS' WAVE off Saw: a note's more (one saw, three) */
-static const float kWebPadsLayer[9] = {0.0f, 79.9f, 121.5f, 100.1f, 118.1f, 81.4f, 112.1f, 95.0f, 101.4f};   /* its LAYER */
-static const float kWebPadsTex[5] = {0.0f, 10.9f, 0.3f, 29.1f, 12.3f};   /* its TEXTURE (Down: a note's) */
+static const float kWebPads[3] = {133.5f, 12.3f, 21.4f};   /* PADS: its floor, a note (one saw, three) */
+static const float kWebPadsWave[2] = {19.5f, 23.6f};   /* (0.16.57) PADS' WAVE off Saw: a note's more (one saw, three) */
+static const float kWebPadsLayer[9] = {0.0f, 84.1f, 121.2f, 99.9f, 118.0f, 79.4f, 112.3f, 91.2f, 101.6f};   /* its LAYER */
+static const float kWebPadsTex[5] = {0.0f, 11.8f, 0.3f, 28.0f, 12.3f};   /* its TEXTURE (Down: a note's) */
 static const float kWebPoly[2] = {33.6f, 76.6f};   /* POLY: its floor, a voice */
 static const float kWebPro[2] = {34.0f, 108.4f};   /* REV3: its floor, a voice */
 static const float kWebChoir[2] = {18.7f, 154.2f};   /* CHOIR: its floor, a part */

@@ -1668,7 +1668,7 @@ static void panel_plaits(int t, int face, uint16_t ac)
 
 /* (0.16.57) PADS' fourth face: WAVE drawn, two cycles of its shape as it morphs (Sine, Triangle, Saw, Square: two
  * of them at once between), over its name; LAYER and TEXTURE under it */
-static void panel_pad4(int t, uint16_t ac)
+APP_SMALL static void panel_pad4(int t, uint16_t ac)
 {
     char s[40], v[16], u[16];
     const int x0 = 86, w = 146, ym = 30, hh = 15;
