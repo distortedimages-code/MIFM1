@@ -170,6 +170,16 @@ const Knob kKnobs[LX_MODELS][LX_KNOBS] = {
 };
 
 const char* const kWaves[NUM_OSC_WAVEFORMS] = {"Sine", "Tri", "Saw", "Rect", "Noise", "PWM"};
+// (0.16.50) WAVE's travel: the first five waves on their sixths, then PWM's sixth cut in eight, its pulse width from 4 %
+// to 50 % (the LXR-02's CC2_PWM: a saw less the same saw a share of a cycle on, pwm 0..1 that share x 2). Before,
+// MIFM1 left it at its kit's 0: two saws in phase, a pulse of no width, silence
+const int kPwmSteps = 8;
+inline float pwm_of(float u) {
+  const float z = (u - 5.0f / 6.0f) * 6.0f;                        // (in PWM's sixth, 0..1; its steps at (j + 0.5) / 8)
+  if (z < 0.0f) return 0.0f;
+  const float w = (z - 0.5f / kPwmSteps) * (kPwmSteps / (kPwmSteps - 1.0f));   // (the first step 0, the last 1)
+  return 0.08f + 0.92f * (w < 0.0f ? 0.0f : w > 1.0f ? 1.0f : w);
+}
 
 const int kBlock = OUTPUT_DMA_SIZE;     // 64
 const int kHome = 48;                   // the note that plays a kit's pitch (as the LXR-02's SEQ_DEFAULT_NOTE):
@@ -281,6 +291,7 @@ void lx_set(int t, int model, float note, const float* k) {
     int p = kKnobs[model][i].p;
     if (note_moves(model, p)) pitch_dirty = 1;
     else apply(model, static_cast<uint8_t>(t), p, static_cast<uint8_t>(itg_of(u)), u, 1);
+    if (p == P_WAVE) apply(model, static_cast<uint8_t>(t), P_PWM, 0, pwm_of(u), 1);   // (0.16.50: PWM's width)
   }
   // the note: its semitones over the oscillators' coarse (as a MIDI note over SEQ_DEFAULT_NOTE moves them), the rest
   // of it on the main oscillator's fine tune (+/- 50 cents, the LXR's own curve)
@@ -334,8 +345,17 @@ MI_COLD void lx_knob_text(int model, int k, float v, char* b, int n) {
   if (model < 0 || model >= LX_MODELS || k < 0 || k >= LX_KNOBS) return;
   float u = v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v;
   const char* s = 0;
-  char num[4];
-  if (kKnobs[model][k].p == P_WAVE) {
+  char num[8];
+  if (kKnobs[model][k].p == P_WAVE && wave_of(0, u, 1) == PWM) {   // (0.16.50: PW 4% .. PW 50%)
+    const int x = static_cast<int>(pwm_of(u) * 50.0f + 0.5f);
+    int i = 0;
+    num[i++] = 'P', num[i++] = 'W', num[i++] = ' ';
+    if (x >= 10) num[i++] = static_cast<char>('0' + x / 10);
+    num[i++] = static_cast<char>('0' + x % 10);
+    num[i++] = '%';
+    num[i] = 0;
+    s = num;
+  } else if (kKnobs[model][k].p == P_WAVE) {
     s = kWaves[wave_of(0, u, 1)];
   } else {                              // 0..127, as the LXR-02 shows it
     int x = itg_of(u), i = 0;
@@ -360,7 +380,18 @@ void lx_defaults(int model, float* k) {
 
 int lx_knob_steps(int model, int k) {
   if (model < 0 || model >= LX_MODELS || k < 0 || k >= LX_KNOBS) return 128;
-  return kKnobs[model][k].p == P_WAVE ? NUM_OSC_WAVEFORMS : 128;
+  return kKnobs[model][k].p == P_WAVE ? NUM_OSC_WAVEFORMS - 1 + kPwmSteps : 128;
+}
+
+MI_COLD float lx_knob_turn(int model, int k, float u, int detents) {   // (0.16.50) WAVE: a wave a detent, then PWM's
+  if (model < 0 || model >= LX_MODELS || k < 0 || k >= LX_KNOBS || kKnobs[model][k].p != P_WAVE) return -1.0f;
+  const int nw = NUM_OSC_WAVEFORMS - 1, last = nw + kPwmSteps - 1;   // (widths; -1: not WAVE, the usual detents)
+  const float z = (u - 5.0f / 6.0f) * 6.0f;
+  int i = z < 0.0f ? static_cast<int>(u * 6.0f) : nw + static_cast<int>(z * kPwmSteps);
+  i = (i < 0 ? 0 : i > last ? last : i) + detents;
+  i = i < 0 ? 0 : i > last ? last : i;
+  return i < nw ? (static_cast<float>(i) + 0.5f) / 6.0f
+                : 5.0f / 6.0f + (static_cast<float>(i - nw) + 0.5f) / (6.0f * kPwmSteps);
 }
 
 }  // extern "C"

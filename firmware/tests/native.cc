@@ -1419,9 +1419,9 @@ int main(int argc, char** argv) {
     eng_play(0);
     eng_defaults(p);
     eng_fresh();
-    static const char* const kFirst[4] = {"FM", "Noise", "Mod 1", "Mod 1"};
+    static const char* const kFirst[LX_MODELS] = {"FM", "Noise"};   // (0.16.50: the two left since 0.16.43)
     int names_ok = 1, kit_ok = 1, sound_ok = 1;
-    float pk[4];
+    float pk[LX_MODELS];
     char tx[24];
     for (int m = 0; m < LX_MODELS; ++m) {
       eng_set_model(0, eng_model_find(MK_LXR, m));
@@ -1499,9 +1499,8 @@ int main(int argc, char** argv) {
       eng_render(l, r, n);
       for (uint32_t i = 0; i < n; ++i) after = std::max(after, std::fabs(l[i]));
     }
-    printf("FM drums: kits %s, names %s, text %s, peaks %.2f %.2f %.2f %.2f, the drum at 48: %d Hz (49), cut %.5f\n",
-           kit_ok ? "ok" : "WRONG", names_ok ? "ok" : "WRONG", text_ok ? "ok" : "WRONG", pk[0], pk[1], pk[2], pk[3],
-           cross, after);
+    printf("FM drums: kits %s, names %s, text %s, peaks %.2f %.2f, the drum at 48: %d Hz (49), cut %.5f\n",
+           kit_ok ? "ok" : "WRONG", names_ok ? "ok" : "WRONG", text_ok ? "ok" : "WRONG", pk[0], pk[1], cross, after);
     if (!kit_ok || !names_ok || !text_ok || !sound_ok || cross < 47 || cross > 51 || after > 1e-4f)
       ++failures, printf("FAIL: the FM drums\n");
     eng_defaults(p);
@@ -5877,6 +5876,53 @@ int main(int argc, char** argv) {
     if (!ok || !kit_ok || !sound_ok || !fam || !texts || !pitch || !click || !dyn || !retrig || nan_any ||
         pk_any > 1.21f || !proj_ok || !snd_ok)
       ++failures, printf("FAIL: the SDS\n");
+  }
+
+  {  // (0.16.50) the FM DRUM's PWM: WAVE past Noise, eight pulse widths (4 % to 50 %) a detent each, each sounding (its
+     // width left at the kit's 0 before: silence), the narrow ones quieter and richer (their 2nd and 3rd harmonics near
+     // the fundamental's), back to Sine 12 detents down; the WAVE knob through the engine, its text
+    int texts = 1, steps = 1;
+    float u = 0.0f, lv[13];
+    const char* const kText[13] = {"Sine", "Tri", "Saw", "Rect", "Noise", "PW 4%", "PW 11%", "PW 17%", "PW 24%",
+                                   "PW 30%", "PW 37%", "PW 43%", "PW 50%"};
+    lx_init();
+    for (int i = 0; i < 13; ++i) {
+      if (i) u = lx_knob_turn(0, 4, u, 1);
+      char tx[16];
+      lx_knob_text(0, 4, u, tx, sizeof tx);
+      if (std::strcmp(tx, kText[i]) != 0) texts = 0, printf("  WAVE %d: %s (%s)\n", i, tx, kText[i]);
+      float k[8];
+      lx_defaults(0, k);
+      k[3] = 60.0f / 127.0f, k[5] = 0.0f, k[6] = 0.0f, k[7] = 0.0f;   // (longer; no click, no drive, no pitch envelope)
+      k[4] = u;
+      static float buf[6656];
+      lx_set(0, 0, 60.0f, k);
+      lx_trigger(0);
+      for (int j = 0; j < 6656; j += 64) lx_render(0, buf + j, 64);
+      double e = 0.0;
+      for (int j = 2205; j < 6615; ++j) e += static_cast<double>(buf[j]) * buf[j];
+      lv[i] = static_cast<float>(10.0 * std::log10(e / 4410.0 + 1e-20));
+    }
+    steps = lx_knob_turn(0, 4, u, 1) == u && std::fabs(lx_knob_turn(0, 4, u, -12) - 1.0f / 12.0f) < 1e-6f &&
+            lx_knob_turn(0, 0, 0.5f, 1) < 0.0f && lx_knob_steps(0, 4) == 13;
+    int sounding = 1;
+    for (int i = 5; i < 13; ++i) sounding &= lv[i] > -30.0f && (i == 5 || lv[i] >= lv[i - 1] - 0.5f);
+    lx_init();
+    project_t* p = eng_project();
+    eng_defaults(p);
+    eng_fresh();
+    eng_set_model(0, eng_model_find(MK_LXR, 0));
+    const int wave = PG_TRACK(0, 1) * 4 + 1;              // (the second page's second knob: WAVE)
+    char tx[24];
+    float v = eng_lx_step(wave, p->val[wave], 9);
+    eng_param_text(wave, v, tx, sizeof tx);
+    const int engine = std::strcmp(tx, "PW 30%") == 0 && !std::strcmp(eng_param_name(wave), "Wave");
+    eng_defaults(p);
+    eng_fresh();
+    printf("FM DRUM's PWM: texts %s, steps %s; levels Sine %.1f, PW 4%% %.1f, 24%% %.1f, 50%% %.1f dB (%s); through the "
+           "engine %s\n", texts ? "ok" : "WRONG", steps ? "ok" : "WRONG", lv[0], lv[5], lv[8], lv[12],
+           sounding ? "ok" : "SILENT", engine ? "ok" : "WRONG");
+    if (!texts || !steps || !sounding || !engine) ++failures, printf("FAIL: the FM DRUM's PWM\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

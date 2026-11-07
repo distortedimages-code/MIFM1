@@ -346,7 +346,11 @@ piste met ses huit réglages à ceux de son kit (le kit INIT du LXR-02, retouch�
 potards qui suivent FREQ, sur les trois pages de leur son (EDIT, puis SELECT) : les trois de la première, les quatre
 de la deuxième, et le premier de la troisième (à la place de GATE). ENV n'a alors qu'une page : l'enveloppe du
 filtre (F.ENV, F.ATK, F.DECAY, PING). Ils sont écrits de 0 à 127 comme sur le LXR-02, WAVE par son nom, et chaque cran
-de potard passe à la valeur suivante (WAVE : à la forme d'onde suivante) :
+de potard passe à la valeur suivante (WAVE : à la forme d'onde suivante). **WAVE, après Noise, c'est PWM** et sa largeur
+d'impulsion, cran par cran, de PW 4% à PW 50% (0.16.50) : sur le LXR-02 la largeur est un réglage à part (CC2_PWM),
+que MIFM1 laissait à la valeur de son kit, 0, deux dents de scie en phase qui s'annulent, donc un silence (seul le clic
+restait). L'impulsion fine est mince et nasillarde (et plus douce : -23 dB contre -12 pour la sinusoïde), 50 % un
+carré ; un câble d'LFO sur WAVE, gardé dans sa zone, fait de la vraie modulation de largeur d'impulsion :
 
 | | 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -361,8 +365,8 @@ rien. Les câbles, les locks, les aléatoires, la dose
 et le circuit bending marchent sur elles comme sur Plaits. Leur code est celui du LXR-02, compilé tel quel (ce qui change pour le
 FM-1 est listé dans `firmware/third_party/lxr/MIFM1.md`) : le LXR-02 calcule une partie en double précision, que le
 FM-1 n'a pas ; leur enveloppe d'amplitude garde exactement la valeur du double (vérifiée pas à pas), le reste passe
-en float, et `make lxr-check` compare les deux : 99,99 % des échantillons identiques à ceux du LXR-02, les autres à
-quelques pas de 16 bits (-111 dB).
+en float, et `make lxr-check` compare les deux : 99,97 % des échantillons identiques à ceux du LXR-02 (depuis la
+0.16.50, où l'onde PWM sonne enfin), les autres à quelques pas de 16 bits (-113 dB).
 
 **SDS** (0.16.49 ; ALGORITHM après FM SNARE, la banque SDS) : quatre batteries d'après le **Simmons SDS 8** (1984),
 le cerveau des pads hexagonaux. Son manuel donne la recette en une ligne : les sons sont « compiled from a controlled

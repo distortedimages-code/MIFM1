@@ -3496,6 +3496,10 @@ MI_COLD float eng_lx_step(int param, float v, int detents) {
                                             : track_kind(t) == MK_STATIC ? static_knob_steps(lk, static_mode_u(t))
                                                                       : lx_knob_steps(lx_model(t), lk);
   float u = bip ? (v + 1.0f) * 0.5f : v;
+  if (track_kind(t) == MK_LXR) {        // (0.16.50) an FM drum's WAVE: its waves, then PWM's widths
+    const float w = lx_knob_turn(lx_model(t), lk, u, detents);
+    if (w >= 0.0f) return bip ? 2.0f * w - 1.0f : w;
+  }
   int i;
   if (n == 128) {                       // its 128 values: n / 127
     i = static_cast<int>(u * 127.0f + 0.5f) + detents;

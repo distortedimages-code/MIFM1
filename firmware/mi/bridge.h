@@ -52,7 +52,9 @@ void lx_render(int t, float *out, uint32_t n);
 const char *lx_knob_name(int model, int k);
 void lx_knob_text(int model, int k, float v, char *b, int n);   /* as the LXR-02 shows it: 0..127, a wave's name */
 void lx_defaults(int model, float *k);   /* the knobs as the model's kit has them */
-int lx_knob_steps(int model, int k);     /* its values a knob's turn goes through: 128 (MIDI's), a wave's 6 */
+int lx_knob_steps(int model, int k);     /* its values a knob's turn goes through: 128 (MIDI's), WAVE's 13 */
+float lx_knob_turn(int model, int k, float u, int detents);   /* (0.16.50) WAVE turned (u 0..1): its five waves, then
+                                         * PWM's eight widths; -1: another knob (its 128 values) */
 
 /* ---- the machines' state on a track (0.13): ZERO's, a drum's, the FM's, POLY's and PROPHET's share it, one machine a track at a
  * time. The engine's (mf_state); a machine's made when it comes to a track (its _reset), its init making all four its

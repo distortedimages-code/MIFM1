@@ -40,9 +40,9 @@ original files, the same each time it runs.
   exception: a float would round its state (the cymbal's steep curve showed it at -60 dB), so `lxr_port.cc` keeps
   the LXR-02's double exactly (its sums of floats are exact in a double: here, integers of 2^-40) and computes its
   curve in pairs of floats; `SlopeEg2.c`'s own code is kept for the comparison build. Built with `LXR_HARD_DOUBLE`,
-  the copies compute as the LXR-02 does: `make lxr-check` plays the four voices both ways, sample for sample
-  (99.986 % identical, the others a few LSB at most, -111 dB), and `make test` checks the envelope against the
-  double, step by step.
+  the copies compute as the LXR-02 does: `make lxr-check` plays the voices both ways, sample for sample
+  (99.965 % identical since 0.16.50, its PWM wave sounding; the others 26 LSB at most, -113 dB), and `make test`
+  checks the envelope against the double, step by step.
 - **One voice of each a track.** The snare, the cymbal and the hi-hat were single globals: each is an array of four
   (`LXR_VOICES`), its functions given the index `v` (`snareVoice.` becomes `snareVoice[v].`); the drum voices are
   four (`NUM_DRUM_VOICES`). The drum's `volEgValueBlock`, used only with `USE_AMP_FILTER`, is only there with it.
@@ -64,3 +64,8 @@ under way is dropped: the voice is retriggered there, as the LXR-02 retriggers i
 0..1, its MIDI value v x 127), from the INIT kit's values (`initKit.c`), a few changed for a ready sound (see
 `mi_lxr.cc`). The played note moves the oscillators as a MIDI note over `SEQ_DEFAULT_NOTE` does (MIFM1's C3 plays a
 kit's pitch); its fraction goes on the main oscillator's fine tune.
+
+The FM DRUM's WAVE knob (0.16.50): its first five sixths the first five waveforms (`wave_of`, as the parser's
+`OSC_WAVE_DRUM1` takes a modulation), its last sixth `PWM`, cut in eight steps that also set the voice's `pwm`
+(`CC2_PWM_1`, 4 % to 50 % of a cycle: `calcPwmBlock` subtracts from the saw the same saw that much on). Before, the
+pulse width stayed at the INIT kit's 0: the two saws in phase cancel, and `PWM` played nothing but the click.
