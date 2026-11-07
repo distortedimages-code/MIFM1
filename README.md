@@ -15,9 +15,10 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
 - **PADS** de MIFM1 (0.11) : des accords et leurs progressions (Arvo Pärt, la Folia, Pachelbel, la basse de
   lamentation, Bach, Satie…) joués par une nappe de cordes, sur une piste ; ses accords suivent la gamme du projet, et
   la gamme **Prog** fait suivre l'accord joué à toutes les autres pistes, en temps réel ; une quatrième page (0.16.57) :
-  l'**onde** (du sinus au carré, en fondu), l'ensemble, une **couche** par-dessus l'accord (une cloche, un carillon, un
-  kalimba, des cordes pincées, une voix, un souffle, un halo, une montée à l'envers) et une **TEXTURE** d'après les
-  nappes usées de Boards of Canada (la bande, la dérive, la poussière, l'octave dessous) ; GLIDE et RELEASE (voir plus
+  l'**onde** (du sinus au carré, en fondu), l'ensemble et une **TEXTURE** d'après les nappes usées de Boards of Canada
+  (la bande, la dérive, la poussière, l'octave dessous) ; une cinquième (0.16.59) : une **couche** par-dessus l'accord
+  (une cloche, un carillon, un kalimba, des cordes pincées, une voix, un souffle, un halo, une montée à l'envers), son
+  volume, son caractère et sa transposition ; GLIDE et RELEASE (voir plus
   bas) ;
 - **POLY** (0.12) : un petit synthé analogique polyphonique d'après le SH-101 de Roland et le S-1, quatre voix par
   piste, chacune son filtre à quatre pôles et son enveloppe ; **MODE** Mono ou Poly (0.16.15 : en Poly, les accords
@@ -616,34 +617,45 @@ reste sous −44 dB à do 7). **ENSEMBLE** en fait deux choses : à droite, troi
 écartés (une string machine, ses cordes) ; à gauche **VINTAGE**, un seul par note, mais chaque voix un peu désaccordée
 et **dérivant lentement à sa façon**, comme celles d'un vieux polyphonique, de plus en plus vers la gauche.
 
-**LAYER** pose un second instrument sur l'accord : Off à gauche, puis huit couches, chacune sur sa part du potard, d'une
-touche à tout de gauche à droite. Une couche tire au sort avec son propre hasard : la nappe dessous reste exactement la
-même, et la TEXTURE les use ensemble. Une frappe ou une corde lancée sonne jusqu'au bout, même si on tourne le potard.
+**LAYER** pose un second instrument sur l'accord. Depuis 0.16.59 il a **sa page, la cinquième** (la page 71 du
+projet) : **LAYER** (Off, puis les huit couches, une par cran), **LEVEL** (son volume : du silence, à gauche, à +6 dB ;
+0 dB, au trois quarts environ, le niveau qu'avait la couche en 0.16.57 au milieu de sa part), **CHARACTER** (ce que la
+couche fait de plus, détaillé ci-dessous : l'écran écrit son nom, *Wind* pour Chime…) et **TRANSP** (la couche
+transposée de −24 à +24 demi-tons, la nappe non : +7 pour une quinte, +12 ou −12 pour une octave). Une couche tire au
+sort avec son propre hasard : la nappe dessous reste exactement la même, et la TEXTURE les use ensemble. Une frappe ou
+une corde lancée sonne jusqu'au bout, même si on change de couche.
 
 - **Bell** : la **cloche FM** sur la note du haut, une octave au-dessus (deux opérateurs, 1 : 3,5, son index qui retombe
-  vite, son niveau lentement) ; avant 0.16.57, la première TEXTURE.
+  vite, son niveau lentement) ; avant 0.16.57, la première TEXTURE. CHARACTER (*Bright*) : son index, de moitié moins à
+  deux fois plus (une cloche ronde, une cloche brillante).
 - **Chime** : un carillon à vent. Une des quatre notes du haut, deux octaves au-dessus, frappée au trig puis de temps en
-  temps tant que l'accord sonne, comme le vent (en moyenne toutes les 1,5 s à une touche, toutes les 0,4 s au bout),
-  plus ou moins fort ; chaque frappe, les trois premiers modes d'une barre libre (1 : 2,756 : 5,404), chacun sa retombée.
+  temps tant que l'accord sonne, plus ou moins fort ; chaque frappe, les trois premiers modes d'une barre libre (1 :
+  2,756 : 5,404), chacun sa retombée. CHARACTER (*Wind*) : le vent, une frappe toutes les 1,6 s en moyenne à gauche,
+  toutes les 0,4 s à droite.
 - **Kalimba** : une lamelle sur la note du haut, une octave au-dessus, à chaque trig (ses modes 1 : 6,267 : 17,547, les
-  aigus vite éteints) ; passé la moitié du potard, la note d'en dessous aussi, 110 ms après.
+  aigus vite éteints). CHARACTER (*Tines*) : passé la moitié, la note d'en dessous aussi, 110 ms après.
 - **Pluck** : les quatre notes du haut grattées (des cordes de Karplus-Strong), vers le haut à un trig, vers le bas au
-  suivant, à 16 à 30 ms d'écart ; chaque corde sonne jusqu'à ce que son tour revienne (1,2 à 3,8 s).
+  suivant ; chaque corde sonne jusqu'à ce que son tour revienne. CHARACTER (*Ring*) : de 16 ms d'écart et 1,2 s de
+  résonance à 30 ms et 3,8 s.
 - **Vox** : la nappe elle-même passée dans les trois premiers formants d'une voix d'alto (l'annexe D du manuel de
-  Csound), la voyelle allant lentement de A à O, vers U, et retour (environ 14 s) ; elle suit l'enveloppe de la nappe.
-- **Air** : un souffle accordé : un bruit en bandes étroites (Q 28) sur les quatre notes du haut, une octave au-dessus,
-  et un peu de souffle large ; il suit l'enveloppe de la nappe.
+  Csound), la voyelle allant lentement de A à O, vers U, et retour ; elle suit l'enveloppe de la nappe. CHARACTER
+  (*Vowels*) : la vitesse de la voyelle, un tour en 57 s à gauche, 14 s au milieu, 3,6 s à droite. TRANSP déplace ses
+  formants (vers une voix plus grave ou plus aiguë), pas ses notes, qui sont celles de la nappe.
+- **Air** : un souffle accordé : un bruit en bandes étroites sur les quatre notes du haut, une octave au-dessus, et un
+  peu de souffle large ; il suit l'enveloppe de la nappe. CHARACTER (*Focus*) : ses bandes, de larges (Q 10, un souffle)
+  à fines (Q 79, presque un sifflement ; Q 28 au milieu), au même volume.
 - **Halo** : une octave et une quinte, et deux octaves, au-dessus des trois notes du haut, des sinus purs qui viennent
-  lentement (environ 1,8 s) et partent vite avec la nappe.
+  lentement et partent vite avec la nappe. CHARACTER (*Bloom*) : le temps qu'ils mettent à venir, 5 s à gauche, 1,8 s
+  au milieu, 0,6 s à droite.
 - **Swell** : une montée à l'envers. Les trois notes du haut une octave au-dessus et un souffle qui s'ouvre avec elles,
   montant (au cube) jusqu'au trig suivant, où tout s'arrête net, comme un son joué à rebours. Swell apprend le temps
-  entre deux trigs (de 0,12 à 8 s) et démarre avant le suivant (de 0,35 à 1,75 s plus tôt, 85 % de l'intervalle au plus) ;
-  au premier trig, il écoute.
+  entre deux trigs (de 0,12 à 8 s) et démarre avant le suivant ; au premier trig, il écoute. CHARACTER (*Rise*) : la
+  durée de la montée, de 0,35 à 1,75 s (85 % de l'intervalle au plus).
 
-**TEXTURE** (0.16.16 ; 0.16.57 : à la quatrième page, Bell passée dans LAYER) use la nappe, d'après celles de
-**Boards of Canada** (des synthés anciens volontairement désaccordés, des prises superposées sur une bande mono qui se
-heurtent en un chorus microtonal, saturées puis rééchantillonnées ; voir le site) : Off à gauche, puis quatre textures,
-chacune sur sa part du potard, d'une touche à tout de gauche à droite. **Tape** : une bande, son **pleurage** (0,45 Hz)
+**TEXTURE** (0.16.16 ; 0.16.57 : à la quatrième page, Bell passée dans LAYER ; 0.16.59 : un choix, et son **AMOUNT**
+sur le potard d'à côté, de rien à tout) use la nappe, d'après celles de **Boards of Canada** (des synthés anciens
+volontairement désaccordés, des prises superposées sur une bande mono qui se heurtent en un chorus microtonal,
+saturées puis rééchantillonnées ; voir le site) : Off, puis quatre textures. **Tape** : une bande, son **pleurage** (0,45 Hz)
 et son **scintillement** (une nouvelle visée toutes les 20 ms, lissée), les mêmes sur toutes les notes (jusqu'à un tiers
 de demi-ton), une saturation douce (le niveau à peu près gardé) et l'aigu usé (le passe-bas jusqu'à 0,8 octave plus
 bas). **Drift** : chaque voix fausse à sa façon (jusqu'à près d'un demi-ton : un écart à elle et une dérive lente).
@@ -651,23 +663,42 @@ bas). **Drift** : chaque voix fausse à sa façon (jusqu'à près d'un demi-ton 
 sa part, un craquement (jusqu'à une dizaine par seconde). **Down** : un sinus une octave sous chaque note, le passe-bas
 jusqu'à 0,7 octave plus bas.
 
-| 1/4 : 2 | 1/4 : 3 | 1/4 : 4 | 2/4 : 1 | 2/4 : 2 | 2/4 : 3 | 2/4 : 4 | 3/4 : 1 |
+| 1/5 : 2 | 1/5 : 3 | 1/5 : 4 | 2/5 : 1 | 2/5 : 2 | 2/5 : 3 | 2/5 : 4 | 3/5 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | **PROG** (Manual, 26 progressions) | **COLOR** (Power, Triad, Sus2, 7th, Sus4, 9th, Add9, 11th, Add6) | **VOICING** (Close, Open, Wide, Bass) | **DECAY** (0,2 à 20 s ; au bout, Hold) | **ATTACK** (1 ms à 4 s) | **TONE** (− : sombre, + : brillant) | **GLIDE** (Off, 20 ms à 2 s) | **RELEASE** (30 ms à 7,7 s) |
 
-| 4/4 : 1 | 4/4 : 2 | 4/4 : 3 | 4/4 : 4 |
+| 4/5 : 1 | 4/5 : 2 | 4/5 : 3 | 4/5 : 4 |
 | --- | --- | --- | --- |
-| **WAVE** (Sine, Tri, Saw, Square, en fondu) | **ENSEMBLE** (− : VINTAGE, + : WIDE) | **LAYER** (Off, Bell, Chime, Kalimba, Pluck, Vox, Air, Halo, Swell) | **TEXTURE** (Off, Tape, Drift, Dust, Down) |
+| **WAVE** (Sine, Tri, Saw, Square, en fondu) | **ENSEMBLE** (− : VINTAGE, + : WIDE) | **TEXTURE** (Off, Tape, Drift, Dust, Down) | **AMOUNT** (0 à 100 %) |
 
-L'écran de la quatrième page dessine l'onde (deux cycles, telle qu'elle se fond) et écrit la couche et la texture.
-La quatrième page ne prend ni lock ni aléatoire (ce sont des réglages de la nappe, pas de ses pas) ; les câbles, si : ils
-vivent dans le groupe de la piste PADS.
+| 5/5 : 1 | 5/5 : 2 | 5/5 : 3 | 5/5 : 4 |
+| --- | --- | --- | --- |
+| **LAYER** (Off, Bell, Chime, Kalimba, Pluck, Vox, Air, Halo, Swell) | **LEVEL** (Off, puis jusqu'à +6 dB) | **CHARACTER** (selon la couche) | **TRANSP** (−24 à +24 demi-tons) |
+
+(Dans ces tableaux, « 1/5 : 2 » se lit page 1, potard 2.) L'écran de la quatrième page dessine
+l'onde (deux cycles, telle qu'elle se fond) et écrit la texture et la couche ; celui de la cinquième, la couche en grand,
+son niveau, son caractère et sa transposition. Ces deux pages ne prennent ni lock ni aléatoire (ce sont des réglages de
+la nappe, pas de ses pas) ; les câbles, si : ils vivent dans le groupe de la piste PADS (un LFO sur LEVEL fait respirer
+la couche).
 
 **Un projet ou un son d'avant 0.16.57** (projet version 36, son version 9) s'ouvre comme il sonnait : WAVE sur Saw, son
 ENSEMBLE et sa TEXTURE à la quatrième page au même dosage (sa cloche dans LAYER), GLIDE sur Off, RELEASE au temps qu'avait
-sa retombée. Les locks et l'aléatoire posés sur ENSEMBLE et TEXTURE ne passent pas ; un câble sur l'un d'eux le suit. Un
-son garde sa quatrième page dans quatre octets libres (à 1/255 près). DARK PAD, le son d'usine, reste le même (Tape à
-60 %, une retombée de 263 ms).
+sa retombée. Les locks et l'aléatoire posés sur ENSEMBLE et TEXTURE ne passent pas ; un câble sur l'un d'eux le suit.
+**Un projet ou un son de la 0.16.57 ou de la 0.16.58** (projet version 37, son version 10) aussi : sa TEXTURE et sa couche, chacune sur
+une part de son potard, deviennent leurs choix, l'AMOUNT de la texture son dosage d'alors, le LEVEL de la couche le
+niveau qu'elle avait, son CHARACTER son dosage d'alors (pour Chime, Kalimba, Pluck et Swell, où il faisait plus que le
+niveau ; le milieu pour les quatre autres, ce qu'elles faisaient), TRANSP à 0 ; un câble sur l'ancien LAYER passe sur
+LEVEL. Le projet garde sa taille : la cinquième page prend la place de quatre locks (363 au lieu de 367 ; au-delà, les
+derniers sont perdus, comme en 0.16.23). Un son garde maintenant ses deux pages telles quelles (version 11, 32 octets de
+plus ; les sons enregistrés avant se lisent toujours). DARK PAD, le son d'usine, reste le même (Tape à 60 %, une retombée
+de 263 ms, sans couche).
+
+**Les câbles au-delà de la page 63** (corrigé en 0.16.59) : la cible d'un câble tenait sur un octet, alors que les
+pages GLITCH (64 à 67), celles des followers (68 à 70) et la cinquième de PADS ont des paramètres au-delà de 255. Un
+câble posé sur GLITCH, BEND, DROP ou un potard de follower était enregistré sur un autre potard, l'un des sept premières
+pages du projet (celles de T1, T2 et T3) : le GLITCH de T1 bougeait en fait le FREQ de T1. La cible tient maintenant sur deux octets
+(l'octet libre de chaque câble). Un câble posé ainsi avant 0.16.59 reste où il a été écrit, faute de savoir ce qu'il
+visait : si un projet en a un, le MATRIX le montre sur le potard qu'il bouge vraiment.
 
 **La gamme Prog** (GLO, SCALE après Hirajoshi) : quand une piste joue PADS, **toutes les autres pistes suivent son
 accord**, en temps réel : à chaque trig de PADS, le quantiseur passe à la **gamme de l'accord**, ses notes et les notes

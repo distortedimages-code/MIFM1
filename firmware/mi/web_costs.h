@@ -19,7 +19,7 @@ static const float kWebModel[27] = {   /* a voice playing, by model */
     212.3f,  /* 11 SDS PERC */
     317.9f,  /* 12 ZERO */
     379.3f,  /* 13 FM */
-    225.6f,  /* 14 PADS */
+    225.9f,  /* 14 PADS */
     311.1f,  /* 15 POLY */
     424.9f,  /* 16 REV3 */
     186.1f,  /* 17 TAURUS */
@@ -41,10 +41,10 @@ static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, 
     {113.7f, 155.4f, 32.0f},
 };
 static const float kWebFm[3] = {37.1f, 81.8f, 22.2f};   /* the FM's extra: its square, PW, SYNC */
-static const float kWebPads[3] = {133.5f, 12.3f, 21.4f};   /* PADS: its floor, a note (one saw, three) */
-static const float kWebPadsWave[2] = {19.5f, 23.6f};   /* (0.16.57) PADS' WAVE off Saw: a note's more (one saw, three) */
-static const float kWebPadsLayer[9] = {0.0f, 84.1f, 121.2f, 99.9f, 118.0f, 79.4f, 112.3f, 91.2f, 101.6f};   /* its LAYER */
-static const float kWebPadsTex[5] = {0.0f, 11.8f, 0.3f, 28.0f, 12.3f};   /* its TEXTURE (Down: a note's) */
+static const float kWebPads[3] = {133.8f, 12.2f, 21.4f};   /* PADS: its floor, a note (one saw, three) */
+static const float kWebPadsWave[2] = {19.5f, 23.5f};   /* (0.16.57) PADS' WAVE off Saw: a note's more (one saw, three) */
+static const float kWebPadsLayer[9] = {0.0f, 83.9f, 121.1f, 99.7f, 117.8f, 80.1f, 113.6f, 91.3f, 99.9f};   /* its LAYER */
+static const float kWebPadsTex[5] = {0.0f, 11.7f, 0.1f, 29.0f, 12.3f};   /* its TEXTURE (Down: a note's) */
 static const float kWebPoly[2] = {33.6f, 76.6f};   /* POLY: its floor, a voice */
 static const float kWebPro[2] = {34.0f, 108.4f};   /* REV3: its floor, a voice */
 static const float kWebChoir[2] = {18.7f, 154.2f};   /* CHOIR: its floor, a part */
@@ -62,4 +62,4 @@ static const float kWebFxEq = 37.3f, kWebFxDuck = 6.9f, kWebFxDelay = 15.9f;   /
 static const float kWebFxWarps = 86.9f;   /* Warps in the mix (the rest of the stress test's effects) */
 static const float kWebFxSpread = 75.2f;   /* (0.16.19) a track's SPREAD */
 static const float kWebFxMetal[2] = {78.3f, 113.6f};   /* (0.16.41) the reverb METAL, SHIMMER: over Clouds' */
-static const float kWebPrep = 367.1f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.8f;   /* the preparation: its floor, a track playing, a cable */
+static const float kWebPrep = 367.8f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.9f;   /* the preparation: its floor, a track playing, a cable */

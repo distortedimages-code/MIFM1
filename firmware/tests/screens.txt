@@ -8,7 +8,7 @@
 # a power-off and in a backup, the patterns (SEQ held) and the presets (EDIT held: a factory sound, one saved, one
 # erased, the dark pad on another track), a new project (INIT: GLO, SELECT, REC held), the saved one back, the stress test (on
 # Plaits, then on the FM drums: their pages, a model chosen bringing its kit; the SDS: its pages, its tom, its perc; ZERO, its knobs; the FM: its three pages,
-# another algorithm (its drawing), a chord, a SHAPE drawn; PADS, its progression playing, its RELEASE, its fourth face (WAVE, LAYER), SCALE Prog, then FOLLOW its track; POLY, its MODE; REV3, its sweep; TAURUS; VOCODER; CHOIR, alone and four), an FM-1 without the
+# another algorithm (its drawing), a chord, a SHAPE drawn; PADS, its progression playing, its RELEASE, its fourth face (WAVE, TEXTURE), its fifth (LAYER, LEVEL, CHARACTER, TRANSP), SCALE Prog, then FOLLOW its track; POLY, its MODE; REV3, its sweep; TAURUS; VOCODER; CHOIR, alone and four), an FM-1 without the
 # module tables, then the tables arriving; before them, a live recording (REC and PLAY: counted in, notes, a chord, a long
 # note; the steps and their keys after) and the metronome off (GLO and PLAY). Screenshots in the output folder.
 wait 1500
@@ -833,13 +833,26 @@ wait 600
 shot 18x2_pads_release.png
 turn K1 -22
 turn SELECT 1
-turn K3 22
+turn K3 1
+turn K4 10
 turn K1 -17
 wait 600
-shot 18x3_pads_wave_layer.png
+shot 18x3_pads_wave_texture.png
 turn K1 17
-turn K3 -22
-turn SELECT -3
+turn K4 -10
+turn K3 -1
+turn SELECT 1
+turn K1 2
+turn K2 -15
+turn K3 20
+turn K4 7
+wait 600
+shot 18x4_pads_layer.png
+turn K4 -7
+turn K3 -20
+turn K2 15
+turn K1 -2
+turn SELECT -4
 tap GLO
 wait 400
 turn K2 15

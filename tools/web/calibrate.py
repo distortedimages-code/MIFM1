@@ -96,13 +96,14 @@ def main():
         jobs[f"model{m}"] = ("one", m, 0, 0, 0, 0, 0, -1, 0, SECS)
     for x, bit in (("sq", 8), ("pw", 16), ("sync", 32)):   # the FM's square, PW, SYNC: their extra
         jobs[f"fm{x}"] = ("one", PAD, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
-    zone = lambda i, nz: 0.04 + 0.96 / nz * (i - 0.5)   # (0.16.57: PADS' fourth page, WAVE ENSEMBLE LAYER TEXTURE;
-    pads4 = {"triad": (512, "0.6667,0.75,0,0"), "six": (512 | 64, "0.6667,0.75,0,0"),   # a zone's middle)
-             "one": (512, "0.6667,0.25,0,0"), "wave3": (512, "0.5,0.75,0,0"), "wave1": (512, "0.5,0.25,0,0")}
-    pads4.update({f"ly{i}": (512, f"0.6667,0.75,{zone(i, 8):.4f},0") for i in range(1, 9)})
-    pads4.update({f"tx{i}": (512, f"0.6667,0.75,0,{zone(i, 4):.4f}") for i in range(1, 5)})
-    for x, (bit, p4) in pads4.items():                   # PADS, MANUAL: 3 notes, 6; one saw each; WAVE off Saw; each
-        jobs[f"pads{x}"] = ("one", PADS, 0, 0, 0, 0, 0, -1, 0, SECS, bit, p4)   # layer, each texture
+    p5 = "0,0.7071,0.5,0"                # (0.16.59: PADS' fourth page WAVE ENSEMBLE TEXTURE AMOUNT; its fifth LAYER
+    pads4 = {"triad": (512, "0.6667,0.75,0,0.5", p5), "six": (512 | 64, "0.6667,0.75,0,0.5", p5),   # LEVEL ...)
+             "one": (512, "0.6667,0.25,0,0.5", p5), "wave3": (512, "0.5,0.75,0,0.5", p5),
+             "wave1": (512, "0.5,0.25,0,0.5", p5)}
+    pads4.update({f"ly{i}": (512, "0.6667,0.75,0,0.5", f"{i},0.7071,0.5,0") for i in range(1, 9)})
+    pads4.update({f"tx{i}": (512, f"0.6667,0.75,{i},0.575", p5) for i in range(1, 5)})
+    for x, (bit, p4, q5) in pads4.items():               # PADS, MANUAL: 3 notes, 6; one saw each; WAVE off Saw; each
+        jobs[f"pads{x}"] = ("one", PADS, 0, 0, 0, 0, 0, -1, 0, SECS, bit, p4, q5)   # layer, each texture
     for x, bit in (("one", 1024 | 8192), ("four", 1024 | 2048)):
         jobs[f"poly{x}"] = ("one", POLY, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
     for x, bit in (("one", 1024 | 8192), ("four", 1024 | 16384)):

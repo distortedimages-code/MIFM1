@@ -192,7 +192,7 @@ struct Pad {
                                         // another size, held over: no step)
   // (0.16.57) the fourth page (0..1: WAVE, ENSEMBLE, LAYER, TEXTURE); each voice's pitch now, gliding to pitch[];
   // LAYER's own draws (the pad's untouched by it: a layer only adds)
-  float x[4], cur[kMaxV];
+  float x[4], x5[4], cur[kMaxV];
   int nvp;                              // (the voices before: one more starts on its note, no glide)
   uint32_t lr;
   float mx[4][3], my[4][3], ma[4][3], mk[4][3], me[4][3];   // the strikes (Chime, Kalimba): four, three modes each,
@@ -249,6 +249,33 @@ inline int tex_of(float u, float* amt) { return zone_of(u, TX_N - 1, amt); }
 enum { LY_OFF, LY_BELL, LY_CHIME, LY_KALIMBA, LY_PLUCK, LY_VOX, LY_AIR, LY_HALO, LY_SWELL, LY_N };
 const char* const kLayName[LY_N] = {"Off", "Bell", "Chime", "Kalimba", "Pluck", "Vox", "Air", "Halo", "Swell"};
 inline int lay_of(float u, float* amt) { return zone_of(u, LY_N - 1, amt); }
+// (0.16.59) the fourth page's TEXTURE and the fifth's LAYER: choices (0 Off); a choice from its knob's value
+inline int choice_of(float u, int hi) {
+  const int c = static_cast<int>(u + 0.5f);
+  return c < 0 ? 0 : c > hi ? hi : c;
+}
+// (0.16.59) LAYER's level: each layer's amplitude at an amount la (0.16.57's, where that amount set it), taken at its
+// zone's middle (0.575), LEVEL's gain on it (2 u^2: silent at 0, 0.16.57's at 0.707, +6 dB at 1)
+const float kLaRef = 0.575f;
+const float kLevelUnity = 0.70710678f;
+inline float lay_gain(float u) { return 2.0f * u * u; }
+float lay_level(int ly, float la) {
+  switch (ly) {
+    case LY_BELL: return la;
+    case LY_CHIME: return 0.07f + 0.1f * la;
+    case LY_KALIMBA: return 0.13f + 0.2f * la;
+    case LY_PLUCK: return 0.32f + 0.4f * la;
+    case LY_VOX: return (0.5f + 1.5f * la) * 2.0f;
+    case LY_AIR: return (0.4f + 1.6f * la) * 3.0f;
+    case LY_HALO: return 0.07f + 0.13f * la;
+    case LY_SWELL: return 0.25f + 0.3f * la;
+    default: return 0.0f;
+  }
+}
+// CHARACTER: what each does with it (0.16.57's amount, where it did more than its level; the four it did not, 0.5
+// what they did then)
+const char* const kCharName[LY_N] = {"", "Bright", "Wind", "Tines", "Ring", "Vowels", "Focus", "Bloom", "Rise"};
+inline int char_was_level(int ly) { return ly == LY_BELL || ly == LY_VOX || ly == LY_AIR || ly == LY_HALO; }
 inline float attack_s(float u) { return 0.001f * exp2_b(u * 12.0f); }    // ATTACK: 1 ms .. 4 s
 inline int prog_of(float u) {
   int p = static_cast<int>(u * static_cast<float>(kProgs + 1));
@@ -413,6 +440,7 @@ MI_COLD void pads_init(void) {
   pads_defaults(d);
   for (int i = 0; i < 8; ++i) pad.k[i] = d[i];
   pads_page4_defaults(pad.x);           // (0.16.57)
+  pads_page5_defaults(pad.x5);          // (0.16.59)
 }
 
 MI_COLD void pads_silence(void) {
@@ -431,17 +459,32 @@ MI_COLD void pads_silence(void) {
   pad.he = 0.0f;
 }
 
-// (0.16.57) the fourth page (0..1: WAVE, ENSEMBLE, LAYER, TEXTURE): the engine's, from the project's page 39
+// (0.16.57) the fourth page (0.16.59: WAVE, ENSEMBLE 0..1, TEXTURE a choice 0..4, its AMOUNT 0..1): the engine's,
+// from the project's page 39; (0.16.59) the fifth (LAYER a choice 0..8, LEVEL, CHARACTER 0..1, TRANSP -24..24
+// semitones), from its page 71
 void pads_set_page4(const float* x) {
-  for (int i = 0; i < 4; ++i) pad.x[i] = clampf(x[i], 0.0f, 1.0f);
+  for (int i = 0; i < 4; ++i) pad.x[i] = x[i];
 }
-int pads_layer_of(float u) {            // its choice: 0 Off, 1 Bell .. 8 Swell
-  float a;
-  return lay_of(clampf(u, 0.0f, 1.0f), &a);
+void pads_set_page5(const float* x) {
+  for (int i = 0; i < 4; ++i) pad.x5[i] = x[i];
 }
-int pads_texture_of(float u) {          // TEXTURE's: 0 Off, 1 Tape .. 4 Down
-  float a;
-  return tex_of(clampf(u, 0.0f, 1.0f), &a);
+int pads_layer_of(float u) { return choice_of(u, LY_N - 1); }     // LAYER's choice: 0 Off, 1 Bell .. 8 Swell
+int pads_texture_of(float u) { return choice_of(u, TX_N - 1); }   // TEXTURE's: 0 Off, 1 Tape .. 4 Down
+// (0.16.59) 0.16.57's fourth page (WAVE, ENSEMBLE, LAYER and TEXTURE, a zone of the knob each, its place there the
+// amount, 15 .. 100 %): the fourth now (TEXTURE, its AMOUNT that amount) and the fifth (LAYER; its LEVEL what that
+// amount gave, CHARACTER the amount where it did more than the level, else 0.5, as they were; TRANSP 0)
+MI_COLD void pads_from_v37(const float* x37, float* x4, float* x5) {
+  float a = 0.0f;
+  x4[0] = x37[0];
+  x4[1] = x37[1];
+  const int t = tex_of(clampf(x37[3], 0.0f, 1.0f), &a);
+  x4[2] = static_cast<float>(t);
+  x4[3] = t ? a : 0.5f;
+  const int l = lay_of(clampf(x37[2], 0.0f, 1.0f), &a);
+  x5[0] = static_cast<float>(l);
+  x5[1] = l ? clampf(fm_sqrtf(0.5f * lay_level(l, a) / lay_level(l, kLaRef)), 0.0f, 1.0f) : kLevelUnity;
+  x5[2] = l && !char_was_level(l) ? a : 0.5f;
+  x5[3] = 0.0f;
 }
 // a project's or a sound's PADS before 0.16.57 (its eight knobs, 0..1: ENSEMBLE seventh, TEXTURE eighth, its
 // Bell, Tape, Drift, Dust, Down a fifth of the knob each): its eight now (GLIDE Off, RELEASE as it let go then: 0.06 s +
@@ -652,10 +695,10 @@ MI_COLD void strike(Pad& v, const Modal& m, float hz, float lvl, int wait) {
   v.mwait[i] = wait;
 }
 // Chime: one of the top four notes, two octaves up, as hard as the wind blows it
-MI_COLD void chime(Pad& v, float la) {
+MI_COLD void chime(Pad& v, float lv, float tr) {
   const int ns = v.nv < 4 ? v.nv : 4;
   const int i = v.nv - ns + static_cast<int>(rnd01(v.lr) * static_cast<float>(ns) * 0.999f);
-  strike(v, kChime, note_hz(v.pitch[i] + 24.0f), (0.07f + 0.1f * la) * (0.45f + 0.55f * rnd01(v.lr)), 0);
+  strike(v, kChime, note_hz(v.pitch[i] + 24.0f + tr), lv * (0.45f + 0.55f * rnd01(v.lr)), 0);
 }
 MI_COLD float chime_gap(Pad& v, float la) {     // the next, samples away: 1.5 s on average at a touch .. 0.4 s, as rain falls
   float u = rnd01(v.lr);
@@ -697,15 +740,15 @@ float strikes(Pad& v, float* o, uint32_t m) {   // the strikes ringing, added to
 
 // Pluck: the top four notes strummed, up from the lowest at one trig, down from the top at the next; each string
 // rings on until its turn comes, then its line is filled with soft noise (a pick)
-MI_COLD void strum(Pad& v, float la) {
+MI_COLD void strum(Pad& v, float la, float lv, float tr) {
   const int ns = v.nv < 4 ? v.nv : 4;
   v.pl_up ^= 1;
-  const float g = (0.32f + 0.4f * la) / fm_sqrtf(static_cast<float>(ns > 0 ? ns : 1));
+  const float g = lv / fm_sqrtf(static_cast<float>(ns > 0 ? ns : 1));
   const float t60 = 1.2f + 2.6f * la;
   for (int j = ns; j < 4; ++j) v.pl_wait[j] = 0;   // (a string over the chord's: left to ring out)
   for (int j = 0; j < ns; ++j) {
     const int s = v.pl_up ? j : ns - 1 - j;
-    float hz = note_hz(v.pitch[v.nv - ns + s]);
+    float hz = note_hz(v.pitch[v.nv - ns + s] + tr);
     while (hz < 110.0f) hz *= 2.0f;
     while (hz > 1800.0f) hz *= 0.5f;
     v.pl_hz[s] = hz;
@@ -786,15 +829,15 @@ const float kVox[3][3][3] = {{{800.0f, 80.0f, 1.0f}, {1150.0f, 90.0f, 0.63096f},
                              {{325.0f, 50.0f, 1.0f}, {700.0f, 60.0f, 0.25119f}, {2530.0f, 170.0f, 0.031623f}}};
 // the chord's own waves (sum: the pad's, before its low pass) through them, into o: band passes in parallel
 // (Zavalishin's state variable, its band normalized: a peak of 1), the vowel from A to O, towards U and back (~14 s)
-void vox(Pad& v, const float* sum, float* o, uint32_t m) {
-  v.vph += static_cast<float>(m) * (0.07f / kSr);
+void vox(Pad& v, const float* sum, float* o, uint32_t m, float rate, float ft) {   // (0.16.59: rate, Hz; ft
+  v.vph += static_cast<float>(m) * (rate / kSr);                                  // its formants' shift)
   v.vph -= v.vph >= 1.0f ? 1.0f : 0.0f;
   const float w = 1.6f * (v.vph < 0.5f ? 2.0f * v.vph : 2.0f - 2.0f * v.vph);
   const int a = w < 1.0f ? 0 : 1;
   const float t = w - static_cast<float>(a);
   for (int f = 0; f < 3; ++f) {
-    const float hz = kVox[a][f][0] + t * (kVox[a + 1][f][0] - kVox[a][f][0]);
-    const float bw = kVox[a][f][1] + t * (kVox[a + 1][f][1] - kVox[a][f][1]);
+    const float hz = ft * (kVox[a][f][0] + t * (kVox[a + 1][f][0] - kVox[a][f][0]));
+    const float bw = ft * (kVox[a][f][1] + t * (kVox[a + 1][f][1] - kVox[a][f][1]));
     const float lv = kVox[a][f][2] + t * (kVox[a + 1][f][2] - kVox[a][f][2]);
     const float g = tpt_g(hz), k = bw / hz, d = 1.0f / (1.0f + g * (g + k)), kl = k * lv;
     float s1 = v.vs[f][0], s2 = v.vs[f][1];
@@ -812,12 +855,12 @@ void vox(Pad& v, const float* sum, float* o, uint32_t m) {
 
 // Air: a noise in narrow bands on the top four notes, an octave up (Q 28: a breath with a pitch), and a little of it
 // broad, its lows taken off (the breath itself)
-void air(Pad& v, float* o, uint32_t m) {
+void air(Pad& v, float* o, uint32_t m, float q, float tr) {   // (0.16.59: q its bands' Q, 28 as before; tr)
   const int ns = v.nv < 4 ? v.nv : 4;
   float g[4], d[4];
-  const float k = 1.0f / 28.0f;
+  const float k = 1.0f / q, kq = k * fm_sqrtf(q * (1.0f / 28.0f));   // (narrower, as loud: its level kept)
   for (int j = 0; j < ns; ++j) {
-    g[j] = tpt_g(note_hz(v.cur[v.nv - ns + j] + 12.0f));
+    g[j] = tpt_g(note_hz(v.cur[v.nv - ns + j] + 12.0f + tr));
     d[j] = 1.0f / (1.0f + g[j] * (g[j] + k));
   }
   uint32_t r = v.lr;
@@ -834,7 +877,7 @@ void air(Pad& v, float* o, uint32_t m) {
       s1 = g[j] * hp + bp;
       const float l2 = g[j] * bp + s2;
       s2 = g[j] * bp + l2;
-      acc += k * bp;
+      acc += kq * bp;
     }
     o[i] += acc;
   }
@@ -843,12 +886,12 @@ void air(Pad& v, float* o, uint32_t m) {
 }
 
 // Halo: over the top three notes, an octave and a fifth (0.55) and two octaves (0.35), into o at gain
-void halo(Pad& v, float* o, uint32_t m, float gain) {
+void halo(Pad& v, float* o, uint32_t m, float gain, float tr) {
   const int ns = v.nv < 3 ? v.nv : 3;
   static const float kR[2] = {2.9966141f, 4.0f}, kA[2] = {0.55f, 0.35f};
   for (int j = 0; j < ns; ++j)
     for (int h = 0; h < 2; ++h) {
-      const float f = note_hz(v.cur[v.nv - ns + j]) * kR[h];
+      const float f = note_hz(v.cur[v.nv - ns + j] + tr) * kR[h];
       if (f > 0.42f * kSr) continue;
       const float e = circle(f), a = kA[h] * gain;
       float x = v.hx[j][h], y = v.hy[j][h];
@@ -865,10 +908,10 @@ void halo(Pad& v, float* o, uint32_t m, float gain) {
 
 // Swell: the top three notes an octave up and a wash of noise opening with it, rising as the cube of its time to the
 // next trig, where it stops (a sound played backwards); cut short (6 ms) by a trig before, or 30 ms past it if none came
-void swell(Pad& v, float* o, uint32_t m, float gain) {
+void swell(Pad& v, float* o, uint32_t m, float gain, float tr) {
   const int ns = v.nv < 3 ? v.nv : 3;
   float e[3];
-  for (int j = 0; j < ns; ++j) e[j] = circle(note_hz(v.pitch[v.nv - ns + j] + 12.0f));
+  for (int j = 0; j < ns; ++j) e[j] = circle(note_hz(v.pitch[v.nv - ns + j] + 12.0f + tr));
   const float len = static_cast<float>(v.sw_len > 0 ? v.sw_len : 1);
   const int fade = static_cast<int>(0.006f * kSr);
   for (uint32_t i = 0; i < m && v.sw_on; ++i) {
@@ -896,7 +939,8 @@ void swell(Pad& v, float* o, uint32_t m, float gain) {
 
 // a trig: the swell's clock, the phases scattered from silence, the envelope from where it is, the layer's strike
 // (0.16.57: out of pads_render, small: once a trig)
-MI_COLD __attribute__((noinline)) void pad_trig(Pad& v, int ly, float la) {
+MI_COLD __attribute__((noinline)) void pad_trig(Pad& v, int ly, float la, float lv, float tr) {   // (0.16.59: la
+  // CHARACTER, lv the layer's level, tr its transposition)
   // (Swell: the time between the last two trigs, the next one guessed from it; a swell under way cut)
   v.iv = v.since > static_cast<int>(0.12f * kSr) && v.since < static_cast<int>(8.0f * kSr) ? v.since : 0;
   v.since = 0;
@@ -922,21 +966,21 @@ MI_COLD __attribute__((noinline)) void pad_trig(Pad& v, int ly, float la) {
   v.dec = 1.0f;
   v.let_go = 0;
   v.alive = 1;
-  if (ly == LY_BELL && v.nv > 0) {    // the bell: on the top note, an octave up
-    v.bell_hz = note_hz(v.pitch[v.nv - 1] + 12.0f);
-    v.bell_e = la;
-    v.bell_i = 1.0f;
+  if (ly == LY_BELL && v.nv > 0) {    // the bell: on the top note, an octave up; CHARACTER its index (as 0.16.57's
+    v.bell_hz = note_hz(v.pitch[v.nv - 1] + 12.0f + tr);   // at 0.5: x 1/2 .. x 2)
+    v.bell_e = lv;
+    v.bell_i = exp2_b(2.0f * la - 1.0f);
   }
   if (ly == LY_CHIME && v.nv > 0) {   // (0.16.57) a chime at once, then now and then
-    chime(v, la);
+    chime(v, lv, tr);
     v.ch_wait = chime_gap(v, la);
   }
   if (ly == LY_KALIMBA && v.nv > 0) {   // the top note an octave up; from the middle, the next one too, 110 ms on
-    strike(v, kKalimba, note_hz(v.pitch[v.nv - 1] + 12.0f), 0.13f + 0.2f * la, 0);
+    strike(v, kKalimba, note_hz(v.pitch[v.nv - 1] + 12.0f + tr), lv, 0);
     if (la >= 0.5f && v.nv >= 2)
-      strike(v, kKalimba, note_hz(v.pitch[v.nv - 2] + 12.0f), 0.6f * (0.13f + 0.2f * la), static_cast<int>(0.11f * kSr));
+      strike(v, kKalimba, note_hz(v.pitch[v.nv - 2] + 12.0f + tr), 0.6f * lv, static_cast<int>(0.11f * kSr));
   }
-  if (ly == LY_PLUCK && v.nv > 0) strum(v, la);
+  if (ly == LY_PLUCK && v.nv > 0) strum(v, la, lv, tr);
 }
 
 }  // namespace
@@ -948,11 +992,13 @@ void pads_render(float* out, uint32_t n) {
   const float A = attack_s(v.k[4]);
   const int held = v.k[3] > 0.98f;
   const float tone = 2.0f * v.k[5] - 1.0f, ens = 2.0f * v.x[1] - 1.0f;   // (0.16.57: ENSEMBLE on the fourth page)
-  float ta = 0.0f, la = 0.0f;
-  const int tx = tex_of(v.x[3], &ta), ly = lay_of(v.x[2], &la);
+  // (0.16.59) TEXTURE and its AMOUNT on the fourth page; LAYER, its LEVEL, its CHARACTER, its TRANSP on the fifth
+  const int tx = choice_of(v.x[2], TX_N - 1), ly = choice_of(v.x5[0], LY_N - 1);
+  const float ta = clampf(v.x[3], 0.0f, 1.0f), la = clampf(v.x5[2], 0.0f, 1.0f);
+  const float lv = lay_level(ly, kLaRef) * lay_gain(clampf(v.x5[1], 0.0f, 1.0f)), tr = clampf(v.x5[3], -24.0f, 24.0f);
   if (v.trig) {
     v.trig = 0;
-    pad_trig(v, ly, la);
+    pad_trig(v, ly, la, lv, tr);
   }
   v.since += static_cast<int>(n);       // (Swell's clock, the pad sounding or not)
   if (!v.alive) {
@@ -961,7 +1007,7 @@ void pads_render(float* out, uint32_t n) {
   }
   if (ly == LY_CHIME && v.nv > 0 && v.env > 0.04f) {   // Chime: the wind, as long as the chord sounds
     v.ch_wait -= static_cast<float>(n);
-    if (v.ch_wait <= 0.0f) chime(v, la), v.ch_wait += chime_gap(v, la);
+    if (v.ch_wait <= 0.0f) chime(v, lv, tr), v.ch_wait += chime_gap(v, la);
   }
   // Swell: from silence, its time before the next trig (most of the time between them: 0.35 .. 1.75 s), the chord's
   if (ly == LY_SWELL && !v.sw_on && v.iv > 0 && v.nv > 0) {
@@ -975,8 +1021,11 @@ void pads_render(float* out, uint32_t n) {
       v.sw_lp = 0.0f;
     }
   }
-  // Halo: its swell, the envelope followed slowly up (~1.8 s), quickly down (~0.25 s)
-  if (ly == LY_HALO) v.he += (v.env - v.he) * (1.0f - exp_b(-static_cast<float>(n) / ((v.env > v.he ? 1.8f : 0.25f) * kSr)));
+  // Halo: its swell, the envelope followed slowly up (~1.8 s; CHARACTER 0 .. 1: 5.1 .. 0.64 s), quickly down (~0.25 s)
+  if (ly == LY_HALO) {
+    const float up = 1.8f * exp2_b(1.5f - 3.0f * la);
+    v.he += (v.env - v.he) * (1.0f - exp_b(-static_cast<float>(n) / ((v.env > v.he ? up : 0.25f) * kSr)));
+  }
   // the wander (VINTAGE: each voice its own, slow)
   v.dr_n -= static_cast<int>(n);
   if (v.dr_n <= 0) {
@@ -1068,7 +1117,12 @@ void pads_render(float* out, uint32_t n) {
   const WaveW wc = {4.0f * ww[0], 2.0f * ww[1], ww[2], ww[3], ww[2] + ww[3]};
   // (LAYER: nothing to add, none chosen and none still sounding; the pad alone, as before 0.16.57)
   const int lay_on = ly != LY_OFF || v.lring, lye_on = ly == LY_VOX || ly == LY_AIR;
-  const float g_lye = ly == LY_VOX ? (0.5f + 1.5f * la) * 2.0f : ly == LY_AIR ? (0.4f + 1.6f * la) * 3.0f : 0.0f;
+  const float g_lye = ly == LY_VOX || ly == LY_AIR ? lv : 0.0f;
+  // (0.16.59) Vox: its vowels' speed (CHARACTER: 57 s .. 3.6 s a round, 14 s at 0.5), its formants with TRANSP; Air:
+  // its bands' Q (9.9 .. 79, 28 at 0.5)
+  const float vox_rate = ly == LY_VOX ? 0.07f * exp2_b(4.0f * la - 2.0f) : 0.0f;
+  const float vox_ft = ly == LY_VOX ? exp2_b(tr * (1.0f / 12.0f)) : 1.0f;
+  const float air_q = ly == LY_AIR ? 28.0f * exp2_b(4.5f * la - 2.25f) : 28.0f;
   for (uint32_t s = 0; s < n; ++s) {
     if ((s & 31u) == 0u) {              // the voices, 32 samples at a time
       uint32_t m = n - s < 32u ? n - s : 32u;
@@ -1100,10 +1154,10 @@ void pads_render(float* out, uint32_t n) {
         if (lye_on)
           for (uint32_t q = 0; q < m; ++q) lye[q] = 0.0f;
         ring += strikes(v, lay, m) + plucks(v, lay, m);   // (struck: they ring out, the knob turned or not)
-        if (v.sw_on) swell(v, lay, m, 0.25f + 0.3f * la);
-        if (ly == LY_HALO && v.nv > 0) halo(v, lay, m, v.he * (0.07f + 0.13f * la));
-        if (ly == LY_VOX) vox(v, sum, lye, m);
-        if (ly == LY_AIR && v.nv > 0) air(v, lye, m);
+        if (v.sw_on) swell(v, lay, m, ly == LY_SWELL ? lv : lay_level(LY_SWELL, kLaRef), tr);
+        if (ly == LY_HALO && v.nv > 0) halo(v, lay, m, v.he * lv, tr);
+        if (ly == LY_VOX) vox(v, sum, lye, m, vox_rate, vox_ft);
+        if (ly == LY_AIR && v.nv > 0) air(v, lye, m, air_q, tr);
       }
     }
     float e;
@@ -1183,12 +1237,20 @@ const char* pads_knob_name(int k) {
   static const char* const kN[8] = {"Prog", "Color", "Voicing", "Decay", "Attack", "Tone", "Glide", "Release"};
   return k >= 0 && k < 8 ? kN[k] : "";
 }
-const char* pads_page4_name(int k) {    // (0.16.57) the fourth page's
-  static const char* const kN[4] = {"Wave", "Ensemble", "Layer", "Texture"};
+const char* pads_page4_name(int k) {    // (0.16.57) the fourth page's (0.16.59: TEXTURE, its AMOUNT)
+  static const char* const kN[4] = {"Wave", "Ensemble", "Texture", "Amount"};
   return k >= 0 && k < 4 ? kN[k] : "";
 }
-void pads_page4_defaults(float* x) {    // Saw, an ensemble, no layer, no texture
-  static const float kD[4] = {kWaveSaw, 0.75f, 0.0f, 0.0f};
+const char* pads_page5_name(int k) {    // (0.16.59) the fifth's
+  static const char* const kN[4] = {"Layer", "Level", "Character", "Transp"};
+  return k >= 0 && k < 4 ? kN[k] : "";
+}
+void pads_page4_defaults(float* x) {    // Saw, an ensemble, no texture (half of one, when it comes)
+  static const float kD[4] = {kWaveSaw, 0.75f, 0.0f, 0.5f};
+  for (int i = 0; i < 4; ++i) x[i] = kD[i];
+}
+void pads_page5_defaults(float* x) {    // no layer; as loud as 0.16.57's at its zone's middle, its character's middle,
+  static const float kD[4] = {0.0f, kLevelUnity, 0.5f, 0.0f};   // not transposed
   for (int i = 0; i < 4; ++i) x[i] = kD[i];
 }
 
@@ -1227,12 +1289,13 @@ MI_COLD void pads_knob_text(int k, float u, char* b, int n) {
       break;
   }
 }
-// (0.16.57) the fourth page's: WAVE (a shape, or the two it is between), ENSEMBLE (as TONE: %, its side), LAYER and
-// TEXTURE (a name, how much)
+// (0.16.57) the fourth page's: WAVE (a shape, or the two it is between), ENSEMBLE (as TONE: %, its side); (0.16.59)
+// TEXTURE (its name), AMOUNT (%)
 MI_COLD void pads_page4_text(int k, float u, char* b, int n) {
   if (n <= 0) return;
   int at = 0;
   b[0] = 0;
+  if (k == 2) return put_s(b, n, &at, kTexName[choice_of(u, TX_N - 1)]);
   u = clampf(u, 0.0f, 1.0f);
   switch (k) {
     case 0: {
@@ -1246,14 +1309,45 @@ MI_COLD void pads_page4_text(int k, float u, char* b, int n) {
       return put_s(b, n, &at, kW[lo + 1]);
     }
     case 1: return bip_text(b, n, &at, u, 1);
-    case 2: case 3: {
-      float a = 0.0f;
-      const int tx = k == 3 ? tex_of(u, &a) : lay_of(u, &a);
-      put_s(b, n, &at, k == 3 ? kTexName[tx] : kLayName[tx]);
-      if (tx == 0) return;
-      put_s(b, n, &at, " ");
-      put_i(b, n, &at, static_cast<int>(a * 100.0f + 0.5f));
+    case 3:
+      put_i(b, n, &at, static_cast<int>(u * 100.0f + 0.5f));
       return put_s(b, n, &at, "%");
+    default:
+      break;
+  }
+}
+// (0.16.59) the fifth's: LAYER (its name), LEVEL (dB against 0.16.57's, Off at 0), CHARACTER (what it does with the
+// layer playing now: its name, %), TRANSP (semitones)
+MI_COLD void pads_page5_text(int k, float u, char* b, int n) {
+  if (n <= 0) return;
+  int at = 0;
+  b[0] = 0;
+  switch (k) {
+    case 0: return put_s(b, n, &at, kLayName[choice_of(u, LY_N - 1)]);
+    case 1: {
+      u = clampf(u, 0.0f, 1.0f);
+      if (u < 0.01f) return put_s(b, n, &at, "Off");
+      const float db = 20.0f * fm_log2f(lay_gain(u)) * 0.30103f;
+      const int d = static_cast<int>(db + (db < 0.0f ? -0.5f : 0.5f));
+      if (d > 0) put_s(b, n, &at, "+");
+      else if (d < 0) put_s(b, n, &at, "-");
+      put_i(b, n, &at, d < 0 ? -d : d);
+      return put_s(b, n, &at, " dB");
+    }
+    case 2: {
+      const int ly = choice_of(pad.x5[0], LY_N - 1);
+      if (ly) {
+        put_s(b, n, &at, kCharName[ly]);
+        put_s(b, n, &at, " ");
+      }
+      put_i(b, n, &at, static_cast<int>(clampf(u, 0.0f, 1.0f) * 100.0f + 0.5f));
+      return put_s(b, n, &at, "%");
+    }
+    case 3: {
+      const int t = static_cast<int>(u + (u < 0.0f ? -0.5f : 0.5f));
+      if (t > 0) put_s(b, n, &at, "+");
+      else if (t < 0) put_s(b, n, &at, "-");
+      return put_i(b, n, &at, t < 0 ? -t : t);
     }
     default:
       break;

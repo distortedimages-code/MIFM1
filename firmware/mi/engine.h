@@ -26,12 +26,14 @@ extern "C" {
 #define LANE_REVERB 5
 #define LANE_WARPS 6
 #define ENG_CABLES 8                     /* per track, and as many global */
-#define ENG_NPAGES 71                     /* (68 until 0.16.22: the followers' three pages after them, 0.16.23) */
+#define ENG_NPAGES 72                     /* (68 until 0.16.22: the followers' three pages after them, 0.16.23; 71
+                                          * until 0.16.57: PADS' fifth page after them, 0.16.59) */
 #define ENG_NPARAMS (ENG_NPAGES * 4)
 #define ENG_STEPS 64                     /* the steps a lane: four pages of 16 */
-#define ENG_PLOCKS 367                   /* parameter locks, for all the lanes' steps (384 until 0.16.6: four gave
+#define ENG_PLOCKS 363                   /* parameter locks, for all the lanes' steps (384 until 0.16.6: four gave
                                           * their room to CLIMB's randoms, 0.16.7; 380 until 0.16.22: thirteen to the
-                                          * followers' pages, 0.16.23, the project the same size) */
+                                          * followers' pages, 0.16.23; 367 until 0.16.57: four to PADS' fifth page,
+                                          * 0.16.59; the project the same size) */
 #define ENG_ENDLESS 64                   /* an Endless sequence's notes (and rests), a track */
 #define ENDLESS_REST 0xFF
 
@@ -60,7 +62,8 @@ extern "C" {
                                           * ALGORITHM the bus's mode (off, the compressor, OTT) */
 #define PG_OTT 39                        /* OTT (three bands squashed up and down): DEPTH, TIME, DRIVE, LEVEL; gone
                                           * in 0.16.43, its page (0.16.57) PADS' fourth: */
-#define PG_PADS4 39                      /* WAVE, ENSEMBLE, LAYER, TEXTURE (one track plays PADS: the project's own) */
+#define PG_PADS4 39                      /* WAVE, ENSEMBLE, TEXTURE, AMOUNT (one track plays PADS: the project's own;
+                                          * 0.16.57: WAVE, ENSEMBLE, LAYER, TEXTURE, a zone of the knob each) */
 #define PG_EQ 40                         /* the mixer's filter, a knob a track: to the left a low pass coming down
                                           * (the highs cut), to the right a high pass going up (the lows), 24 dB/oct */
 #define PG_BEND(t) (41 + (t))            /* a track's circuit bending, its bits (0.7: the grit's place): CLOCK (a sample
@@ -81,12 +84,13 @@ extern "C" {
 #define PG_GLITCH(t) (64 + (t))          /* its glitch (after its filter): GLITCH (a sixteenth's chance to repeat), SIZE
                                           * (the slice: 1/64 .. 1/8), BEND (each repeat slower and lower, or faster
                                           * and higher), DROP (a repeat's chance of an accident: backwards, a hole) */
+#define PG_PADS5 71                      /* (0.16.59) PADS' fifth page: LAYER, LEVEL, CHARACTER, TRANSP */
 #define PG_FOLLOW(i) (68 + (i))          /* (0.16.23) an LFO's follower (its WAVE on FOLLOW), its input: SOURCE (the
                                           * track it listens to), GAIN (-24..+24 dB), THRESH (-60..0 dB: TRIG's,
                                           * FOLLOW's floor), FILTER (to the left the highs cut, to the right the lows) */
 enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_LFO, PT_MIX, PT_PAN, PT_REVERB, PT_RSEND, PT_DELAY1,
        PT_DELAY2, PT_DSEND, PT_STEP, PT_LANE, PT_GLOBAL, PT_ARP, PT_WARPS1, PT_WARPS2, PT_DUCK, PT_COMP, PT_OTT, PT_EQ,
-       PT_BEND, PT_EUC, PT_FILT1, PT_FILT2, PT_FILT3, PT_GLITCH, PT_CURVE, PT_FOLLOW, NPT };
+       PT_BEND, PT_EUC, PT_FILT1, PT_FILT2, PT_FILT3, PT_GLITCH, PT_CURVE, PT_FOLLOW, PT_PADS5, NPT };
 enum { BS_OFF, BS_RECT, BS_DOWN, BS_DOWN3, BS_FOLD, BS_SWAP, BS_N };   /* the bits' SHAPE */
 #define BM_N 12                          /* the bits' MASKs */
 enum { GL_64, GL_32, GL_16, GL_8, GL_N };   /* the glitch's SIZE */
@@ -188,7 +192,10 @@ int eng_model_lock_set(int lane, int step, int m);   /* 0 ok, -1 no room or not 
  * knobs' randoms, a name. Saved by the screen (app.c, pat_store.h), read onto any track */
 #define SND_PAGES 8
 #define SND_MAGIC 0x31444E53u            /* "SND1" */
-#define SND_VERSION 10                   /* (9: 0.16.49's to 0.16.56's: PADS' fourth page (0.16.57) not in it: read,
+#define SND_VERSION 11                   /* (10: 0.16.57's and 0.16.58's: PADS' fourth page in four algorithm bytes (engine.cc
+                                          * kPads4At), as 0.16.57 had it, its fifth not yet: read, both made from it
+                                          * (pads_from_v37); a sound before 11 is pads[] shorter (SND_SIZE_10);
+                                          * 9: 0.16.49's to 0.16.56's: PADS' fourth page (0.16.57) not in it: read,
                                           * made from its knobs as they were (engine.cc pads_from_v36); 8: 0.16.43's to 0.16.48's: the SDS (0.16.49) not yet at 8: read, the models
                                           * from 8 four further on; 7: 0.16.24's to 0.16.42's: FM CYMBAL, FM HI-HAT, OTIS there (gone): read as
                                           * HAT, HAT, POLY from their kits, the others to their places; 6: 0.16.21's to 0.16.23's, STATIC (0.16.24) not yet at 18: read, the
@@ -205,7 +212,9 @@ typedef struct {
     int8_t rnd[SND_PAGES * 4];           /* each knob's random (0: none; the pages' knobs without one: 0) */
     uint8_t rseed[SND_PAGES * 4];
     char name[12];                       /* a factory sound's, or its model's */
+    float pads[8];                       /* (11, 0.16.59) PADS' fourth and fifth pages (its own: 0 for another model) */
 } eng_sound_t;
+#define SND_SIZE_10 ((unsigned)sizeof(eng_sound_t) - 32u)   /* a sound's size before 11 (0.16.58 and before) */
 void eng_sound_get(int t, eng_sound_t *s);
 int eng_sound_set(int t, const eng_sound_t *s);   /* 0 done; -1 not a sound; -2 PADS (once a project) on another track */
 int eng_sound_check(const eng_sound_t *s, int bytes);   /* 1: a sound this version reads */
@@ -223,10 +232,18 @@ enum { SRC_NONE, SRC_L1, SRC_L2, SRC_L3, NSRC };   /* (0.3's were Tides' A1..A4,
 const char *eng_src_name(int src);
 
 typedef struct {
-    uint8_t src, dst;                    /* SRC_*, a parameter */
+    uint8_t src, dst;                    /* SRC_*, a parameter (its low byte: cable_dst) */
     int8_t depth;                        /* -100..100 (0: no cable) */
-    uint8_t rsv;
+    uint8_t dst_hi;                      /* (0.16.59, its spare until then, 0) the parameter's high byte: the pages
+                                          * from 64 on (the glitches, the followers, PADS' fifth). Before 0.16.59 a
+                                          * cable onto one of them was kept as its low byte, onto another knob */
 } cable_t;
+static inline int cable_dst(const cable_t *k) { return k->dst | (k->dst_hi << 8); }
+static inline void cable_dst_set(cable_t *k, int param)
+{
+    k->dst = (uint8_t)(param & 0xFF);
+    k->dst_hi = (uint8_t)(param >> 8);
+}
 
 typedef struct {
     uint8_t lane;                        /* 0xFF: a free slot */
@@ -237,7 +254,10 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 37u              /* (36: 0.16.49's to 0.16.56's: PADS' fourth page (0.16.57) not yet there:
+#define PROJECT_VERSION 38u              /* (37: 0.16.57's and 0.16.58's: 71 pages, 367 locks, PADS' fourth page as 0.16.57 had
+                                          * it: read, its fourth and fifth pages made from it (pads_from_v37), its
+                                          * locks past 363 out; 33 to 36 the same layout, their changes after;
+                                          * 36: 0.16.49's to 0.16.56's: PADS' fourth page (0.16.57) not yet there:
                                           * read, made from its knobs as they were, pads_in; 35: 0.16.43's to 0.16.48's: the SDS (0.16.49) not yet at 8: read, the
                                           * models from 8 four further on (a step's model too); 34: 0.16.24's to 0.16.42's: FM CYMBAL, FM HI-HAT, OTIS there (0.16.43:
                                           * gone): read, as HAT, HAT, POLY from their kits, the others to their places;
@@ -293,7 +313,7 @@ typedef struct {
     uint8_t dice_out;                    /* (0.16.51, in the spare) the tracks the random dose leaves alone: bit t, track
                                           * t (0: all four taken, as ever; GLO's third face) */
     uint8_t trauma_out;                  /* (0.16.51) the tracks TRAUMA leaves clean (GLO's fourth face) */
-    uint8_t rsv[2];                      /* (0.16.7) spare, 0: the project at the patterns' record's size */
+    uint8_t rsv[1];                      /* (0.16.7) spare, 0: the project at the patterns' record's size */
 } project_t;
 #define PROJECT_SIZE_24 3804u            /* (0.16.0's and 0.16.1's project, version 24) */
 #define PROJECT_SIZE_26 3820u            /* (0.16.2's to 0.16.6's, versions 25, 26) */

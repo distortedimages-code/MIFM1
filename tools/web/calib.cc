@@ -9,7 +9,7 @@
 // what the table calibrate.py writes says (firmware/mi/web_costs.h).
 //   calib stress SECONDS [TRAUMA DICE]   the stress test playing (TRAUMA's dose, the random dose: 0..100)
 //   calib groove SECONDS [TRAUMA DICE]   the demo groove playing
-//   calib one MODEL FILTER FM NOISE BEND BUS WARPS HQ SECONDS [EXTRA [PAGE4]]
+//   calib one MODEL FILTER FM NOISE BEND BUS WARPS HQ SECONDS [EXTRA [PAGE4 [PAGE5]]]
 //                                        T1 alone playing a note every step (its voice never rests), on MODEL, its
 //                                        filter FILTER (FM, NOISE: 0..1), BEND 0/1 (its bits); the bus BUS (MB_*); WARPS -1 off
 //                                        or its algorithm's mark 0..5 (T2 by T1, T2 playing too), HQ 0/1; EXTRA
@@ -109,10 +109,10 @@ int main(int argc, char** argv) {
     if (extra & 56) p->val[PG_TRACK(0, 0) * 4 + 1] = 5.5f / 8.0f;
     if (extra & 512) p->val[PG_TRACK(0, 0) * 4 + 1] = 0.0f;   // PADS (512), MANUAL: a triad; 64 an eleventh, a bass
     if (extra & 64) p->val[PG_TRACK(0, 0) * 4 + 2] = p->val[PG_TRACK(0, 0) * 4 + 3] = 0.9f;   // under it (6 notes);
-    if (argc > 12 && eng_model_kind(model) == MK_PADS) {   // (0.16.57) PADS' fourth page, PAGE4: WAVE, ENSEMBLE,
-      float x[4];                                         // LAYER, TEXTURE (0..1, commas between)
-      if (sscanf(argv[12], "%f,%f,%f,%f", &x[0], &x[1], &x[2], &x[3]) == 4)
-        for (int i = 0; i < 4; ++i) p->val[PG_PADS4 * 4 + i] = x[i];
+    for (int pg = 0; pg < 2 && argc > 12 + pg && eng_model_kind(model) == MK_PADS; ++pg) {   // (0.16.57) PADS'
+      float x[4];                       // fourth page, PAGE4: WAVE, ENSEMBLE, TEXTURE (0..4), AMOUNT; (0.16.59) its
+      if (sscanf(argv[12 + pg], "%f,%f,%f,%f", &x[0], &x[1], &x[2], &x[3]) == 4)   // fifth, PAGE5: LAYER (0..8),
+        for (int i = 0; i < 4; ++i) p->val[(pg ? PG_PADS5 : PG_PADS4) * 4 + i] = x[i];   // LEVEL, CHARACTER, TRANSP
     }
     if (extra & 1024) p->val[PG_TRACK(0, 1) * 4 + 0] = 1.0f;  // POLY (1024): held; 2048 UNISON (four voices); 8192
     if (extra & 2048) p->val[PG_TRACK(0, 2) * 4 + 0] = 0.5f;  // its DECAY short (a voice a trig, over before the

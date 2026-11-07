@@ -5,6 +5,7 @@
 // stopped machine, a project's values are written as the screen writes them, the effects' lanes open and close them.
 // WAVs in the folder given.
 //   build/native build/wav [seconds]
+#include <array>
 #include <cmath>
 #include <algorithm>
 #include <cstdio>
@@ -172,6 +173,60 @@ static void as_v32(project_t* q, int version) {
   memcpy(o.dir, q->dir, sizeof o.dir);
   memcpy(o.endless_opt, q->endless_opt, sizeof o.endless_opt);
   memcpy(o.arp_opt, q->arp_opt, sizeof o.arp_opt);
+  memset(q, 0xA5, sizeof *q);
+  memcpy(q, &o, sizeof o);
+}
+
+// (0.16.59) a project of now, written as 0.16.23 to 0.16.58 kept theirs (versions 33 to 37: 71 pages, no PADS'
+// fifth, 367 locks; 3824 bytes, as now), its version as the test set it
+struct V37 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[71 * 4];
+  uint8_t algo[71];
+  uint8_t out_mode, warps_hq, theme, dice, dice_seed;
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+  int8_t rnd[ENG_LANES][ENG_NTP];
+  uint16_t seed[ENG_LANES];
+  plock_t lock[367];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+  uint8_t rseed[ENG_LANES][ENG_NTP];
+  uint8_t trauma;
+  int8_t speed[ENG_LANES];
+  uint8_t dir[ENG_LANES];
+  uint8_t endless_opt[ENG_TRACKS][4];
+  uint8_t arp_opt[ENG_TRACKS];
+  uint8_t dice_out, trauma_out;
+  uint8_t rsv[2];
+};
+static_assert(sizeof(V37) == PROJECT_SIZE_32 && sizeof(V37) == sizeof(project_t), "0.16.57's layout");
+static V37 v37_o;
+static void as_v37(project_t* q, int version, const plock_t* locks = 0) {   // (locks: its 367, else now's 363)
+  V37& o = v37_o;
+  memset(&o, 0, sizeof o);
+  o.magic = q->magic, o.version = static_cast<uint16_t>(version), o.size = PROJECT_SIZE_32;
+  memcpy(o.val, q->val, sizeof o.val);
+  memcpy(o.algo, q->algo, sizeof o.algo);
+  o.out_mode = q->out_mode, o.warps_hq = q->warps_hq, o.theme = q->theme, o.dice = q->dice, o.dice_seed = q->dice_seed;
+  memcpy(o.cable, q->cable, sizeof o.cable);
+  memcpy(o.trig, q->trig, sizeof o.trig);
+  memcpy(o.rnd, q->rnd, sizeof o.rnd);
+  memcpy(o.seed, q->seed, sizeof o.seed);
+  if (locks) memcpy(o.lock, locks, sizeof o.lock);
+  else old_locks(o.lock, q->lock, 367);
+  memcpy(o.endless, q->endless, sizeof o.endless);
+  memcpy(o.endless_len, q->endless_len, sizeof o.endless_len);
+  memcpy(o.endless_key, q->endless_key, sizeof o.endless_key);
+  memcpy(o.rseed, q->rseed, sizeof o.rseed);
+  o.trauma = q->trauma;
+  memcpy(o.speed, q->speed, sizeof o.speed);
+  memcpy(o.dir, q->dir, sizeof o.dir);
+  memcpy(o.endless_opt, q->endless_opt, sizeof o.endless_opt);
+  memcpy(o.arp_opt, q->arp_opt, sizeof o.arp_opt);
+  o.dice_out = q->dice_out, o.trauma_out = q->trauma_out;
   memset(q, 0xA5, sizeof *q);
   memcpy(q, &o, sizeof o);
 }
@@ -2625,9 +2680,14 @@ int main(int argc, char** argv) {
     pads_init();
     for (int s2 = 0; s2 < 300; ++s2) {
       for (int i = 0; i < 8; ++i) k[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();
-      float x4[4];                      // (0.16.57: its fourth page too, WAVE, ENSEMBLE, LAYER, TEXTURE)
-      for (int i = 0; i < 4; ++i) x4[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();
+      float x4[4], x5[4];               // (0.16.57: its fourth page too; 0.16.59: WAVE, ENSEMBLE, TEXTURE, AMOUNT;
+      for (int i = 0; i < 4; ++i) x4[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();   // its fifth,
+      for (int i = 0; i < 4; ++i) x5[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();   // LAYER, LEVEL,
+      x4[2] = static_cast<float>(static_cast<int>(rnd() * 4.999f));   // CHARACTER, TRANSP)
+      x5[0] = static_cast<float>(static_cast<int>(rnd() * 8.999f));
+      x5[3] = static_cast<float>(static_cast<int>(rnd() * 48.999f) - 24);
       pads_set_page4(x4);
+      pads_set_page5(x5);
       int prog = static_cast<int>(rnd() * static_cast<float>(pads_progs()));
       int cn = pads_chord(prog, s2, s2 % 7, 0x5AD, k[1], ch, &raised);
       pads_set(24.0f + 60.0f * rnd(), k, ch, cn, s2 % 12);
@@ -4181,17 +4241,18 @@ int main(int argc, char** argv) {
     if (!ok || vmax != 3 || !low) ++failures, printf("FAIL: a step's chord\n");
   }
 
-  {                                     // 68. PADS' TEXTURE (0.16.16; 0.16.57: on its fourth page, Bell in LAYER):
-    // Off, Tape, Drift, Dust, Down, each sounding, finite, its level near Off's; Tape's pitch wavering, Dust rougher,
-    // Down an octave under
+  {                                     // 68. PADS' TEXTURE (0.16.16; 0.16.57: on its fourth page, Bell in LAYER;
+    // 0.16.59: a choice, its AMOUNT the next knob): Off, Tape, Drift, Dust, Down, each sounding, finite, its level
+    // near Off's; Tape's pitch wavering, Dust rougher, Down an octave under
     static float buf[44100 * 2];
-    auto play = [&](float tex, int one) {   // (one: a single note, one saw: its pitch to follow)
+    auto play = [&](int tex, float amt, int one) {   // (one: a single note, one saw: its pitch to follow)
       float k[8], x[4];
       const int chord[3] = {0, 4, 7};
       pads_init();
       pads_defaults(k);
       pads_page4_defaults(x);
-      x[3] = tex;
+      x[2] = static_cast<float>(tex);
+      x[3] = amt;
       k[4] = 0.0f;                      // (no swell)
       k[5] = 0.7f;                      // (bright enough to see)
       if (one) x[1] = 0.5f;
@@ -4224,14 +4285,14 @@ int main(int argc, char** argv) {
     };
     char tx[24];
     int names = 1, finite = 1;
-    const float kAt[5] = {0.0f, 0.04f + 0.24f * 0.9f, 0.28f + 0.24f * 0.9f, 0.52f + 0.24f * 0.99f, 0.76f + 0.24f * 0.9f};
+    const float kAt[5] = {0.5f, 0.915f, 0.915f, 0.9915f, 0.915f};   // (each amount as 0.16.57's test had it)
     const char* const kName[5] = {"Off", "Tape", "Drift", "Dust", "Down"};
     double lv[5], rough[5], sub[5];
     for (int t = 0; t < 5; ++t) {
-      pads_page4_text(3, kAt[t], tx, sizeof tx);
-      if (std::strncmp(tx, kName[t], std::strlen(kName[t])) || pads_texture_of(kAt[t]) != t)
-        names = 0, printf("PADS: TEXTURE at %.3f written %s\n", kAt[t], tx);
-      play(kAt[t], 0);
+      pads_page4_text(2, static_cast<float>(t), tx, sizeof tx);
+      if (std::strcmp(tx, kName[t]) || pads_texture_of(static_cast<float>(t)) != t)
+        names = 0, printf("PADS: TEXTURE %d written %s\n", t, tx);
+      play(t, kAt[t], 0);
       double e = 0.0, d = 0.0;
       for (int i = 0; i < 44100 * 2; ++i) finite &= std::isfinite(buf[i]) ? 1 : 0;
       for (int i = 22050; i < 44100; ++i) {
@@ -4243,12 +4304,14 @@ int main(int argc, char** argv) {
       rough[t] = std::sqrt(d / (e + 1e-12));   // (the first difference over the level: the top)
       sub[t] = level(22050, 16384, 32.70);       // (C1: an octave under the chord's lowest, C2)
     }
-    play(kAt[1], 1);
+    play(1, kAt[1], 1);
     const double tape_w = wander();
-    play(kAt[0], 1);
+    play(0, kAt[0], 1);
     const double off_w = wander();
     int levels = 1;
     for (int t = 1; t < 5; ++t) levels &= lv[t] > 0.5 * lv[0] && lv[t] < 2.0 * lv[0];
+    pads_page4_text(3, 0.6016f, tx, sizeof tx);
+    names &= !std::strcmp(tx, "60%");   // (its AMOUNT)
     const int tape = tape_w > 1.0 && tape_w > 4.0 * off_w + 0.2, dust = rough[3] > 1.5 * rough[0],
               down = sub[4] > 0.03 && sub[4] > 8.0 * sub[0];
     printf("PADS' TEXTURE: names %s, finite %s; levels %.3f (Off) %.3f %.3f %.3f %.3f; Tape's pitch over %.2f Hz "
@@ -4269,9 +4332,9 @@ int main(int argc, char** argv) {
     // time, then rising to the next one, cut there
     const int kN = 44100 * 3;
     static float off[kN], on[kN], d[kN];
-    auto play = [&](float* buf, float ly, int n) {
-      float k[8], x[4];
-      const int chord[3] = {0, 4, 7};
+    auto play = [&](float* buf, int ly, int n, float lvl = 0.70710678f, float chr = 0.575f, float tr = 0.0f) {
+      float k[8], x[4], x5[4] = {static_cast<float>(ly), lvl, chr, tr};   // (0.16.59: its fifth page; CHARACTER
+      const int chord[3] = {0, 4, 7};                                      // 0.16.57's middle, its level the same)
       pads_init();
       pads_defaults(k);
       pads_page4_defaults(x);
@@ -4279,8 +4342,8 @@ int main(int argc, char** argv) {
       k[4] = 0.0f;
       k[5] = 0.7f;
       if (n == 1) x[1] = 0.5f;          // (one saw)
-      x[2] = ly;
       pads_set_page4(x);
+      pads_set_page5(x5);
       pads_set(48.0f, k, chord, n, 0);
       for (int i = 0; i < kN; i += 128) {
         if (i % 44100 < 128) pads_gate(0), pads_gate(1);   // (at 0, 1.001 s, 2.003 s)
@@ -4317,14 +4380,13 @@ int main(int argc, char** argv) {
     int names = 1, finite = 1, loud = 1, own = 1, peak_ok = 1;
     double share[2][9], each[9] = {0.0}, pmax = 0.0;
     for (int n = 1; n <= 3; n += 2) {
-      play(off, 0.0f, n);
+      play(off, 0, n);
       const double pad = rms(off, 0.1, 2.9);
       for (int ly = 1; ly <= 8; ++ly) {
-        const float u = 0.04f + 0.12f * (static_cast<float>(ly) - 0.5f);
-        pads_page4_text(2, u, tx, sizeof tx);
-        if (n == 1 && (std::strncmp(tx, kName[ly], std::strlen(kName[ly])) || pads_layer_of(u) != ly))
-          names = 0, printf("PADS: LAYER at %.3f written %s\n", u, tx);
-        play(on, u, n);
+        pads_page5_text(0, static_cast<float>(ly), tx, sizeof tx);
+        if (n == 1 && (std::strcmp(tx, kName[ly]) || pads_layer_of(static_cast<float>(ly)) != ly))
+          names = 0, printf("PADS: LAYER %d written %s\n", ly, tx);
+        play(on, ly, n);
         for (int i = 0; i < kN; ++i) {
           finite &= std::isfinite(on[i]) ? 1 : 0;
           pmax = std::max(pmax, static_cast<double>(std::fabs(on[i])));
@@ -4365,7 +4427,7 @@ int main(int argc, char** argv) {
         }
       }
       if (n == 3) {                     // Vox, its bands
-        play(on, 0.04f + 0.12f * 4.5f, 3);
+        play(on, 5, 3);
         for (int i = 0; i < kN; ++i) d[i] = on[i] - off[i];
         each[5] = band(d, 300.0, 1300.0) / band(d, 1300.0, 6000.0) > 3.0 * band(off, 300.0, 1300.0) / band(off, 1300.0, 6000.0);
       }
@@ -4378,6 +4440,47 @@ int main(int argc, char** argv) {
     for (int ly = 1; ly <= 8; ++ly) printf(" %s %.2f/%.2f%s", kName[ly], share[0][ly], share[1][ly], each[ly] > 0.0 ? "" : " WRONG");
     printf("; the pad's C3 untouched %s\n", own ? "ok" : "WRONG");
     if (!names || !finite || !loud || !own || !peak_ok || !all) ++failures, printf("FAIL: PADS' LAYER\n");
+    // (0.16.59) its LEVEL (2 u^2: Off, 0.16.57's at 0.707, +6 dB at 1, -6 dB at 0.5), its TRANSP (Bell +7: G4; Halo
+    // -12: its G3 and C4), its CHARACTER (Bell: brighter, its index x 1/2 .. x 2: more of it above its carrier)
+    play(off, 0, 1);
+    auto layer_rms = [&](int ly, float lvl, float chr = 0.575f, float tr = 0.0f) {
+      play(on, ly, 1, lvl, chr, tr);
+      for (int i = 0; i < kN; ++i) d[i] = on[i] - off[i];
+      return rms(d, 0.1, 2.9);
+    };
+    const double h_u = layer_rms(7, 0.70710678f), h_0 = layer_rms(7, 0.0f), h_1 = layer_rms(7, 1.0f),
+                 h_h = layer_rms(7, 0.5f);
+    const int level = h_0 == 0.0 && std::fabs(h_1 / h_u - 2.0) < 0.05 && std::fabs(h_h / h_u - 0.5) < 0.03;
+    char t0[16], tu[16], t1[16], th[16];
+    pads_page5_text(1, 0.0f, t0, sizeof t0);
+    pads_page5_text(1, 0.70710678f, tu, sizeof tu);
+    pads_page5_text(1, 1.0f, t1, sizeof t1);
+    pads_page5_text(1, 0.5f, th, sizeof th);
+    const int ltext = !std::strcmp(t0, "Off") && !std::strcmp(tu, "0 dB") && !std::strcmp(t1, "+6 dB") &&
+                      !std::strcmp(th, "-6 dB");
+    layer_rms(1, 0.70710678f, 0.575f, 7.0f);
+    const double b7 = pk(d, 0.05, 16384, 392.0), b0 = pk(d, 0.05, 16384, 261.63);
+    layer_rms(7, 0.70710678f, 0.575f, -12.0f);
+    const double hg = pk(d, 1.5, 16384, 196.0), hc = pk(d, 1.5, 16384, 261.63);
+    char ttr[16];
+    pads_page5_text(3, 7.0f, ttr, sizeof ttr);
+    const int transp = b7 > 20.0 && b0 < 3.0 && hg > 20.0 && hc > 20.0 && !std::strcmp(ttr, "+7");
+    auto above = [&](float chr) {       // (Bell alone: its level over 1 kHz against its carrier's)
+      layer_rms(1, 0.70710678f, chr);
+      double hi = 0.0;
+      for (double f = 1000.0; f < 6000.0; f += 20.0) hi += std::pow(lvl(d, 2205, 8192, f), 2.0);
+      return hi / std::pow(lvl(d, 2205, 8192, 261.63), 2.0);
+    };
+    const double c0 = above(0.0f), c1 = above(1.0f);
+    char tch[24];
+    pads_set_page5(std::array<float, 4>{2.0f, 0.7f, 0.5f, 0.0f}.data());   // (its text: Chime's, Wind)
+    pads_page5_text(2, 0.5f, tch, sizeof tch);
+    const int chr = c1 > 3.0 * c0 && !std::strcmp(tch, "Wind 50%");
+    printf("PADS' LAYER, its fifth page: LEVEL Off %.4f, 0.707 %.4f, 1 x%.2f, 0.5 x%.2f (%s %s %s %s) %s; TRANSP: Bell "
+           "+7 at G4 %.0f (C4 %.1f), Halo -12 at G3 %.0f and C4 %.0f (%s) %s; CHARACTER: Bell's partials over 1 kHz "
+           "x%.1f from 0 to 1 (%s) %s\n", h_0, h_u, h_1 / h_u, h_h / h_u, t0, tu, t1, th, level && ltext ? "ok" : "WRONG",
+           b7, b0, hg, hc, ttr, transp ? "ok" : "WRONG", c1 / (c0 + 1e-12), tch, chr ? "ok" : "WRONG");
+    if (!level || !ltext || !transp || !chr) ++failures, printf("FAIL: PADS' LAYER's fifth page\n");
     pads_init();
   }
 
@@ -4559,22 +4662,27 @@ int main(int argc, char** argv) {
     pads_init();
   }
 
-  {                                     // 68e (0.16.57). PADS before 0.16.57, a project's (version 36) and a sound's
-    // (version 9): ENSEMBLE and TEXTURE from its seventh and eighth knobs to its fourth page (Bell to LAYER), WAVE on
-    // Saw; GLIDE Off, RELEASE as the pad let go then (0.06 s + 0.6 x ATTACK); their locks and randoms gone, a cable on
-    // ENSEMBLE retargeted; its text as before (the same choice, the same amount). A sound of now: its fourth page with
-    // it (algo bytes 1, 2, 3, 5), read back; DARK PAD's as it was (Tape at 60 %, RELEASE 263 ms)
+  {                                     // 68e (0.16.57, 0.16.59). PADS before: a project of 0.16.56 (version 36),
+    // ENSEMBLE and TEXTURE on its seventh and eighth knobs: to its fourth page (Bell to LAYER, on the fifth: its
+    // LEVEL what its amount gave, CHARACTER 0.5), WAVE on Saw; GLIDE Off, RELEASE as it let go then (0.06 s + 0.6 x
+    // ATTACK); their locks and randoms gone, a cable on ENSEMBLE retargeted. A project of 0.16.57 (37): its fourth
+    // page's LAYER and TEXTURE (a zone of the knob each) to TEXTURE and AMOUNT, LAYER LEVEL CHARACTER (as it sounded:
+    // its level, its amount where it did more), its cables on them to AMOUNT and LEVEL; its 367 locks, 363 kept; one
+    // without PADS, the fifth page at its defaults. Sounds of 0.16.56 (9) and 0.16.57 (10, its page in four bytes,
+    // shorter), and of now (11): both pages, exactly. DARK PAD as it was (Tape at 60 %, RELEASE 263 ms, no layer).
+    // And (0.16.59) a cable onto a parameter past 255 (a glitch's GLITCH): that one moved, not the one of its low byte
     project_t* p = eng_project();
     const int pads = eng_model_find(MK_PADS, 0);
     auto lx_param = [](int t, int i) { return PG_TRACK(t, 0) * 4 + 1 + i; };
     auto bipu = [&](int prm, float u) { return eng_pdef(prm)->kind == K_BIP ? 2.0f * u - 1.0f : u; };
     auto ubip = [&](int prm, float v) { return eng_pdef(prm)->kind == K_BIP ? 0.5f * (v + 1.0f) : v; };
+    auto near = [](float a, float b) { return std::fabs(a - b) < 1e-4f; };
     static project_t q;
     int ok = 1;
-    const float kTex[3] = {0.04f + 0.192f * 0.33f, 0.04f + 0.192f * 1.62f, 0.04f + 0.192f * 4.71f};   // (Bell, Tape,
-    const float kWantL[3] = {0.04f + 0.12f * 0.33f, 0.0f, 0.0f};                                      // Down: 0.15 +
-    const float kWantT[3] = {0.0f, 0.04f + 0.24f * 0.62f, 0.04f + 0.24f * 3.71f};                     // 0.85 x its
-    const char* const kWantText[3] = {"Bell 43%", "Tape 68%", "Down 75%"};                            // share)
+    // 0.16.56's: TEXTURE's five zones of 0.192 (Bell first)
+    const float kTex[3] = {0.04f + 0.192f * 0.33f, 0.04f + 0.192f * 1.62f, 0.04f + 0.192f * 4.71f};
+    const float kAmt[3] = {0.15f + 0.85f * 0.33f, 0.15f + 0.85f * 0.62f, 0.15f + 0.85f * 0.71f};
+    const int kWantT[3] = {0, 1, 4}, kWantL[3] = {1, 0, 0};   // (Bell to LAYER; Tape, Down)
     for (int c = 0; c < 3; ++c) {
       eng_defaults(&q);
       q.algo[PG_TRACK(2, 0)] = static_cast<uint8_t>(pads);
@@ -4591,67 +4699,129 @@ int main(int argc, char** argv) {
       q.rnd[2][7] = 40;
       q.rnd[2][8] = -30;
       q.rnd[2][4] = 20;
-      q.cable[2][0] = cable_t{};
-      q.cable[2][0].src = 1;
-      q.cable[2][0].depth = 30;
-      q.cable[2][0].dst = static_cast<uint8_t>(lx_param(2, 6));
-      q.version = 36;
-      char new_t[24];
-      int up = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.version == PROJECT_VERSION;
+      q.cable[2][0] = cable_t{1, static_cast<uint8_t>(lx_param(2, 6)), 30, 0};
+      as_v37(&q, 36);
+      int up = eng_upgrade(&q, sizeof(V37)) && eng_check(&q);
       const float* x = &q.val[PG_PADS4 * 4];
-      up &= std::fabs(x[0] - 2.0f / 3.0f) < 1e-6f && std::fabs(x[1] - 0.3f) < 1e-5f &&
-            std::fabs(x[2] - kWantL[c]) < 1e-4f && std::fabs(x[3] - kWantT[c]) < 1e-4f;
+      const float* x5 = &q.val[PG_PADS5 * 4];
+      up &= near(x[0], 2.0f / 3.0f) && near(x[1], 0.3f) && static_cast<int>(x[2]) == kWantT[c] &&
+            static_cast<int>(x5[0]) == kWantL[c] && near(x5[2], 0.5f) && x5[3] == 0.0f;
+      if (kWantT[c]) up &= near(x[3], kAmt[c]);
+      if (kWantL[c]) up &= near(2.0f * x5[1] * x5[1] * 0.575f, kAmt[c]);   // (the bell: as loud as its amount made it)
+      else up &= near(x5[1], 0.70710678f);
       up &= ubip(lx_param(2, 6), q.val[lx_param(2, 6)]) < 1e-6f;
       const float rel = 0.03f * std::exp2(8.0f * ubip(lx_param(2, 7), q.val[lx_param(2, 7)]));
       up &= std::fabs(rel - (0.06f + 0.6f * 0.001f * std::exp2(12.0f * 0.5f))) < 2e-3f;
-      up &= q.lock[0].lane == 0xFF && q.lock[1].lane == 0xFF && q.lock[2].lane == 2 && q.rnd[2][7] == 0 &&
-            q.rnd[2][8] == 0 && q.rnd[2][4] == 20 && q.cable[2][0].dst == PG_PADS4 * 4 + 1 && q.cable[2][0].depth == 30;
-      pads_page4_text(c == 0 ? 2 : 3, c == 0 ? x[2] : x[3], new_t, sizeof new_t);
-      up &= !std::strcmp(new_t, kWantText[c]);   // (its TEXTURE's text then: the same name, the same amount)
-      if (!up) printf("PADS before 0.16.57 (%d): page %.3f %.3f %.3f %.3f, knobs 7 8 %.3f %.3f, release %.3f s; %s\n", c,
-                      x[0], x[1], x[2], x[3], q.val[lx_param(2, 6)], q.val[lx_param(2, 7)], rel, new_t);
+      up &= q.lock[0].lane == 0xFF && q.lock[1].lane == 0xFF && q.lock[2].lane == 2 && q.lock[2].tp == 4 &&
+            q.rnd[2][7] == 0 &&
+            q.rnd[2][8] == 0 && q.rnd[2][4] == 20 && cable_dst(&q.cable[2][0]) == PG_PADS4 * 4 + 1 &&
+            q.cable[2][0].depth == 30;
+      if (!up) printf("PADS before 0.16.57 (%d): page 4 %.3f %.3f %.3f %.3f, page 5 %.3f %.3f %.3f %.3f, release %.3f s\n",
+                      c, x[0], x[1], x[2], x[3], x5[0], x5[1], x5[2], x5[3], rel);
       ok &= up;
     }
-    // a sound of version 9 (its knobs as then), onto T2
+    // 0.16.57's: its fourth page's zones (LAYER 0.12 each, TEXTURE 0.24), cables on them, 367 locks
+    eng_defaults(&q);
+    q.algo[PG_TRACK(1, 0)] = static_cast<uint8_t>(pads);
+    q.val[PG_PADS4 * 4 + 0] = 0.5f;
+    q.val[PG_PADS4 * 4 + 1] = 0.6f;
+    q.val[PG_PADS4 * 4 + 2] = 0.04f + 0.12f * 1.4f;   // (Chime, 40 % of its zone: an amount of 0.49)
+    q.val[PG_PADS4 * 4 + 3] = 0.04f + 0.24f * 2.25f;  // (Dust, 25 %: 0.3625)
+    q.cable[1][0] = cable_t{1, static_cast<uint8_t>(PG_PADS4 * 4 + 2), 40, 0};
+    q.cable[1][1] = cable_t{2, static_cast<uint8_t>(PG_PADS4 * 4 + 3), -20, 0};
+    static plock_t l367[367];
+    for (int i = 0; i < 367; ++i) l367[i] = plock_t{static_cast<uint8_t>(i % 4), static_cast<uint8_t>(i % 64), 4, 7};
+    as_v37(&q, 37, l367);
+    int v37 = eng_upgrade(&q, sizeof(V37)) && eng_check(&q);
+    {
+      const float* x = &q.val[PG_PADS4 * 4];
+      const float* x5 = &q.val[PG_PADS5 * 4];
+      const float want_lv = std::sqrt(0.5f * (0.07f + 0.1f * 0.49f) / (0.07f + 0.1f * 0.575f));
+      int used = 0;
+      for (int i = 0; i < ENG_PLOCKS; ++i) used += q.lock[i].lane != 0xFF;
+      v37 &= near(x[0], 0.5f) && near(x[1], 0.6f) && x[2] == 3.0f && near(x[3], 0.3625f) && x5[0] == 2.0f &&
+             near(x5[1], want_lv) && near(x5[2], 0.49f) && x5[3] == 0.0f && used == ENG_PLOCKS &&
+             cable_dst(&q.cable[1][0]) == PG_PADS5 * 4 + 1 && cable_dst(&q.cable[1][1]) == PG_PADS4 * 4 + 3;
+      if (!v37) printf("PADS of 0.16.57: page 4 %.3f %.3f %.3f %.3f, page 5 %.3f %.3f (%.3f) %.3f %.3f, %d locks, cables "
+                       "%d %d\n", x[0], x[1], x[2], x[3], x5[0], x5[1], want_lv, x5[2], x5[3], used,
+                       cable_dst(&q.cable[1][0]), cable_dst(&q.cable[1][1]));
+      eng_defaults(&q);                 // (and one without PADS: the fifth page at its defaults)
+      as_v37(&q, 37);
+      float d5[4];
+      pads_page5_defaults(d5);
+      v37 &= eng_upgrade(&q, sizeof(V37)) && eng_check(&q);
+      for (int i = 0; i < 4; ++i) v37 &= q.val[PG_PADS5 * 4 + i] == d5[i];
+    }
+    // the sounds: 0.16.56's (9), 0.16.57's (10), now's (11)
     eng_defaults(p);
     eng_fresh();
     eng_set_model(1, pads);
     static eng_sound_t snd;
     eng_sound_get(1, &snd);
-    int s_ok = snd.version == SND_VERSION && snd.algo[1] == 170 && snd.algo[2] == 191 && snd.algo[3] == 0 && snd.algo[5] == 0;
+    int s_ok = snd.version == SND_VERSION && snd.size == sizeof snd && eng_sound_check(&snd, sizeof snd) &&
+               !eng_sound_check(&snd, SND_SIZE_10);
     snd.version = 9;
-    snd.algo[1] = snd.algo[2] = snd.algo[3] = snd.algo[5] = 0;
+    snd.size = static_cast<uint16_t>(SND_SIZE_10);
     snd.val[7] = bipu(lx_param(1, 6), 0.3f);   // (its knobs 7 and 8: the sound's val[7], val[8])
-    snd.val[8] = bipu(lx_param(1, 7), 0.04f + 0.192f * 2.5f);   // (Drift, 50 %)
-    s_ok &= eng_sound_set(1, &snd) == 0;
+    snd.val[8] = bipu(lx_param(1, 7), 0.04f + 0.192f * 2.5f);   // (Drift, 50 %: 0.575)
+    s_ok &= eng_sound_check(&snd, SND_SIZE_10) && eng_sound_set(1, &snd) == 0;
     const float* x = &p->val[PG_PADS4 * 4];
-    s_ok &= std::fabs(x[0] - 2.0f / 3.0f) < 1e-6f && std::fabs(x[1] - 0.3f) < 1e-5f && x[2] == 0.0f &&
-            std::fabs(x[3] - (0.04f + 0.24f * 1.5f)) < 1e-4f && ubip(lx_param(1, 6), p->val[lx_param(1, 6)]) < 1e-6f;
-    // one of now: its fourth page with it
-    const float kSet[4] = {0.2f, 0.9f, 0.5f, 0.7f};
-    for (int i = 0; i < 4; ++i) p->val[PG_PADS4 * 4 + i] = kSet[i];
+    const float* x5 = &p->val[PG_PADS5 * 4];
+    s_ok &= near(x[0], 2.0f / 3.0f) && near(x[1], 0.3f) && x[2] == 2.0f && near(x[3], 0.575f) && x5[0] == 0.0f &&
+            ubip(lx_param(1, 6), p->val[lx_param(1, 6)]) < 1e-6f;
+    snd.version = 10;                   // (0.16.57's: its fourth page in four bytes: Saw, 75 %, Halo at 50 %, no texture)
+    snd.size = static_cast<uint16_t>(SND_SIZE_10);   // (0.16.59: a sound before 11, shorter)
+    snd.algo[1] = 170, snd.algo[2] = 191, snd.algo[3] = static_cast<uint8_t>((0.04f + 0.12f * 6.5f) * 255.0f + 0.5f);
+    snd.algo[5] = 0;
+    s_ok &= eng_sound_set(1, &snd) == 0;
+    s_ok &= near(x[0], 2.0f / 3.0f) && x[2] == 0.0f && x5[0] == 7.0f && near(x5[2], 0.5f);
+    for (int pg : {PG_TRACK(1, 1), PG_TRACK(1, 2), PG_BEND(1), PG_FILT(1, 1)}) s_ok &= p->algo[pg] == 0;
+    const float kSet4[4] = {0.2f, 0.9f, 3.0f, 0.7f}, kSet5[4] = {6.0f, 0.33f, 0.81f, -5.0f};
+    for (int i = 0; i < 4; ++i) p->val[PG_PADS4 * 4 + i] = kSet4[i], p->val[PG_PADS5 * 4 + i] = kSet5[i];
     eng_sound_get(1, &snd);
     pads_page4_defaults(&p->val[PG_PADS4 * 4]);
+    pads_page5_defaults(&p->val[PG_PADS5 * 4]);
     s_ok &= eng_sound_set(1, &snd) == 0;
-    for (int i = 0; i < 4; ++i) s_ok &= std::fabs(x[i] - kSet[i]) < 0.5f / 255.0f + 1e-6f;
-    for (int pg : {PG_TRACK(1, 1), PG_TRACK(1, 2), PG_BEND(1), PG_FILT(1, 1)}) s_ok &= p->algo[pg] == 0;
+    for (int i = 0; i < 4; ++i) s_ok &= x[i] == kSet4[i] && x5[i] == kSet5[i];
     // DARK PAD, the factory's
     int dark = -1;
     for (int i = 0; i < ENG_FACTORY; ++i)
       if (!std::strcmp(eng_factory_name(i), "DARK PAD")) dark = i;
     int d_ok = dark >= 0 && eng_factory(dark, &snd) == 0 && eng_sound_set(1, &snd) == 0;
-    char dt[24];
-    pads_page4_text(3, x[3], dt, sizeof dt);
+    char dt[24], da[24];
+    pads_page4_text(2, x[2], dt, sizeof dt);
+    pads_page4_text(3, x[3], da, sizeof da);
     const float drel = 0.03f * std::exp2(8.0f * ubip(lx_param(1, 7), p->val[lx_param(1, 7)]));
-    const int dpc = !std::strncmp(dt, "Tape ", 5) ? std::atoi(dt + 5) : -1;   // (60 % then; a sound keeps it a
-    d_ok &= dpc >= 59 && dpc <= 62 && std::fabs(x[0] - 2.0f / 3.0f) < 1e-6f && x[2] < 0.04f &&   // byte: 61 %)
+    d_ok &= !std::strcmp(dt, "Tape") && !std::strcmp(da, "60%") && near(x[0], 2.0f / 3.0f) && x5[0] == 0.0f &&
             std::fabs(drel - 0.263f) < 0.005f;
+    // (0.16.59) a cable onto T1's GLITCH (parameter 256): it moves that, not T1's FREQ (0, its low byte)
     eng_defaults(p);
     eng_fresh();
-    printf("PADS before 0.16.57: three projects %s; a sound of then %s, of now (its fourth page) %s; DARK PAD %s "
-           "(%s, RELEASE %.3f s)\n", ok ? "ok" : "WRONG", s_ok ? "ok" : "WRONG", s_ok ? "ok" : "WRONG",
-           d_ok ? "ok" : "WRONG", dt, drel);
-    if (!ok || !s_ok || !d_ok) ++failures, printf("FAIL: PADS before 0.16.57\n");
+    for (int g = 0; g <= ENG_TRACKS; ++g)
+      for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c] = cable_t{0, 0, 0, 0};
+    const int gl = PG_GLITCH(0) * 4;
+    p->val[gl] = 0.0f;
+    p->val[PG_LFO(0) * 4 + 1] = 0.9f;   // (LFO 1 fast)
+    cable_dst_set(&p->cable[0][0], gl);
+    p->cable[0][0].src = SRC_L1, p->cable[0][0].depth = 100;
+    eng_play(1);
+    static float bl[128], br[128];
+    float g_hi = 0.0f, f_dev = 0.0f;
+    for (int b = 0; b < 400; ++b) {
+      eng_render(bl, br, 128);
+      g_hi = std::max(g_hi, eng_final(gl));
+      f_dev = std::max(f_dev, std::fabs(eng_final(0) - p->val[0]));
+    }
+    eng_play(0);
+    const int c_ok = g_hi > 0.2f && f_dev < 1e-6f && p->cable[0][0].dst_hi == 1 && p->cable[0][0].dst == 0;
+    eng_defaults(p);
+    eng_fresh();
+    printf("PADS before 0.16.59: projects of 0.16.56 %s, of 0.16.57 %s; sounds of 0.16.56, 0.16.57, now %s; DARK PAD %s "
+           "(%s %s, RELEASE %.3f s); a cable onto parameter 256: it %.2f, parameter 0 %.6f %s\n",
+           ok ? "ok" : "WRONG", v37 ? "ok" : "WRONG", s_ok ? "ok" : "WRONG", d_ok ? "ok" : "WRONG", dt, da, drel,
+           g_hi, f_dev, c_ok ? "ok" : "WRONG");
+    if (!ok || !v37 || !s_ok || !d_ok) ++failures, printf("FAIL: PADS before 0.16.59\n");
+    if (!c_ok) ++failures, printf("FAIL: a cable past parameter 255\n");
   }
 
   {                                     // 69. 0.16.17's projects and sounds (ROBOVOX's, withdrawn in 0.16.18):
@@ -4673,6 +4843,7 @@ int main(int argc, char** argv) {
     static eng_sound_t snd;
     eng_sound_get(1, &snd);
     snd.version = 3;
+    snd.size = static_cast<uint16_t>(SND_SIZE_10);   // (0.16.59: a sound before 11, shorter)
     snd.algo[0] = 16;                    // (ROBOVOX's number then)
     snd.val[1] = 0.9f;                   // (its first page's HARMONICS)
     const int set = eng_sound_set(1, &snd);
@@ -4917,6 +5088,7 @@ int main(int argc, char** argv) {
     static eng_sound_t snd;
     eng_sound_get(1, &snd);
     snd.version = 4;
+    snd.size = static_cast<uint16_t>(SND_SIZE_10);   // (0.16.59: a sound before 11, shorter)
     snd.algo[0] = 16;                    // (SPEECH's number then)
     eng_set_model(1, eng_model_find(MK_FM, 0));
     const int snd_ok = eng_sound_set(1, &snd) == 0 && p->algo[PG_TRACK(1, 0)] == speech;
@@ -5115,6 +5287,7 @@ int main(int argc, char** argv) {
     static eng_sound_t snd;
     eng_sound_get(1, &snd);
     snd.version = 5;
+    snd.size = static_cast<uint16_t>(SND_SIZE_10);   // (0.16.59: a sound before 11, shorter)
     snd.algo[0] = 17;
     eng_set_model(1, eng_model_find(MK_FM, 0));
     const int snd_ok = eng_sound_set(1, &snd) == 0 && p->algo[PG_TRACK(1, 0)] == speech;
@@ -5479,12 +5652,14 @@ int main(int argc, char** argv) {
     q.algo[PG_TRACK(0, 0)] = 18;
     q.algo[PG_TRACK(1, 0)] = 23;
     q.algo[PG_TRACK(2, 0)] = 17;
-    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == speech &&
+    as_v37(&q, 33);                     // (0.16.59: 0.16.57's layout, 71 pages)
+    const int proj_ok = eng_upgrade(&q, sizeof(V37)) && eng_check(&q) && q.algo[PG_TRACK(0, 0)] == speech &&
                         q.algo[PG_TRACK(1, 0)] == ENG_MODELS - 1 &&
                         q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_VOCODER, 0);
     eng_sound_t snd;
     eng_sound_get(1, &snd);
     snd.version = 6;
+    snd.size = static_cast<uint16_t>(SND_SIZE_10);   // (0.16.59: a sound before 11, shorter)
     snd.algo[0] = 18;
     eng_set_model(1, eng_model_find(MK_FM, 0));
     const int snd_ok = eng_sound_set(1, &snd) == 0 && p->algo[PG_TRACK(1, 0)] == speech;
@@ -6069,7 +6244,8 @@ int main(int argc, char** argv) {
     for (int i = 0; i < ENG_PLOCKS; ++i) q.lock[i].lane = 0xFF;
     q.lock[0] = plock_t{3, 2, static_cast<uint8_t>(ENG_NTP + 4), 9};
     q.lock[1] = plock_t{3, 4, static_cast<uint8_t>(ENG_NTP + 4), 7};
-    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) &&
+    as_v37(&q, 34);                     // (0.16.59: 0.16.57's layout, 71 pages)
+    const int proj_ok = eng_upgrade(&q, sizeof(V37)) && eng_check(&q) &&
                         q.algo[PG_TRACK(0, 0)] == eng_model_find(MK_POLY, 0) &&
                         q.algo[PG_TRACK(1, 0)] == eng_model_find(MK_DRUM, 3) &&
                         q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_DRUM, 3) &&
@@ -6080,6 +6256,7 @@ int main(int argc, char** argv) {
     static eng_sound_t snd;
     eng_sound_get(1, &snd);
     snd.version = 7;
+    snd.size = static_cast<uint16_t>(SND_SIZE_10);   // (0.16.59: a sound before 11, shorter)
     snd.algo[0] = 15;
     const int snd_ok = eng_sound_set(1, &snd) == 0 && p->algo[PG_TRACK(1, 0)] == eng_model_find(MK_POLY, 0);
     eng_defaults(p);
@@ -6252,7 +6429,8 @@ int main(int argc, char** argv) {
     for (int i = 0; i < ENG_PLOCKS; ++i) q.lock[i].lane = 0xFF;
     q.lock[0] = plock_t{2, 2, static_cast<uint8_t>(ENG_NTP + 4), 6};
     q.lock[1] = plock_t{2, 4, static_cast<uint8_t>(ENG_NTP + 4), 15};
-    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) &&
+    as_v37(&q, 35);                     // (0.16.59: 0.16.57's layout, 71 pages)
+    const int proj_ok = eng_upgrade(&q, sizeof(V37)) && eng_check(&q) &&
                         q.algo[PG_TRACK(0, 0)] == eng_model_find(MK_TAURUS, 0) && q.algo[PG_TRACK(1, 0)] == speech &&
                         q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_LXR, 1) && q.lock[0].v == 6 &&
                         q.lock[1].v == eng_model_find(MK_CHOIR, 0);
@@ -6261,6 +6439,7 @@ int main(int argc, char** argv) {
     static eng_sound_t snd;
     eng_sound_get(1, &snd);
     snd.version = 8;
+    snd.size = static_cast<uint16_t>(SND_SIZE_10);   // (0.16.59: a sound before 11, shorter)
     snd.algo[0] = 11;
     const int snd_ok = eng_sound_set(1, &snd) == 0 && p->algo[PG_TRACK(1, 0)] == eng_model_find(MK_POLY, 0);
     eng_defaults(p);

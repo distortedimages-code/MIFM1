@@ -145,15 +145,21 @@ const char *pads_knob_name(int k);
 void pads_defaults(float *k);
 int pads_knob_steps(int k);              /* PROG's 17, COLOR's and VOICING's 4, the others 128 */
 void pads_knob_text(int k, float u, char *b, int n);
-/* (0.16.57) the fourth page (the project's page 39): WAVE, ENSEMBLE, LAYER, TEXTURE, 0..1 */
+/* (0.16.57) the fourth page (the project's page 39; 0.16.59: WAVE, ENSEMBLE 0..1, TEXTURE a choice 0..4, AMOUNT
+ * 0..1) and (0.16.59) the fifth (page 71: LAYER a choice 0..8, LEVEL, CHARACTER 0..1, TRANSP -24..24) */
 const char *pads_page4_name(int k);
+const char *pads_page5_name(int k);
 void pads_page4_defaults(float *x);
+void pads_page5_defaults(float *x);
 void pads_page4_text(int k, float u, char *b, int n);
+void pads_page5_text(int k, float u, char *b, int n);
 void pads_set_page4(const float *x);
+void pads_set_page5(const float *x);
 int pads_layer_of(float u);              /* LAYER's choice: 0 Off, 1 Bell, Chime, Kalimba, Pluck, Vox, Air, Halo, 8 Swell */
 int pads_texture_of(float u);            /* TEXTURE's: 0 Off, 1 Tape, Drift, Dust, 4 Down */
 void pads_from_v36(const float *k, float *k_now, float *x);   /* its eight knobs before 0.16.57 (0..1): its eight
-                                          * now, its fourth page */
+                                          * now, its fourth page as 0.16.57 had it */
+void pads_from_v37(const float *x37, float *x4, float *x5);   /* 0.16.57's fourth page: the fourth and fifth now */
 
 /* ---- POLY (mi_poly.cc, 0.12): a small polyphonic analog synthesizer after Roland's SH-101 and S-1, four voices a
  * track: its oscillator (saw, pulse, PWM, its sub), the IR3109's four poles, one envelope. Its eight knobs (k: 0..1, a
