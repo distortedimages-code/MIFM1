@@ -145,7 +145,8 @@ const eng_pdef_t kPages[NPT][4] = {
    {"Mode", K_ENUM, 0, 2, kWarpsMode}},
   {{"Decay", K_UNI, 0, 0, 0}, {"Duck", K_UNI, 0, 0, 0}, {"Duck", K_UNI, 0, 0, 0}, {"Duck", K_UNI, 0, 0, 0}},
   {{"Thresh", K_UNI, 0, 0, 0}, {"Ratio", K_UNI, 0, 0, 0}, {"Release", K_UNI, 0, 0, 0}, {"Gain", K_BIP, 0, 0, 0}},
-  {{"Depth", K_UNI, 0, 0, 0}, {"Time", K_UNI, 0, 0, 0}, {"Drive", K_BIP, 0, 0, 0}, {"Level", K_BIP, 0, 0, 0}},
+  {{"Wave", K_UNI, 0, 0, 0}, {"Ensemble", K_UNI, 0, 0, 0}, {"Layer", K_UNI, 0, 0, 0}, {"Texture", K_UNI, 0, 0, 0}},
+  // (0.16.57: page 39, OTT's until 0.16.42, PADS' fourth page: one track plays it)
   {{"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}, {"Filter", K_BIP, 0, 0, 0}},
   {{"Clock", K_UNI, 0, 0, 0}, {"Bits", K_UNI, 0, 0, 0}, {"Mask", K_ENUM, 0, BM_N - 1, kBendMasks},
    {"Shape", K_ENUM, 0, BS_N - 1, kBendShapes}},
@@ -1899,6 +1900,7 @@ MI_COLD void lx_kit(project_t* p, int t) {      // its knobs as its kit has them
   if (d.kind == MK_DRUM || d.kind == MK_LXR || d.kind == MK_SDS)   // OCTAVE 0: C3 plays the kit's own pitch (a
     p->val[PG_TRACK(t, 2) * 4 + 3] = 0.0f;     // bass's -1 would halve a kick; ZERO, the FM play the note as Plaits
                                                // does: its octave kept)
+  if (d.kind == MK_PADS) pads_page4_defaults(&p->val[PG_PADS4 * 4]);   // (0.16.57: its fourth page's too)
 }
 
 // the presets (0.15.1): a track's sound, its eight pages (eng_sound_t) in this order: Plaits' three (the sound, the
@@ -1957,7 +1959,7 @@ const FactorySound kFactory[ENG_FACTORY] = {
    0.0f, MF_SEM, {0.58f, 0.45f, 0.45f, 0.32f, 0.0f, 0.0f, 0.0f, 0.3f, MF_LP, 0.15f, -0.3f, 0.05f}, NO_BITS, NO_GLITCH},
   // a dark pad (PADS: Lament, sevenths, wide, swelling, long: a trig of a sixteenth blooms); a pluck (Plaits' string); a lead (PROPHET: synced, its
   // sweep); noise (Plaits': clocked, resonant, crushed to five bits with holes, glitched)
-  {"DARK PAD", MK_PADS, 0, {STEP(5, 17), STEP(1, 4), STEP(2, 4), 0.8f, 0.7f, 0.3f, 0.875f, 0.334f}, 0.0f, 0.95f, 0.0f,
+  {"DARK PAD", MK_PADS, 0, {STEP(5, 17), STEP(1, 4), STEP(2, 4), 0.8f, 0.7f, 0.3f, 0.0f, 0.3913f}, 0.0f, 0.95f, 0.0f,
    0.0f, NO_FILTER, NO_BITS, NO_GLITCH},
   {"PLUCK", MK_PLAITS, 19, {0.35f, 0.62f, 0.55f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f}, 0.0f, 0.5f, 0.0f, 0.0f,
    NO_FILTER, NO_BITS, NO_GLITCH},
@@ -2076,6 +2078,12 @@ __attribute__((noinline)) void step_kit(int t, int m, float* k) {
     k[i] = lx && !lx_knob_same(mdef(a).sub, mdef(m).sub, i) ? kb[i] : clampf(kb[i] + k[i] - ka[i], 0.0f, 1.0f);
 }
 
+// (0.16.57) PADS' voice: its fourth page (page 39, its cables on it) and its eight knobs, the chord (in the flash:
+// set_voice is in the RAM)
+__attribute__((noinline)) void pads_voice(float note, const float* k) {
+  pads_set_page4(&fin[PG_PADS4 * 4]);
+  pads_set(note, k, pad_chord, pad_n, Pi(PG_GLOBAL, 2));
+}
 void set_voice(int t) {
   mclaim(t);
   if (own_knobs(t)) {
@@ -2090,7 +2098,7 @@ void set_voice(int t) {
     else if (kind == MK_SDS) sds_set(t, sub, note, k);
     else if (kind == MK_FM) fm4_set(t, note, k);
     else if (kind == MK_PADS) {
-      if (t == pad_track) pads_set(note, k, pad_chord, pad_n, Pi(PG_GLOBAL, 2));
+      if (t == pad_track) pads_voice(note, k);
     } else if (kind == MK_POLY) {       // (0.16.15: one note; its chords the keys', 0.16.16 the step's)
       float sc[4];
       const int cn = step_chord(t, note, sc);
@@ -2481,13 +2489,14 @@ void render_voice(int t, uint32_t n) {
       fm = (E(t, 7) < -0.004f ? kWebFm[0] : 0.0f) + (mu < -0.004f ? kWebFm[1] : mu > 0.004f ? kWebFm[2] : 0.0f);
     }
     float own = kWebModel[m < 0 ? 0 : m > ENG_MODELS - 1 ? ENG_MODELS - 1 : m];
-    if (track_kind(t) == MK_PADS) {     // (PADS: its notes, one saw each or three, its TEXTURE: Off under 0.04, then
-      const float tu = (E(t, 8) + 1.0f) * 0.5f;   // Bell, Tape, Drift, Dust, Down; Dust's and Down's estimated from
-      const int tz = tu < 0.04f ? -1 : static_cast<int>((tu - 0.04f) / 0.192f);   // their instructions, 0.16.16)
+    if (track_kind(t) == MK_PADS) {     // (PADS: its notes, one saw each or three, WAVE off Saw a note's more, its
+      const float* x4 = &fin[PG_PADS4 * 4];   // LAYER, its TEXTURE (Down a note's): the fourth page, 0.16.57)
       const float nv = static_cast<float>(pads_voices());
+      const int three = 2.0f * x4[1] - 1.0f > 0.02f, saw = fm_fabsf(x4[0] * 3.0f - 2.0f) < 0.015f;
+      const int ly = pads_layer_of(x4[2]), tx = pads_texture_of(x4[3]);
       own = t != pad_track ? kWebRest
-                           : kWebPads[0] + nv * kWebPads[E(t, 7) > 0.02f ? 2 : 1] +
-                                 (tz == 0 ? kWebPads[3] : tz == 3 ? 31.0f : tz >= 4 ? 14.7f * nv : 0.0f);
+                           : kWebPads[0] + nv * (kWebPads[1 + three] + (saw ? 0.0f : kWebPadsWave[three])) +
+                                 kWebPadsLayer[ly] + (tx == 4 ? nv : 1.0f) * kWebPadsTex[tx];
     }
     if (track_kind(t) == MK_POLY) own = kWebPoly[0] + static_cast<float>(poly_voices(t)) * kWebPoly[1];   // (its voices)
     if (track_kind(t) == MK_PROPHET) own = kWebPro[0] + static_cast<float>(pro_voices(t)) * kWebPro[1];
@@ -3335,15 +3344,16 @@ MI_COLD const char* eng_param_name(int param) {
 }
 
 // (0.16.16) a knob drawn from its middle (its - +): a bipolar parameter's, a negative range's; a machine's own knobs say
-// where theirs start (PADS' TEXTURE from the left on a bipolar place; TAURUS' CONTOUR, VOCODER's SHIFT from the middle;
+// where theirs start (PADS' GLIDE and RELEASE from the left on bipolar places, 0.16.57: TEXTURE's before; TAURUS' CONTOUR, VOCODER's SHIFT from the middle;
 // CHOIR's all from the left)
 int eng_param_centered(int param) {
+  if (param == PG_PADS4 * 4 + 1) return 1;   // (0.16.57: PADS' ENSEMBLE, VINTAGE to the left, WIDE to the right)
   const eng_pdef_t* d = eng_pdef(param);
   const int c = d->kind == K_BIP || (d->kind == K_INT && d->lo < 0);
   const int lk = eng_lx_knob(param);
   if (lk < 0 || zero_on(param / 12)) return c;
   const int k = track_kind(param / 12);
-  if (k == MK_PADS && lk == 7) return 0;
+  if (k == MK_PADS && lk >= 6) return 0;   // (0.16.57: GLIDE, RELEASE from the left; TONE from the middle)
   if (k == MK_TAURUS) return lk == 5;   // (CONTOUR: a swell to the left, its depth to the right)
   if (k == MK_VOCODER) return lk == 6;  // (SHIFT: the voice lower or higher)
   if (k == MK_CHOIR) return 0;
@@ -3367,6 +3377,8 @@ int eng_model_free(int t, int m) {
   return 1;
 }
 int eng_pads_track(void) { return pad_track; }
+int eng_pads_layer(float u) { return pads_layer_of(u); }
+int eng_pads_texture(float u) { return pads_texture_of(u); }
 int eng_choir_parts(int t, float note, int nv, float* out) {   // (0.16.43: the tests')
   return t >= 0 && t < ENG_TRACKS ? choir_parts(t, note, nv, out) : 0;
 }
@@ -3609,6 +3621,12 @@ int eng_model_lock_set(int lane, int step, int m) {   // 0 ok, -1 no room or not
 }
 
 // the presets (0.15.1): a track's sound
+// (0.16.57) PADS' fourth page in a sound: in the algorithm bytes of its sound's second and third pages, its bits' and
+// its filter's second (unused: a sound's model is the first's, its filter's the fifth's), a 256th of the travel each
+const int kPads4At[4] = {1, 2, 3, 5};
+void pads4_put(eng_sound_t* s, const float* x) {
+  for (int i = 0; i < 4; ++i) s->algo[kPads4At[i]] = static_cast<uint8_t>(clampf(x[i], 0.0f, 1.0f) * 255.0f + 0.5f);
+}
 static void sound_name(eng_sound_t* s, const char* n) {
   int i = 0;
   for (; n && n[i] && i < static_cast<int>(sizeof s->name) - 1; ++i) s->name[i] = n[i];
@@ -3635,6 +3653,7 @@ MI_COLD void eng_sound_get(int t, eng_sound_t* s) {
     }
   }
   sound_name(s, mdef(proj.algo[PG_TRACK(t, 0)]).name);
+  if (mdef(proj.algo[PG_TRACK(t, 0)]).kind == MK_PADS) pads4_put(s, &proj.val[PG_PADS4 * 4]);
 }
 int eng_sound_check(const eng_sound_t* s, int bytes) {
   if (bytes < static_cast<int>(sizeof *s) || s->magic != SND_MAGIC || s->version < 1 || s->version > SND_VERSION ||
@@ -3678,6 +3697,25 @@ MI_COLD int eng_sound_set(int t, const eng_sound_t* s) {
     lx_kit(&proj, t);
     for (int k = 0; k < LX_KNOBS; ++k) proj.rnd[t][1 + k] = 0;
   }
+  if (mdef(m).kind == MK_PADS) {        // (0.16.57) PADS: its fourth page from the sound, or, a sound before 0.16.57,
+    float* x = &proj.val[PG_PADS4 * 4];   // made from its knobs as they were (pads_in's way)
+    for (int i = 0; i < 4; ++i) proj.algo[snd_page(t, kPads4At[i])] = 0;
+    if (s->version >= 10) {
+      for (int i = 0; i < 4; ++i) x[i] = static_cast<float>(s->algo[kPads4At[i]]) * (1.0f / 255.0f);
+    } else {
+      float k[LX_KNOBS], kn[LX_KNOBS];
+      for (int i = 0; i < LX_KNOBS; ++i) {
+        const int prm = lx_param(t, i);
+        k[i] = eng_pdef(prm)->kind == K_BIP ? 0.5f * (proj.val[prm] + 1.0f) : proj.val[prm];
+      }
+      pads_from_v36(k, kn, x);
+      for (int i = 0; i < LX_KNOBS; ++i) {
+        const int prm = lx_param(t, i);
+        proj.val[prm] = eng_pdef(prm)->kind == K_BIP ? 2.0f * kn[i] - 1.0f : kn[i];
+      }
+      proj.rnd[t][7] = proj.rnd[t][8] = 0;
+    }
+  }
   return 0;
 }
 const char* eng_factory_name(int i) { return i >= 0 && i < ENG_FACTORY ? kFactory[i].name : ""; }
@@ -3708,6 +3746,10 @@ MI_COLD int eng_factory(int i, eng_sound_t* s) {
   for (int k = 0; k < 12; ++k) s->val[16 + k] = f.f[k];
   s->algo[4] = f.filt;
   sound_name(s, f.name);
+  if (f.kind == MK_PADS) {              // (0.16.57) DARK PAD's fourth page: Saw, its ensemble, Tape at 53 % (its knobs
+    static const float kDark4[4] = {2.0f / 3.0f, 0.875f, 0.0f, 0.1675f};   // until then: GLIDE Off, RELEASE as it
+    pads4_put(s, kDark4);               // let go then, 263 ms)
+  }
   return 0;
 }
 
@@ -3767,6 +3809,8 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
   if (voc_play_param(param)) {          // (0.16.28) VOCODER's PLAY: Mono, Poly, Manual, a progression's name
     const int c = voc_play(v);
     put(b, n, c < 0 ? "Mono" : c ? pads_prog_name(c - 1) : "Poly");
+  } else if (param / 4 == PG_PADS4) {   // (0.16.57) PADS' fourth page: a wave, %, a layer's name, a texture's
+    pads_page4_text(param % 4, v, b, n);
   } else if (lk >= 0 && zero_on(param / 12)) {   // ZERO's: as it writes them (an index, a ratio, Hz, %)
     zero_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0 && track_kind(param / 12) == MK_DRUM) {   // a drum's (times, Hz, semitones)
@@ -4183,6 +4227,7 @@ MI_COLD void eng_blank(project_t* p) {
   static const float kComp[4] = {0.28f, 0.32f, 0.5f, 4.0f / 12.0f};
   for (int k = 0; k < 4; ++k) p->val[PG_COMP * 4 + k] = kComp[k];
   p->algo[PG_COMP] = MB_COMP;
+  pads_page4_defaults(&p->val[PG_PADS4 * 4]);   // (0.16.57: PADS' fourth page, ready)
   for (int t = 0; t < ENG_TRACKS; ++t) {                 // the filters: off, LP; ready at 1.2 kHz, some resonance
     static const float kF[12] = {0.6f, 0.3f, 0.3f, 0.35f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};   // and
     for (int k = 0; k < 12; ++k) p->val[PG_FILT(t, k / 4) * 4 + k % 4] = kF[k];               // envelope
@@ -4424,6 +4469,7 @@ MI_COLD void eng_stress(project_t* p) {
   p->algo[PG_COMP] = MB_COMP;                            // the master bus: the compressor (0.16.43: OTT gone)
   static const float kComp[4] = {0.45f, 0.5f, 0.4f, 4.0f / 12.0f};
   for (int k = 0; k < 4; ++k) p->val[PG_COMP * 4 + k] = kComp[k];
+  pads_page4_defaults(&p->val[PG_PADS4 * 4]);   // (0.16.57: PADS' fourth page, ready)
   p->val[PG_GLOBAL * 4 + 1] = 2.0f;                      // minor
   // the cables: each track's, then the global ones
   cable(p, 0, 0, SRC_L2, PG_TRACK(0, 0) * 4 + 2, 25);    // T1: S&H -> BRIGHT, sine -> its bits, the triangle -> DECAY
@@ -4574,6 +4620,37 @@ MI_COLD void models_from(project_t* p, int at) {   // a machine come in at at: t
   }
   for (int i = 0; i < ENG_PLOCKS; ++i)             // (0.16.40: a step's model too)
     if (p->lock[i].lane < ENG_TRACKS && p->lock[i].tp == kTpModel && p->lock[i].v >= at) ++p->lock[i].v;
+}
+// (0.16.57) a project before: PADS' fourth page (page 39: OTT's until 0.16.42, what it kept read no more) made from
+// its track's knobs as they were (pads_from_v36: ENSEMBLE there, TEXTURE's Bell in LAYER and the others in TEXTURE;
+// GLIDE Off and RELEASE as it let go, in their places); the locks and randoms on those places gone (they were
+// ENSEMBLE's and TEXTURE's), their cables taken to the fourth page
+MI_COLD void pads_in(project_t* p) {
+  pads_page4_defaults(&p->val[PG_PADS4 * 4]);
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    if (mdef(p->algo[PG_TRACK(t, 0)]).kind != MK_PADS) continue;
+    float k[LX_KNOBS], kn[LX_KNOBS], x[4];
+    for (int i = 0; i < LX_KNOBS; ++i) {
+      const int prm = lx_param(t, i);
+      k[i] = eng_pdef(prm)->kind == K_BIP ? 0.5f * (p->val[prm] + 1.0f) : p->val[prm];
+    }
+    pads_from_v36(k, kn, x);
+    for (int i = 0; i < LX_KNOBS; ++i) {
+      const int prm = lx_param(t, i);
+      p->val[prm] = eng_pdef(prm)->kind == K_BIP ? 2.0f * kn[i] - 1.0f : kn[i];
+    }
+    for (int i = 0; i < 4; ++i) p->val[PG_PADS4 * 4 + i] = x[i];
+    for (int i = 0; i < ENG_PLOCKS; ++i)
+      if (p->lock[i].lane == t && (p->lock[i].tp == 7 || p->lock[i].tp == 8)) p->lock[i].lane = 0xFF;
+    p->rnd[t][7] = p->rnd[t][8] = 0;
+    for (int g = 0; g <= ENG_TRACKS; ++g)
+      for (int c = 0; c < ENG_CABLES; ++c) {
+        cable_t& cb = p->cable[g][c];
+        if (cb.dst == lx_param(t, 6)) cb.dst = static_cast<uint8_t>(PG_PADS4 * 4 + 1);
+        else if (cb.dst == lx_param(t, 7)) cb.dst = static_cast<uint8_t>(PG_PADS4 * 4 + 3);
+      }
+    break;                              // (one track plays it)
+  }
 }
 MI_COLD void sds_in(project_t* p) {      // (0.16.49) 0.16.43's to 0.16.48's numbers: the SDS' four at 8, the models
   for (int t = 0; t < ENG_TRACKS; ++t)   // from there four further on, a step's model too
@@ -4742,11 +4819,12 @@ int upgrade_any(project_t* p, int bytes);
 MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them, sizeof(project_t) >= the largest)
   if (bytes == static_cast<int>(sizeof(project_t)) && eng_check(p)) return 1;
   const int v = p->magic == PROJECT_MAGIC ? static_cast<int>(p->version) : 0;
-  if (v >= 33 && v <= 35 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+  if (v >= 33 && v <= 36 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
     p->version = PROJECT_VERSION;       // (0.16.23: its layout this one; STATIC at 18, the models from there one
     if (v == 33) static_in(p);          // further on; 0.16.24 to 0.16.42: the models gone, CHOIR's place; 0.16.43 to
     if (v <= 34) models_v35(p);         // 0.16.48: the SDS' place)
-    else sds_in(p);
+    else if (v == 35) sds_in(p);
+    pads_in(p);                         // (0.16.57: PADS' fourth page)
     return 1;
   }
   if (v >= 27 && v <= 32 && bytes == static_cast<int>(sizeof(project_v32)) && p->size == sizeof(project_v32)) {
@@ -4762,12 +4840,14 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
     if (v == 29)
       for (int t = 0; t < ENG_TRACKS; ++t)
         if (p->algo[PG_TRACK(t, 0)] == eng_model_find(MK_PLAITS, 15)) kit_fresh(p, t);
+    pads_in(p);
     return 1;
   }
   if (!upgrade_any(p, bytes)) return 0;   // (0.16.32: before 0.16, a project is no longer read: 0)
   climb_off_all(p);
   models_v27(p), taurus_in(p), vocoder_in(p), static_in(p);   // (0.16.0 to 0.16.6: their numbers 0.16.13's)
   models_v35(p);
+  pads_in(p);
   return 1;
 }
 MI_COLD int upgrade_any(project_t* p, int bytes) {

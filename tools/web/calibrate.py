@@ -35,7 +35,7 @@ SECS = 2.0
 NAMES = re.findall(r'\{"([^"]+)", "[^"]*", MK_', (FW / "mi" / "engine.cc").read_text())   # (the models, in order)
 VA = NAMES.index("FM")                               # (the filters', the bus', Warps' runs: under the FM)
 PAD = VA                                             # (the FM's square, PW and SYNC: three operators heard, calib.cc)
-PADS = NAMES.index("PADS")                           # (PADS: its notes, one saw each or three, its bell: calib.cc)
+PADS = NAMES.index("PADS")                           # (PADS: its notes, one saw each or three; its fourth page)
 POLY = NAMES.index("POLY")                           # (POLY: a voice held, four in unison)
 PRO = NAMES.index("REV3")                            # (REV3, after the Prophet-5: a voice, four in a chord)
 CHOIR = NAMES.index("CHOIR")                         # (CHOIR: a soprano alone, four parts)
@@ -96,8 +96,13 @@ def main():
         jobs[f"model{m}"] = ("one", m, 0, 0, 0, 0, 0, -1, 0, SECS)
     for x, bit in (("sq", 8), ("pw", 16), ("sync", 32)):   # the FM's square, PW, SYNC: their extra
         jobs[f"fm{x}"] = ("one", PAD, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
-    for x, bit in (("triad", 512), ("six", 512 | 64), ("one", 512 | 128), ("bell", 512 | 256)):   # PADS, MANUAL:
-        jobs[f"pads{x}"] = ("one", PADS, 0, 0, 0, 0, 0, -1, 0, SECS, bit)   # 3 notes, 6, one saw each, a bell
+    zone = lambda i, nz: 0.04 + 0.96 / nz * (i - 0.5)   # (0.16.57: PADS' fourth page, WAVE ENSEMBLE LAYER TEXTURE;
+    pads4 = {"triad": (512, "0.6667,0.75,0,0"), "six": (512 | 64, "0.6667,0.75,0,0"),   # a zone's middle)
+             "one": (512, "0.6667,0.25,0,0"), "wave3": (512, "0.5,0.75,0,0"), "wave1": (512, "0.5,0.25,0,0")}
+    pads4.update({f"ly{i}": (512, f"0.6667,0.75,{zone(i, 8):.4f},0") for i in range(1, 9)})
+    pads4.update({f"tx{i}": (512, f"0.6667,0.75,0,{zone(i, 4):.4f}") for i in range(1, 5)})
+    for x, (bit, p4) in pads4.items():                   # PADS, MANUAL: 3 notes, 6; one saw each; WAVE off Saw; each
+        jobs[f"pads{x}"] = ("one", PADS, 0, 0, 0, 0, 0, -1, 0, SECS, bit, p4)   # layer, each texture
     for x, bit in (("one", 1024 | 8192), ("four", 1024 | 2048)):
         jobs[f"poly{x}"] = ("one", POLY, 0, 0, 0, 0, 0, -1, 0, SECS, bit)
     for x, bit in (("one", 1024 | 8192), ("four", 1024 | 16384)):
@@ -139,10 +144,14 @@ def main():
                                                                     # the delay's)
     warps = [[k(res[f"warps{hq}.{a}"]["warps"], K_WARPS) for a in range(6)] for hq in range(2)]
     fmx = [max(k(res[f"fm{x}"]["voice"] - 3 * rest, K_VOICE) - model[PAD], 0.0) for x in ("sq", "pw", "sync")]
-    pv = {x: k(res[f"pads{x}"]["voice"] - 3 * rest, K_VOICE) for x in ("triad", "six", "one", "bell")}
+    pv = {x: k(res[f"pads{x}"]["voice"] - 3 * rest, K_VOICE) for x in pads4}
     pv3 = max((pv["six"] - pv["triad"]) / 3.0, 0.0)      # (a note, three saws: the triad and six notes apart)
     pv1 = max(pv3 - (pv["triad"] - pv["one"]) / 3.0, 0.0)   # (one saw: two fewer a note)
-    pads = [max(pv["triad"] - 3.0 * pv3, 0.0), pv1, pv3, max(pv["bell"] - pv["triad"], 0.0)]
+    pads = [max(pv["triad"] - 3.0 * pv3, 0.0), pv1, pv3]
+    padsw = [max((pv["wave1"] - pv["one"]) / 3.0, 0.0), max((pv["wave3"] - pv["triad"]) / 3.0, 0.0)]
+    padsl = [0.0] + [max(pv[f"ly{i}"] - pv["triad"], 0.0) for i in range(1, 9)]   # (on a triad)
+    padst = [0.0] + [max(pv[f"tx{i}"] - pv["triad"], 0.0) for i in range(1, 5)]
+    padst[4] /= 3.0                                      # (Down: a note's)
     po = {x: k(res[f"poly{x}"]["voice"] - 3 * rest, K_VOICE) for x in ("one", "four")}
     n1, n4 = res["polyone"]["nv"], res["polyfour"]["nv"]   # (the voices sounding: a trig's and its last ones' tails;
     pvv = max((po["four"] - po["one"]) / max(n4 - n1, 0.5), 0.0)   # four in unison)
@@ -187,8 +196,13 @@ def main():
     h += ["};",
           "static const float kWebFm[3] = {" + ", ".join(f1(v) for v in fmx) + "};   /* the FM's extra: its square, "
           "PW, SYNC */",
-          "static const float kWebPads[4] = {" + ", ".join(f1(v) for v in pads) + "};   /* PADS: its floor, a note "
-          "(one saw, three), its bell */",
+          "static const float kWebPads[3] = {" + ", ".join(f1(v) for v in pads) + "};   /* PADS: its floor, a note "
+          "(one saw, three) */",
+          "static const float kWebPadsWave[2] = {" + ", ".join(f1(v) for v in padsw) + "};   /* (0.16.57) PADS' WAVE "
+          "off Saw: a note's more (one saw, three) */",
+          "static const float kWebPadsLayer[9] = {" + ", ".join(f1(v) for v in padsl) + "};   /* its LAYER */",
+          "static const float kWebPadsTex[5] = {" + ", ".join(f1(v) for v in padst) + "};   /* its TEXTURE (Down: a "
+          "note's) */",
           "static const float kWebPoly[2] = {" + ", ".join(f1(v) for v in polyc) + "};   /* POLY: its floor, a voice */",
           "static const float kWebPro[2] = {" + ", ".join(f1(v) for v in proc) + "};   /* REV3: its floor, a voice */",
           "static const float kWebChoir[2] = {" + ", ".join(f1(v) for v in choirc) + "};   /* CHOIR: its floor, a part */",

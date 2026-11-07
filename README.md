@@ -14,9 +14,11 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   des opérateurs, dont huit vrais accords (voir plus bas) ;
 - **PADS** de MIFM1 (0.11) : des accords et leurs progressions (Arvo Pärt, la Folia, Pachelbel, la basse de
   lamentation, Bach, Satie…) joués par une nappe de cordes, sur une piste ; ses accords suivent la gamme du projet, et
-  la gamme **Prog** fait suivre l'accord joué à toutes les autres pistes, en temps réel ; une **TEXTURE** d'après les
-  nappes usées de Boards of Canada (0.16.16 : la bande, la dérive, la poussière, l'octave dessous, une cloche ; voir
-  plus bas) ;
+  la gamme **Prog** fait suivre l'accord joué à toutes les autres pistes, en temps réel ; une quatrième page (0.16.57) :
+  l'**onde** (du sinus au carré, en fondu), l'ensemble, une **couche** par-dessus l'accord (une cloche, un carillon, un
+  kalimba, des cordes pincées, une voix, un souffle, un halo, une montée à l'envers) et une **TEXTURE** d'après les
+  nappes usées de Boards of Canada (la bande, la dérive, la poussière, l'octave dessous) ; GLIDE et RELEASE (voir plus
+  bas) ;
 - **POLY** (0.12) : un petit synthé analogique polyphonique d'après le SH-101 de Roland et le S-1, quatre voix par
   piste, chacune son filtre à quatre pôles et son enveloppe ; **MODE** Mono ou Poly (0.16.15 : en Poly, les accords
   se jouent à la main au clavier), et un mode **VINTAGE** qui écarte un peu chaque voix (voir plus bas) ;
@@ -599,26 +601,73 @@ quatrième aussi), Bass (et une basse sous l'accord, sa fondamentale). Chaque ac
 de ses renversements, celui où les voix bougent le moins, autour de la note de la piste (FREQ, OCTAVE : le registre).
 **DECAY** de 0,2 à 20 s, Hold au bout (tenu tant que la note l'est ; depuis 0.15.2, joué par les pas ou Endless,
 **l'accord tient jusqu'au trig suivant de la piste**, quelle que soit la GATE : un trig par mesure, un accord par
-mesure) ; **ATTACK** de 1 ms à 4 s (une montée douce, en S). Chaque note de l'accord est une dent de scie (polyBLEP), et **ENSEMBLE** en fait deux choses : à droite, trois dents
-de scie par note, de plus en plus écartées (une string machine, ses cordes) ; à gauche **VINTAGE**, une seule par note,
-mais chaque voix un peu désaccordée et **dérivant lentement à sa façon**, comme celles d'un vieux polyphonique, de plus
-en plus vers la gauche. **TONE** : à gauche une sinusoïde sous chaque note et les scies filtrées (plus rond, plus
-sombre), à droite plus brillant ; un passe-bas (d'état variable, celui de Zavalishin) qui s'ouvre avec l'enveloppe.
-**TEXTURE** (0.16.16, à la place de BELLS) use la nappe, d'après celles de **Boards of Canada** (des synthés anciens
-volontairement désaccordés, des prises superposées sur une bande mono qui se heurtent en un chorus microtonal, saturées
-puis rééchantillonnées ; voir le site) : Off à gauche, puis cinq textures, chacune sur sa part du potard, d'une touche à
-tout de gauche à droite. **Bell** : la **cloche FM** sur la note du haut, une octave au-dessus (deux opérateurs, 1 : 3,5,
-son index qui retombe vite, son niveau lentement). **Tape** : une bande, son **pleurage** (0,45 Hz) et son
-**scintillement** (une nouvelle visée toutes les 20 ms, lissée), les mêmes sur toutes les notes (jusqu'à un tiers de
-demi-ton), une saturation douce (le niveau à peu près gardé) et l'aigu usé (le passe-bas jusqu'à 0,8 octave plus bas).
-**Drift** : chaque voix fausse à sa façon (jusqu'à près d'un demi-ton : un écart à elle et une dérive lente). **Dust** :
-la poussière, chaque échantillon tenu sur un à cinq, de 11 à 5 bits, un souffle et, dans la seconde moitié de sa part,
-un craquement (jusqu'à une dizaine par seconde). **Down** : un sinus une octave sous chaque note, le passe-bas jusqu'à
-0,7 octave plus bas. L'ancien BELLS n'est pas converti : un projet d'avant lit sa valeur comme une TEXTURE.
+mesure) ; **ATTACK** de 1 ms à 4 s (une montée douce, en S). **TONE** : à gauche une sinusoïde sous chaque note et les
+oscillateurs filtrés (plus rond, plus sombre), à droite plus brillant ; un passe-bas (d'état variable, celui de
+Zavalishin) qui s'ouvre avec l'enveloppe. **GLIDE** (0.16.57) : à chaque nouvel accord, chaque voix glisse de sa note à
+la suivante (exponentiellement : à 5 % près au bout de son temps, de 20 ms à 2 s ; Off à gauche) ; une voix que l'accord
+d'avant n'avait pas part tout de suite de sa note. **RELEASE** (0.16.57, à la troisième page, à la place de l'ancienne
+TEXTURE) : la retombée quand on lâche un accord tenu, de 30 ms à 7,7 s (avant, elle valait 0,06 s + 0,6 × ATTACK).
 
-| 1/3 : 2 | 1/3 : 3 | 1/3 : 4 | 2/3 : 1 | 2/3 : 2 | 2/3 : 3 | 2/3 : 4 | 3/3 : 1 |
+**La quatrième page** (0.16.57 : la page 39 du projet, celle de l'ancien OTT) façonne les voix et ce qui s'y ajoute.
+**WAVE** fond chaque note d'une onde à l'autre, deux à la fois entre elles : **Sine** (une parabole : ses harmoniques
+impaires à −30 dB), **Tri**, **Saw** (la nappe d'avant, à l'identique et aussi économe), **Square** ; chacune à peu près
+aussi forte qu'une dent de scie, la chute de la scie et les deux fronts du carré passés au polyBLEP (leur repliement
+reste sous −44 dB à do 7). **ENSEMBLE** en fait deux choses : à droite, trois oscillateurs par note, de plus en plus
+écartés (une string machine, ses cordes) ; à gauche **VINTAGE**, un seul par note, mais chaque voix un peu désaccordée
+et **dérivant lentement à sa façon**, comme celles d'un vieux polyphonique, de plus en plus vers la gauche.
+
+**LAYER** pose un second instrument sur l'accord : Off à gauche, puis huit couches, chacune sur sa part du potard, d'une
+touche à tout de gauche à droite. Une couche tire au sort avec son propre hasard : la nappe dessous reste exactement la
+même, et la TEXTURE les use ensemble. Une frappe ou une corde lancée sonne jusqu'au bout, même si on tourne le potard.
+
+- **Bell** : la **cloche FM** sur la note du haut, une octave au-dessus (deux opérateurs, 1 : 3,5, son index qui retombe
+  vite, son niveau lentement) ; avant 0.16.57, la première TEXTURE.
+- **Chime** : un carillon à vent. Une des quatre notes du haut, deux octaves au-dessus, frappée au trig puis de temps en
+  temps tant que l'accord sonne, comme le vent (en moyenne toutes les 1,5 s à une touche, toutes les 0,4 s au bout),
+  plus ou moins fort ; chaque frappe, les trois premiers modes d'une barre libre (1 : 2,756 : 5,404), chacun sa retombée.
+- **Kalimba** : une lamelle sur la note du haut, une octave au-dessus, à chaque trig (ses modes 1 : 6,267 : 17,547, les
+  aigus vite éteints) ; passé la moitié du potard, la note d'en dessous aussi, 110 ms après.
+- **Pluck** : les quatre notes du haut grattées (des cordes de Karplus-Strong), vers le haut à un trig, vers le bas au
+  suivant, à 16 à 30 ms d'écart ; chaque corde sonne jusqu'à ce que son tour revienne (1,2 à 3,8 s).
+- **Vox** : la nappe elle-même passée dans les trois premiers formants d'une voix d'alto (l'annexe D du manuel de
+  Csound), la voyelle allant lentement de A à O, vers U, et retour (environ 14 s) ; elle suit l'enveloppe de la nappe.
+- **Air** : un souffle accordé : un bruit en bandes étroites (Q 28) sur les quatre notes du haut, une octave au-dessus,
+  et un peu de souffle large ; il suit l'enveloppe de la nappe.
+- **Halo** : une octave et une quinte, et deux octaves, au-dessus des trois notes du haut, des sinus purs qui viennent
+  lentement (environ 1,8 s) et partent vite avec la nappe.
+- **Swell** : une montée à l'envers. Les trois notes du haut une octave au-dessus et un souffle qui s'ouvre avec elles,
+  montant (au cube) jusqu'au trig suivant, où tout s'arrête net, comme un son joué à rebours. Swell apprend le temps
+  entre deux trigs (de 0,12 à 8 s) et démarre avant le suivant (de 0,35 à 1,75 s plus tôt, 85 % de l'intervalle au plus) ;
+  au premier trig, il écoute.
+
+**TEXTURE** (0.16.16 ; 0.16.57 : à la quatrième page, Bell passée dans LAYER) use la nappe, d'après celles de
+**Boards of Canada** (des synthés anciens volontairement désaccordés, des prises superposées sur une bande mono qui se
+heurtent en un chorus microtonal, saturées puis rééchantillonnées ; voir le site) : Off à gauche, puis quatre textures,
+chacune sur sa part du potard, d'une touche à tout de gauche à droite. **Tape** : une bande, son **pleurage** (0,45 Hz)
+et son **scintillement** (une nouvelle visée toutes les 20 ms, lissée), les mêmes sur toutes les notes (jusqu'à un tiers
+de demi-ton), une saturation douce (le niveau à peu près gardé) et l'aigu usé (le passe-bas jusqu'à 0,8 octave plus
+bas). **Drift** : chaque voix fausse à sa façon (jusqu'à près d'un demi-ton : un écart à elle et une dérive lente).
+**Dust** : la poussière, chaque échantillon tenu sur un à cinq, de 11 à 5 bits, un souffle et, dans la seconde moitié de
+sa part, un craquement (jusqu'à une dizaine par seconde). **Down** : un sinus une octave sous chaque note, le passe-bas
+jusqu'à 0,7 octave plus bas.
+
+| 1/4 : 2 | 1/4 : 3 | 1/4 : 4 | 2/4 : 1 | 2/4 : 2 | 2/4 : 3 | 2/4 : 4 | 3/4 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **PROG** (Manual, 26 progressions) | **COLOR** (Power, Triad, Sus2, 7th, Sus4, 9th, Add9, 11th, Add6) | **VOICING** (Close, Open, Wide, Bass) | **DECAY** (0,2 à 20 s ; au bout, Hold) | **ATTACK** (1 ms à 4 s) | **TONE** (− : sombre, + : brillant) | **ENSEMBLE** (− : VINTAGE, + : WIDE) | **TEXTURE** (Off, Bell, Tape, Drift, Dust, Down) |
+| **PROG** (Manual, 26 progressions) | **COLOR** (Power, Triad, Sus2, 7th, Sus4, 9th, Add9, 11th, Add6) | **VOICING** (Close, Open, Wide, Bass) | **DECAY** (0,2 à 20 s ; au bout, Hold) | **ATTACK** (1 ms à 4 s) | **TONE** (− : sombre, + : brillant) | **GLIDE** (Off, 20 ms à 2 s) | **RELEASE** (30 ms à 7,7 s) |
+
+| 4/4 : 1 | 4/4 : 2 | 4/4 : 3 | 4/4 : 4 |
+| --- | --- | --- | --- |
+| **WAVE** (Sine, Tri, Saw, Square, en fondu) | **ENSEMBLE** (− : VINTAGE, + : WIDE) | **LAYER** (Off, Bell, Chime, Kalimba, Pluck, Vox, Air, Halo, Swell) | **TEXTURE** (Off, Tape, Drift, Dust, Down) |
+
+L'écran de la quatrième page dessine l'onde (deux cycles, telle qu'elle se fond) et écrit la couche et la texture.
+La quatrième page ne prend ni lock ni aléatoire (ce sont des réglages de la nappe, pas de ses pas) ; les câbles, si : ils
+vivent dans le groupe de la piste PADS.
+
+**Un projet ou un son d'avant 0.16.57** (projet version 36, son version 9) s'ouvre comme il sonnait : WAVE sur Saw, son
+ENSEMBLE et sa TEXTURE à la quatrième page au même dosage (sa cloche dans LAYER), GLIDE sur Off, RELEASE au temps qu'avait
+sa retombée. Les locks et l'aléatoire posés sur ENSEMBLE et TEXTURE ne passent pas ; un câble sur l'un d'eux le suit. Un
+son garde sa quatrième page dans quatre octets libres (à 1/255 près). DARK PAD, le son d'usine, reste le même (Tape à
+60 %, une retombée de 263 ms).
 
 **La gamme Prog** (GLO, SCALE après Hirajoshi) : quand une piste joue PADS, **toutes les autres pistes suivent son
 accord**, en temps réel : à chaque trig de PADS, le quantiseur passe à la **gamme de l'accord**, ses notes et les notes
@@ -636,10 +685,12 @@ majeur, ROOT en do : la gamme de sol majeur sans le sol, fa tombe sur mi, sol su
 suivie garde l'accord d'avant ; un accord qu'aucune gamme majeure ne contient (augmenté, diminué) donne ses seules
 notes. Avec PADS sur la piste suivie, c'est Prog.
 
-Choisir PADS met ces réglages aux siens (Tintin, des triades ouvertes, tenues, une montée lente, un peu sombre, en
-ensemble, sans texture) et garde l'OCTAVE de la piste. Elle coûte au FM-1 de 5 % d'un bloc (une triade, une dent de
-scie par note) à 12 % (six notes, trois dents de scie chacune, la cloche) ; sur ses réglages, 7 %. TEXTURE sur
-Down y ajoute environ 30 % (un sinus par note), sur Dust 10 %, les autres presque rien.
+Choisir PADS met ces réglages aux siens (Tintin, des triades ouvertes, tenues, une montée lente, un peu sombre, sans
+glide, la dent de scie, en ensemble, sans couche ni texture) et garde l'OCTAVE de la piste. Elle coûte au FM-1 de 6 %
+d'un bloc (une triade, une dent de scie par note) à 9 % (six notes, trois dents de scie chacune) ; sur ses réglages,
+7 %. WAVE ailleurs que sur Saw y ajoute 2,5 % sur une triade en ensemble (0,7 % en VINTAGE) ; une couche de 2,8 % (Bell,
+Vox) à 4,2 % (Chime ; Pluck 4,1, Air 3,9, Swell 3,5, Kalimba 3,5, Halo 3,3) ; TEXTURE sur Down 1,3 % (un sinus par
+note), sur Dust 1 %, les autres presque rien. Sans couche et sur Saw, la nappe coûte à peu près ce qu'elle coûtait (0,1 % de plus).
 
 **POLY** (0.12 ; ALGORITHM après PADS, la banque MIFM1) : un petit synthé analogique polyphonique d'après le
 **SH-101** de Roland (1982 : un oscillateur, sa dent de scie, son impulsion et sa sous-octave mélangées, un filtre à

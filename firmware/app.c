@@ -203,8 +203,10 @@ static void pat_name(int slot, char *b)  /* A1 .. K16 */
                                           * pages' fourth place, PG_SPREAD_PARAM) */
 #define VP_EXCL(i) (ENG_NPAGES + 41 + (i))   /* (0.16.51) GLO's third and fourth faces: the tracks the random dose (0)
                                           * and TRAUMA (1) take, a knob a track (In, Out: left alone) */
+#define VP_PAD4(t) (ENG_NPAGES + 43 + (t))   /* (0.16.57) PADS' fourth face: WAVE, ENSEMBLE, LAYER, TEXTURE (the
+                                          * engine's page PG_PADS4, its knobs) */
 enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS, PT_PLAY, PT_ARP2, PT_CLIMB, PT_ARP3, PT_SPREAD,
-       PT_EXCL };
+       PT_EXCL, PT_PAD4 };
 /* a track's pages in four sets: EDIT goes from one to the next of the first three (its sound, its bending: the bits
  * and the glitch, its filter),
  * ENV to the envelopes; SELECT through a set's pages; ALGO changes what the page shows (the sound's model, the
@@ -268,11 +270,13 @@ static struct {
 /* ------------------------------------------------------------ the pages --- */
 static int ptype(int page)
 {
-    return page >= VP_EXCL(0) ? PT_EXCL : page >= VP_SPREAD ? PT_SPREAD : page >= VP_ARP3(0) ? PT_ARP3 : page >= VP_CLIMB(0) ? PT_CLIMB : page >= VP_ARP2(0) ? PT_ARP2 : page >= VP_PLAY(0) ? PT_PLAY : page >= VP_SYS ? PT_SYS : page >= ENG_NPAGES ? PT_RND + (page - ENG_NPAGES) / 4
+    return page >= VP_PAD4(0) ? PT_PAD4 : page >= VP_EXCL(0) ? PT_EXCL : page >= VP_SPREAD ? PT_SPREAD : page >= VP_ARP3(0) ? PT_ARP3 : page >= VP_CLIMB(0) ? PT_CLIMB : page >= VP_ARP2(0) ? PT_ARP2 : page >= VP_PLAY(0) ? PT_PLAY : page >= VP_SYS ? PT_SYS : page >= ENG_NPAGES ? PT_RND + (page - ENG_NPAGES) / 4
                                                                                         : eng_page_type(page);
 }
 static int ptrack(int page)              /* the track a page belongs to, -1: none */
 {
+    if (page >= VP_PAD4(0))
+        return page - VP_PAD4(0);
     if (page >= VP_SPREAD)
         return -1;
     if (page >= VP_ARP3(0))
@@ -308,7 +312,7 @@ static int track_kind(int t) { return t >= 0 && t < ENG_TRACKS ? eng_model_kind(
 static int track_cat(int page)           /* the set a track's page is in */
 {
     switch (ptype(page)) {
-    case PT_PLAITS1: case PT_PLAITS3: case PT_SON2: return CAT_SOUND;
+    case PT_PLAITS1: case PT_PLAITS3: case PT_SON2: case PT_PAD4: return CAT_SOUND;
     case PT_PLAITS2: return drum_track(ptrack(page)) ? CAT_SOUND : CAT_ENV;   /* (an FM drum's knobs 4..7) */
     case PT_BEND: case PT_GLITCH: return CAT_BEND;
     case PT_VFLT1: case PT_VFLT2: case PT_FILT1: case PT_FILT2: case PT_FILT3: return CAT_FILTER;
@@ -324,6 +328,10 @@ static int cat_pages(int cat, int t, int *f)   /* a set's pages on track t, in o
         if (drum_track(t)) {
             f[1] = PG_TRACK(t, 1);
             f[2] = VP_SON2(t);
+            if (track_kind(t) == MK_PADS) {   /* (0.16.57) PADS: its fourth */
+                f[3] = VP_PAD4(t);
+                return 4;
+            }
             return 3;
         }
         f[1] = VP_SON2(t);
@@ -366,7 +374,7 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
     int t = ptrack(page);
     switch (ptype(page)) {
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_BEND: case PT_GLITCH: case PT_FILT1: case PT_FILT2: case PT_FILT3:
-    case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2:
+    case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2: case PT_PAD4:
         return cat_pages(track_cat(page), t, f);
     case PT_LFO: case PT_FOLLOW: {       /* the three LFOs; (0.16.23) a follower's input after its LFO */
         int n = 0;
@@ -505,6 +513,7 @@ static int knob_param(int page, int k)
         static const uint8_t TP[4] = {TP_LENGTH, TP_TRANSPOSE, TP_OCTAVE, TP_KEY};
         return k == 0 && drum_track(t) ? PG_TRACK(t, 2) * 4 : eng_track_param(t, TP[k]);
     }
+    case PT_PAD4: return PG_PADS4 * 4 + k;   /* (0.16.57) PADS' fourth page */
     case PT_VFLT1: {
         static const uint8_t TP[4] = {TP_FTYPE, TP_CUTOFF, TP_RESO, TP_FENV};
         return eng_track_param(t, TP[k]);
@@ -561,7 +570,7 @@ static const char *module_name(int page)
 {
     switch (ptype(page)) {
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_BEND: case PT_GLITCH: case PT_FILT1: case PT_FILT2: case PT_FILT3:
-    case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2: {
+    case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2: case PT_PAD4: {
         int c = track_cat(page);
         return c == CAT_BEND ? "Bend" : c == CAT_FILTER ? "Filter" : c == CAT_ENV ? "Envelope"
                                                                         : track_kind(ptrack(page)) == MK_ZERO ? "Zero"
@@ -638,7 +647,7 @@ static uint16_t page_accent(int page)
     case PT_COMP: return AC2;
     case PT_OTT: return AC3;
     case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_BEND: case PT_GLITCH: case PT_FILT1: case PT_FILT2: case PT_FILT3:
-    case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2:
+    case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2: case PT_PAD4:
         return model_accent(p->algo[PG_TRACK(ptrack(page), 0)]);
     case PT_EUC: return lane_accent(eng_page_lane(page));
     case PT_PLAY: return lane_accent(plane(page));
@@ -1657,6 +1666,50 @@ static void panel_plaits(int t, int face, uint16_t ac)
     }
 }
 
+/* (0.16.57) PADS' fourth face: WAVE drawn, two cycles of its shape as it morphs (Sine, Triangle, Saw, Square: two
+ * of them at once between), over its name; LAYER and TEXTURE under it */
+static void panel_pad4(int t, uint16_t ac)
+{
+    char s[40], v[16], u[16];
+    const int x0 = 86, w = 146, ym = 30, hh = 15;
+    float wz = fm_minf(fm_maxf(eng_final(PG_PADS4 * 4), 0.0f), 1.0f) * 3.0f, wt[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    int wi = wz >= 3.0f ? 2 : (int)wz;
+    wt[wi] = 1.0f - (wz - (float)wi);
+    wt[wi + 1] = wz - (float)wi;
+    hero_icon(IC_MODEL + eng_project()->algo[PG_TRACK(t, 0)], ac);
+    cv_text(84, 0, &FONT_XS, dec("WAVE", 1), MUTED);
+    eng_param_text(PG_PADS4 * 4, eng_final(PG_PADS4 * 4), v, sizeof v);
+    label_text(v, u, sizeof u);
+    cv_text(232 - text_w(&FONT_XS, u), 0, &FONT_XS, u, DIM);
+    for (int x = 0; x < w; x += 5)
+        cv_rect(x0 + x, ym, 2, 1, MUTED);
+    int reveal = anim_p >= 1.0f ? w : (int)((float)w * (1.0f - (1.0f - anim_p) * (1.0f - anim_p)));
+    float px = 0.0f, py = (float)ym;
+    for (int x = 0; x <= reveal; x++) {
+        float ph = (float)x * (2.0f / (float)w) + 0.5f, a;   /* (from the middle of a cycle: the saw's fall inside) */
+        ph -= (float)(int)ph;
+        float q = 2.0f * ph - 1.0f, aq = fm_fabsf(q);
+        a = wt[0] * 4.0f * q * (1.0f - aq) + wt[1] * (1.0f - 2.0f * aq) + wt[2] * q + wt[3] * (q < 0.0f ? -1.0f : 1.0f);
+        float y = (float)ym - a * (float)hh;
+        if (x) {
+            seg((float)x0 + px, py, (float)(x0 + x), y, 5.0f, tint(ac, BG, 2));
+            seg((float)x0 + px, py, (float)(x0 + x), y, 2.0f, ac);
+        }
+        px = (float)x;
+        py = y;
+    }
+    s[0] = 0;
+    for (int k = 2; k < 4; k++) {        /* LAYER, TEXTURE: its name and amount, or none */
+        float x = eng_final(PG_PADS4 * 4 + k);
+        eng_param_text(PG_PADS4 * 4 + k, x, v, sizeof v);
+        label_text(v, u, sizeof u);
+        if (k == 3)
+            text_cat(s, "|", sizeof s);
+        text_cat(s, (k == 2 ? eng_pads_layer(x) : eng_pads_texture(x)) ? u : k == 2 ? "NO LAYER" : "NO TEXTURE", sizeof s);
+    }
+    hero_line(54, s);
+}
+
 static void enum_cat(char *s, int param, uint32_t max)   /* a choice's name, in capitals */
 {
     char u[24];
@@ -2498,6 +2551,10 @@ APP_SMALL static void draw_panel(void)
             s[2] = s[2] * 131 + (int)(eng_final(pg * 4 + k) * 100.0f);
         break;
     }
+    case PT_PAD4:                        /* (0.16.57) PADS' fourth page: its knobs as they play */
+        for (int k = 0; k < 4; k++)
+            s[2] = s[2] * 131 + (int)(eng_final(PG_PADS4 * 4 + k) * 200.0f);
+        break;
     case PT_ENV2:                        /* the filter's envelope: its knobs, where it is */
         s[2] = p->algo[PG_FILT(tr, 0)] | (int)(eng_filter_env(tr) * 24.0f) << 3;
         for (int k = 0; k < 12; k++)
@@ -2566,6 +2623,7 @@ APP_SMALL static void draw_panel(void)
         panel_plaits(tr, drum_track(tr) && eng_fm_algo(tr) < 0 ? 0 : 1, page_accent(ui.page));
         break;
     case PT_SON2: panel_plaits(tr, 2, page_accent(ui.page)); break;
+    case PT_PAD4: panel_pad4(tr, page_accent(ui.page)); break;
     case PT_ENV2: panel_env2(tr, page_accent(ui.page)); break;
     case PT_LFO: case PT_FOLLOW: panel_lfo(lfo_of(ui.page)); break;
     case PT_MIX: case PT_PAN: panel_mixer(pt == PT_PAN); break;
@@ -5111,6 +5169,9 @@ static void edit_lock(int param, int32_t e)   /* a held step: its lock on the la
 static int cable_group(int param)
 {
     int t, tp = eng_param_tp(param, &t);
+    if (param / 4 == PG_PADS4 && eng_pads_track() >= 0)   /* (0.16.57) PADS' fourth page: its track's (as an older
+                                          * project's cables on ENSEMBLE and TEXTURE come) */
+        return eng_pads_track();
     return tp >= 0 && t < ENG_TRACKS ? t : ENG_TRACKS;
 }
 
@@ -6284,7 +6345,7 @@ static void input(void)
      * TRAUMA;
      * the keys: the steps (the one playing blinks), or held; MOD mode: the LFOs' keys blinking at their rates */
     {
-        static const uint8_t PAGE_BTN[PT_EXCL + 1] = {
+        static const uint8_t PAGE_BTN[PT_PAD4 + 1] = {
             [PT_PLAITS1] = B_EDIT, [PT_PLAITS2] = B_ENV, [PT_PLAITS3] = B_EDIT, [PT_LFO] = B_LFO, [PT_FOLLOW] = B_LFO,
             [PT_MIX] = B_HOME, [PT_PAN] = B_HOME, [PT_REVERB] = B_FX, [PT_RSEND] = B_FX, [PT_DELAY1] = B_FX,
             [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
@@ -6292,7 +6353,7 @@ static void input(void)
             [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_BEND] = B_EDIT, [PT_GLITCH] = B_EDIT, [PT_EUC] = B_SEQ, [PT_RND] = B_SEQ,
             [PT_FILT1] = B_EDIT, [PT_FILT2] = B_EDIT, [PT_FILT3] = B_EDIT, [PT_SON2] = B_EDIT, [PT_VFLT1] = B_EDIT,
             [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO, [PT_PLAY] = B_SEQ, [PT_ARP2] = B_ARP,
-            [PT_CLIMB] = B_SEQ, [PT_ARP3] = B_ARP, [PT_SPREAD] = B_HOME, [PT_EXCL] = B_GLO};
+            [PT_CLIMB] = B_SEQ, [PT_ARP3] = B_ARP, [PT_SPREAD] = B_HOME, [PT_EXCL] = B_GLO, [PT_PAD4] = B_EDIT};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
         uint32_t bb = ui.dice ? 1u << B_OCTDN : ui.trauma ? 1u << B_OCTUP : 0, kk = ui.keys, mk = 0;
         int pt = ptype(ui.page);
@@ -6385,6 +6446,11 @@ void app_frame(void)
     }
     input();
     chain_service();
+    if (ptype(ui.page) == PT_PAD4 && track_kind(ptrack(ui.page)) != MK_PADS) {   /* (0.16.57) PADS' fourth face, the
+                                          * track on another model now: its third */
+        ui.page = VP_SON2(ptrack(ui.page));
+        ui.full = 1;
+    }
     if (ui.lrec) {                       /* (0.16.39) live recording: the steps' page shown, the one playing */
         int s = eng_step_now(ui.track);
         if (s >= 0)

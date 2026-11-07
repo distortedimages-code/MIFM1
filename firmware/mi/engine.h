@@ -58,7 +58,9 @@ extern "C" {
 #define PG_DUCK 37                       /* the duck: its DECAY, then how deep T2, T3, T4 duck at T1's trigs */
 #define PG_COMP 38                       /* the master bus: the compressor (THRESHOLD, RATIO, RELEASE, GAIN), its
                                           * ALGORITHM the bus's mode (off, the compressor, OTT) */
-#define PG_OTT 39                        /* OTT (three bands squashed up and down): DEPTH, TIME, DRIVE, LEVEL */
+#define PG_OTT 39                        /* OTT (three bands squashed up and down): DEPTH, TIME, DRIVE, LEVEL; gone
+                                          * in 0.16.43, its page (0.16.57) PADS' fourth: */
+#define PG_PADS4 39                      /* WAVE, ENSEMBLE, LAYER, TEXTURE (one track plays PADS: the project's own) */
 #define PG_EQ 40                         /* the mixer's filter, a knob a track: to the left a low pass coming down
                                           * (the highs cut), to the right a high pass going up (the lows), 24 dB/oct */
 #define PG_BEND(t) (41 + (t))            /* a track's circuit bending, its bits (0.7: the grit's place): CLOCK (a sample
@@ -163,6 +165,8 @@ int eng_fm_shaped(int t);                /* its SHAPE now: the operators it move
 float eng_fm_shape(int t, int op, float x);   /* operator op's level in it at x (its units), -1..1 */
 int eng_model_free(int t, int m);        /* 0: a model once a project (PADS) another track holds */
 int eng_pads_track(void);                /* the track PADS is on, -1 none */
+int eng_pads_layer(float u);             /* (0.16.57) its LAYER at u (its fourth page): 0 none, 1 Bell .. 8 Swell */
+int eng_pads_texture(float u);           /* its TEXTURE at u: 0 none, 1 Tape .. 4 Down */
 int eng_choir_parts(int t, float note, int nv, float *out);   /* (0.16.43) CHOIR's parts for a note: how many */
 int eng_duck_track(int k);               /* (0.16.42) the duck: 0 its source, 1..3 the track of that depth knob */
 int eng_lead_ok(int t);                  /* (0.16.42) a track that plays chords (SCALE FOLLOW can lead from it) */
@@ -184,7 +188,8 @@ int eng_model_lock_set(int lane, int step, int m);   /* 0 ok, -1 no room or not 
  * knobs' randoms, a name. Saved by the screen (app.c, pat_store.h), read onto any track */
 #define SND_PAGES 8
 #define SND_MAGIC 0x31444E53u            /* "SND1" */
-#define SND_VERSION 9                    /* (8: 0.16.43's to 0.16.48's: the SDS (0.16.49) not yet at 8: read, the models
+#define SND_VERSION 10                   /* (9: 0.16.49's to 0.16.56's: PADS' fourth page (0.16.57) not in it: read,
+                                          * made from its knobs as they were (engine.cc pads_from_v36); 8: 0.16.43's to 0.16.48's: the SDS (0.16.49) not yet at 8: read, the models
                                           * from 8 four further on; 7: 0.16.24's to 0.16.42's: FM CYMBAL, FM HI-HAT, OTIS there (gone): read as
                                           * HAT, HAT, POLY from their kits, the others to their places; 6: 0.16.21's to 0.16.23's, STATIC (0.16.24) not yet at 18: read, the
                                           * models from 18 one further on, as the older ones after theirs; 5: 0.16.20's, VOCODER (0.16.21) not yet at 17: read, the models from 17 one
@@ -232,7 +237,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 36u              /* (35: 0.16.43's to 0.16.48's: the SDS (0.16.49) not yet at 8: read, the
+#define PROJECT_VERSION 37u              /* (36: 0.16.49's to 0.16.56's: PADS' fourth page (0.16.57) not yet there:
+                                          * read, made from its knobs as they were, pads_in; 35: 0.16.43's to 0.16.48's: the SDS (0.16.49) not yet at 8: read, the
                                           * models from 8 four further on (a step's model too); 34: 0.16.24's to 0.16.42's: FM CYMBAL, FM HI-HAT, OTIS there (0.16.43:
                                           * gone): read, as HAT, HAT, POLY from their kits, the others to their places;
                                           * 33: 0.16.23's: STATIC (0.16.24) not yet at 18: read, the models from 18
