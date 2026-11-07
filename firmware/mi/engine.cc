@@ -596,6 +596,12 @@ void make_dice() {                      // the effects' (a track's: at its trigs
 //   from 60 %       the delay's DRIVE (its echoes pushed)
 inline float ramp01(float x, float a, float b) { return x <= a ? 0.0f : x >= b ? 1.0f : (x - a) / (b - a); }
 float trauma01() { return static_cast<float>(proj.trauma > 100 ? 100 : proj.trauma) * 0.01f; }
+// (0.16.51) the tracks each dose takes: all four unless left out (GLO's third and fourth faces: proj.dice_out,
+// proj.trauma_out), so that a voice stays clean among thrown or saturated ones. What is a track's own is spared (its
+// knobs thrown at its trigs, its dropped trigs, its fills; its drive, its filter's DRIVE and FM, Warps where its sound
+// goes through it); the effects, shared, are thrown and pushed as before (the delay's DRIVE, their colours)
+inline int dose_takes(int t) { return proj.dice && !((proj.dice_out >> t) & 1u); }
+inline int trauma_takes(int t) { return proj.trauma && !((proj.trauma_out >> t) & 1u); }
 float tr_f[ENG_TRACKS] = {1.0f, 1.0f, 1.0f, 1.0f};   // this trig's share of the dose's drive (0.2..1)
 uint8_t tr_hard[ENG_TRACKS];            // this trig's drive hard rather than warm
 float tr_w[3];                          // Warps now: its opening (0: shut), TIMBRE (-1..1), LEVEL 2 (0..1)
@@ -648,9 +654,14 @@ void apply_cables() {
     float a = dice_curve();
     int shift = iround(proj.val[PG_WARPS(1) * 4 + 3]) == WM_SHIFT;
     int osc = iround(proj.val[PG_WARPS(0) * 4 + 0]) >= WC_OSC1;   // (Warps' own oscillator: LEVEL 1 is its note)
-    for (int j = 0; j < n_fx_dice; ++j)
+    // (0.16.51) Warps not thrown where a track the dose leaves alone goes through it (its carrier, its modulator)
+    const int w_out = (w_dst >= 0 && !dose_takes(w_dst)) || (w_mute >= 0 && !dose_takes(w_mute));
+    for (int j = 0; j < n_fx_dice; ++j) {
+      const int pg = fx_dice[j] / 4;
+      if (w_out && (pg == PG_WARPS(0) || pg == PG_WARPS(1))) continue;
       if (!(shift && fx_dice[j] == PG_WARPS(0) * 4 + 2) && !(osc && fx_dice[j] == PG_WARPS(1) * 4 + 1))
         fin[fx_dice[j]] += a * fx_off[j];   // (not the shift, not the oscillator's note: 0.8.6, Yoann's call)
+    }
     // Warps' ALGORITHM on a mark (one cross-modulation): thrown to another mark, never between two (there Warps plays
     // both algorithms, blended: twice its work)
     const int wa = PG_WARPS(0) * 4 + 2;
@@ -702,8 +713,10 @@ int16_t lane_param[ENG_LANES][ENG_NTP];  // eng_track_param's answers, made once
 void trauma_knobs() {                   // TRAUMA's knobs: the filters' DRIVE, Warps' now, the delay's DRIVE
   float d = trauma01();
   for (int t = 0; t < ENG_TRACKS; ++t)
-    if (proj.algo[PG_FILT(t, 0)] != MF_OFF) fin[lane_param[t][TP_FDRIVE]] += 0.45f * d;
-  if (tr_w[0] > 0.0f && iround(proj.val[PG_WARPS(0) * 4]) > WC_OFF) {   // (Warps: where it is patched)
+    if (trauma_takes(t) && proj.algo[PG_FILT(t, 0)] != MF_OFF) fin[lane_param[t][TP_FDRIVE]] += 0.45f * d;
+  const int w_clean = (w_dst >= 0 && !trauma_takes(w_dst)) || (w_mute >= 0 && !trauma_takes(w_mute));
+  if (tr_w[0] > 0.0f && iround(proj.val[PG_WARPS(0) * 4]) > WC_OFF && !w_clean) {   // (Warps: where it is patched;
+                                        // 0.16.51: not where a track left clean goes through it)
     fin[PG_WARPS(0) * 4 + 3] += 0.4f * tr_w[0];                        // MIX
     fin[PG_WARPS(1) * 4 + 0] += 0.25f * tr_w[0] * tr_w[1];             // TIMBRE
     fin[PG_WARPS(1) * 4 + 2] += 0.3f * tr_w[0] * tr_w[2];              // LEVEL 2
@@ -1163,7 +1176,7 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
   if (lane < ENG_TRACKS) {              // the random dose: every sound parameter of the track thrown anew, this trig's
     dice_type[lane] = -1;
     dice_climb[lane] = 0;
-    if (proj.dice) {
+    if (dose_takes(lane)) {
       float a = dice_curve(), d = static_cast<float>(proj.dice > 100 ? 100 : proj.dice) * 0.01f;
       int iv = dice_interval(proj.algo[PG_TRACK(lane, 0)]), vk = mdef(proj.algo[PG_TRACK(lane, 0)]).kind == MK_VOCODER;
       for (int tp = 0; tp < ENG_NTP; ++tp) {
@@ -1186,7 +1199,7 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
       if (rand01() < 0.15f * a)         // now and then, lightly, into the delay or the reverb
         tdelta[lane][rand01() < 0.5f ? TP_DSEND : TP_SEND] += 0.2f + 0.15f * rand01();
     }
-    if (proj.trauma) trauma_trig(lane);  // TRAUMA: this trig's drive, its filter's FM
+    if (trauma_takes(lane)) trauma_trig(lane);   // TRAUMA: this trig's drive, its filter's FM
   }
   if (lane >= ENG_TRACKS) {             // an effect: open, by its probability
     float prob = E(lane, kLaneKnobs[lane] + 1);
@@ -1199,7 +1212,7 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
                                                         1.0f, static_cast<float>(ENG_RATCH_MAX))),
                                &rat_span[lane]);
   rat_on[lane] = prob >= 0.999f || rand01() < prob;
-  if (rat_on[lane] && locks && proj.dice) {   // (0.16.10) the dose leaving a step's trig out now and then, from 50 %
+  if (rat_on[lane] && locks && dose_takes(lane)) {   // (0.16.10) the dose leaving a trig out now and then, from 50 %
     float d = static_cast<float>(proj.dice > 100 ? 100 : proj.dice) * 0.01f;   // (its ratchets' curve, 20 % at most,
     float q = 0.2f * dice_rise(d);            // Yoann's: 8 % at 60 %, 14 % at 70 %, 17 % at 80 %, 20 % at 100 %; on a
     if (step % 16 == 0) q = 0.0f;             // beat half as often, the bar's first step never: the groove kept)
@@ -1245,11 +1258,11 @@ const int kFillShort = 7, kFillN = static_cast<int>(sizeof kFills / sizeof kFill
 int fill_amount_q(int dice) { return dice > 75 ? (dice > 100 ? 100 : dice) - 75 : 0; }   // 0..25
 struct FillPlan {
   int32_t bar;
-  int dice, seed;
+  int dice, seed, out;                  // (out: the tracks left out, 0.16.51)
   int every, span, tracks;              // a fill every so many bars, over its last span sixteenths, on so many tracks
   int8_t pat[ENG_TRACKS];               // each track's pattern this bar (-1: none)
 };
-FillPlan fplan = {-1, -1, -1, 0, 0, 0, {-1, -1, -1, -1}};
+FillPlan fplan = {-1, -1, -1, 0, 0, 0, 0, {-1, -1, -1, -1}};
 
 uint32_t fill_hash(uint32_t a, uint32_t b) {
   uint32_t h = (a + 1u) * 0x9E3779B9u ^ (b + 0x7F4A7C15u) * 0x85EBCA6Bu;
@@ -1268,9 +1281,10 @@ void fill_shape(int q, int* every, int* span, int* tracks) {   // the dose's las
 }
 
 void fill_plan(int32_t bar, const int* stepping) {
-  if (fplan.bar == bar && fplan.dice == proj.dice && fplan.seed == proj.dice_seed) return;
+  if (fplan.bar == bar && fplan.dice == proj.dice && fplan.seed == proj.dice_seed && fplan.out == proj.dice_out) return;
   fplan.bar = bar;
   fplan.dice = proj.dice;
+  fplan.out = proj.dice_out;
   fplan.seed = proj.dice_seed;
   for (int t = 0; t < ENG_TRACKS; ++t) fplan.pat[t] = -1;
   int q = fill_amount_q(proj.dice);
@@ -1492,7 +1506,8 @@ void sequence(uint32_t n) {
       for (int t = 0; t < ENG_TRACKS; ++t) gl_at[t] = static_cast<int>(k * static_cast<uint32_t>(fl));   // (the glitch)
       if (fill_amount_q(proj.dice) && tick % 16 >= 8) {   // (the bar's second half: where fills are)
         int stepping[ENG_TRACKS];
-        for (int t = 0; t < ENG_TRACKS; ++t) stepping[t] = !endless[t] && !e_rec[t] && eng_lane_has_trigs(t);
+        for (int t = 0; t < ENG_TRACKS; ++t)   // (0.16.51: not a track the dose leaves out)
+          stepping[t] = !endless[t] && !e_rec[t] && eng_lane_has_trigs(t) && !((proj.dice_out >> t) & 1u);
         fill_plan(tick / 16, stepping);
         for (int t = 0; t < ENG_TRACKS; ++t) fhit[t] = stepping[t] ? fill_hit(t, &fdn[t]) : 0;
       }
@@ -2334,7 +2349,7 @@ void trauma_run(float* x, uint32_t n, float* st, const float* d) {   // st: g b 
 void apply_trauma(int t, float* x, uint32_t n) {
   TraumaDrive& s = tdrv[t];
   float g1 = 1.0f, b1 = 0.0f, k1 = s.k, m1 = 0.0f;
-  if (proj.trauma) trauma_drive(t, &g1, &b1, &k1, &m1);
+  if (trauma_takes(t)) trauma_drive(t, &g1, &b1, &k1, &m1);   // (0.16.51: left out, it fades back to clean)
   if (m1 <= 0.0f && s.m <= 0.0f) {      // (off, and out: nothing done)
     s.x1 = s.dc = s.dcy = s.env = 0.0f;
     return;
@@ -2413,7 +2428,7 @@ void set_filter(int t) {
   }
   float k[MF_KNOBS];
   for (int i = 0; i < MF_KNOBS; ++i) k[i] = E(t, TP_CUTOFF + i);
-  if (!proj.dice) dice_type[t] = -1;
+  if (!dose_takes(t)) dice_type[t] = -1;
   mf_set(t, m, dice_type[t] >= 0 ? dice_type[t] : iround(proj.val[PG_FILT(t, 2) * 4]), k, vnote[t]);
 }
 
@@ -2458,7 +2473,7 @@ void render_voice(int t, uint32_t n) {
             (voc_mod_track(lx_u(lx_param(t, 0), E(t, 1))) >= 0 ? kWebVoc[2] : 0.0f);
     web_spend((own + fm + (bend[t].on ? kWebBend : 0.0f) +
                (glitch[t].on || glitch[t].mix > 0.0f ? kWebGlitch : 0.0f) +
-               (proj.trauma || tdrv[t].m > 0.0f ? kWebTrauma : 0.0f)) * static_cast<float>(n) / 128.0f);
+               (trauma_takes(t) || tdrv[t].m > 0.0f ? kWebTrauma : 0.0f)) * static_cast<float>(n) / 128.0f);
   }
 #endif
   int kind = track_kind(t);             // an FM drum: a rise triggers it, its own envelope does the rest; ZERO, a

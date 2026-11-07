@@ -28,7 +28,8 @@
  *   FX          the effects, one after the other: the delay, the reverb, Warps; SELECT their faces (their knobs,
  *               the tracks' sends, their steps)
  *   GLO         TEMPO, SCALE, ROOT, SWING; then the project (K1, REC held: INIT, the demo, the saved one, the stress
- *               test, which plays at once: the machine's figures under it) and the machine. Held with a knob:
+ *               test, which plays at once: the machine's figures under it) and the machine; then (0.16.51) the
+ *               tracks the random dose takes, those TRAUMA takes (a knob a track: In, Out). Held with a knob:
  *               ALL, the same parameter on the four tracks (with ALGORITHM: the same model), the screen yellow while
  *               GLO is held; for 4 s after, GLO undoes it as the next bar starts (again: it stays)
  *   ENV         the track's envelope (PLAITS 2/3: DECAY, LPG COLOUR, the internal envelope's TIMBRE and MORPH).
@@ -200,7 +201,10 @@ static void pat_name(int slot, char *b)  /* A1 .. K16 */
 #define VP_ARP3(t) (ENG_NPAGES + 36 + (t))   /* (0.16.13) Endless' third face, ARP: MODE, OCTAVES, LATCH, ORDER */
 #define VP_SPREAD (ENG_NPAGES + 40)      /* (0.16.19) the mixer's third face, SPREAD: a knob a track (the Euclidean
                                           * pages' fourth place, PG_SPREAD_PARAM) */
-enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS, PT_PLAY, PT_ARP2, PT_CLIMB, PT_ARP3, PT_SPREAD };
+#define VP_EXCL(i) (ENG_NPAGES + 41 + (i))   /* (0.16.51) GLO's third and fourth faces: the tracks the random dose (0)
+                                          * and TRAUMA (1) take, a knob a track (In, Out: left alone) */
+enum { PT_RND = NPT, PT_SON2, PT_VFLT1, PT_VFLT2, PT_ENV2, PT_SYS, PT_PLAY, PT_ARP2, PT_CLIMB, PT_ARP3, PT_SPREAD,
+       PT_EXCL };
 /* a track's pages in four sets: EDIT goes from one to the next of the first three (its sound, its bending: the bits
  * and the glitch, its filter),
  * ENV to the envelopes; SELECT through a set's pages; ALGO changes what the page shows (the sound's model, the
@@ -264,7 +268,7 @@ static struct {
 /* ------------------------------------------------------------ the pages --- */
 static int ptype(int page)
 {
-    return page >= VP_SPREAD ? PT_SPREAD : page >= VP_ARP3(0) ? PT_ARP3 : page >= VP_CLIMB(0) ? PT_CLIMB : page >= VP_ARP2(0) ? PT_ARP2 : page >= VP_PLAY(0) ? PT_PLAY : page >= VP_SYS ? PT_SYS : page >= ENG_NPAGES ? PT_RND + (page - ENG_NPAGES) / 4
+    return page >= VP_EXCL(0) ? PT_EXCL : page >= VP_SPREAD ? PT_SPREAD : page >= VP_ARP3(0) ? PT_ARP3 : page >= VP_CLIMB(0) ? PT_CLIMB : page >= VP_ARP2(0) ? PT_ARP2 : page >= VP_PLAY(0) ? PT_PLAY : page >= VP_SYS ? PT_SYS : page >= ENG_NPAGES ? PT_RND + (page - ENG_NPAGES) / 4
                                                                                         : eng_page_type(page);
 }
 static int ptrack(int page)              /* the track a page belongs to, -1: none */
@@ -407,7 +411,8 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
         f[4] = VP_PLAY(LANE_WARPS);
         return 5;
     }
-    default: f[0] = PG_GLOBAL; f[1] = VP_SYS; return 2;
+    default: f[0] = PG_GLOBAL; f[1] = VP_SYS; f[2] = VP_EXCL(0); f[3] = VP_EXCL(1); return 4;   /* (0.16.51: the
+                                          * doses' tracks, third and fourth) */
     }
 }
 static int page_count(int page)
@@ -589,7 +594,7 @@ static const char *module_name(int page)
         int l = plane(page);
         return l < ENG_TRACKS ? "Steps" : l == LANE_DELAY ? "Delay" : l == LANE_REVERB ? "Reverb" : "Warps";
     }
-    case PT_GLOBAL: case PT_SYS: return "Global";
+    case PT_GLOBAL: case PT_SYS: case PT_EXCL: return "Global";
     default: {
         int l = eng_page_lane(page);
         return l == LANE_DELAY ? "Delay" : l == LANE_REVERB ? "Reverb" : "Warps";
@@ -628,6 +633,7 @@ static uint16_t page_accent(int page)
     switch (ptype(page)) {
     case PT_STEP: case PT_RND: case PT_ARP: case PT_ARP2: case PT_ARP3: case PT_CLIMB: return track_accent(ptrack(page));
     case PT_PAN: case PT_SPREAD: case PT_GLOBAL: case PT_SYS: case PT_MIX: case PT_EQ: return AC1;
+    case PT_EXCL: return page == VP_EXCL(0) ? AC3 : AC2;   /* (the footer's colours: the dose pink, TRAUMA orange) */
     case PT_DUCK: return track_accent(eng_duck_track(0));   /* its source's: it ducks the others */
     case PT_COMP: return AC2;
     case PT_OTT: return AC3;
@@ -1084,7 +1090,8 @@ typedef struct {
 } vop_t;
 enum { IC_MODEL = 0, IC_ALG = ENG_MODELS, IC_WAVE = IC_ALG + 8, IC_MIX = IC_WAVE + LW_N, IC_REV, IC_GLO, IC_NEW, IC_DEMO, IC_SAVED, IC_STRESS,
        IC_STEPS, IC_DICE,
-       IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, IC_EQ, IC_BEND, IC_EUC, IC_SPREAD, NICON };
+       IC_ENDLESS, IC_WARPS, IC_DELAY = IC_WARPS + 7, IC_DUCK, IC_COMP, IC_OTT, IC_EQ, IC_BEND, IC_EUC, IC_SPREAD,
+       IC_TRAUMA, NICON };
 #define IOPS 10
 static const vop_t ICONS[NICON][IOPS] = {
     {{'C', 16, 16, 9, 0}, {'D', 16, 16, 3, 0}},                                                     /* KICK */
@@ -1234,6 +1241,11 @@ static const vop_t ICONS[NICON][IOPS] = {
      {'L', 28, 16, 24, 12}, {'L', 28, 16, 24, 20}},                                                  /* SPREAD: the
                                                                                                      * middle, out to
                                                                                                      * both sides */
+    {{'L', 3, 16, 7, 7}, {'L', 7, 7, 13, 7}, {'L', 13, 7, 19, 25}, {'L', 19, 25, 25, 25}, {'L', 25, 25, 29, 16},
+     {'L', 3, 4, 29, 4}, {'L', 3, 28, 29, 28}},                                                     /* TRAUMA (0.16.51):
+                                                                                                     * a wave clipped
+                                                                                                     * flat at the
+                                                                                                     * rails */
 };
 
 static void vicon(float cx, float cy, float s, float w, uint16_t c, int which, int glow)
@@ -2072,6 +2084,44 @@ static void panel_bus(void)              /* the master bus: the compressor, on o
     hero_line(hero_title("COMP"), on ? "COMP ON|LIMITER" : "MASTER BUS OFF|ALGO: ON");
 }
 
+APP_SMALL static void panel_excl(int i)   /* (0.16.51) the random dose's (0) or TRAUMA's (1) tracks: the dose, the
+                                           * tracks left alone; a column a track, lit in its colour where it takes it */
+{
+    project_t *p = eng_project();
+    int d = i ? p->trauma : p->dice, out = i ? p->trauma_out : p->dice_out, n = 0, last = 0;
+    char s[40], v[8];
+    hero_icon(i ? IC_TRAUMA : IC_DICE, i ? AC2 : AC3);
+    int y = hero_title(i ? "TRAUMA" : "RANDOM");
+    s[0] = 0;
+    if (d) {
+        int_text(d > 100 ? 100 : d, v);
+        text_cat(s, v, sizeof s);
+        text_cat(s, " %|", sizeof s);
+    } else {
+        text_cat(s, "OFF|", sizeof s);
+    }
+    for (int t = 0; t < ENG_TRACKS; t++)
+        if ((out >> t) & 1)
+            n++, last = t;
+    if (!n || n == ENG_TRACKS) {
+        text_cat(s, n ? "NO TRACK" : "ALL TRACKS", sizeof s);
+    } else {                             /* T3 CLEAN; 2 AS SET */
+        char tn[4] = {'T', (char)('1' + last), ' ', 0};
+        if (n > 1)
+            int_text(n, v), text_cat(v, " ", sizeof v);
+        text_cat(s, n > 1 ? v : tn, sizeof s);
+        text_cat(s, i ? "CLEAN" : "AS SET", sizeof s);
+    }
+    hero_line(y, s);
+    for (int t = 0; t < ENG_TRACKS; t++) {   /* a column a track: lit (its colour) where the dose takes it */
+        int x = 198 + t * 9, in = !((out >> t) & 1);
+        char tn[2] = {(char)('1' + t), 0};
+        for (int k = 0; k < 7; k++)
+            cv_rect(x, 56 - k * 7, 6, 5, in ? (k < 1 + d * 6 / 100 ? track_accent(t) : TRACK) : OFF);
+        cv_text(x + 3 - text_w(&FONT_T, tn) / 2, 63, &FONT_T, tn, in ? TXT : DIM);
+    }
+}
+
 APP_SMALL static void panel_mixer(int pan)
 {
     hero_icon(IC_MIX, AC1);
@@ -2473,6 +2523,11 @@ APP_SMALL static void draw_panel(void)
             s[2] = s[2] * 131 + (int)(eng_final(PG_EQ * 4 + t) * 200.0f) + (int)track_accent(t);
         s[2] = s[2] * 7 + ui.track;
         break;
+    case PT_EXCL:                        /* (0.16.51: the dose, the tracks it leaves alone, their colours) */
+        s[2] = p->dice | p->trauma << 7 | p->dice_out << 14 | p->trauma_out << 18;
+        for (int t = 0; t < ENG_TRACKS; t++)
+            s[2] = s[2] * 7 + (int)track_accent(t);
+        break;
     case PT_SPREAD:                      /* (each track's width now, where it sits, its colour) */
         for (int t = 0; t < ENG_TRACKS; t++)
             s[2] = s[2] * 131 + (int)(eng_spread_width(t) * 60.0f) * 97 + (int)(eng_now(PG_PAN * 4 + t) * 60.0f) +
@@ -2515,6 +2570,7 @@ APP_SMALL static void draw_panel(void)
     case PT_LFO: case PT_FOLLOW: panel_lfo(lfo_of(ui.page)); break;
     case PT_MIX: case PT_PAN: panel_mixer(pt == PT_PAN); break;
     case PT_SPREAD: panel_spread(); break;
+    case PT_EXCL: panel_excl(ui.page - VP_EXCL(0)); break;
     case PT_EQ: panel_eq(); break;
     case PT_BEND: panel_bend(tr); break;
     case PT_GLITCH: panel_glitch(tr); break;
@@ -2703,7 +2759,8 @@ static int play_byte(int page, int k)    /* 0 SPEED, 1 DIRECTION, -1 neither */
 }
 static int byte_knob(int page, int k)
 {
-    return play_byte(page, k) >= 0 || ptype(page) == PT_ARP2 || ptype(page) == PT_ARP3 || (ptype(page) == PT_CLIMB && k > 0);
+    int pt = ptype(page);
+    return play_byte(page, k) >= 0 || pt == PT_ARP2 || pt == PT_ARP3 || (pt == PT_CLIMB && k > 0) || pt == PT_EXCL;
 }
 static int byte_value(int page, int k, int *n, char *txt, uint32_t max, const char **name)   /* its value (a choice's
                                                                                                * index) */
@@ -2721,6 +2778,15 @@ static int byte_value(int page, int k, int *n, char *txt, uint32_t max, const ch
         else
             label_text(eng_dir_name(v), txt, max);
         *name = b == 0 ? "Speed" : "Dir";
+        return v;
+    }
+    if (ptype(page) == PT_EXCL) {        /* (0.16.51) a track the dose takes (In) or leaves alone (Out) */
+        static const char *const NT[4] = {"T1", "T2", "T3", "T4"};
+        uint8_t m = page == VP_EXCL(0) ? p->dice_out : p->trauma_out;
+        *name = NT[k];
+        *n = 2;
+        v = (m >> k) & 1u ? 0 : 1;
+        text_cat(txt, v ? "In" : "Out", max);
         return v;
     }
     if (ptype(page) == PT_ARP3) {        /* (0.16.13) the ARP: MODE, OCTAVES, LATCH, ORDER */
@@ -2922,7 +2988,13 @@ static void play_turn(int k, int32_t e)  /* a byte knob turned (byte_knob): the 
 {
     project_t *p = eng_project();
     int d = e > 0 ? 1 : -1;
-    if (ptype(ui.page) == PT_ARP3) {     /* (0.16.13) the ARP's: a step each, the track's (GLO held: the four's) */
+    if (ptype(ui.page) == PT_EXCL) {     /* (0.16.51) a track in (to the right) or out (to the left) of the dose; GLO
+                                          * held: the four */
+        uint8_t *m = ui.page == VP_EXCL(0) ? &p->dice_out : &p->trauma_out;
+        for (int t = 0; t < ENG_TRACKS; t++)
+            if (t == k || held(B_GLO))
+                *m = (uint8_t)(d > 0 ? *m & ~(1u << t) : *m | 1u << t);
+    } else if (ptype(ui.page) == PT_ARP3) {   /* (0.16.13) the ARP's: a step each, the track's (GLO held: the four's) */
         int t = ptrack(ui.page), v = eng_arp_opt(t, k) + d;
         v = k == 0 ? clamp(v, 0, AM_N - 1) : k == 1 ? clamp(v, 1, 4) : clamp(v, 0, 1);
         for (int m = 0; m < ENG_TRACKS; m++)
@@ -4884,8 +4956,8 @@ static void go_page_dir(int page, int dir)
 {
     ui.cview = 0;                        /* (another page: a step's notes no longer shown) */
     page = shown_page(page);
-    int g = ptype(page) == PT_GLOBAL || ptype(page) == PT_SYS, l = page_lane(page);
-    if (g && ptype(ui.page) != PT_GLOBAL && ptype(ui.page) != PT_SYS)
+    int g = ptype(page) == PT_GLOBAL || ptype(page) == PT_SYS || ptype(page) == PT_EXCL, l = page_lane(page);
+    if (g && ptype(ui.page) != PT_GLOBAL && ptype(ui.page) != PT_SYS && ptype(ui.page) != PT_EXCL)
         ui.prev_page = ui.page;          /* GLO again goes back there */
     if (!ui.matrix && page != ui.page && page_first(page) == page_first(ui.page) && data_ok && engine_ok) {
         ui.slide_dir = dir ? dir : page_face(page) > page_face(ui.page) ? 1 : -1;
@@ -5452,7 +5524,7 @@ static void button_up(int b)
         break;
     case B_GLO:                          /* a tap: the global page, and back; held with a knob: ALL, undone here */
         if (!ui.used[b])
-            go_page(pt == PT_GLOBAL || pt == PT_SYS ? ui.prev_page : PG_GLOBAL);
+            go_page(pt == PT_GLOBAL || pt == PT_SYS || pt == PT_EXCL ? ui.prev_page : PG_GLOBAL);
         else
             all_up();
         ui.full = 1;
@@ -6212,7 +6284,7 @@ static void input(void)
      * TRAUMA;
      * the keys: the steps (the one playing blinks), or held; MOD mode: the LFOs' keys blinking at their rates */
     {
-        static const uint8_t PAGE_BTN[PT_SPREAD + 1] = {
+        static const uint8_t PAGE_BTN[PT_EXCL + 1] = {
             [PT_PLAITS1] = B_EDIT, [PT_PLAITS2] = B_ENV, [PT_PLAITS3] = B_EDIT, [PT_LFO] = B_LFO, [PT_FOLLOW] = B_LFO,
             [PT_MIX] = B_HOME, [PT_PAN] = B_HOME, [PT_REVERB] = B_FX, [PT_RSEND] = B_FX, [PT_DELAY1] = B_FX,
             [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
@@ -6220,7 +6292,7 @@ static void input(void)
             [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_BEND] = B_EDIT, [PT_GLITCH] = B_EDIT, [PT_EUC] = B_SEQ, [PT_RND] = B_SEQ,
             [PT_FILT1] = B_EDIT, [PT_FILT2] = B_EDIT, [PT_FILT3] = B_EDIT, [PT_SON2] = B_EDIT, [PT_VFLT1] = B_EDIT,
             [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO, [PT_PLAY] = B_SEQ, [PT_ARP2] = B_ARP,
-            [PT_CLIMB] = B_SEQ, [PT_ARP3] = B_ARP, [PT_SPREAD] = B_HOME};
+            [PT_CLIMB] = B_SEQ, [PT_ARP3] = B_ARP, [PT_SPREAD] = B_HOME, [PT_EXCL] = B_GLO};
         static const uint8_t W[16] = PLAT_WHITE_KEYS, Bk[11] = PLAT_BLACK_KEYS;
         uint32_t bb = ui.dice ? 1u << B_OCTDN : ui.trauma ? 1u << B_OCTUP : 0, kk = ui.keys, mk = 0;
         int pt = ptype(ui.page);

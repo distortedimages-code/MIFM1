@@ -1429,6 +1429,18 @@ chiffre file au-delà de 100. On lâche OCT+ : retour à la page, TRAUMA reste (
 trait orange sous celui de la dose d'aléatoire). Les deux doses se combinent. Elle se sauve avec le projet ; un
 projet de 0.13 revient avec TRAUMA à 0.
 
+**Les pistes que prennent les doses** (0.16.51) : GLO, puis SELECT jusqu'à la troisième face, **RANDOM**, et la
+quatrième, **TRAUMA** : un potard par piste (K1 pour T1... K4 pour T4), **In** à droite, **Out** à gauche. Par défaut
+les quatre sont In, comme avant (un projet plus ancien revient ainsi). Une piste Out n'est pas touchée par cette dose
+: pour RANDOM, ses réglages restent ceux qu'on a mis (rien de relancé à ses trigs, pas de trigs laissés de côté, pas de
+ratchets, pas de fills sur elle) ; pour TRAUMA, ni son drive, ni le DRIVE et la FM de son filtre (le drive retombe en
+fondu s'il était là). Si une piste Out passe par Warps (sa porteuse ou son modulateur), la dose ne touche pas Warps non
+plus. Les effets restent partagés : ce qu'une piste Out envoie au delay et à la réverbe les entend relancés par la dose
+d'aléatoire, et poussés par TRAUMA au-delà de 60 % (le DRIVE du delay). GLO tenu, un potard règle les quatre pistes
+d'un coup. Le panneau dit la dose et les pistes laissées de côté (T2 CLEAN, 2 AS SET), une colonne par piste, éclairée
+dans sa couleur quand la dose la prend. De quoi passer TRAUMA à fond sur trois pistes et garder une voix propre.
+Les deux réglages se sauvent avec le projet (deux octets de la réserve du projet : sa taille ne change pas).
+
 **Les fills** (le dernier quart de la dose, 76 à 100 %) : des trigs en plus à la fin des mesures (comptées depuis
 PLAY), comme un batteur, sur les pistes qui jouent des pas (pas sur Endless). À 76 %, un fill sur le dernier temps
 toutes les 4 mesures, sur une piste ; en montant, toutes les 2 mesures (85 %), sur les deux derniers temps (88 %), à

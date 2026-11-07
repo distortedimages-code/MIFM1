@@ -5925,6 +5925,96 @@ int main(int argc, char** argv) {
     if (!texts || !steps || !sounding || !engine) ++failures, printf("FAIL: the FM DRUM's PWM\n");
   }
 
+  {  // (0.16.51) the tracks the doses leave alone (GLO's third and fourth faces): at 100 % of the random dose and of
+     // TRAUMA, T2 left out of both plays as with both at 0 (its spectrum; alone, nothing sent to the effects, its
+     // voice made anew each run); left in, it does not; the dose's fills not on it, on it when it is in; each dose
+     // alone left out of one, the other still heard; 0 in both bytes, all four taken (an old project's spare)
+    project_t* p = eng_project();
+    static float l[128], r[128], base[128 * 400], got[128 * 400];
+    uint32_t fills = 0;
+    auto run = [&](int dice, int trauma, int dout, int tout, float* out) {
+      eng_play(0);
+      eng_defaults(p);
+      eng_set_model(1, eng_model_find(MK_SDS, 1));   // (another machine a block: the FM made anew after it)
+      eng_render(l, r, 128);
+      eng_set_model(1, eng_model_find(MK_FM, 0));
+      for (int t = 0; t < ENG_TRACKS; ++t) {
+        p->val[PG_MIX * 4 + t] = t == 1 ? 0.9f : 0.0f;
+        p->val[eng_track_param(t, TP_SEND)] = p->val[eng_track_param(t, TP_DSEND)] = 0.0f;
+        for (int tp = 0; tp < ENG_NTP; ++tp) p->rnd[t][tp] = 0;
+        p->val[PG_STEP(t) * 4 + 3] = 16.0f;
+      }
+      for (int k = 1; k < 4; ++k) p->val[PG_DUCK * 4 + k] = 0.0f;
+      for (int g = 0; g <= ENG_TRACKS; ++g)   // (no cable: an LFO's smooth random draws from the same generator)
+        for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c].depth = 0;
+      p->val[PG_WARPS(0) * 4] = static_cast<float>(WC_OFF);
+      p->val[PG_STEP(1) * 4 + 1] = 1.0f;                 // (T2: every trig, a beat's off-beat)
+      eng_steps_clear(1);
+      for (int s = 2; s < 16; s += 4) eng_trig_set(1, s, 1);
+      p->dice = static_cast<uint8_t>(dice), p->dice_seed = 3, p->trauma = static_cast<uint8_t>(trauma);
+      p->dice_out = static_cast<uint8_t>(dout), p->trauma_out = static_cast<uint8_t>(tout);
+      eng_fresh();
+      eng_cut();
+      for (int b = 0; b < 3; ++b) eng_render(l, r, 128);
+      const uint32_t f0 = eng_fill_trigs(1);
+      eng_play(1);
+      for (int b = 0; b < 400; ++b) {
+        eng_render(l, r, 128);
+        for (int i = 0; i < 128; ++i) out[b * 128 + i] = l[i];
+      }
+      eng_play(0);
+      fills = eng_fill_trigs(1) - f0;
+    };
+    // their spectra apart (the mean of the bands' differences, dB, over 48 bands from 40 Hz to 16 kHz: the clock's
+    // start falls a sample or so apart from run to run, the spectrum does not move)
+    auto bands = [&](const float* x, double* db) {
+      const int len = 128 * 400;
+      for (int k = 0; k < 48; ++k) {
+        double f = 40.0 * std::pow(400.0, k / 47.0), re = 0.0, im = 0.0, c = std::cos(6.283185307 * f / 44100.0),
+               sn = std::sin(6.283185307 * f / 44100.0), wr = 1.0, wi = 0.0;
+        for (int i = 0; i < len; ++i) {
+          double w = 0.5 - 0.5 * std::cos(6.283185307 * i / len);
+          re += w * x[i] * wr, im += w * x[i] * wi;
+          double t = wr * c - wi * sn;
+          wi = wr * sn + wi * c, wr = t;
+        }
+        db[k] = 10.0 * std::log10(re * re + im * im + 1e-6);
+      }
+    };
+    static double bb[48];
+    auto diff = [&]() {
+      double g[48], d = 0.0;
+      bands(got, g);
+      for (int k = 0; k < 48; ++k) d += std::fabs(g[k] - bb[k]);
+      return d / 48.0;
+    };
+    eng_defaults(p);
+    const int zero = p->dice_out == 0 && p->trauma_out == 0;
+    run(0, 0, 0, 0, base);
+    bands(base, bb);
+    run(0, 0, 0, 0, got);
+    const double twice = diff();
+    run(100, 100, 2, 2, got);
+    const double clean = diff();
+    const uint32_t fills_out = fills;
+    run(100, 100, 0, 0, got);
+    const double taken = diff();
+    const uint32_t fills_in = fills;
+    run(100, 0, 0, 2, got);                // (TRAUMA's left out, the dose still taking it)
+    const double dose_alone = diff();
+    run(0, 100, 2, 0, got);                // (the dose's left out, TRAUMA still taking it)
+    const double trauma_alone = diff();
+    eng_defaults(p);
+    eng_fresh();
+    const int ok = zero && clean < 2.0 * twice + 0.3 && taken > 3.0 && dose_alone > 3.0 && trauma_alone > 1.0 &&
+                   fills_out == 0 && fills_in > 0;
+    printf("the tracks the doses leave alone (their spectra apart, dB a band): T2 out of both at 100 %% %.2f (the same "
+           "run twice %.2f); in, %.1f; the dose alone %.1f, TRAUMA alone %.1f; its fills out %u, in %u; an old "
+           "project's 0: all four %s\n", clean, twice, taken, dose_alone, trauma_alone, fills_out, fills_in,
+           zero ? "ok" : "WRONG");
+    if (!ok) ++failures, printf("FAIL: the tracks the doses leave alone\n");
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

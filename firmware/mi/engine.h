@@ -284,7 +284,10 @@ typedef struct {
                                           * 1 + them, 2..16), ON (bits 4, 5: CLON_*), SHAPE (bits 6, 7: CLSH_*) */
     uint8_t arp_opt[ENG_TRACKS];         /* (0.16.13, in the spare) Endless' ARP: MODE (bits 0, 1: AM_*), OCTAVES (bits
                                           * 2, 3: 1 + them), LATCH (bit 4), ORDER (bit 5: 0 by pitch, 1 as played) */
-    uint8_t rsv[4];                      /* (0.16.7) spare, 0: the project at the patterns' record's size */
+    uint8_t dice_out;                    /* (0.16.51, in the spare) the tracks the random dose leaves alone: bit t, track
+                                          * t (0: all four taken, as ever; GLO's third face) */
+    uint8_t trauma_out;                  /* (0.16.51) the tracks TRAUMA leaves clean (GLO's fourth face) */
+    uint8_t rsv[2];                      /* (0.16.7) spare, 0: the project at the patterns' record's size */
 } project_t;
 #define PROJECT_SIZE_24 3804u            /* (0.16.0's and 0.16.1's project, version 24) */
 #define PROJECT_SIZE_26 3820u            /* (0.16.2's to 0.16.6's, versions 25, 26) */
