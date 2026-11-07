@@ -148,7 +148,7 @@ void zero_reset(int t) {
   v.att = 1.0f;
 }
 
-void zero_init(void) {
+MI_COLD void zero_init(void) {
   for (int t = 0; t < MF_TRACKS; ++t) zero_reset(t);
   mf_forget();
 }
@@ -321,7 +321,7 @@ const char* zero_knob_name(int k) {
   return k >= 0 && k < 8 ? kN[k] : "";
 }
 
-void zero_defaults(float* k) {          // round pulses of a sine, a breath of FM, a slow beat, a little loop
+MI_COLD void zero_defaults(float* k) {          // round pulses of a sine, a breath of FM, a slow beat, a little loop
   static const float kD[8] = {0.2f, 2.5f / 11.0f, 0.0f, 0.3f, 0.3f, 0.5f, 0.4f, 0.5f};
   for (int i = 0; i < 8; ++i) k[i] = kD[i];
 }

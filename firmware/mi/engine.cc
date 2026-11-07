@@ -397,7 +397,7 @@ int lane_steps(int l) {                 // its pass, in its steps (there and bac
 }
 float tdelta[ENG_LANES][ENG_NTP];       // the trig's locks and randoms, over the knobs, until the next trig (a lane
                                         // left without trigs, or another project: back to the knobs, eng_fresh)
-void lane_fresh(int lane) {
+MI_COLD void lane_fresh(int lane) {
   for (int tp = 0; tp < ENG_NTP; ++tp) tdelta[lane][tp] = 0.0f;
 }
 float tnote[ENG_TRACKS];                // its note
@@ -512,7 +512,7 @@ float src_value(int s) { return s > SRC_NONE && s < NSRC ? src[s] : 0.0f; }
 // lengths, tempo), the scale, the patching; not the filter's model (OFF stays OFF: its CPU), nor its DRIVE, FM,
 // NOISE, the bits and the glitch where they are off (0.8.3: dice_costly, their CPU too). The sends (0.5.7: the
 // sound thrown, not drowned in the effects) only now and then, lightly: a trig in seven at 100 %, into one effect
-float dice_span(int param) {
+MI_COLD float dice_span(int param) {
   if (param < 0 || param >= ENG_NPARAMS) return 0.0f;
   int pt = page_type(param / 4), k = param % 4;
   switch (pt) {
@@ -1434,7 +1434,7 @@ int climb_by(int n, int d) {            // n moved d of the scale's notes (SCALE
   }
   return n < 0 ? 0 : n > 127 ? 127 : n;
 }
-void climb_play(int t, int hit) {       // a trig climbing (hit 0) or one of its ratchets' hits: its note
+MI_COLD void climb_play(int t, int hit) {       // a trig climbing (hit 0) or one of its ratchets' hits: its note
   int st = climb_t[t];
   if (st < 0) return;
   int dc = climb_dice[t];               // (the dose's roll: each hit on, over its hits, once)
@@ -1454,7 +1454,7 @@ void climb_play(int t, int hit) {       // a trig climbing (hit 0) or one of its
   climb_off[t][st] = static_cast<int8_t>(off < -127 ? -127 : off > 127 ? 127 : off);
   tnote[t] = static_cast<float>(climb_by(climb_base[t], off));
 }
-void climb_fresh() {                    // (PLAY, another pattern: each step from its note)
+MI_COLD void climb_fresh() {                    // (PLAY, another pattern: each step from its note)
   for (int t = 0; t < ENG_TRACKS; ++t) {
     climb_t[t] = -1;
     for (int i = 0; i < ENG_STEPS; ++i) climb_cnt[t][i] = 0, climb_off[t][i] = 0;
@@ -3126,7 +3126,7 @@ extern "C" {
 uint32_t eng_prof[3];                    // (a computer's measure: the preparation, the mix, the whole render)
 #endif
 
-int eng_page_type(int page) { return page_type(page); }
+MI_COLD int eng_page_type(int page) { return page_type(page); }
 int eng_page_track(int page) {
   if (page < 12) return page / 3;
   if (page >= PG_BEND(0) && page < PG_BEND(ENG_TRACKS)) return page - PG_BEND(0);
@@ -3136,7 +3136,7 @@ int eng_page_track(int page) {
   if (page >= PG_ARP(0) && page < PG_ARP(0) + ENG_TRACKS) return page - PG_ARP(0);
   return page >= PG_STEP(0) && page < PG_STEP(ENG_TRACKS) ? page - PG_STEP(0) : -1;
 }
-int eng_page_lane(int page) {
+MI_COLD int eng_page_lane(int page) {
   int t = eng_page_track(page);
   if (t >= 0) return t;
   if (page == PG_DELAY(0) || page == PG_DELAY(1) || page == PG_DSEND) return LANE_DELAY;
@@ -3370,7 +3370,7 @@ int eng_model_sub(int m) { return mdef(m).sub; }
 int eng_model_bank(int m) { return mdef(m).bank; }
 const char* eng_model_abbr(int m) { return mdef(m).abbr; }
 const char* eng_bank_name(int b) { return b >= 0 && b < ENG_BANKS ? kBankNames[b] : ""; }
-int eng_model_free(int t, int m) {
+MI_COLD int eng_model_free(int t, int m) {
   if (mdef(m).kind != MK_PADS) return 1;
   for (int u = 0; u < ENG_TRACKS; ++u)
     if (u != t && mdef(proj.algo[PG_TRACK(u, 0)]).kind == MK_PADS) return 0;
@@ -3518,8 +3518,8 @@ extern "C" void* mf_voice_mem(int t, uint32_t* bytes, uint32_t* epoch) {
   return voice[t];
 }
 int eng_fm_algo(int t) { return t >= 0 && t < ENG_TRACKS && track_kind(t) == MK_FM ? fm4_algo(E(t, 1)) : -1; }
-int eng_fm_shaped(int t) { return eng_fm_algo(t) >= 0 && fm4_shape((E(t, 6) + 1.0f) * 0.5f) ? fm4_modulators(eng_fm_algo(t)) : 0; }
-float eng_fm_shape(int t, int op, float x) {
+MI_COLD int eng_fm_shaped(int t) { return eng_fm_algo(t) >= 0 && fm4_shape((E(t, 6) + 1.0f) * 0.5f) ? fm4_modulators(eng_fm_algo(t)) : 0; }
+MI_COLD float eng_fm_shape(int t, int op, float x) {
   return eng_fm_algo(t) >= 0 ? fm4_shape_level((E(t, 6) + 1.0f) * 0.5f, op, x) : 0.0f;
 }
 int eng_model_own(int m) { return mdef(m).kind != MK_PLAITS; }
@@ -3600,7 +3600,7 @@ int eng_model_lock(int lane, int step) {   // a step's model, -1 none
   int i = lock_find(lane, step, kTpModel);
   return i >= 0 ? proj.lock[i].v : -1;
 }
-int eng_model_lock_set(int lane, int step, int m) {   // 0 ok, -1 no room or not its family; m -1 or the track's: none
+MI_COLD int eng_model_lock_set(int lane, int step, int m) {   // 0 ok, -1 no room or not its family; m -1 or the track's: none
   if (lane < 0 || lane >= ENG_TRACKS || step < 0 || step >= ENG_STEPS) return -1;
   int i = lock_find(lane, step, kTpModel);
   if (m < 0 || m == proj.algo[PG_TRACK(lane, 0)]) {
@@ -3624,7 +3624,7 @@ int eng_model_lock_set(int lane, int step, int m) {   // 0 ok, -1 no room or not
 // (0.16.57) PADS' fourth page in a sound: in the algorithm bytes of its sound's second and third pages, its bits' and
 // its filter's second (unused: a sound's model is the first's, its filter's the fifth's), a 256th of the travel each
 const int kPads4At[4] = {1, 2, 3, 5};
-void pads4_put(eng_sound_t* s, const float* x) {
+MI_COLD void pads4_put(eng_sound_t* s, const float* x) {
   for (int i = 0; i < 4; ++i) s->algo[kPads4At[i]] = static_cast<uint8_t>(clampf(x[i], 0.0f, 1.0f) * 255.0f + 0.5f);
 }
 static void sound_name(eng_sound_t* s, const char* n) {
@@ -4125,7 +4125,7 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
 
 const char* eng_src_name(int s) { return s >= 0 && s < NSRC ? kSrcNames[s] : "?"; }
 
-int eng_algo_count(int page) {
+MI_COLD int eng_algo_count(int page) {
   switch (page_type(page)) {
     case PT_PLAITS1: return ENG_MODELS;
     case PT_FILT1: return MF_MODELS;
@@ -4159,7 +4159,7 @@ static void set_trigs(project_t* p, int lane, uint32_t bits) {   // bit s: step 
     if ((bits >> st) & 1u) p->trig[lane][st / 8] |= static_cast<uint8_t>(1u << (st % 8));
 }
 
-static void set_lock(project_t* p, int lane, int step, int tp, float v) {
+MI_COLD static void set_lock(project_t* p, int lane, int step, int tp, float v) {
   for (int i = 0; i < ENG_PLOCKS; ++i)
     if (p->lock[i].lane == 0xFF) {
       p->lock[i].lane = static_cast<uint8_t>(lane);
@@ -5005,7 +5005,7 @@ void eng_play(int on) {
 }
 int eng_playing(void) { return playing; }
 
-void eng_back_at_bar(const float* val, const uint8_t* algo, const int8_t* rnd) {
+MI_COLD void eng_back_at_bar(const float* val, const uint8_t* algo, const int8_t* rnd) {
   back_pending = 0;
   for (int i = 0; i < ENG_NPARAMS; ++i) back_val[i] = val[i];
   for (int i = 0; i < ENG_NPAGES; ++i) back_algo[i] = algo[i];
@@ -5030,7 +5030,7 @@ int pattern_len() {                     // in sixteenths: the longest lane's pas
   }
   return len;
 }
-void take_pattern(const project_t* c) {   // the machine's settings stay (the FM-1's, not the music's)
+MI_COLD void take_pattern(const project_t* c) {   // the machine's settings stay (the FM-1's, not the music's)
   uint8_t out = proj.out_mode, hq = proj.warps_hq, th = proj.theme;
   proj = *c;
   proj.out_mode = out;
@@ -5052,8 +5052,8 @@ void eng_cue(const project_t* next) {   // (its bytes all written before the poi
 }
 int eng_cue_pending(void) { return cue_p != 0; }
 uint32_t eng_cycles(void) { return pat_cycles; }
-int eng_pattern_len(void) { return pattern_len(); }
-int eng_pattern_pos(void) { return playing && tick >= 0 ? static_cast<int>(tick % pattern_len()) : -1; }
+MI_COLD int eng_pattern_len(void) { return pattern_len(); }
+MI_COLD int eng_pattern_pos(void) { return playing && tick >= 0 ? static_cast<int>(tick % pattern_len()) : -1; }
 
 void eng_key(int track, int note, int on) {
   if (track < 0 || track >= ENG_TRACKS) return;
@@ -5562,7 +5562,7 @@ int eng_trig(int lane, int step) {
   if (lane < 0 || lane >= ENG_LANES || step < 0 || step >= ENG_STEPS) return 0;
   return (proj.trig[lane][step / 8] >> (step % 8)) & 1;
 }
-void eng_trig_set(int lane, int step, int on) {
+MI_COLD void eng_trig_set(int lane, int step, int on) {
   if (lane < 0 || lane >= ENG_LANES || step < 0 || step >= ENG_STEPS) return;
   if (on) proj.trig[lane][step / 8] = static_cast<uint8_t>(proj.trig[lane][step / 8] | (1u << (step % 8)));
   else proj.trig[lane][step / 8] = static_cast<uint8_t>(proj.trig[lane][step / 8] & ~(1u << (step % 8)));
@@ -5593,7 +5593,7 @@ int eng_lock(int lane, int step, int tp, float* v) {
   if (v) *v = from_u(eng_track_param(lane, tp), static_cast<float>(proj.lock[i].v) / 255.0f);
   return 1;
 }
-int eng_lock_set(int lane, int step, int tp, float v) {   // the value first, the slot's names last (the render reads it)
+MI_COLD int eng_lock_set(int lane, int step, int tp, float v) {   // the value first, the slot's names last (the render reads it)
   if (!eng_tp_lockable(lane, tp) || step < 0 || step >= ENG_STEPS) return -1;
   int i = lock_find(lane, step, tp);
   uint8_t u = static_cast<uint8_t>(clampf(to_u(eng_track_param(lane, tp), v), 0.0f, 1.0f) * 255.0f + 0.5f);
@@ -5621,7 +5621,7 @@ void eng_steps_clear(int lane) {        // a lane's pattern: its trigs and its l
   ++lock_gen;
   lane_fresh(lane);                     // (the last trig's locks and randoms go with them)
 }
-void eng_fresh(void) {                   // another project: no trig's lock or random left from the last one
+MI_COLD void eng_fresh(void) {                   // another project: no trig's lock or random left from the last one
   for (int l = 0; l < ENG_LANES; ++l) lane_fresh(l);
   ++lock_gen;
 }
@@ -5656,7 +5656,7 @@ void eng_step_ties(int lane, uint8_t* out) {   // every step's (ENG_STEPS), one 
       out[proj.lock[i].step] = proj.lock[i].v;
 }
 // (0.16.16) a step's notes (NOTE's values: its lock, else the track's; the chord's over it), the lowest first; how many
-int eng_step_notes(int lane, int step, int* out) {
+MI_COLD int eng_step_notes(int lane, int step, int* out) {
   if (lane < 0 || lane >= ENG_TRACKS || step < 0 || step >= ENG_STEPS) return 0;
   float v = 0.0f;
   int base = eng_lock(lane, step, TP_NOTE, &v) ? iround(v) : iround(proj.val[eng_track_param(lane, TP_NOTE)]);
@@ -5742,7 +5742,7 @@ const float* eng_click_out(void) { return clk_n ? clk_out : nullptr; }
 float eng_lane_open(int lane) {
   return lane >= ENG_TRACKS && lane < ENG_LANES ? fx_open[lane - ENG_TRACKS] : 1.0f;
 }
-int eng_quantize(int note) { return quantize_mask(note, scale_mask(Pi(PG_GLOBAL, 1)), Pi(PG_GLOBAL, 2)); }
+MI_COLD int eng_quantize(int note) { return quantize_mask(note, scale_mask(Pi(PG_GLOBAL, 1)), Pi(PG_GLOBAL, 2)); }
 uint32_t eng_rises(int t) { return t >= 0 && t < ENG_TRACKS ? vrises[t] : 0u; }
 
 void eng_endless_rec(int t, int on) {
@@ -5778,7 +5778,7 @@ void eng_endless_key(int t, int note) {   // from its first note
       return;
     }
 }
-int eng_endless_pos(int t) {
+MI_COLD int eng_endless_pos(int t) {
   if (t < 0 || t >= ENG_TRACKS) return -1;
   if (arp_mode(t) != AM_LOOP) return arp_has(t) && arp_len[t] && (playing || e_free[t]) ? e_pos[t] : -1;
   return eng_endless_on(t) && (playing || e_free[t]) ? e_pos[t] : -1;
@@ -5825,7 +5825,7 @@ void eng_arp_key(int t, int note, int on) {
   }
   arp_n[t] = n;
 }
-void eng_arp_release_all(void) {        // (every key let go: the ARPs not latched empty, no key down anywhere)
+MI_COLD void eng_arp_release_all(void) {        // (every key let go: the ARPs not latched empty, no key down anywhere)
   for (int t = 0; t < ENG_TRACKS; ++t) {
     arp_down[t] = 0;
     if (!eng_arp_opt(t, AO_LATCH)) arp_n[t] = 0;
@@ -5835,7 +5835,7 @@ int eng_arp_list(int t, uint8_t* out, int max) {
   if (t < 0 || t >= ENG_TRACKS || arp_mode(t) == AM_LOOP) return 0;
   return arp_build(t, out, max);
 }
-void eng_endless_free(int t, int on) {   // (0.16.11) the sequencer stopped: Endless by a key held (-1: all let go;
+MI_COLD void eng_endless_free(int t, int on) {   // (0.16.11) the sequencer stopped: Endless by a key held (-1: all let go;
   for (int i = 0; i < ENG_TRACKS; ++i) { // 0.16.13: an ARP's latched notes go on)
     if (t >= 0 && i != t) continue;
     if (!on && t < 0 && arp_mode(i) == AM_KEYS && eng_arp_opt(i, AO_LATCH) && arp_n[i] > 0) continue;

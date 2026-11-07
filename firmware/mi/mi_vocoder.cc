@@ -640,7 +640,7 @@ const char* voc_knob_name(int k) {
   return k >= 0 && k < 8 ? kN[k] : "";
 }
 
-void voc_defaults(float* k) {           // no voice yet (Off: a string machine), strings, the ensemble up, a pad's
+MI_COLD void voc_defaults(float* k) {           // no voice yet (Off: a string machine), strings, the ensemble up, a pad's
   static const float kD[8] = {0.1f, 0.5f, 0.7f, 0.25f, 0.45f, 0.3f, 0.5f, 0.35f};   // envelope
   for (int i = 0; i < 8; ++i) k[i] = kD[i];
 }

@@ -358,7 +358,7 @@ const char* taurus_knob_name(int k) {
   return k >= 0 && k < 8 ? kN[k] : "";
 }
 
-void taurus_defaults(float* k) {        // the Taurus: B beating a little, as loud as A; the roar, then the purr
+MI_COLD void taurus_defaults(float* k) {        // the Taurus: B beating a little, as loud as A; the roar, then the purr
   static const float kD[8] = {0.5f / 9.0f, 0.35f, 0.5f, 0.3f, 0.25f, 0.78f, 0.55f, 0.0f};
   for (int i = 0; i < 8; ++i) k[i] = kD[i];
 }

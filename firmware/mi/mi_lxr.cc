@@ -264,7 +264,7 @@ void block(Track& tr, int t) {          // the next 64 frames: the mixer's order
 
 extern "C" {
 
-void lx_init(void) {
+MI_COLD void lx_init(void) {
   initDrumVoice();
   for (int t = 0; t < LXR_VOICES; ++t) {
     // each oscillator's noise its own (the LXR-02 draws all of them from the STM32's generator)
@@ -373,7 +373,7 @@ MI_COLD void lx_knob_text(int model, int k, float v, char* b, int n) {
   b[i] = 0;
 }
 
-void lx_defaults(int model, float* k) {
+MI_COLD void lx_defaults(int model, float* k) {
   if (model < 0 || model >= LX_MODELS) return;
   for (int i = 0; i < LX_KNOBS; ++i) k[i] = kKnobs[model][i].def / 127.0f;
 }

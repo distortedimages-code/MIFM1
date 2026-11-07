@@ -108,7 +108,7 @@ inline float clip3_F(float x) {
 
 extern "C" {
 
-void drum_reset(int t) {
+MI_COLD void drum_reset(int t) {
   if (t < 0 || t >= MF_TRACKS) return;
   Drum& d = drum[t];
   uint8_t* raw = reinterpret_cast<uint8_t*>(&d);
@@ -118,7 +118,7 @@ void drum_reset(int t) {
   for (int i = 0; i < 8; ++i) d.k[i] = kKits[0].def[i];
 }
 
-void drum_init(void) {
+MI_COLD void drum_init(void) {
   for (int t = 0; t < MF_TRACKS; ++t) drum_reset(t);
   mf_forget();
 }

@@ -22,9 +22,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TP = ROOT / "firmware" / "third_party"
 
-# the region: whole sectors from the data area's start (base/include/plat.h PLAT_DATA_LO), clear of the sectors other
-# firmwares keep their saves in (ZINZIN's song at 0xDA000, every firmware's panel calibration at 0xDC000)
+# the region: whole sectors from the data area's start (base/include/plat.h PLAT_DATA_LO), up to MIFM1's own store
+# (firmware/app.h APP_STORE_MAP: the project at 0xD8000, the panel's calibration at 0xDC000; ZINZIN's song, another
+# firmware's, at 0xDA000). Until 0.16.58 the check stopped at 0xDA000, over the project's sectors: the region never
+# reached them (0xD4000), but a bigger one would have written over the saved project
 RES_BASE = 0x97000
+RES_END = 0xD8000
 RES_HEAD = 32                     # base/device/res.c: the commit record before the payload
 XIP = lambda off: 0x02000000 + off - 0x4000   # base/bsp/chip/fm1_xip.h FM1_XIP
 
@@ -37,6 +40,9 @@ MOVED = [
     # triangle wavetables (74 KB), the transients' samples (26 KB)
     ("lxr/Soundengine/DSPAudio/wavetable.cc", "", r"sine_table|lxr_wave_tables"),
     ("lxr/Soundengine/DSPAudio/transientTables.cc", "", r"lxr_transient_data"),
+    # (0.16.58) Warps' wavefolder (16 KB): read as the image's tables are, through the same cache; last, so the
+    # tables before it keep their places
+    ("warps/resources.cc", "warps", r"lut_bipolar_fold"),
 ]
 TYPES = {"float": ("f", 4), "int16_t": ("h", 2), "uint16_t": ("H", 2), "int8_t": ("b", 1), "uint8_t": ("B", 1),
          "int32_t": ("i", 4), "uint32_t": ("I", 4)}
@@ -83,8 +89,8 @@ def main():
     while len(payload) % 4:
         payload.append(0)
     sectors = (RES_HEAD + len(payload) + 4095) // 4096
-    if RES_BASE + sectors * 4096 > 0xDA000:
-        raise SystemExit("split_tables: the region would reach the sectors other firmwares save in")
+    if RES_BASE + sectors * 4096 > RES_END:
+        raise SystemExit(f"split_tables: the region ({sectors} sectors) would reach the project's store at {RES_END:#x}")
     (ROOT / "firmware" / "res").mkdir(exist_ok=True)
     (ROOT / "firmware" / "res" / "mi_tables.bin").write_bytes(bytes(payload))
     base = XIP(RES_BASE + RES_HEAD)

@@ -127,7 +127,7 @@ inline void corner(float D, float t, float& p2, float& p1, float& cur, float& ca
 
 extern "C" {
 
-void pro_reset(int t) {
+MI_COLD void pro_reset(int t) {
   if (t < 0 || t >= MF_TRACKS) return;
   Pro& p = pro[t];
   uint8_t* raw = reinterpret_cast<uint8_t*>(&p);
@@ -151,7 +151,7 @@ void pro_init(void) {
   mf_forget();
 }
 
-void pro_silence(int t) {
+MI_COLD void pro_silence(int t) {
   if (t < 0 || t >= MF_TRACKS) return;
   Pro& p = pro[t];
   p.trig = 0;
@@ -174,7 +174,7 @@ void pro_set(int t, const float* notes, int n, const float* k) {
   p.n = n;
 }
 
-void pro_gate(int t, int g) {
+MI_COLD void pro_gate(int t, int g) {
   if (t < 0 || t >= MF_TRACKS) return;
   Pro& p = pro[t];
   if (g && !p.gate) p.trig = 1;
@@ -232,7 +232,7 @@ void pro_keys(int t, const int* ids, const float* notes, int n) {
   }
 }
 
-int pro_voices(int t) {
+MI_COLD int pro_voices(int t) {
   if (t < 0 || t >= MF_TRACKS) return 0;
   int n = 0;
   for (int i = 0; i < kVoices; ++i) n += pro[t].v[i].alive;
@@ -529,7 +529,7 @@ const char* pro_knob_name(int k) {
   return k >= 0 && k < 8 ? kN[k] : "";
 }
 
-void pro_defaults(float* k) {           // two saws a little apart, a brass's filter, a voice a trig
+MI_COLD void pro_defaults(float* k) {           // two saws a little apart, a brass's filter, a voice a trig
   static const float kD[8] = {0.5f / 13.0f, 0.52f, 0.25f, 0.55f, 0.35f, 0.35f, 0.5f, 0.5f};
   for (int i = 0; i < 8; ++i) k[i] = kD[i];
 }

@@ -62,6 +62,9 @@ extern const int16_t wav_integrated_waves[];
 namespace tides {
 extern const int16_t lut_wavetable[];
 }
+namespace warps {
+extern const float lut_bipolar_fold[];
+}
 
 // the first moved table (offset 0): on the FM-1 the region's payload, where plat_res must point (app.c)
 extern "C" const void* mi_res_where(void) { return marbles::dist_icdf_0_0; }
@@ -120,6 +123,7 @@ const Moved kMoved[] = {
   { ::sine_table, 144948u, 8194u },
   { ::lxr_wave_tables, 153144u, 67586u },
   { ::lxr_transient_data, 220732u, 26460u },
+  { warps::lut_bipolar_fold, 247192u, 16388u },
 };
 }  // namespace
 

@@ -359,7 +359,7 @@ const char* choir_knob_name(int k) {
   return k >= 0 && k < 8 ? kN[k] : "";
 }
 
-void choir_defaults(float* k) {         // a soprano alone, on A, her vibrato, no breath, a soft start
+MI_COLD void choir_defaults(float* k) {         // a soprano alone, on A, her vibrato, no breath, a soft start
   static const float kD[8] = {0.0f, 0.0f, 0.5f, 0.0f, 0.3f, 0.6f, 0.3f, 0.35f};
   for (int i = 0; i < 8; ++i) k[i] = kD[i];
 }

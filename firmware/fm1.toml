@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MPL-2.0
 # Copyright (C) 2026 Yoann
 # MIFM1 (fm1-base tools/build.py: from base/, `tools/build.py ../firmware`): a four-track groovebox on Mutable
-# Instruments' code and the LXR-02's drum voices. The modules' biggest tables (247 KB) live in the resource region,
+# Instruments' code and the LXR-02's drum voices. The modules' biggest tables (263 KB) live in the resource region,
 # which the installer writes after the firmware (tools/split_tables.py), so the code fits the FM-1's 581 KB of program
 # flash with room to spare.
 name = "MIFM1"

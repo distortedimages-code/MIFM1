@@ -401,7 +401,7 @@ MI_COLD uint16_t pads_chord_scale(const int* chord, int n, uint16_t mask, int ra
   return m ? m : cm;
 }
 
-void pads_init(void) {
+MI_COLD void pads_init(void) {
   uint8_t* raw = reinterpret_cast<uint8_t*>(&pad);
   for (uint32_t i = 0; i < sizeof(Pad); ++i) raw[i] = 0;
   pad.rnd = 0x9E3779B9u;
@@ -415,7 +415,7 @@ void pads_init(void) {
   pads_page4_defaults(pad.x);           // (0.16.57)
 }
 
-void pads_silence(void) {
+MI_COLD void pads_silence(void) {
   pad.alive = 0;
   pad.trig = 0;
   pad.env = 0.0f;
@@ -1192,7 +1192,7 @@ void pads_page4_defaults(float* x) {    // Saw, an ensemble, no layer, no textur
   for (int i = 0; i < 4; ++i) x[i] = kD[i];
 }
 
-void pads_defaults(float* k) {          // Tintin, triads, open, held, a slow swell, a little dark, no glide, its
+MI_COLD void pads_defaults(float* k) {          // Tintin, triads, open, held, a slow swell, a little dark, no glide, its
   static const float kD[8] = {2.5f / 27.0f, 1.5f / 9.0f, 0.375f, 1.0f, 0.62f, 0.4f, 0.0f, kRelDefault};   // release
   for (int i = 0; i < 8; ++i) k[i] = kD[i];   // as it was before RELEASE (0.06 + 0.6 x ATTACK's 174 ms)
 }

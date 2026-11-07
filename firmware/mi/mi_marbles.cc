@@ -38,7 +38,7 @@ extern "C" {
 
 uint32_t mm_size(void) { return sizeof(MarblesGen); }
 
-void mm_init(void* mem, uint32_t seed, float sr) {
+MI_COLD void mm_init(void* mem, uint32_t seed, float sr) {
   MarblesGen* m = new (mem) MarblesGen();
   m->random_generator.Init(seed);
   m->random_stream.Init(&m->random_generator);

@@ -56,5 +56,6 @@ __asm__(
     ".globl sine_table\n.set sine_table, 0x020b6654\n"
     ".globl lxr_wave_tables\n.set lxr_wave_tables, 0x020b8658\n"
     ".globl lxr_transient_data\n.set lxr_transient_data, 0x020c8e5c\n"
+    ".globl _ZN5warps16lut_bipolar_foldE\n.set _ZN5warps16lut_bipolar_foldE, 0x020cf5b8\n"
 );
 #endif

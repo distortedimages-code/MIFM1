@@ -282,7 +282,7 @@ MI_COLD void static_mode_defaults(int mode, float* k) {   // a mode's knobs (MOD
   for (int i = 0; i < 8; ++i) k[i] = kD[m][i];
 }
 
-void static_defaults(float* k) { static_mode_defaults(BODY, k); }
+MI_COLD void static_defaults(float* k) { static_mode_defaults(BODY, k); }
 
 MI_COLD void static_reset(int t) {
   if (t < 0 || t >= MF_TRACKS) return;

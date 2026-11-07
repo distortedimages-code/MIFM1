@@ -182,7 +182,7 @@ int poly_notes(float u, float note, const int* pc, int pn, uint16_t mask, int ro
   return n;
 }
 
-void poly_reset(int t) {
+MI_COLD void poly_reset(int t) {
   if (t < 0 || t >= MF_TRACKS) return;
   Poly& p = poly[t];
   uint8_t* raw = reinterpret_cast<uint8_t*>(&p);
@@ -207,7 +207,7 @@ void poly_init(void) {
   mf_forget();
 }
 
-void poly_silence(int t) {
+MI_COLD void poly_silence(int t) {
   if (t < 0 || t >= MF_TRACKS) return;
   Poly& p = poly[t];
   p.trig = 0;
@@ -228,7 +228,7 @@ void poly_set(int t, const float* notes, int n, const float* k) {
   p.n = n;
 }
 
-void poly_gate(int t, int g) {
+MI_COLD void poly_gate(int t, int g) {
   if (t < 0 || t >= MF_TRACKS) return;
   Poly& p = poly[t];
   if (g && !p.gate) p.trig = 1;
@@ -238,7 +238,7 @@ void poly_gate(int t, int g) {
   p.gate = g;
 }
 
-int poly_voices(int t) {
+MI_COLD int poly_voices(int t) {
   if (t < 0 || t >= MF_TRACKS) return 0;
   int n = 0;
   for (int i = 0; i < kVoices; ++i) n += poly[t].v[i].alive;
@@ -561,7 +561,7 @@ const char* poly_knob_name(int k) {
   return k >= 0 && k < 8 ? kN[k] : "";
 }
 
-void poly_defaults(float* k) {          // a saw over its sub, a squelch, Poly (a voice a trig), a little vintage
+MI_COLD void poly_defaults(float* k) {          // a saw over its sub, a squelch, Poly (a voice a trig), a little vintage
   static const float kD[8] = {0.0f, 0.5f, 0.35f, 0.45f, 0.3f, 0.75f, 0.75f, 0.35f};
   for (int i = 0; i < 8; ++i) k[i] = kD[i];
 }

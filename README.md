@@ -1040,6 +1040,16 @@ distortion, VA-VCF, ses trois batteries) sortent du firmware : un moteur muet ti
 leurs numéros), une cinquantaine de Ko de flash et 26 Ko de mémoire rendus (l'arène du son passe de 280 à 260 Ko ; le
 projet de travail et le tampon de lecture des anciens projets passent dans le pool, hors de la RAM).
 
+**La place dans la flash** (0.16.58) : la 0.16.57 laissait 524 octets libres sur les 581 564 de l'image. La table du
+replieur d'onde de Warps (16 Ko) passe dans la zone de ressources, avec les autres grosses tables (elle se lit au même
+endroit de la flash, par le même cache : rien ne ralentit) ; la zone fait maintenant 65 secteurs et s'arrête là où
+commence la sauvegarde du projet (0xD8000), qu'elle ne peut plus dépasser (`tools/split_tables.py` vérifiait jusqu'à
+0xDA000, sur le projet : elle n'y était jamais arrivée). Et une cinquantaine de fonctions du moteur et des modules que
+le rendu n'appelle jamais, ou moins d'une fois tous les 20 blocs (les initialisations, les réglages par défaut, les
+gestes du panneau, les gate et reset d'un trig), passent en `MI_COLD`, choisies en comptant les appels de chaque
+fonction (moteur compilé sans inlining, sous valgrind : le stress test avec les doses, le groove, chaque modèle seul) ;
+le modèle de charge de l'émulateur en sort identique, à l'instruction près.
+
 **Le garde-fou** (0.8.2) : quand un bloc dépasse 92 % de son temps, la FM des filtres s'allège pendant 0,3 s (ses
 coefficients recalculés un échantillon sur deux) ; quand un bloc arrive en retard (plus de 100 % : un clic), un sur
 quatre ; deux retards en 0,3 s, la FM des filtres coupée ; puis un cran de moins toutes les 0,3 s. Quand la machine est

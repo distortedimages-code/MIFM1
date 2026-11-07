@@ -492,7 +492,7 @@ __attribute__((noinline)) float ladder_g(float hz, float* kc) {
   return a * (2.0f * 0.312f);
 }
 
-void mf_init(void) {
+MI_COLD void mf_init(void) {
   for (int t = 0; t < MF_TRACKS; ++t) {
     Filter& f = flt[t];
     f.model = MF_OFF;

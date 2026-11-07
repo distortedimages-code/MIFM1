@@ -348,7 +348,7 @@ __attribute__((noinline)) void core(Voice& v, const Core& c, float* y, int m) {
 
 extern "C" {
 
-void fm4_reset(int t) {
+MI_COLD void fm4_reset(int t) {
   if (t < 0 || t >= MF_TRACKS) return;
   Voice& v = voice[t];
   uint8_t* raw = reinterpret_cast<uint8_t*>(&v);
@@ -359,7 +359,7 @@ void fm4_reset(int t) {
   for (int i = 0; i < 8; ++i) v.k[i] = kDef[i];
 }
 
-void fm4_init(void) {
+MI_COLD void fm4_init(void) {
   for (int i = 0; i < 512; ++i) g_sin[i] = sin_cyc(static_cast<float>(i) * (1.0f / 512.0f));
   g_sin[512] = 0.0f;
   for (int t = 0; t < MF_TRACKS; ++t) fm4_reset(t);
@@ -652,7 +652,7 @@ const char* fm4_knob_name(int k) {
   return k >= 0 && k < 8 ? kN[k] : "";
 }
 
-void fm4_defaults(float* k) {
+MI_COLD void fm4_defaults(float* k) {
   for (int i = 0; i < 8; ++i) k[i] = kDef[i];
 }
 
