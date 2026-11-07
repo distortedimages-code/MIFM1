@@ -224,6 +224,34 @@ phrase ajoutée : son anglais dans la page, son élément un `data-t` (le numér
 `i18n-fr`, puis `python3 tools/web/i18n.py check firmware/web/emu/index.html`. Après un changement qui pèse sur le CPU (un module, un filtre), `python3
 tools/web/calibrate.py` recompte et réécrit la table.
 
+## Sur iPhone et iPad (RemoteFM1)
+
+**MIFM1 tourne dans [RemoteFM1](https://github.com/Quixotic7/RemoteFM1IOS)** (0.16.55), une app iOS (iPhone, iPad) en
+bêta sur [TestFlight](https://testflight.apple.com/join/e6A47Xap) qui fait tourner des firmwares du FM-1 : **seule**
+(le FM-1 dessiné à l'écran, au doigt), **en AUv3** dans un hôte comme AUM, ou **avec le FM-1 comme façade** (ses
+boutons, ses potards, son clavier, et le son sur l'iPhone, ou dans le FM-1 branché en USB). Pour la façade, le FM-1
+doit avoir le firmware de RemoteFM1, que l'app installe elle-même en USB : il remplace MIFM1 sur le FM-1 tant qu'on
+s'en sert (MIFM1 se réinstalle depuis le site).
+
+**L'installer** : sur l'iPhone ou l'iPad, télécharger `mifm1-VERSION.rfm1` depuis
+<https://distortedimages-code.github.io/MIFM1/> (la carte iPhone), puis l'ouvrir (Fichiers) : RemoteFM1 l'ajoute à ses
+firmwares (ou Firmware › Add firmware…). Il n'est pas dans la liste « Get firmware » de l'app, que tient l'auteur de
+RemoteFM1. Le projet de l'app est le sien (sa propre mémoire, gardée par l'app), séparé de celui du FM-1.
+
+**Ce que c'est** : le même code que sur la machine et dans le navigateur, compilé en WebAssembly (le simulateur de
+fm1-base, au format `.rfm1` de RemoteFM1 : sa version 1, l'ABI 6), comme l'émulateur avec le clang de Zig
+(`tools/make_rfm1.py`, `make rfm1`). La CI le construit à chaque version, le fait tourner comme le fait une app
+(`base/tests/rfm1_test.mjs` : démarrage, écran, son, boutons, mémoire gardée) et le met sur le site. Le fichier dit le
+commit de sa source et porte les licences de tout ce qu'il contient (MIFM1, Mutable Instruments, le LXR-02,
+fm1-base, wasi-libc, Zig). Comme dans le navigateur : pas de radio, pas d'hôte USB.
+
+**Ce qu'il coûte** : rien au FM-1 ; tout à l'iPhone. iOS interdit de compiler le code à la volée : RemoteFM1 le fait
+tourner dans un interpréteur (wasm3). Mesuré avec le wasm3 même de l'app, sur un serveur (un cœur Xeon à 2,1 GHz) : la
+démo jouée prend **~25 % du temps audio** en moyenne (23 à 27 % selon les passes ; 99 % des blocs de 2,9 ms sous
+45 %), soit 3,5 à 4,2 fois plus vite que le temps réel.
+Les iPhone et iPad récents ont des cœurs plus rapides que ce serveur ; un projet plus chargé que la démo coûte plus, et
+l'app prévient quand un firmware est trop lourd pour l'appareil (au-delà de 90 %).
+
 ## Enregistrer (USB)
 
 Branché en USB, le FM-1 est aussi une **carte son** (class compliant : aucun pilote, sur Mac, Windows, Linux, iPad,

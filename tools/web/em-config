@@ -1,0 +1,6 @@
+#!/bin/sh
+# SPDX-License-Identifier: MPL-2.0
+# Copyright (C) 2026 Yoann
+# em-config for fm1-base's tools/build.py --rfm1 beside tools/web/emcc (Zig's clang): there is no Emscripten, so no
+# EMSCRIPTEN_ROOT (build.py then packs no Emscripten licence; tools/make_rfm1.py packs wasi-libc's and Zig's)
+exit 0

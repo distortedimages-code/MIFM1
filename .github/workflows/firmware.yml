@@ -20,7 +20,7 @@ concurrency:                     # a newer push of the same branch replaces a ru
   group: firmware-${{ github.ref }}
   cancel-in-progress: true
 env:
-  VERSION: "0.16.54"
+  VERSION: "0.16.55"
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -112,12 +112,19 @@ jobs:
           cp firmware/build/emu/index.html firmware/build/emu/worklet.js firmware/build/emu/app_worklet.js firmware/build/emu/app.wasm site/emu/
           if [ -d firmware/web/emu/img ]; then cp -r firmware/web/emu/img site/emu/; fi
           ls -la site/emu
+      - name: The firmware for host apps (an .rfm1 for RemoteFM1 on iOS, Zig's clang as the emulator's; driven as a host app drives it)
+        run: |
+          python3 tools/make_rfm1.py --release "$VERSION" > rfm1.log 2>&1 || { tail -40 rfm1.log; exit 1; }
+          grep "^rfm1 " rfm1.log
+          node base/tests/rfm1_test.mjs firmware/build/rfm1/mifm1-"$VERSION".rfm1
+          cp firmware/build/rfm1/mifm1-"$VERSION".rfm1 site/firmware/
       - uses: actions/upload-artifact@v4
         with:
           name: mifm1-fwsc
           path: |
             firmware/build/*.fwsc
             firmware/build/*-res.bin
+            firmware/build/rfm1/*.rfm1
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

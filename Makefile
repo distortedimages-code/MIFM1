@@ -10,7 +10,7 @@ OUT = build
 SRC = $(wildcard firmware/mi/*.cc) $(shell find firmware/third_party -name '*.cc')
 OBJ = $(patsubst %.cc,$(OUT)/obj/%.o,$(SRC))
 
-.PHONY: usb48 pat-store all test lxr-check uac-multi uac-stereo base-patch device-check firmware host web clean
+.PHONY: usb48 pat-store all test lxr-check uac-multi uac-stereo base-patch device-check firmware host rfm1 web clean
 all: test
 
 $(OUT)/obj/%.o: %.cc
@@ -89,6 +89,12 @@ firmware: base-patch
 # fm1-base's host simulator, with the real platform code
 host: base-patch
 	cd $(BASE) && python3 tools/build.py ../firmware --host
+
+# (0.16.55) the firmware for host apps (RemoteFM1 for iOS): an .rfm1, built as the browser emulator is (Zig's clang,
+# pip install ziglang), then driven as a host app drives it (fm1-base's tests/rfm1_test.mjs, node)
+rfm1: base-patch
+	python3 tools/make_rfm1.py
+	node $(BASE)/tests/rfm1_test.mjs $$(ls -t firmware/build/rfm1/mifm1-*.rfm1 | head -1)
 
 clean:
 	rm -rf $(OUT) firmware/build

@@ -73,5 +73,6 @@ resources_what_ja = "モジュールのテーブル"
 # the site (the installer)
 tagline = "groovebox Mutable Instruments"
 repo = "https://github.com/distortedimages-code/MIFM1"
-licence = "GPL-3.0-only (the firmware as a whole; its files MPL-2.0, MIT or GPL-3.0: LICENSING.md)"
+licence = "GPL-3.0-only"         # the firmware as a whole; its files MPL-2.0, MIT or GPL-3.0: LICENSING.md (an SPDX
+                                 # expression: the .rfm1's manifest asks for one, tools/make_rfm1.py)
 credits = "Built on Mutable Instruments' open source code (Emilie Gillet, MIT), the drum voices of Erica Synths' LXR-02 firmware (GPL-3.0) and fm1-base (MPL-2.0)."

@@ -71,7 +71,7 @@ a {{ color: inherit; text-underline-offset: 3px; }} a:hover {{ color: var(--oran
          border-top: 10px solid var(--ink); padding-top: 1rem; }}
 .lead {{ margin: 0; font-size: clamp(1.9rem, 3.4vw, 3rem); line-height: .86; font-weight: 900; font-stretch: 62%; text-transform: uppercase; max-width: 16ch; }}
 .sub {{ margin: 0; color: var(--grey); max-width: 58ch; }}
-.ways {{ list-style: none; margin: 64px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }}
+.ways {{ list-style: none; margin: 64px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
 .ways a {{ display: flex; flex-direction: column; height: 100%; padding: 22px 22px 26px; background: var(--paper); text-decoration: none;
           box-shadow: inset 0 6px 0 var(--ink); }}
 .ways li:first-child a {{ background: var(--orange); box-shadow: inset 0 6px 0 var(--ink); }}
@@ -125,6 +125,12 @@ a {{ color: inherit; text-underline-offset: 3px; }} a:hover {{ color: var(--oran
       <p>{t("The project saved on the FM-1, to a file on the computer, and back.",
             "Le projet sauvegardé sur le FM-1, vers un fichier sur l'ordinateur, et retour.")}</p>
       <span class="go">{t("Save or restore →", "Sauvegarder ou restaurer →")}</span></a></li>
+    <li><a href="firmware/mifm1-{version}.rfm1" download><span class="n">04</span><h2>iPhone</h2>
+      <p>{t("MIFM1 in RemoteFM1, an iOS app in beta (TestFlight): on the iPhone or the iPad alone, as an AUv3 in AUM, "
+            "or with the FM-1 as its panel. Open this file on the device: the app adds it.",
+            "MIFM1 dans RemoteFM1, une app iOS en bêta (TestFlight) : sur l'iPhone ou l'iPad seul, en AUv3 dans AUM, "
+            "ou avec le FM-1 comme façade. Ouvrir ce fichier sur l'appareil : l'app l'ajoute.")}</p>
+      <span class="go">{t(f"MIFM1 {version} for RemoteFM1 →", f"MIFM1 {version} pour RemoteFM1 →")}</span></a></li>
   </ul>
   <p class="fine">{t('MIFM1 is designed by Yoann, an active member of the Audiotrauma label. Vous êtes le bruit: '
                      '<a href="emu/#about">about the designer</a>. ',

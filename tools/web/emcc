@@ -7,9 +7,10 @@ the WASI imports it asks for, so the result runs there as Emscripten's -sSTANDAL
 
   make web   (from the repository: base/tools/build.py ../firmware --web, this directory first in PATH)
 
-What it translates: -sSTACK_SIZE (the linker's stack), -sINITIAL_MEMORY, --no-entry (a reactor: _initialize), and
-the exports: every function its sources mark __attribute__((used, visibility("default"))) (EMSCRIPTEN_KEEPALIVE's
-spelling). Other -s settings have no meaning here and are dropped."""
+What it translates: -sSTACK_SIZE (the linker's stack), -sINITIAL_MEMORY, -sALLOW_MEMORY_GROWTH=0 (the memory's maximum
+its initial size: an .rfm1's fixed memory, build.py --rfm1), --no-entry (a reactor: _initialize), and the exports:
+every function its sources mark __attribute__((used, visibility("default"))) (EMSCRIPTEN_KEEPALIVE's spelling;
+export_name(...) exports itself). Other -s settings have no meaning here and are dropped."""
 import os, re, subprocess, sys
 
 args = sys.argv[1:]
@@ -18,6 +19,7 @@ if args and args[0] == "--version":
                                                                    capture_output=True, text=True).stdout.strip())
     sys.exit(0)
 out, link, cxx, srcs, rest, ldflags = None, "-c" not in args, False, [], [], []
+initial, fixed = None, False
 i = 0
 while i < len(args):
     a = args[i]
@@ -32,6 +34,9 @@ while i < len(args):
             ldflags.append(f"-Wl,-z,stack-size={v}")
         elif k == "INITIAL_MEMORY":
             ldflags.append(f"-Wl,--initial-memory={v}")
+            initial = v
+        elif k == "ALLOW_MEMORY_GROWTH":
+            fixed = v == "0"
     elif a == "--no-entry":
         ldflags.append("-mexec-model=reactor")
     else:
@@ -63,5 +68,7 @@ if link:
                     break
     ldflags += [f"-Wl,--export={e}" for e in sorted(exports)]
     ldflags += ["-lwasi-emulated-signal", "-Wl,--strip-debug"]
+    if fixed and initial:
+        ldflags.append(f"-Wl,--max-memory={initial}")
 r = subprocess.run(cmd + rest + (ldflags if link else []))
 sys.exit(r.returncode)
