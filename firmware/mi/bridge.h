@@ -53,6 +53,7 @@ const char *lx_knob_name(int model, int k);
 void lx_knob_text(int model, int k, float v, char *b, int n);   /* as the LXR-02 shows it: 0..127, a wave's name */
 void lx_defaults(int model, float *k);   /* the knobs as the model's kit has them */
 int lx_knob_steps(int model, int k);     /* its values a knob's turn goes through: 128 (MIDI's), WAVE's 13 */
+int lx_knob_same(int a, int b, int k);   /* (0.16.52) 1: knob k the same parameter on models a and b */
 float lx_knob_turn(int model, int k, float u, int detents);   /* (0.16.50) WAVE turned (u 0..1): its five waves, then
                                          * PWM's eight widths; -1: another knob (its 128 values) */
 

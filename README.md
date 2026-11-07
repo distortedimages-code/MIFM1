@@ -968,8 +968,16 @@ tourner un potard pose un P-lock** sur ce pas : pour une piste, sur n'importe qu
 son niveau, ses envois, son pan, sa note…) ; pour un effet, sur ses potards. Le potard montre alors la valeur du pas
 (LOCK dessous). **Tenir un pas et tourner ALGORITHM** (0.16.40) lui donne **un autre modèle de la famille de la
 piste**, joué de son trig au suivant : les six moteurs de Plaits entre eux (SPEECH, SWARM, NOISE, PARTICLES, STRING,
-MODAL), les six batteries entre elles (KICK, SNARE, CLAP, HAT, TOM, PERC), les deux batteries FM entre elles ; ses
-potards restent ceux de la piste (« STEP 5  STRING » ; revenir au modèle de la piste enlève le lock). Les autres
+MODAL), les six batteries entre elles (KICK, SNARE, CLAP, HAT, TOM, PERC), les deux batteries FM entre elles, les
+quatre SDS entre eux (« STEP 5  STRING » ; revenir au modèle de la piste enlève le lock). **Le modèle du pas joue son
+propre kit** (0.16.52), déplacé d'autant que les potards de la piste le sont du kit de la piste : un pas SNARE sur une
+piste KICK sonne comme une SNARE (avant, c'était une caisse claire sur les réglages du kick, son decay, son sweep, son
+filtre : loin d'elle), et monter DECAY sur la piste allonge aussi la SNARE du pas. Entre FM DRUM et FM SNARE, les
+potards qui ne règlent pas la même chose prennent le kit du pas ; sur Plaits, tous les kits sont à midi, les potards
+de la piste valent tels quels. Un trig verrouillé que sa PROB (ou la dose) laisse tomber ne touche plus la voix qui
+sonne encore (avant, la queue du kick passait sur le modèle du pas). Mesuré sur 40 bandes : SNARE sur une piste KICK à
+4 dB par bande de la SNARE de sa propre piste (23 avant), HAT 1,7 (33), SDS SNARE 5,1 (27,5), FM SNARE 5,6 (20),
+au même niveau à 0,5 dB près ; l'écart restant est celui des tirages du bruit d'un coup à l'autre. Les autres
 machines (ZERO, FM, PADS, POLY, REV3, TAURUS, VOCODER, CHOIR, STATIC) ont chacune leur mémoire et leurs potards à elles :
 pas de modèle par pas. Le clavier joue toujours le modèle de la piste ; changer la piste de famille enlève les modèles
 de ses pas. Tenir un pas et taper SEL efface ses locks. **Tenir un trig une seconde, puis appuyer sur un pas plus

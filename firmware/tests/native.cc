@@ -6015,6 +6015,108 @@ int main(int argc, char** argv) {
     if (!ok) ++failures, printf("FAIL: the tracks the doses leave alone\n");
   }
 
+  {  // (0.16.52) a step's model in the track's family plays its own kit, moved as the track's knobs are from the
+     // track's kit: KICK's track, step 5 on SNARE (and HAT, SDS KICK on SDS SNARE, FM DRUM on FM SNARE): as its own
+     // track would play it (the spectra a few dB a band apart, the noises' draws; on the kick's values, as before,
+     // tens), as loud; DECAY turned up on the track: the snare longer too; a trig its PROB leaves out, locked on HAT,
+     // under a ringing kick: the kick rings on as it is (its model the kick's until a trig plays)
+    project_t* p = eng_project();
+    const int kW = 86;                     // (0.25 s)
+    static float l[128], r[128], lock[86 * 128], ref[86 * 128];
+    double rms = 0.0;
+    auto hit = [&](int m, int knobs_of, int lk, float decay_up, float lk_prob, int at_step, float* out) {
+      eng_play(0);
+      eng_defaults(p);
+      for (int t = 0; t < ENG_TRACKS; ++t)
+        for (int s = 0; s < ENG_STEPS; ++s) eng_trig_set(t, s, 0);
+      for (int t = 0; t < ENG_TRACKS; ++t)
+        for (int tp = 0; tp < ENG_NTP; ++tp) p->rnd[t][tp] = 0;
+      for (int g = 0; g <= ENG_TRACKS; ++g)
+        for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c].depth = 0;
+      float kk[8];
+      eng_set_model(0, knobs_of);         // (the knobs of that model's kit)
+      for (int i = 0; i < 8; ++i) kk[i] = p->val[PG_TRACK(0, 0) * 4 + 1 + i];
+      eng_set_model(0, m);
+      for (int i = 0; i < 8; ++i) p->val[PG_TRACK(0, 0) * 4 + 1 + i] = kk[i];
+      p->val[PG_TRACK(0, 0) * 4 + 3] = std::min(1.0f, p->val[PG_TRACK(0, 0) * 4 + 3] + decay_up);   // (knob 3: DECAY)
+      p->val[PG_MIX * 4 + 0] = 1.0f;
+      p->val[PG_STEP(0) * 4 + 1] = 1.0f;
+      eng_trig_set(0, 0, 1);
+      eng_trig_set(0, at_step, 1);
+      if (lk >= 0) eng_model_lock_set(0, at_step, lk);
+      if (lk_prob < 1.0f) eng_lock_set(0, at_step, TP_PROB, lk_prob);
+      eng_fresh();
+      eng_cut();
+      for (int b = 0; b < 100; ++b) eng_render(l, r, 128);
+      eng_play(1);
+      const int sb = static_cast<int>(0.125f * 44100.0f / 128.0f + 0.5f);
+      for (int b = 0; b < at_step * sb + kW; ++b) {
+        eng_render(l, r, 128);
+        if (b >= at_step * sb) std::memcpy(out + (b - at_step * sb) * 128, l, sizeof l);
+      }
+      eng_play(0);
+      double e = 0.0;
+      for (int i = 0; i < kW * 128; ++i) e += static_cast<double>(out[i]) * out[i];
+      rms = 10.0 * std::log10(e / (kW * 128.0) + 1e-20);
+    };
+    auto bands = [&](const float* x, double* db) {
+      const int len = kW * 128;
+      for (int k = 0; k < 40; ++k) {
+        double f = 40.0 * std::pow(400.0, k / 39.0), re = 0.0, im = 0.0, c = std::cos(6.283185307 * f / 44100.0),
+               sn = std::sin(6.283185307 * f / 44100.0), wr = 1.0, wi = 0.0;
+        for (int i = 0; i < len; ++i) {
+          double w = 0.5 - 0.5 * std::cos(6.283185307 * i / len);
+          re += w * x[i] * wr, im += w * x[i] * wi;
+          double t2 = wr * c - wi * sn;
+          wi = wr * sn + wi * c, wr = t2;
+        }
+        db[k] = 10.0 * std::log10(re * re + im * im + 1e-9);
+      }
+    };
+    auto dist = [&]() {
+      double a[40], b[40], d = 0.0;
+      bands(lock, a), bands(ref, b);
+      for (int k = 0; k < 40; ++k) d += std::fabs(a[k] - b[k]);
+      return d / 40.0;
+    };
+    struct Pair { int a, b; } pairs[4] = {{eng_model_find(MK_DRUM, 0), eng_model_find(MK_DRUM, 1)},
+                                          {eng_model_find(MK_DRUM, 0), eng_model_find(MK_DRUM, 3)},
+                                          {eng_model_find(MK_SDS, 0), eng_model_find(MK_SDS, 1)},
+                                          {eng_model_find(MK_LXR, 0), eng_model_find(MK_LXR, 1)}};
+    double own[4], old[4], lvd[4];
+    for (int i = 0; i < 4; ++i) {
+      hit(pairs[i].a, pairs[i].a, pairs[i].b, 0.0f, 1.0f, 4, lock);
+      const double lv = rms;
+      hit(pairs[i].b, pairs[i].b, -1, 0.0f, 1.0f, 4, ref);   // (its own track, its own kit)
+      own[i] = dist(), lvd[i] = lv - rms;
+      hit(pairs[i].b, pairs[i].a, -1, 0.0f, 1.0f, 4, ref);   // (on the track's values: as before)
+      old[i] = dist();
+    }
+    // DECAY up on the kick's track: the locked snare's tail (its last 125 ms) up too
+    auto tail = [&](const float* x) {
+      double e = 0.0;
+      for (int i = 100 * 128 / 2; i < kW * 128; ++i) e += static_cast<double>(x[i]) * x[i];
+      return 10.0 * std::log10(e + 1e-20);
+    };
+    hit(pairs[0].a, pairs[0].a, pairs[0].b, 0.0f, 1.0f, 4, ref);
+    const double t0 = tail(ref);
+    hit(pairs[0].a, pairs[0].a, pairs[0].b, 0.25f, 1.0f, 4, lock);
+    const double longer = tail(lock) - t0;
+    // a locked trig left out under a ringing kick (DECAY up, step 3 on HAT, PROB 0): the kick's tail as without it
+    hit(pairs[0].a, pairs[0].a, pairs[1].b, 0.3f, 0.0f, 2, lock);
+    hit(pairs[0].a, pairs[0].a, -1, 0.3f, 0.0f, 2, ref);    // (the same trig left out, on no model: the kick's)
+    const double left_out = dist();
+    eng_defaults(p);
+    eng_fresh();
+    int ok = longer > 1.0 && left_out < 1.0;
+    for (int i = 0; i < 4; ++i) ok &= own[i] < 7.0 && old[i] > 10.0 && std::fabs(lvd[i]) < 1.5;
+    printf("a step's model on its own kit (spectra apart, dB a band; on the track's values as before): SNARE on KICK's "
+           "%.1f (%.1f), HAT %.1f (%.1f), SDS SNARE %.1f (%.1f), FM SNARE %.1f (%.1f); levels %+.1f %+.1f %+.1f %+.1f "
+           "dB; DECAY up: its tail %+.1f dB; a trig left out under the kick: %.2f\n", own[0], old[0], own[1], old[1],
+           own[2], old[2], own[3], old[3], lvd[0], lvd[1], lvd[2], lvd[3], longer, left_out);
+    if (!ok) ++failures, printf("FAIL: a step's model's kit\n");
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

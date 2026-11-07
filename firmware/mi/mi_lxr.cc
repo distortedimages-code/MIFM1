@@ -383,6 +383,11 @@ int lx_knob_steps(int model, int k) {
   return kKnobs[model][k].p == P_WAVE ? NUM_OSC_WAVEFORMS - 1 + kPwmSteps : 128;
 }
 
+MI_COLD int lx_knob_same(int a, int b, int k) {   // (0.16.52) knob k the same parameter on both models
+  if (a < 0 || a >= LX_MODELS || b < 0 || b >= LX_MODELS || k < 0 || k >= LX_KNOBS) return 0;
+  return kKnobs[a][k].p == kKnobs[b][k].p;
+}
+
 MI_COLD float lx_knob_turn(int model, int k, float u, int detents) {   // (0.16.50) WAVE: a wave a detent, then PWM's
   if (model < 0 || model >= LX_MODELS || k < 0 || k >= LX_KNOBS || kKnobs[model][k].p != P_WAVE) return -1.0f;
   const int nw = NUM_OSC_WAVEFORMS - 1, last = nw + kPwmSteps - 1;   // (widths; -1: not WAVE, the usual detents)

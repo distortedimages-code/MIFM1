@@ -1131,6 +1131,8 @@ uint8_t trig_iv[ENG_TRACKS][3], trig_cn[ENG_TRACKS];   // the trig playing's
 // engine at a trig, its knobs as they are), played from that trig to the next
 const int kTpModel = ENG_NTP + 4;
 uint8_t trig_model[ENG_TRACKS];         // the trig playing's: its model + 1 (0: the track's)
+uint8_t trig_model_at[ENG_TRACKS];      // (0.16.52) the last trig's, played or not: the voice takes it only when its
+                                        // trig plays (a trig its PROB or the dose leaves out: the sound ringing kept)
 void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_param, lane_lockable, the bounds)
   int16_t at[ENG_NTP];
   for (int tp = 0; tp < ENG_NTP; ++tp) at[tp] = -1;
@@ -1146,7 +1148,7 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
         else if (tp >= kTpNote2 && tp < kTpNote2 + 3) iv[tp - kTpNote2] = proj.lock[i].v;
         else if (tp == kTpModel) tm = static_cast<uint8_t>(proj.lock[i].v + 1);
       }
-  if (lane < ENG_TRACKS) trig_model[lane] = tm;
+  if (lane < ENG_TRACKS) trig_model_at[lane] = tm;
   if (lane < ENG_TRACKS) {              // (its chord's notes over NOTE, in order)
     int c = 0;
     for (int j = 0; j < 3; ++j)
@@ -1224,6 +1226,7 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
     else if (step % 4 == 0) q *= 0.5f;
     if (q > 0.0f && rand01() < q) rat_on[lane] = 0;
   }
+  if (rat_on[lane]) trig_model[lane] = trig_model_at[lane];   // (0.16.52: a trig left out changes nothing)
   rat_pos[lane] = 0.0f;
 }
 
@@ -1624,6 +1627,7 @@ void sequence(uint32_t n) {
         new_trig(t, cur_step[t], 1);
         if (fhit[t]) {                  // a fill's: it plays, its ratchets and its note the fill's
           rat_on[t] = 1;
+          trig_model[t] = trig_model_at[t];
           if (rat_n[t] < fhit[t]) rat_n[t] = fhit[t], rat_span[t] = 1;
           ++fill_trigs[t];
         }
@@ -2056,11 +2060,28 @@ int choir_parts(int t, float note, int nv, float* out) {
   return nv;
 }
 
+// (0.16.52) a step's model of the track's family, its knobs: its own kit, moved as far as the track's knobs are from
+// the track's model's kit (the knobs at the track's kit: the step's model as its own kit has it; DECAY turned up on
+// the track: its DECAY up as much). Before, the step's model took the track's values as they were: a snare on a kick's
+// knobs, a kick with some noise. An FM drum's knob that is not the same parameter on the other (FM DRUM's FM, MODFRQ,
+// WAVE, CLICK; FM SNARE's NOISE, NOISF, FILTER, RESO): the other's kit. Plaits' six: all at noon, the same as before.
+// In the flash (set_voice, in the RAM, calls it while such a step plays)
+__attribute__((noinline)) void step_kit(int t, int m, float* k) {
+  const int a = proj.algo[PG_TRACK(t, 0)];
+  float ka[LX_KNOBS], kb[LX_KNOBS];
+  kit_of(a, ka);
+  kit_of(m, kb);
+  const int lx = mdef(m).kind == MK_LXR;
+  for (int i = 0; i < LX_KNOBS; ++i)
+    k[i] = lx && !lx_knob_same(mdef(a).sub, mdef(m).sub, i) ? kb[i] : clampf(kb[i] + k[i] - ka[i], 0.0f, 1.0f);
+}
+
 void set_voice(int t) {
   mclaim(t);
   if (own_knobs(t)) {
     float k[LX_KNOBS];
     for (int i = 0; i < LX_KNOBS; ++i) k[i] = lx_u(lx_param(t, i), E(t, 1 + i));
+    if (voice_model(t) != proj.algo[PG_TRACK(t, 0)]) step_kit(t, voice_model(t), k);   // (0.16.52)
     int kind = track_kind(t), sub = mdef(voice_model(t)).sub;   // (0.16.40: its trig's model, a drum's)
     float note = vnote[t] + (kind == MK_VOCODER ? 0.0f : 24.0f * E(t, 0));   // (VOCODER: FREQ's place its PLAY)
     if (scale_on_t(t)) note = static_cast<float>(quantize(iround(note)));
