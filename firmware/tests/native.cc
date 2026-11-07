@@ -3608,8 +3608,10 @@ int main(int argc, char** argv) {
   }
 
   {                                     // 59. CLIMB (0.16.7): a step's trig higher each time it plays, back to its note
-    // after TIMES; BOUNCE; on the ratchets' hits; both; in the scale's notes with SCALE on; a lock on one step alone;
-    // a 0.16.6 project read (CLIMB off, its locks and randoms where they were)
+    // past its LIMIT (0.16.60: a step's own, as its CLIMB, the track's none); BOUNCE; on the ratchets' hits; both; in
+    // the scale's notes with SCALE on; 12 semitones without a LIMIT; a LIMIT under the jump; two steps, each its own;
+    // a 0.16.59 project read (the track's CLIMB 0, a step's TIMES its LIMIT); a 0.16.6 project read (CLIMB off, its
+    // locks and randoms where they were)
     project_t* p = eng_project();
     static float l[128], r[128];
     auto notes = [&](int blocks, int* out, int max) {   // the notes T1's gate rises on
@@ -3624,7 +3626,7 @@ int main(int argc, char** argv) {
       eng_play(0);
       return n;
     };
-    auto setup = [&](int climb, int times, int on, int shape, int scale) {
+    auto setup = [&](int climb, int lim, int on, int shape, int scale) {   // (step 1's CLIMB and LIMIT; lim 0: none)
       eng_blank(p);
       eng_fresh();
       p->val[PG_GLOBAL * 4 + 0] = 0.60206f;   // (120 BPM: a sixteenth 43 blocks)
@@ -3632,8 +3634,8 @@ int main(int argc, char** argv) {
       p->val[PG_GLOBAL * 4 + 2] = 0.0f;       // (C)
       p->val[PG_STEP(0) * 4 + 3] = 4.0f;      // (a trig on its first step, every four sixteenths)
       eng_trig_set(0, 0, 1);
-      p->val[PG_EUC(0) * 4 + 2] = static_cast<float>(climb);
-      eng_climb_opt_set(p, 0, CL_TIMES, times);
+      if (climb) eng_lock_set(0, 0, TP_CLIMB, static_cast<float>(climb));
+      if (lim) eng_climb_lim_set(0, 0, lim);
       eng_climb_opt_set(p, 0, CL_ON, on);
       eng_climb_opt_set(p, 0, CL_SHAPE, shape);
     };
@@ -3649,42 +3651,72 @@ int main(int argc, char** argv) {
       printf("\n");
     };
     int ok = 1;
-    setup(2, 3, CLON_TRIG, CLSH_RAMP, 0);
-    notes(7 * 4 * 43 + 20, got, 32);
-    const int kRamp[7] = {0, 2, 4, 0, 2, 4, 0};
-    int ramp = same(kRamp, 7, 48);
-    if (!ramp) show("ramp", 7, 48);
-    setup(2, 3, CLON_TRIG, CLSH_BOUNCE, 0);
+    setup(2, 7, CLON_TRIG, CLSH_RAMP, 0);   // (+2 up to 7: 0 2 4 6, its note again)
+    notes(9 * 4 * 43 + 20, got, 32);
+    const int kRamp[9] = {0, 2, 4, 6, 0, 2, 4, 6, 0};
+    int ramp = same(kRamp, 9, 48);
+    if (!ramp) show("ramp", 9, 48);
+    setup(2, 4, CLON_TRIG, CLSH_BOUNCE, 0);
     notes(7 * 4 * 43 + 20, got, 32);
     const int kBounce[7] = {0, 2, 4, 2, 0, 2, 4};
     int bounce = same(kBounce, 7, 48);
     if (!bounce) show("bounce", 7, 48);
-    setup(-1, 4, CLON_RATCH, CLSH_RAMP, 0);
+    setup(-1, 3, CLON_RATCH, CLSH_RAMP, 0);
     p->val[PG_STEP(0) * 4 + 2] = static_cast<float>(eng_ratch_join(4, 1));
     notes(2 * 4 * 43 + 20, got, 32);
     const int kRatch[8] = {0, -1, -2, -3, 0, -1, -2, -3};
     int ratch = same(kRatch, 8, 48);
     if (!ratch) show("ratch", 8, 48);
-    setup(1, 3, CLON_BOTH, CLSH_RAMP, 0);
+    setup(1, 2, CLON_BOTH, CLSH_RAMP, 0);
     p->val[PG_STEP(0) * 4 + 2] = static_cast<float>(eng_ratch_join(2, 1));
     notes(3 * 4 * 43 + 20, got, 32);
     const int kBoth[6] = {0, 1, 2, 0, 1, 2};
     int both = same(kBoth, 6, 48);
     if (!both) show("both", 6, 48);
-    setup(1, 4, CLON_TRIG, CLSH_RAMP, 2);   // (C minor: C D Eb F)
+    setup(1, 5, CLON_TRIG, CLSH_RAMP, 2);   // (C minor: C D Eb F, within 5 semitones)
+    notes(5 * 4 * 43 + 20, got, 32);
+    const int kScale[5] = {0, 2, 3, 5, 0};
+    int scale = same(kScale, 5, 48);
+    if (!scale) show("scale", 5, 48);
+    setup(5, 0, CLON_TRIG, CLSH_RAMP, 0);   // (no LIMIT: 12)
     notes(4 * 4 * 43 + 20, got, 32);
-    const int kScale[4] = {0, 2, 3, 5};
-    int scale = same(kScale, 4, 48);
-    if (!scale) show("scale", 4, 48);
-    setup(0, 2, CLON_TRIG, CLSH_RAMP, 0);   // (CLIMB 0 on the track; step 3 locked to +5: it alone climbs)
+    const int kOct[4] = {0, 5, 10, 0};
+    int oct = same(kOct, 4, 48) && eng_climb_lim(0, 0) == ENG_CLIMB_LIM;
+    if (!oct) show("no limit", 4, 48);
+    setup(7, 5, CLON_TRIG, CLSH_RAMP, 0);   // (+7 up to 5: no room, its note)
+    notes(3 * 4 * 43 + 20, got, 32);
+    const int kNone[3] = {0, 0, 0};
+    int none = same(kNone, 3, 48);
+    if (!none) show("under the jump", 3, 48);
+    setup(1, 1, CLON_TRIG, CLSH_RAMP, 0);   // (step 1 +1 up to 1, step 3 +5 up to 5: each its own)
     eng_trig_set(0, 2, 1);
     eng_lock_set(0, 2, TP_CLIMB, 5.0f);
-    notes(3 * 4 * 43 + 20, got, 32);
-    const int kLock[6] = {0, 0, 0, 5, 0, 0};
-    int lock = same(kLock, 6, 48);
-    if (!lock) show("lock", 6, 48);
-    // a 0.16.6 project: its slot's junk not read as CLIMB, its randoms and locks where they were
+    eng_climb_lim_set(0, 2, 5);
+    notes(4 * 4 * 43 + 20, got, 32);
+    const int kTwo[8] = {0, 0, 1, 5, 0, 0, 1, 5};
+    int two = same(kTwo, 8, 48) && eng_climb_lim(0, 2) == 5 && eng_climb_lim(0, 1) == ENG_CLIMB_LIM;
+    if (!two) show("two steps", 8, 48);
+    eng_climb_lim_set(0, 2, ENG_CLIMB_LIM);   // (12: no lock)
+    int fewer = 0;
+    for (int i = 0; i < ENG_PLOCKS; ++i) fewer += p->lock[i].lane == 0 && p->lock[i].step == 2;
+    two &= fewer == 1;
+    // a 0.16.59 project: the track's CLIMB 0, a step's lock its jump, TIMES - 1 of them its LIMIT
     static project_t q;
+    eng_defaults(&q);
+    q.version = 38;
+    for (int i = 0; i < ENG_PLOCKS; ++i) q.lock[i].lane = 0xFF;
+    q.val[PG_EUC(1) * 4 + 2] = 7.0f;
+    q.endless_opt[1][3] = static_cast<uint8_t>(2u | CLON_RATCH << 4);   // (TIMES 3, ON its hits)
+    q.lock[0] = plock_t{1, 4, TP_CLIMB, 159};   // (+3 three times: up to 6)
+    q.lock[1] = plock_t{2, 6, TP_CLIMB, 170};   // (+4, TIMES 4 then: up to 12, no lock)
+    int v59 = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.val[PG_EUC(1) * 4 + 2] == 0.0f &&
+              q.endless_opt[1][3] == (CLON_RATCH << 4) && q.lock[0].v == 159 && q.lock[1].v == 170;
+    int lims = 0;
+    for (int i = 0; i < ENG_PLOCKS; ++i)
+      if (q.lock[i].lane != 0xFF && q.lock[i].tp > TP_CLIMB + 1)
+        lims += q.lock[i].lane == 1 && q.lock[i].step == 4 && q.lock[i].v == 6 ? 1 : 100;
+    v59 &= lims == 1;
+    // a 0.16.6 project: its slot's junk not read as CLIMB, its randoms and locks where they were
     eng_defaults(&q);
     q.val[PG_EUC(1) * 4 + 2] = 7.0f;
     q.rnd[2][TP_CURVE] = 44;
@@ -3694,20 +3726,23 @@ int main(int argc, char** argv) {
     int bytes = as_v26(&q, 26);
     reinterpret_cast<V26*>(&q)->lock[383] = plock_t{2, 1, TP_PROB, 33};   // (in a slot 0.16.7 has no more)
     int up = eng_upgrade(&q, bytes) && eng_check(&q) && q.val[PG_EUC(1) * 4 + 2] == 0.0f && q.rnd[2][TP_CURVE] == 44 &&
-             q.rseed[3][TP_GDROP] == 9 && q.rnd[2][TP_CLIMB] == 0 && eng_climb_opt(1, CL_TIMES) == 4;
+             q.rseed[3][TP_GDROP] == 9 && q.rnd[2][TP_CLIMB] == 0 && q.endless_opt[1][3] == 0;
     int found = 0;
     for (int i = 0; i < ENG_PLOCKS; ++i)
       found += (q.lock[i].lane == 1 && q.lock[i].step == 9 && q.lock[i].tp == TP_NOTE && q.lock[i].v == 77) +
                (q.lock[i].lane == 2 && q.lock[i].step == 1 && q.lock[i].tp == TP_PROB && q.lock[i].v == 33);
     up &= found == 2;
-    ok = ramp && bounce && ratch && both && scale && lock && up;
-    printf("CLIMB: +2 three times %s, bouncing %s; -1 on four ratchets %s; both %s; in C minor %s; a lock alone %s; a "
-           "0.16.6 project %s\n", ramp ? "ok" : "WRONG", bounce ? "ok" : "WRONG", ratch ? "ok" : "WRONG",
-           both ? "ok" : "WRONG", scale ? "ok" : "WRONG", lock ? "ok" : "WRONG", up ? "read" : "WRONG");
+    ok = ramp && bounce && ratch && both && scale && oct && none && two && v59 && up;
+    printf("CLIMB: +2 up to 7 %s, bouncing %s; -1 on four ratchets %s; both %s; in C minor %s; 12 without a limit %s; "
+           "a limit under the jump %s; two steps, each its own %s; a 0.16.59 project %s; a 0.16.6 project %s\n",
+           ramp ? "ok" : "WRONG", bounce ? "ok" : "WRONG", ratch ? "ok" : "WRONG", both ? "ok" : "WRONG",
+           scale ? "ok" : "WRONG", oct ? "ok" : "WRONG", none ? "ok" : "WRONG", two ? "ok" : "WRONG",
+           v59 ? "read" : "WRONG", up ? "read" : "WRONG");
     if (!ok) ++failures, printf("FAIL: CLIMB\n");
     eng_defaults(p);
     eng_fresh();
   }
+
 
   {                                     // 60. the random dose on the ratchets (0.16.8, 0.16.9): none added below 50 %,
     // the sequence's left alone below 30 %; at 60 % trigs without ratchets get some now and then, trigs with some lose

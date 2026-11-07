@@ -1143,12 +1143,15 @@ const int kTpModel = ENG_NTP + 4;
 uint8_t trig_model[ENG_TRACKS];         // the trig playing's: its model + 1 (0: the track's)
 uint8_t trig_model_at[ENG_TRACKS];      // (0.16.52) the last trig's, played or not: the voice takes it only when its
                                         // trig plays (a trig its PROB or the dose leaves out: the sound ringing kept)
+// (0.16.60) a step's CLIMB LIMIT: a lock of its own (tp kTpClimbLim, its value the semitones, 1..ENG_CLIMB_MAX)
+const int kTpClimbLim = ENG_NTP + 5;
+uint8_t trig_lim[ENG_TRACKS];           // the trig playing's (0: none, ENG_CLIMB_LIM)
 void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_param, lane_lockable, the bounds)
   int16_t at[ENG_NTP];
   for (int tp = 0; tp < ENG_NTP; ++tp) at[tp] = -1;
   if (lock_gen_seen != lock_gen) make_lock_steps();
   trig_tie[lane] = 0;
-  uint8_t iv[3] = {0, 0, 0}, tm = 0;
+  uint8_t iv[3] = {0, 0, 0}, tm = 0, lim = 0;
   if (locks && step >= 0 && step < ENG_STEPS && ((lock_steps[lane][step / 32] >> (step % 32)) & 1u))
     for (int i = 0; i < ENG_PLOCKS; ++i)
       if (proj.lock[i].lane == lane && proj.lock[i].step == step) {
@@ -1157,8 +1160,9 @@ void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_par
         else if (tp == kTpTie) trig_tie[lane] = proj.lock[i].v;
         else if (tp >= kTpNote2 && tp < kTpNote2 + 3) iv[tp - kTpNote2] = proj.lock[i].v;
         else if (tp == kTpModel) tm = static_cast<uint8_t>(proj.lock[i].v + 1);
+        else if (tp == kTpClimbLim) lim = proj.lock[i].v;
       }
-  if (lane < ENG_TRACKS) trig_model_at[lane] = tm;
+  if (lane < ENG_TRACKS) trig_model_at[lane] = tm, trig_lim[lane] = lim;
   if (lane < ENG_TRACKS) {              // (its chord's notes over NOTE, in order)
     int c = 0;
     for (int j = 0; j < 3; ++j)
@@ -1427,9 +1431,10 @@ int arp_build(int t, uint8_t* out, int max) {
 }
 
 // (0.16.7) CLIMB: a step's trig a little higher (or lower) each time it plays, CLIMB semitones (SCALE on: its notes)
-// a time, back to its note after TIMES of them (RAMP; BOUNCE: up, then back down; RANDOM: any of them); ON: each play
-// of the trig (its ratchets on its note), each hit of its ratchets (from the trig's note), or both (each hit on from
-// the last, across its plays). Each step its own count, from PLAY
+// a time, back to its note past its LIMIT (0.16.60: the semitones it climbs to at most, a step's own as its CLIMB;
+// before, TIMES of them) (RAMP; BOUNCE: up, then back down; RANDOM: any of them); ON: each play of the trig (its
+// ratchets on its note), each hit of its ratchets (from the trig's note), or both (each hit on from the last, across
+// its plays). Each step its own count, from PLAY
 int climb_by(int n, int d) {            // n moved d of the scale's notes (SCALE off: d semitones), within 0..127
   uint32_t m = scale_mask(Pi(PG_GLOBAL, 1));
   if (!m) {
@@ -1443,12 +1448,25 @@ int climb_by(int n, int d) {            // n moved d of the scale's notes (SCALE
   }
   return n < 0 ? 0 : n > 127 ? 127 : n;
 }
+MI_COLD int climb_room(int base, int d, int lim) {   // (0.16.60) its places: its note, then each d further on while
+  int s = d > 0 ? 1 : -1, room = s > 0 ? 127 - base : base, c = 0;   // within lim semitones of it (and the notes)
+  if (lim > room) lim = room;
+  uint32_t m = scale_mask(Pi(PG_GLOBAL, 1));
+  if (!m) {
+    c = lim;
+  } else {                              // (SCALE on: its notes within them)
+    const int root = Pi(PG_GLOBAL, 2);
+    for (int j = 1; j <= lim; ++j) c += static_cast<int>((m >> ((((base + s * j - root) % 12) + 12) % 12)) & 1u);
+  }
+  return 1 + c / (d < 0 ? -d : d);
+}
+int climb_n[ENG_TRACKS];                // (its places, 2 at least)
 MI_COLD void climb_play(int t, int hit) {       // a trig climbing (hit 0) or one of its ratchets' hits: its note
   int st = climb_t[t];
   if (st < 0) return;
   int dc = climb_dice[t];               // (the dose's roll: each hit on, over its hits, once)
   int on = dc ? CLON_RATCH : eng_climb_opt(t, CL_ON), sh = dc ? CLSH_RAMP : eng_climb_opt(t, CL_SHAPE), c;
-  int n = dc ? (rat_n[t] < 2 ? 2 : rat_n[t] > 16 ? 16 : rat_n[t]) : eng_climb_opt(t, CL_TIMES);
+  int n = climb_n[t];
   int per = sh == CLSH_BOUNCE ? 2 * n - 2 : n;
   if (on == CLON_RATCH) {
     c = hit;
@@ -1655,12 +1673,16 @@ void sequence(uint32_t n) {
         climb_dice[t] = !ca && dice_climb[t] && rat_n[t] > 1;   // (0.16.8: else the dose's roll, climbing)
         if (climb_dice[t]) ca = dice_climb[t];
         if (cs >= 0 && cs < ENG_STEPS) {
-          if (ca && rat_on[t]) {
+          const int b = iround(tnote[t]);
+          const int n = !ca ? 0 : climb_dice[t] ? (rat_n[t] > 16 ? 16 : rat_n[t])
+                                               : climb_room(b, ca, trig_lim[t] ? trig_lim[t] : ENG_CLIMB_LIM);
+          if (n >= 2 && rat_on[t]) {
             climb_t[t] = cs;
             climb_amt[t] = ca;
-            climb_base[t] = iround(tnote[t]);
+            climb_base[t] = b;
+            climb_n[t] = n;
             climb_play(t, 0);
-          } else if (!ca) {
+          } else if (n < 2) {           // (off, or its LIMIT under one jump: its note)
             climb_off[t][cs] = 0;
           }
         }
@@ -3194,7 +3216,6 @@ const char* const kClimbShape[CLSH_N] = {"Ramp", "Bounce", "Random"};
 int eng_climb_opt(int t, int o) {
   if (t < 0 || t >= ENG_TRACKS) return 0;
   unsigned b = proj.endless_opt[t][3];
-  if (o == CL_TIMES) return (b & 15u) ? static_cast<int>(b & 15u) + 1 : 4;
   if (o == CL_ON) { int v = static_cast<int>((b >> 4) & 3u); return v >= CLON_N ? CLON_TRIG : v; }
   if (o == CL_SHAPE) { int v = static_cast<int>(b >> 6); return v >= CLSH_N ? CLSH_RAMP : v; }
   return 0;
@@ -3202,12 +3223,33 @@ int eng_climb_opt(int t, int o) {
 void eng_climb_opt_set(project_t* p, int t, int o, int v) {
   if (t < 0 || t >= ENG_TRACKS) return;
   unsigned b = p->endless_opt[t][3];
-  if (o == CL_TIMES) b = (b & ~15u) | static_cast<unsigned>((v < 2 ? 2 : v > 16 ? 16 : v) - 1);
-  else if (o == CL_ON) b = (b & ~0x30u) | static_cast<unsigned>(v < 0 ? 0 : v >= CLON_N ? CLON_N - 1 : v) << 4;
+  if (o == CL_ON) b = (b & ~0x30u) | static_cast<unsigned>(v < 0 ? 0 : v >= CLON_N ? CLON_N - 1 : v) << 4;
   else if (o == CL_SHAPE) b = (b & 0x3Fu) | static_cast<unsigned>(v < 0 ? 0 : v >= CLSH_N ? CLSH_N - 1 : v) << 6;
   p->endless_opt[t][3] = static_cast<uint8_t>(b);
 }
 const char* eng_climb_on_name(int v) { return kClimbOn[v < 0 || v >= CLON_N ? 0 : v]; }
+int eng_climb_lim(int lane, int step) {   // (0.16.60) a step's LIMIT
+  int i = lane >= 0 && lane < ENG_TRACKS ? lock_find(lane, step, kTpClimbLim) : -1;
+  return i >= 0 && proj.lock[i].v ? proj.lock[i].v : ENG_CLIMB_LIM;
+}
+MI_COLD int eng_climb_lim_set(int lane, int step, int v) {   // 0 ok, -1 no room; ENG_CLIMB_LIM: none
+  if (lane < 0 || lane >= ENG_TRACKS || step < 0 || step >= ENG_STEPS) return -1;
+  v = v < 1 ? 1 : v > ENG_CLIMB_MAX ? ENG_CLIMB_MAX : v;
+  int i = lock_find(lane, step, kTpClimbLim);
+  if (v == ENG_CLIMB_LIM) {
+    if (i >= 0) proj.lock[i].lane = 0xFF, ++lock_gen;
+    return 0;
+  }
+  for (int j = 0; j < ENG_PLOCKS && i < 0; ++j)
+    if (proj.lock[j].lane == 0xFF) i = j;
+  if (i < 0) return -1;
+  proj.lock[i].v = static_cast<uint8_t>(v);   // (the value first, the slot's names last: the render reads it)
+  proj.lock[i].step = static_cast<uint8_t>(step);
+  proj.lock[i].tp = static_cast<uint8_t>(kTpClimbLim);
+  proj.lock[i].lane = static_cast<uint8_t>(lane);
+  ++lock_gen;
+  return 0;
+}
 const char* eng_climb_shape_name(int v) { return kClimbShape[v < 0 || v >= CLSH_N ? 0 : v]; }
 
 const char* eng_speed_name(int s) { return kSpeedNames[(s + 4) < 0 ? 0 : (s + 4) >= ENG_SPEEDS ? ENG_SPEEDS - 1 : s + 4]; }
@@ -4889,6 +4931,26 @@ MI_COLD void climb_off_all(project_t* p) {   // (a project before 0.16.7: CLIMB 
   for (int l = 0; l < ENG_LANES; ++l) p->val[PG_EUC(l) * 4 + 2] = p->val[PG_EUC(l) * 4 + 3] = 0.0f;
   for (int t = 0; t < ENG_TRACKS; ++t) p->endless_opt[t][3] = 0;
 }
+MI_COLD void climb_v39(project_t* p) {   // (0.16.60) before, CLIMB the track's too, over TIMES: the track's 0, a step's
+  for (int t = 0; t < ENG_TRACKS; ++t) {   // lock its jump, its LIMIT TIMES - 1 of them (the same notes, SCALE off)
+    const unsigned b = p->endless_opt[t][3];
+    const int times = (b & 15u) ? static_cast<int>(b & 15u) + 1 : 4;
+    p->val[PG_EUC(t) * 4 + 2] = 0.0f;
+    p->endless_opt[t][3] = static_cast<uint8_t>(b & 0xF0u);
+    for (int i = 0; i < ENG_PLOCKS; ++i) {
+      const plock_t k = p->lock[i];
+      if (k.lane != t || k.tp != TP_CLIMB || k.step >= ENG_STEPS) continue;
+      int j = (static_cast<int>(k.v) * 24 + 127) / 255 - 12, lim = (j < 0 ? -j : j) * (times - 1);
+      lim = lim > ENG_CLIMB_MAX ? ENG_CLIMB_MAX : lim;
+      if (!j || lim == ENG_CLIMB_LIM) continue;
+      for (int f = 0; f < ENG_PLOCKS; ++f)
+        if (p->lock[f].lane == 0xFF) {
+          p->lock[f] = plock_t{static_cast<uint8_t>(t), k.step, static_cast<uint8_t>(kTpClimbLim), static_cast<uint8_t>(lim)};
+          break;
+        }
+    }
+  }
+}
 // RATCH's travel: 1..8 before 0.16, 1..8 then eight tuplets (9..16) in 0.16.0 to 0.16.3, hits over a span (1..256)
 // since 0.16.4: a project before, its knobs and its locks as they were (a lock is a share of the travel; old_max: 8 or
 // 16)
@@ -4923,6 +4985,12 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
     else if (v == 35) sds_in(p);        // place)
     if (v <= 36) pads_in(p);            // (0.16.57: PADS' fourth page)
     pads_v37_in(p);                     // (0.16.59: its fourth page now, its fifth)
+    climb_v39(p);
+    return 1;
+  }
+  if (v == 38 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+    p->version = PROJECT_VERSION;       // (0.16.59's: the same layout, CLIMB a step's alone now)
+    climb_v39(p);
     return 1;
   }
   if (v >= 27 && v <= 32 && bytes == static_cast<int>(sizeof(project_v32)) && p->size == sizeof(project_v32)) {
@@ -4940,6 +5008,7 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
         if (p->algo[PG_TRACK(t, 0)] == eng_model_find(MK_PLAITS, 15)) kit_fresh(p, t);
     pads_in(p);
     pads_v37_in(p);
+    climb_v39(p);
     return 1;
   }
   if (!upgrade_any(p, bytes)) return 0;   // (0.16.32: before 0.16, a project is no longer read: 0)

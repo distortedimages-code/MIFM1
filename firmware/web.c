@@ -213,6 +213,7 @@ __attribute__((used, visibility("default"))) uint32_t lab_setup(uint32_t id)
         for (int s = 0; s < 16; s++)
             eng_trig_set(2, s, s % 4 == 2);
         p->val[PG_STEP(2) * 4 + 2] = 3.0f;
+        eng_climb_opt_set(p, 2, CL_ON, CLON_RATCH);   /* (0.16.60: CLIMB on its hits, as drawn; its LIMIT 12) */
         lab_lane = 2;
         lab_k(3, PG_STEP(2) * 4 + 2, PG_CURVE * 4 + 2, PG_EUC(2) * 4 + 2, 0);
     } else if (id == LAB_PLOCK) {        /* (0.16.30) a kick alone, seven trigs, three of them locked */

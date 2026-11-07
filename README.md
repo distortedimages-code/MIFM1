@@ -1010,7 +1010,7 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **PRESETS** | la piste active, de 1 à 4 (les presets eux-mêmes : EDIT tenu) |
 | **EDIT** | **tapé** : les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son ; **tenu : les presets** de la piste (touches noires : la banque, A celle d'usine ; blanches : le son, posé sur la piste et joué ; SAVE tenu : l'y garde ; REC tenu : l'efface) ; **tenu + SELECT** (0.16.39) : **le niveau de la piste active** (« T1 LEVEL 85 » ; MASTER, lui, est le volume de sortie) |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
-| **SEQ** | tapé : les pas de la piste (NOTE, PROB, SPEED, LENGTH ; puis RATCHETS : RATCH, SPAN, CURVE, DIR ; puis CLIMB : CLIMB, NOTES, ON, SHAPE ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns** (touches noires : la banque, blanches : le pattern, plusieurs : un enchaînement ; REC tenu : efface) |
+| **SEQ** | tapé : les pas de la piste (NOTE, PROB, SPEED, LENGTH ; puis RATCHETS : RATCH, SPAN, CURVE, DIR ; puis CLIMB : CLIMB et LIMIT d'un pas tenu, ON, SHAPE ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns** (touches noires : la banque, blanches : le pattern, plusieurs : un enchaînement ; REC tenu : efface) |
 | **ARP** | Endless, celui de la piste (voir plus bas) ; à nouveau : ses options (STRIDE, REST, HOLES, LEAP) |
 | **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leur SPREAD, leurs filtres (EQ), le DUCK, puis le bus master (COMP) ; ALGORITHM sur COMP : le compresseur allumé ou coupé |
 | **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps, chacun sur sa première face, **les envois des pistes** (0.16.39 ; avant, ses potards) ; SELECT parcourt leurs faces (les envois, leurs potards, leurs pas). Revenu d'ailleurs, FX retrouve la face où l'on était |
@@ -1166,19 +1166,28 @@ pistes repartent ensemble au début
 du pattern ; un pattern dure le temps de sa piste la plus longue à sa vitesse (un aller-retour compte ses deux sens).
 Effacer la piste (REC tenu) la remet à x1, en avant, sans CLIMB.
 
-**CLIMB** (0.16.7 : SEQ, la troisième page des pas) : chaque trig monte (ou descend) un peu à chaque fois qu'il joue,
-puis revient à sa note. **CLIMB**, de combien à chaque fois : −12 à +12 demi-tons, ou, la gamme du projet allumée
-(SCALE), autant de ses notes (+1 en do mineur : do, ré, mi♭, fa…) ; 0 : rien. **NOTES**, combien de notes avant de
-revenir (2 à 16 ; +2 sur 3 notes : la note, +2, +4, la note…). **ON**, ce qui fait monter : *Trig*, chaque fois que le
-trig joue (ses ratchets sur sa note du moment) ; *Ratch*, chaque coup de ses ratchets (un roulement qui grimpe, qui
-repart de la note à chaque trig) ; *Both*, chaque coup, d'une lecture à l'autre. **SHAPE** : *Ramp* (jusqu'en haut, puis
-la note), *Bounce* (en haut, puis redescend pas à pas), *Random* (n'importe laquelle de ces notes). Chaque pas compte ses
-propres lectures (le pas 1 monte d'une mesure à l'autre sans rien devoir au pas 5), depuis le PLAY ou le début d'un
-autre pattern. CLIMB se locke pas par pas : une piste à 0 dont un seul pas est locké à +5, et lui seul grimpe ; ENV
-tenu, son aléatoire. Un trig qui ne joue pas (sa PROB) ne compte pas. GLO tenu : NOTES, ON ou SHAPE sur les quatre
-pistes. Les projets d'avant 0.16.7 sont relus sans CLIMB ; ils avaient 384 locks, il y en a eu 380 (les quatre derniers
-ont fait la place de CLIMB : un projet qui les utilisait tous perd les quatre derniers), puis 367 depuis 0.16.23 (treize
-ont fait la place des followers des LFO ; un projet en relit 367 au plus, dans l'ordre).
+**CLIMB** (0.16.7 ; chaque pas les siens depuis 0.16.60 : SEQ, la troisième page des pas) : le trig d'un pas monte
+(ou descend) un peu à chaque fois qu'il joue, jusqu'à sa limite, puis repart de sa note. Chaque pas se règle en le
+tenant (mode STEP, REC) : **CLIMB**, de combien à chaque fois : −12 à +12 demi-tons, ou, la gamme du projet allumée
+(SCALE), autant de ses notes (+1 en do mineur : do, ré, mi♭, fa…) ; 0 : rien. **LIMIT**, jusqu'où, en demi-tons
+au-dessus (ou au-dessous) de sa note : 1 à 36, 12 sans réglage. Tant que le saut suivant reste dans la limite, il
+monte ; au-delà, il reprend depuis la note d'origine (+2 limité à 7 : la note, +2, +4, +6, la note… ; +5 limité à 12 :
+la note, +5, +10, la note… ; un saut plus grand que sa limite ne monte pas). Sans pas tenu, ces deux potards sont gris
+et l'écran le dit (HOLD A STEP) ; pas tenu, il montre son saut, sa limite et ce qui le fait monter : il n'y a plus de
+réglage commun à la piste. **ON** et **SHAPE**, eux, restent ceux de la piste. **ON**, ce qui fait monter : *Trig*,
+chaque fois que le trig joue (ses ratchets sur sa note du moment) ; *Ratch*, chaque coup de ses ratchets (un roulement
+qui grimpe, qui repart de la note à chaque trig) ; *Both*, chaque coup, d'une lecture à l'autre. **SHAPE** : *Ramp*
+(jusqu'en haut, puis la note), *Bounce* (en haut, puis redescend pas à pas), *Random* (n'importe laquelle de ces
+notes). Chaque pas compte ses propres lectures (le pas 1 monte d'une mesure à l'autre sans rien devoir au pas 5),
+depuis le PLAY ou le début d'un autre pattern. Le CLIMB d'un pas est un lock, sa LIMIT aussi (seulement si elle n'est
+pas à 12) ; SEL, le pas tenu, efface ses locks, les deux compris. ENV tenu sur CLIMB : son aléatoire, sur toute la piste
+(un saut tiré à chaque trig, autour de celui du pas). Un trig qui ne joue pas (sa PROB) ne compte pas. GLO tenu : ON
+ou SHAPE sur les quatre pistes. Les projets d'avant 0.16.60 sont relus avec le CLIMB de la piste à 0 (il ne se règle
+plus) ; les pas lockés gardent leur saut, et l'ancien NOTES devient leur limite (+2 sur 4 notes : limite 6, les mêmes
+notes, la gamme éteinte). Ceux d'avant 0.16.7 sont relus sans CLIMB ; ils avaient 384 locks, il y en a eu 380 (les
+quatre derniers ont fait la place de CLIMB : un projet qui les utilisait tous perd les quatre derniers), puis 367
+depuis 0.16.23 (treize ont fait la place des followers des LFO ; un projet en relit 367 au plus, dans l'ordre), puis
+363 depuis 0.16.59 (la cinquième page de PADS).
 
 La deuxième page du son (EDIT,
 SELECT) donne la **GATE** de la note (5 à 95 % du pas, lockable : des notes courtes et longues dans le même pattern),

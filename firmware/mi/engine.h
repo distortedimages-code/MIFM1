@@ -254,7 +254,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 38u              /* (37: 0.16.57's and 0.16.58's: 71 pages, 367 locks, PADS' fourth page as 0.16.57 had
+#define PROJECT_VERSION 39u              /* (38: 0.16.59's, CLIMB the track's and its TIMES: read, the track's CLIMB 0, a
+                                          * step's lock its jump, its LIMIT TIMES - 1 jumps (climb_v39); 37: 0.16.57's and 0.16.58's: 71 pages, 367 locks, PADS' fourth page as 0.16.57 had
                                           * it: read, its fourth and fifth pages made from it (pads_from_v37), its
                                           * locks past 363 out; 33 to 36 the same layout, their changes after;
                                           * 36: 0.16.49's to 0.16.56's: PADS' fourth page (0.16.57) not yet there:
@@ -307,7 +308,8 @@ typedef struct {
     uint8_t endless_opt[ENG_TRACKS][4];  /* (0.16.2) Endless' options (its second face): STRIDE (bits 0..2: 1..7, 0 as
                                           * 1) and REST (bits 3..6: 0 none, 2..8) a byte; HOLES, LEAP (0..100 %);
                                           * then (0.16.7, its spare byte) CLIMB's: TIMES (bits 0..3: 0 as 4, else
-                                          * 1 + them, 2..16), ON (bits 4, 5: CLON_*), SHAPE (bits 6, 7: CLSH_*) */
+                                          * 1 + them, 2..16; 0.16.60: 0, a step's LIMIT instead), ON (bits 4, 5:
+                                          * CLON_*), SHAPE (bits 6, 7: CLSH_*) */
     uint8_t arp_opt[ENG_TRACKS];         /* (0.16.13, in the spare) Endless' ARP: MODE (bits 0, 1: AM_*), OCTAVES (bits
                                           * 2, 3: 1 + them), LATCH (bit 4), ORDER (bit 5: 0 by pitch, 1 as played) */
     uint8_t dice_out;                    /* (0.16.51, in the spare) the tracks the random dose leaves alone: bit t, track
@@ -318,13 +320,19 @@ typedef struct {
 #define PROJECT_SIZE_24 3804u            /* (0.16.0's and 0.16.1's project, version 24) */
 #define PROJECT_SIZE_26 3820u            /* (0.16.2's to 0.16.6's, versions 25, 26) */
 #define PROJECT_SIZE_32 3824u            /* (0.16.7's to 0.16.22's, versions 27 to 32; now's too) */
-enum { CL_TIMES, CL_ON, CL_SHAPE };      /* (0.16.7) CLIMB's options: how many times before the note again (2..16), */
+enum { CL_ON = 1, CL_SHAPE };            /* (0.16.7) CLIMB's options, the track's (0.16.60: TIMES gone: a step's LIMIT) */
 enum { CLON_TRIG, CLON_RATCH, CLON_BOTH, CLON_N };   /* what climbs: each play of the trig, each hit of its ratchets
                                           * (from the trig's note again), both (each hit on from the last) */
 enum { CLSH_RAMP, CLSH_BOUNCE, CLSH_RANDOM, CLSH_N };   /* how: up to the last then the note again, up and back down,
                                           * any of them */
-int eng_climb_opt(int t, int o);         /* TIMES 2..16, ON CLON_*, SHAPE CLSH_* */
+int eng_climb_opt(int t, int o);         /* ON CLON_*, SHAPE CLSH_* */
 void eng_climb_opt_set(project_t *p, int t, int o, int v);
+/* (0.16.60) CLIMB a step's own: its jump the step's lock on CLIMB (the track's 0), its LIMIT a lock of its own: the
+ * semitones it climbs to at most (1..ENG_CLIMB_MAX, 12 without), past them its note again */
+#define ENG_CLIMB_MAX 36
+#define ENG_CLIMB_LIM 12
+int eng_climb_lim(int lane, int step);   /* a step's LIMIT, ENG_CLIMB_LIM without a lock */
+int eng_climb_lim_set(int lane, int step, int v);   /* 0 ok, -1 no room; ENG_CLIMB_LIM: no lock */
 const char *eng_climb_on_name(int v);
 const char *eng_climb_shape_name(int v);
 int eng_climb_now(int t, int step);      /* the transposition that step plays now (its last), 0 none */

@@ -197,7 +197,7 @@ static void pat_name(int slot, char *b)  /* A1 .. K16 */
                                           * second face, RATCH, SPAN, CURVE, then DIRECTION; SPEED on the first, in
                                           * RATCH's place), an effect's (its last) SPEED, DIRECTION, PROB, LENGTH */
 #define VP_ARP2(t) (ENG_NPAGES + 28 + (t))   /* (0.16.2) Endless' second face: STRIDE, REST, HOLES, LEAP */
-#define VP_CLIMB(t) (ENG_NPAGES + 32 + (t))  /* (0.16.7) a track's steps' third face: CLIMB, NOTES, ON, SHAPE */
+#define VP_CLIMB(t) (ENG_NPAGES + 32 + (t))  /* (0.16.7) a track's steps' third face: CLIMB, LIMIT (0.16.60: a held step's), ON, SHAPE */
 #define VP_ARP3(t) (ENG_NPAGES + 36 + (t))   /* (0.16.13) Endless' third face, ARP: MODE, OCTAVES, LATCH, ORDER */
 #define VP_SPREAD (ENG_NPAGES + 40)      /* (0.16.19) the mixer's third face, SPREAD: a knob a track (the Euclidean
                                           * pages' fourth place, PG_SPREAD_PARAM) */
@@ -2276,17 +2276,18 @@ static void panel_steps(int l, int ratch)  /* a lane's steps: how many, how many
     hero_line(y, s);
 }
 
-static void panel_climb(int t)           /* (0.16.7) CLIMB: how far a time (semitones, or the scale's notes), over how
-                                          * many notes, on what */
+static void panel_climb(int t)           /* (0.16.7) CLIMB: how far a time (semitones, or the scale's notes), up to
+                                          * where, on what: (0.16.60) a held step's */
 {
-    project_t *p = eng_project();
     char s[48], v[16], n[8];
-    float c = p->val[PG_EUC(t) * 4 + 2];
+    float c = 0.0f;
     hero_icon(IC_STEPS, track_accent(t));
     int y = hero_title("CLIMB");
     s[0] = 0;
-    if (c > -0.5f && c < 0.5f) {
-        text_cat(s, "OFF|OR LOCKED ON A STEP", sizeof s);
+    if (ui.held_step < 0 || ui.lane != t) {
+        text_cat(s, "HOLD A STEP", sizeof s);
+    } else if (!eng_lock(t, ui.held_step, TP_CLIMB, &c) || (c > -0.5f && c < 0.5f)) {
+        text_cat(s, "OFF|TURN CLIMB", sizeof s);
     } else {
         static const char *const ON[CLON_N] = {"ON TRIGS", "ON HITS", "TRIG+HITS"};
         int i = 0, deg = 0;
@@ -2296,10 +2297,10 @@ static void panel_climb(int t)           /* (0.16.7) CLIMB: how far a time (semi
         deg = v[i] == ' ' && v[i + 1] == 'd';
         v[i] = 0;
         text_cat(s, v, sizeof s);
-        text_cat(s, deg ? " DEG|" : " ST|", sizeof s);
-        int_text(eng_climb_opt(t, CL_TIMES), n);
+        text_cat(s, deg ? " DEG|LIMIT " : " ST|LIMIT ", sizeof s);
+        int_text(eng_climb_lim(t, ui.held_step), n);
         text_cat(s, n, sizeof s);
-        text_cat(s, " NOTES|", sizeof s);
+        text_cat(s, "|", sizeof s);
         text_cat(s, ON[eng_climb_opt(t, CL_ON)], sizeof s);
     }
     hero_line(y, s);
@@ -2545,10 +2546,17 @@ APP_SMALL static void draw_panel(void)
         s[2] = s[2] * 263 + (pt == PT_PLAY ? 1 + (int)p->val[PG_STEP(l) * 4 + 2] : 0);   /* (the ratchets' face) */
         break;
     }
-    case PT_CLIMB:                       /* (CLIMB, its options, the scale: semitones or its notes) */
-        s[2] = (int)(p->val[PG_EUC(tr) * 4 + 2] * 2.0f) + 64 + (int)p->endless_opt[tr][3] * 256 +
+    case PT_CLIMB: {                     /* (a held step's CLIMB and LIMIT, the options, the scale: semitones or its
+                                          * notes) */
+        float c = 0.0f;
+        int st = ui.held_step >= 0 && ui.lane == tr ? ui.held_step : -1;
+        if (st >= 0 && !eng_lock(tr, st, TP_CLIMB, &c))
+            c = 0.0f;
+        s[1] = st + 1 + eng_climb_lim(tr, st) * 128;
+        s[2] = (int)(c * 2.0f) + 64 + (int)p->endless_opt[tr][3] * 256 +
                (eng_quantize(61) != 61 || eng_quantize(66) != 66) * 65536 + (int)p->val[PG_GLOBAL * 4 + 1] * 131072;
         break;
+    }
     case PT_DELAY1: case PT_DELAY2: case PT_DSEND:
         s[2] = (int)p->val[PG_DELAY(0) * 4] | (int)p->val[PG_DELAY(1) * 4 + 1] << 5 |
                (int)(eng_final(PG_DELAY(0) * 4 + 1) * 100.0f) << 6;
@@ -2772,8 +2780,9 @@ static void ring_text(const char *t, uint16_t c, char *under, uint32_t max)
         for (int i = 0; a[i]; i++)
             if (a[i] == ' ')
                 sp = i;
-        if (sp > 0) {
-            text_cat(under, a + sp + 1, max);
+        if (sp > 0) {                    /* (0.16.60: under a lock's LOCK, none) */
+            if (!under[0])
+                text_cat(under, a + sp + 1, max);
             a[sp] = 0;
         }
     }
@@ -2815,6 +2824,8 @@ static int knob_idle(int param)
         return eng_project()->algo[PG_FILT((page - PG_FILT(0, 0)) / 3, 0)] == MF_OFF;
     if (ptype(page) == PT_LANE && k != 3)
         return !eng_lane_has_trigs(eng_page_lane(page));
+    if (page >= PG_EUC(0) && page < PG_EUC(ENG_TRACKS) && k == 2)   /* (0.16.60) CLIMB: a held step's alone */
+        return 1;
     return 0;
 }
 
@@ -2906,16 +2917,23 @@ static int byte_value(int page, int k, int *n, char *txt, uint32_t max, const ch
         label_text(k == 0 ? eng_arp_mode_name(o) : k == 2 ? (o ? "On" : "Off") : (o ? "Played" : "Pitch"), txt, max);
         return o;
     }
-    if (ptype(page) == PT_CLIMB) {       /* (0.16.7) CLIMB's options: NOTES (2..16), ON, SHAPE */
-        int t = ptrack(page), o = eng_climb_opt(t, k - 1);
+    if (ptype(page) == PT_CLIMB) {       /* (0.16.7) CLIMB's options: ON, SHAPE; (0.16.60) a held step's LIMIT */
+        int t = ptrack(page), o;
         char d[8];
         if (k == 1) {
-            *n = 15;
+            *n = 0;
+            *name = "Limit";
+            if (ui.held_step < 0 || t != ui.lane) {
+                text_cat(txt, "Step", max);
+                return 0;
+            }
+            o = eng_climb_lim(t, ui.held_step);
             int_text(o, d);
             text_cat(txt, d, max);
-            *name = "Notes";
-            return o - 2;
+            text_cat(txt, " semitones", max);
+            return o * 100 / ENG_CLIMB_MAX;
         }
+        o = eng_climb_opt(t, k - 1);
         *n = k == 2 ? CLON_N : CLSH_N;
         label_text(k == 2 ? eng_climb_on_name(o) : eng_climb_shape_name(o), txt, max);
         *name = k == 2 ? "On" : "Shape";
@@ -3102,10 +3120,18 @@ static void play_turn(int k, int32_t e)  /* a byte knob turned (byte_knob): the 
         for (int m = 0; m < ENG_TRACKS; m++)
             if (m == t || held(B_GLO))
                 eng_arp_opt_set(p, m, k, v);
+    } else if (ptype(ui.page) == PT_CLIMB && k == 1) {   /* (0.16.60) a held step's LIMIT, a semitone each */
+        int t = ptrack(ui.page);
+        if (ui.held_step < 0 || t != ui.lane) {
+            app_say("LIMIT:", ui.held_step < 0 ? "HOLD A STEP" : "THIS LANE'S STEPS");
+            return;
+        }
+        if (eng_climb_lim_set(t, ui.held_step, clamp(eng_climb_lim(t, ui.held_step) + d, 1, ENG_CLIMB_MAX)) != 0)
+            app_say("LOCKS", "ALL USED");
+        ui.step_edit = 1;
     } else if (ptype(ui.page) == PT_CLIMB) {   /* (0.16.7) CLIMB's options: a step each, the track's (GLO held: the
                                           * four's) */
-        int t = ptrack(ui.page), o = k - 1, v = eng_climb_opt(t, o) + d;
-        v = o == CL_TIMES ? clamp(v, 2, 16) : clamp(v, 0, (o == CL_ON ? CLON_N : CLSH_N) - 1);
+        int t = ptrack(ui.page), o = k - 1, v = clamp(eng_climb_opt(t, o) + d, 0, (o == CL_ON ? CLON_N : CLSH_N) - 1);
         for (int m = 0; m < ENG_TRACKS; m++)
             if (m == t || held(B_GLO))
                 eng_climb_opt_set(p, m, o, v);
@@ -6376,6 +6402,8 @@ static void input(void)
             edit_rnd(param, e);
         } else if (ui.held_step >= 0) {
             edit_lock(param, e);
+        } else if (ptype(ui.page) == PT_CLIMB && h == SRC_NONE) {   /* (0.16.60) CLIMB: a step's alone */
+            app_say("CLIMB:", "HOLD A STEP");
         } else if (h != SRC_NONE) {      /* an LFO's key held: its cable, deeper (or upside down) */
             cable_turn(h, param, e);
         } else if (!held(B_GLO) || !edit_all(param, e)) {
