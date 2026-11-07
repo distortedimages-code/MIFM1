@@ -20,7 +20,7 @@ concurrency:                     # a newer push of the same branch replaces a ru
   group: firmware-${{ github.ref }}
   cancel-in-progress: true
 env:
-  VERSION: "0.16.55"
+  VERSION: "0.16.56"
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -117,6 +117,7 @@ jobs:
           python3 tools/make_rfm1.py --release "$VERSION" > rfm1.log 2>&1 || { tail -40 rfm1.log; exit 1; }
           grep "^rfm1 " rfm1.log
           node base/tests/rfm1_test.mjs firmware/build/rfm1/mifm1-"$VERSION".rfm1
+          node tools/rfm1_check.mjs firmware/build/rfm1/mifm1-"$VERSION".rfm1
           cp firmware/build/rfm1/mifm1-"$VERSION".rfm1 site/firmware/
       - uses: actions/upload-artifact@v4
         with:

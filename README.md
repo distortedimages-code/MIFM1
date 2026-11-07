@@ -245,6 +245,13 @@ fm1-base, au format `.rfm1` de RemoteFM1 : sa version 1, l'ABI 6), comme l'émul
 commit de sa source et porte les licences de tout ce qu'il contient (MIFM1, Mutable Instruments, le LXR-02,
 fm1-base, wasi-libc, Zig). Comme dans le navigateur : pas de radio, pas d'hôte USB.
 
+**0.16.56** : la 0.16.55 ne se chargeait pas dans RemoteFM1 (« rfm1_alloc(17440) failed », constaté sur iPad). Le
+format fixe la mémoire du module (8 Mo, sans agrandissement), et le malloc de wasi-libc (celui de Zig) n'en prend
+jamais que par agrandissement : chaque allocation rendait 0 (le test de fm1-base ne regarde pas ce qu'elle rend).
+`tools/web/heap.c` donne au module un malloc sur la mémoire après les données et la pile (~4,8 Mo), comme celui
+d'Emscripten ; `tools/rfm1_check.mjs` (dans `make rfm1` et la CI) vérifie les blocs que l'app demande (17 440 octets,
+1 Mo), puis un démarrage avec eux.
+
 **Ce qu'il coûte** : rien au FM-1 ; tout à l'iPhone. iOS interdit de compiler le code à la volée : RemoteFM1 le fait
 tourner dans un interpréteur (wasm3). Mesuré avec le wasm3 même de l'app, sur un serveur (un cœur Xeon à 2,1 GHz) : la
 démo jouée prend **~25 % du temps audio** en moyenne (23 à 27 % selon les passes ; 99 % des blocs de 2,9 ms sous

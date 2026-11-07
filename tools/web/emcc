@@ -8,9 +8,11 @@ the WASI imports it asks for, so the result runs there as Emscripten's -sSTANDAL
   make web   (from the repository: base/tools/build.py ../firmware --web, this directory first in PATH)
 
 What it translates: -sSTACK_SIZE (the linker's stack), -sINITIAL_MEMORY, -sALLOW_MEMORY_GROWTH=0 (the memory's maximum
-its initial size: an .rfm1's fixed memory, build.py --rfm1), --no-entry (a reactor: _initialize), and the exports:
-every function its sources mark __attribute__((used, visibility("default"))) (EMSCRIPTEN_KEEPALIVE's spelling;
-export_name(...) exports itself). Other -s settings have no meaning here and are dropped."""
+its initial size: an .rfm1's fixed memory, build.py --rfm1; and malloc on the memory after the data and the stack,
+tools/web/heap.c, as Emscripten's: wasi-libc's grows the memory for its every byte), --no-entry (a reactor:
+_initialize), and the exports: every function its sources mark __attribute__((used, visibility("default")))
+(EMSCRIPTEN_KEEPALIVE's spelling; export_name(...) exports itself). Other -s settings have no meaning here and are
+dropped."""
 import os, re, subprocess, sys
 
 args = sys.argv[1:]
@@ -70,5 +72,6 @@ if link:
     ldflags += ["-lwasi-emulated-signal", "-Wl,--strip-debug"]
     if fixed and initial:
         ldflags.append(f"-Wl,--max-memory={initial}")
+        rest.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "heap.c"))
 r = subprocess.run(cmd + rest + (ldflags if link else []))
 sys.exit(r.returncode)

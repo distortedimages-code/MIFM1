@@ -95,6 +95,7 @@ host: base-patch
 rfm1: base-patch
 	python3 tools/make_rfm1.py
 	node $(BASE)/tests/rfm1_test.mjs $$(ls -t firmware/build/rfm1/mifm1-*.rfm1 | head -1)
+	node tools/rfm1_check.mjs $$(ls -t firmware/build/rfm1/mifm1-*.rfm1 | head -1)
 
 clean:
 	rm -rf $(OUT) firmware/build
