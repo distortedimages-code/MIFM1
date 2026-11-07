@@ -161,7 +161,7 @@ const eng_pdef_t kPages[NPT][4] = {
 };
 const char* const kBusModes[2] = {"OFF", "COMP"};   // (0.16.43: OTT gone; a project's OTT read as COMP)
 const char* const kDelayAlgos[2] = {"SYNC", "FREE"};
-const eng_pdef_t kDelayFreeTime = {"Time", K_UNI, 0, 0, 0};   // the delay's TIME when FREE: 1 ms..1.2 s
+const eng_pdef_t kDelayFreeTime = {"Time", K_UNI, 0, 0, 0};   // the delay's TIME when FREE: 1 ms..1.13 s
 const char* const kReverbAlgos[RV_ALGOS] = {"CLOUDS", "METAL", "SHIMMER"};
 const eng_pdef_t kMetalKnobs[3] = {{"Decay", K_UNI, 0, 0, 0}, {"Size", K_UNI, 0, 0, 0}, {"Tone", K_UNI, 0, 0, 0}};
 
@@ -282,7 +282,9 @@ MI_COLD float fol_att(float v) { return 0.0005f * fm_exp2f(v * 10.966f); }
 MI_COLD float fol_dec(float v) { return 0.005f * fm_exp2f(v * 9.966f); }
 MI_COLD float fol_db(float v) { return -60.0f + 60.0f * v; }
 MI_COLD float fol_hz(float v) { return v < 0.0f ? 18000.0f * fm_exp2f(v * 7.492f) : 20.0f * fm_exp2f(v * 7.966f); }
-float delay_ms(float v) { return fm_exp2f(v * 10.228819f); }                // the delay's FREE time: 1..1200 ms
+const float kDelayLog2 = 10.142107f;   // log2(1130): the delay's FREE time at its end, 1130 ms (0.16.53, 1200 before:
+                                       // its line 6 KB shorter, for the screen's mirror; mi_delay.cc)
+float delay_ms(float v) { return fm_exp2f(v * kDelayLog2); }                 // the delay's FREE time: 1..1130 ms
 float gate_frac(float v) { return 0.05f + 0.9f * v; }                         // LENGTH: 5..95 % of the sixteenth
 float lane_tau(float v) { return 0.01f * fm_exp2f(v * 9.0f); }                // an effect lane's DECAY: 10 ms..5.1 s
 float duck_tau(float v) { return 0.02f * fm_exp2f(v * 7.0f); }                // the duck's DECAY: 20 ms..2.6 s
@@ -305,11 +307,12 @@ float src[NSRC];
 #ifndef ENG_ARENA_BYTES
 #if UINTPTR_MAX > 0xFFFFFFFFu           /* a computer's 64-bit pointers: a little more */
 #define ENG_ARENA_BYTES (292u * 1024u)
-#else                                   /* the FM-1: 4 Plaits 74 KB (0.16.1: the eight engines MIFM1 plays, 100 KB
-                                         * before), the reverb 32 (16-bit words), the delay 103, Warps 8, the
-                                         * glitch's slices 32 (251.5 KB, 8.5 left; 32-bit sizes, tools/device_check.sh's
-                                         * objects: mp_size and the others) */
-#define ENG_ARENA_BYTES (260u * 1024u)
+#else                                   /* the FM-1: 4 Plaits 72.3 KB (0.16.1: the eight engines MIFM1 plays, 100 KB
+                                         * before), the reverb 32.8 (16-bit words), the delay 97.4 (0.16.53: 6 KB
+                                         * less, 1.13 s, for the screen's mirror; 260 KB the arena before), Warps 8.3,
+                                         * the glitch's slices 32 (242.9 KB, 11.1 left; 32-bit sizes,
+                                         * tools/device_check.sh's objects: mp_size and the others) */
+#define ENG_ARENA_BYTES (254u * 1024u)
 #endif
 #endif
 uint8_t arena[ENG_ARENA_BYTES] __attribute__((aligned(8))) PLAT_POOL;
@@ -5432,7 +5435,7 @@ MI_COLD void eng_delay_mode(int mode) {
   if (mode == DL_FREE) {
     int d = iround(v);
     float ms = sl_ms * kDivMult[d < 0 ? 0 : d >= kDivs ? kDivs - 1 : d];
-    v = clampf(fm_log2f(ms > 1.0f ? ms : 1.0f) / 10.228819f, 0.0f, 1.0f);
+    v = clampf(fm_log2f(ms > 1.0f ? ms : 1.0f) / kDelayLog2, 0.0f, 1.0f);
   } else {
     float ms = delay_ms(v), best = 1e30f;
     int pick = 0;

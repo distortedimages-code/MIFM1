@@ -1,0 +1,286 @@
+MIFM1's changes to fm1-base (base/), applied by tools/patch_base.sh before a build.
+(0.16.53) The screen mirror (device/mirror.c, fm1.toml mirror = true) for a UI drawn in tiles, not only in full rows:
+fm1-base's kept a row's segments (30 px) only for blits the screen's whole width, and took a row for right again
+only when one came whole; MIFM1 draws its knobs in 60-pixel tiles, so their rows stayed wrong for good, the UI was
+asked to draw everything again 20 times a second, and each time the ring was full before the last knobs and the
+footer: the viewer never had them. Now each segment of each row is known or not, wrong or not (mr.kn, mr.dt: a byte a
+row, 480 B for the 64 of the two bitmaps): a blit on the segments' bounds (x and w multiples of 30) is compared and
+sent segment by segment as a full row was; another one sent whole, the segments it covers whole known and right after
+it, the ones it covers in part unknown; a part dropped makes the segments it touches wrong. And plat_mirroring()
+(0: no host; else 1 + the room in the ring, only 1 while a dropped part waits): what moves on its own (MIFM1's LFO
+scope) drawn when there is room, after the rest. The protocol and the viewers unchanged.
+Checked: fm1-base's tests/mirror_test.c (its internals' names changed): the same checks pass as before (its session's
+check fails here before as after, with this fm1-base), and MIFM1's firmware/tests/mirror.txt with
+tools/mirror_check.py (make mirror-check): each session's screen whole at the viewer, every pixel.
+
+diff --git a/device/mirror.c b/device/mirror.c
+index 035780b..72e834c 100644
+--- a/device/mirror.c
++++ b/device/mirror.c
+@@ -83,6 +83,7 @@
+ #define MR_HASH(c) ((((uint32_t)(c)) * 40503u) >> 10 & 63u)
+ #define MR_SEGW 30u                                   /* a row's segments: only the changed ones are sent */
+ #define MR_NSEG (MR_W / MR_SEGW)
++_Static_assert(MR_NSEG <= 8u, "a row's segments in a byte (mr.kn, mr.dt)");
+ #define MR_MROWS 32u                                  /* rows a rect frame takes at most */
+ #define MR_NIN 21u
+ 
+@@ -98,8 +99,9 @@ static struct {
+     uint8_t seq, ask_redraw;
+     int link;
+     uint32_t heard, redraw_t, input_t;
+-    uint32_t known[(MR_H + 31u) / 32u];               /* the viewer's row r: its segments' hashes are mr_seg[r] */
+-    uint32_t dirty[(MR_H + 31u) / 32u];               /* the viewer's row r is wrong somewhere (dropped) */
++    uint8_t kn[MR_H];                                 /* (MIFM1) row r's segments the viewer has as mr_seg[r] says
++                                                       * (bit i: segment i) */
++    uint8_t dt[MR_H];                                 /* (MIFM1) row r's segments wrong at the viewer (dropped) */
+     int16_t enc[7];                                   /* detents not reported yet (EN_*) */
+     uint16_t lit_b;
+     uint32_t lit_k;
+@@ -122,13 +124,16 @@ static uint32_t mr_mh[MR_MROWS][MR_NSEG];             /* the frame being coded:
+ static uint8_t mr_msg[6 + 5 + MR_CAP + MR_ROWMAX + 1] PLAT_POOL;
+ static uint8_t mr_wire[2 + (sizeof mr_msg * 8u + 6u) / 7u] PLAT_POOL;
+ 
+-static int mr_bit(const uint32_t *m, uint32_t r) { return (int)(m[r >> 5] >> (r & 31u) & 1u); }
+-static void mr_set(uint32_t *m, uint32_t r, int on)
++/* (MIFM1) the segments a span of columns x .. x+w-1 touches (w >= 1), as a row's mask; those it covers whole */
++static uint32_t mr_touch(uint32_t x, uint32_t w)
+ {
+-    if (on)
+-        m[r >> 5] |= 1u << (r & 31u);
+-    else
+-        m[r >> 5] &= ~(1u << (r & 31u));
++    uint32_t a = x / MR_SEGW, b = (x + w - 1u) / MR_SEGW;
++    return (2u << b) - (1u << a);
++}
++static uint32_t mr_cover(uint32_t x, uint32_t w)
++{
++    uint32_t a = (x + MR_SEGW - 1u) / MR_SEGW, b = (x + w) / MR_SEGW;   /* segments a .. b-1 */
++    return b > a ? (1u << b) - (1u << a) : 0u;
+ }
+ 
+ static uint32_t mr_pack7(const uint8_t *in, uint32_t n, uint8_t *out)   /* 8-to-7, LSB first (ota.c's) */
+@@ -210,11 +215,13 @@ static void mr_code_row(const uint16_t *px, uint32_t w)
+     }
+ }
+ 
+-static void mr_rows_dirty(uint32_t y, uint32_t h)
++/* (MIFM1) rows y .. y+h-1, columns x .. x+w-1 lost on the way: their segments wrong at the viewer, and unknown */
++static void mr_rows_dirty(uint32_t y, uint32_t h, uint32_t x, uint32_t w)
+ {
++    uint32_t m = mr_touch(x, w);
+     for (uint32_t r = y; r < y + h && r < MR_H; r++) {
+-        mr_set(mr.dirty, r, 1);
+-        mr_set(mr.known, r, 0);
++        mr.dt[r] = (uint8_t)(mr.dt[r] | m);
++        mr.kn[r] = (uint8_t)(mr.kn[r] & ~m);
+     }
+ }
+ 
+@@ -230,17 +237,20 @@ static int mr_send(uint32_t w)
+     return 1;
+ }
+ 
+-/* row r (y + r) of a blit: its segments' hashes into sh, the changed ones' span s0..s1 (segments); 0: unchanged */
+-static int mr_span(const uint16_t *row, uint32_t yr, int full, uint32_t *sh, uint32_t *s0, uint32_t *s1)
++/* row yr of a blit (its pixels from column x, w of them): its segments' hashes into sh, the changed ones' span
++ * s0..s1 (segments); 0: unchanged. (MIFM1) Any blit on the segments' bounds (x and w multiples of MR_SEGW: MIFM1's
++ * knobs, 60 px each), not only a full row: its segments compared one by one */
++static int mr_span(const uint16_t *row, uint32_t yr, uint32_t x, uint32_t w, int al, uint32_t *sh, uint32_t *s0,
++                   uint32_t *s1)
+ {
+-    uint32_t i, known = full && mr_bit(mr.known, yr);
++    uint32_t i;
+     *s0 = MR_NSEG;
+     *s1 = 0;
+-    if (!full)
+-        return 1;                                     /* (a part of rows: sent whole, its rows then unknown) */
+-    for (i = 0; i < MR_NSEG; i++) {
+-        sh[i] = mr_hash(row + i * MR_SEGW, MR_SEGW);
+-        if (!known || sh[i] != mr_seg[yr][i]) {
++    if (!al)
++        return 1;                                     /* (off the bounds: sent whole) */
++    for (i = x / MR_SEGW; i < (x + w) / MR_SEGW; i++) {
++        sh[i] = mr_hash(row + i * MR_SEGW - x, MR_SEGW);
++        if (!(mr.kn[yr] >> i & 1u) || sh[i] != mr_seg[yr][i]) {
+             if (*s0 == MR_NSEG)
+                 *s0 = i;
+             *s1 = i;
+@@ -249,12 +259,35 @@ static int mr_span(const uint16_t *row, uint32_t yr, int full, uint32_t *sh, uin
+     return *s0 < MR_NSEG;
+ }
+ 
+-/* lcd_blit's copy: rows y .. y+h-1 of w pixels from x (the panel's byte order). Full-width rows: only the segments
+- * that changed since the viewer had them (a frame: rows whose changes fall in the same span) */
++/* (MIFM1) a blit sent: row yr of it (its pixels from column x, w of them) as the viewer has it now. On the
++ * segments' bounds, segments s0..s1 with the hashes sh; else the segments it covers whole hashed here, the ones it
++ * covers in part unknown (wrong or not as they were) */
++static void mr_sent(uint32_t yr, const uint16_t *row, uint32_t x, uint32_t w, int al, const uint32_t *sh, uint32_t s0,
++                    uint32_t s1)
++{
++    uint32_t i, m = 0;
++    if (al) {
++        for (i = s0; i <= s1; i++)
++            mr_seg[yr][i] = sh[i];
++        m = (2u << s1) - (1u << s0);
++    } else {
++        m = mr_cover(x, w);
++        for (i = 0; i < MR_NSEG; i++)
++            if (m >> i & 1u)
++                mr_seg[yr][i] = mr_hash(row + i * MR_SEGW - x, MR_SEGW);
++        mr.kn[yr] = (uint8_t)(mr.kn[yr] & ~(mr_touch(x, w) & ~m));
++    }
++    mr.kn[yr] = (uint8_t)(mr.kn[yr] | m);
++    mr.dt[yr] = (uint8_t)(mr.dt[yr] & ~m);
++}
++
++/* lcd_blit's copy: rows y .. y+h-1 of w pixels from x (the panel's byte order). Rows on the segments' bounds (a full
++ * row; (MIFM1) any blit whose x and w are multiples of MR_SEGW): only the segments that changed since the viewer had
++ * them (a frame: rows whose changes fall in the same span) */
+ static void mirror_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px)
+ {
+     uint32_t r = 0, sh[MR_NSEG], s0, s1, have = 0, ch = 0;
+-    int full = x == 0 && w == MR_W, drop = 0;
++    int al = x % MR_SEGW == 0u && w % MR_SEGW == 0u, drop = 0;
+     if (!w || !h || x >= MR_W || y >= MR_H || w > MR_W)
+         return;
+     if (y + h > MR_H)
+@@ -263,12 +296,12 @@ static void mirror_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const ui
+     while (r < h) {
+         uint32_t r0, rows = 0, m0, m1, fx, fw;
+         if (!have) {
+-            ch = (uint32_t)mr_span(px + r * w, y + r, full, sh, &s0, &s1);
++            ch = (uint32_t)mr_span(px + r * w, y + r, x, w, al, sh, &s0, &s1);
+             have = 1;
+         }
+         if (!ch || drop) {                            /* the viewer has it; or the ring is full: dirty */
+             if (ch)
+-                mr_rows_dirty(y + r, 1);
++                mr_rows_dirty(y + r, 1, al ? s0 * MR_SEGW : x, al ? (s1 + 1u - s0) * MR_SEGW : w);
+             else
+                 mr.skipped++;
+             r++;
+@@ -278,20 +311,20 @@ static void mirror_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const ui
+         r0 = r;
+         m0 = s0;
+         m1 = s1;
+-        fx = full ? m0 * MR_SEGW : x;
+-        fw = full ? (m1 + 1u - m0) * MR_SEGW : w;
++        fx = al ? m0 * MR_SEGW : x;
++        fw = al ? (m1 + 1u - m0) * MR_SEGW : w;
+         mr.pos = 11;                                  /* x y w h seq, then the code */
+         mr.cur = 0;
+         memset(mr.cache, 0, sizeof mr.cache);
+         while (r < h && rows < MR_MROWS) {
+             uint32_t at = mr.pos;
+             if (!have) {
+-                ch = (uint32_t)mr_span(px + r * w, y + r, full, sh, &s0, &s1);
++                ch = (uint32_t)mr_span(px + r * w, y + r, x, w, al, sh, &s0, &s1);
+                 have = 1;
+             }
+-            if (rows && (!ch || (full && (s0 < m0 || s1 > m1))))
++            if (rows && (!ch || (al && (s0 < m0 || s1 > m1))))
+                 break;                                /* unchanged, or changed elsewhere: the next frame's */
+-            mr_code_row(px + r * w + (full ? fx : 0u), fw);
++            mr_code_row(px + r * w + (al ? fx - x : 0u), fw);
+             if (rows && mr.pos - 11u > MR_CAP) {
+                 mr.pos = at;                          /* (it starts the next frame) */
+                 break;
+@@ -309,19 +342,11 @@ static void mirror_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const ui
+         if (mr_send(mr_seal(MR_RECT, mr.pos - 6u))) {
+             mr.rects++;
+             mr.rows += rows;
+-            for (uint32_t k = 0; k < rows; k++) {
+-                uint32_t yr = y + r0 + k;
+-                if (full) {                           /* (an unknown row's span is all of it) */
+-                    for (uint32_t i = m0; i <= m1; i++)
+-                        mr_seg[yr][i] = mr_mh[k][i];
+-                    mr_set(mr.known, yr, 1);
+-                    mr_set(mr.dirty, yr, 0);
+-                } else
+-                    mr_set(mr.known, yr, 0);
+-            }
++            for (uint32_t k = 0; k < rows; k++)       /* (an unknown segment is in the span) */
++                mr_sent(y + r0 + k, px + (r0 + k) * w, x, w, al, mr_mh[k], m0, m1);
+         } else {
+             mr.drops++;
+-            mr_rows_dirty(y + r0, rows);
++            mr_rows_dirty(y + r0, rows, fx, fw);
+             drop = 1;
+         }
+     }
+@@ -330,7 +355,7 @@ static void mirror_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const ui
+ /* lcd_fill's copy (clipped already) */
+ static void mirror_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c)
+ {
+-    uint32_t r, i, hs = 2166136261u, sw = (uint16_t)(c >> 8 | c << 8), full = x == 0 && w == MR_W;
++    uint32_t r, i, hs = 2166136261u, sw = (uint16_t)(c >> 8 | c << 8), m;
+     if (!w || !h || x >= MR_W || y >= MR_H)
+         return;
+     mr_msg[6] = (uint8_t)x;
+@@ -342,18 +367,19 @@ static void mirror_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t
+     mr_msg[12] = (uint8_t)c;
+     if (!mr_send(mr_seal(MR_FILL, 7))) {
+         mr.drops++;
+-        mr_rows_dirty(y, h);
++        mr_rows_dirty(y, h, x, w);
+         return;
+     }
+     for (i = 0; i < MR_SEGW; i++)
+         hs = (hs ^ sw) * 16777619u;
++    m = mr_cover(x, w);                               /* (MIFM1) the segments it covers whole: known, right; the ones
++                                                       * it covers in part unknown */
+     for (r = y; r < y + h && r < MR_H; r++) {
+-        mr_set(mr.known, r, (int)full);
+-        if (full) {
+-            for (i = 0; i < MR_NSEG; i++)
++        for (i = 0; i < MR_NSEG; i++)
++            if (m >> i & 1u)
+                 mr_seg[r][i] = hs;
+-            mr_set(mr.dirty, r, 0);
+-        }
++        mr.kn[r] = (uint8_t)((mr.kn[r] & ~mr_touch(x, w)) | m);
++        mr.dt[r] = (uint8_t)(mr.dt[r] & ~m);
+     }
+ }
+ 
+@@ -382,7 +408,7 @@ static void mr_hello(void)
+ 
+ static void mr_all_dirty(void)
+ {
+-    mr_rows_dirty(0, MR_H);
++    mr_rows_dirty(0, MR_H, 0, MR_W);
+     mr.ask_redraw = 1;
+     mr.redraw_t = plat_ms() - MR_REDRAW_MS;
+ }
+@@ -417,6 +443,19 @@ static int32_t mirror_in_enc(int role)
+ }
+ static uint32_t mirror_in_master(uint32_t pot) { return mirror_on && mr_in.master ? mr_in.master - 1u : pot; }
+ 
++/* (MIFM1) a host mirrors the screen now: 0 no; else 1 + the bytes free in the ring for the screen's frames, only 1
++ * while a part dropped waits to be drawn again (it goes first). An app draws what moves on its own (an LFO's scope: at
++ * 50 frames a second, the link's ~48 kB/s alone) when there is room, after the rest */
++uint32_t plat_mirroring(void)
++{
++    uint32_t i, any = 0;
++    if (!mirror_on)
++        return 0u;
++    for (i = 0; i < MR_H; i++)
++        any |= mr.dt[i];
++    return any || mr_busy() ? 1u : 1u + mr_free();
++}
++
+ /* a remote request (cmd 0x54, its 5 bytes): done, answered */
+ static void mirror_remote(const uint8_t *b)
+ {
+@@ -496,8 +535,8 @@ static void mirror_step(void)
+     if (mr_busy())
+         return;
+     any = 0;                                          /* rows dirty: the UI draws again once the ring has room */
+-    for (i = 0; i < sizeof mr.dirty / 4u; i++)
+-        any |= mr.dirty[i];
++    for (i = 0; i < MR_H; i++)
++        any |= mr.dt[i];
+     if ((any || mr.ask_redraw) && now - mr.redraw_t >= MR_REDRAW_MS && mr_free() >= MR_REDRAW_ROOM) {
+         mr.ask_redraw = 0;
+         mr.redraw_t = now;

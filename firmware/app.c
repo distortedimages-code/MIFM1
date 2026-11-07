@@ -63,6 +63,12 @@
  * program flash, for a few microseconds a frame */
 #define APP_SMALL __attribute__((minsize))
 #include "mi/bridge.h"                   /* (the filters' models and types: MF_*) */
+#if FM1B_MIRROR
+uint32_t plat_mirroring(void);           /* (0.16.53) a host mirrors the screen now: 0 no, else 1 + the room in its ring
+                                          * (1: a part dropped waits); patches/fm1-base-mirror-tiles.patch */
+#else
+static uint32_t plat_mirroring(void) { return 0; }
+#endif
 
 const void *mi_res_where(void);          /* mi/res_symbols.cc: where the moved tables are (FM-1: the region) */
 #ifdef PLAT_HOST
@@ -804,6 +810,7 @@ void app_backup_restored(void)
     project_load();
     ui.full = 1;
 }
+void app_redraw(void) { ui.full = 1; }   /* (0.16.53) the mirror lost a part: everything again at the next frame */
 
 /* ---------------------------------------------------------------- audio --- */
 static float eng_l[APP_BLOCK], eng_r[APP_BLOCK];
@@ -1702,36 +1709,72 @@ APP_SMALL static void panel_lfo(int i)
     hero_line(48, s);
 }
 
-#define SCOPE_W 148                      /* the LFO's scope, right of its ring */
+/* the LFO's scope, right of its ring. (0.16.53) Its box on the screen mirror's 30-pixel segments (90 to 240: its trace
+ * 142 px, then the panel's margin), and drawn in the panel's band too: a mirrored screen's viewer has it as the device
+ * draws it, its updates only the segments that moved, the band drawn again the same (fm1-base's device/mirror.c, as
+ * patches/fm1-base-mirror-tiles.patch has it) */
+#define SCOPE_X 90
+#define SCOPE_W 150
+#define SCOPE_TW 142                     /* (the trace's width: 148 before, from x 84) */
 #define SCOPE_H 42
-static void lfo_scope(int force)         /* the LFO these 1.4 s (eng_hist), the newest at the right */
+/* (0.16.53) while the screen is mirrored: 15 frames a second at most, and only with 3 KB free in the mirror's ring (of
+ * its 4; what it waits for to ask for a dropped part again): a frame of it is ~2.3 KB, and 50 a second took the USB link's
+ * ~48 kB/s from everything else. On its own the FM-1 draws it as ever */
+#define SCOPE_MIRROR_MS 66u
+#define SCOPE_MIRROR_ROOM 3072u
+static int scope_h[ENG_HIST], scope_i = -1;   /* what the scope shows now: the LFO's history, which LFO */
+static int32_t scope_key;
+static uint32_t scope_at;
+static void scope_paint(int ox, int oy)  /* into the canvas, its box's corner at (ox, oy): the newest at the right */
 {
-    static int32_t shown;
-    int i = lfo_of(ui.page), h[ENG_HIST];
-    int32_t key = i + 1;
-    for (int j = 0; j < ENG_HIST; j++) {
-        h[j] = eng_hist(SRC_L1 + i, j);
-        key = key * 31 + h[j];
-    }
-    if (!force && key == shown)
-        return;
-    shown = key;
-    uint16_t ac = accent3(i), glow = tint(ac, BG, 2);
+    uint16_t ac = accent3(scope_i), glow = tint(ac, BG, 2);
     float px = 0.0f, py = 0.0f;
-    cv_begin(SCOPE_W, SCOPE_H, BG);
-    for (int x = 0; x < SCOPE_W - 4; x += 4)   /* 0, dotted */
-        cv_rect(x, SCOPE_H / 2, 2, 1, RULE);
+    for (int x = 0; x < SCOPE_TW - 4; x += 4)   /* 0, dotted */
+        cv_rect(ox + x, oy + SCOPE_H / 2, 2, 1, RULE);
     for (int pass = 0; pass < 2; pass++)
         for (int j = 0; j < ENG_HIST; j++) {
-            float x = 2.0f + (float)j * (float)(SCOPE_W - 8) / (float)(ENG_HIST - 1);
-            float y = (float)(SCOPE_H / 2) - (float)h[j] * (float)(SCOPE_H / 2 - 4) / 127.0f;
+            float x = (float)ox + 2.0f + (float)j * (float)(SCOPE_TW - 8) / (float)(ENG_HIST - 1);
+            float y = (float)(oy + SCOPE_H / 2) - (float)scope_h[j] * (float)(SCOPE_H / 2 - 4) / 127.0f;
             if (j)
                 seg(px, py, x, y, pass ? 2.0f : 5.0f, pass ? ac : glow);
             px = x;
             py = y;
         }
     lit_disc(px, py, 3.0f, HI);           /* now */
-    blit(84, PANEL_Y + 2);
+}
+/* the LFO these 1.4 s (eng_hist) into scope_h: 1 if it moved (or it is another LFO) */
+static int scope_read(int i)
+{
+    int32_t key = i + 1;
+    for (int j = 0; j < ENG_HIST; j++) {
+        scope_h[j] = eng_hist(SRC_L1 + i, j);
+        key = key * 31 + scope_h[j];
+    }
+    if (i == scope_i && key == scope_key)
+        return 0;
+    scope_i = i;
+    scope_key = key;
+    scope_at = plat_ms();
+    return 1;
+}
+/* the panel's band: the scope as it was last shown (the same LFO's; another one read), so a band drawn again is the
+ * same where the scope is, and a mirror's viewer that has it is sent nothing there */
+static void scope_in_panel(int i)
+{
+    if (i != scope_i)
+        scope_read(i);
+    scope_paint(SCOPE_X, 2);
+}
+static void lfo_scope(void)              /* the scope alone, when the LFO moved (the panel draws it with the rest) */
+{
+    uint32_t mr = plat_mirroring();
+    if (mr && (plat_ms() - scope_at < SCOPE_MIRROR_MS || mr - 1u < SCOPE_MIRROR_ROOM))
+        return;
+    if (!scope_read(lfo_of(ui.page)))
+        return;
+    cv_begin(SCOPE_W, SCOPE_H, BG);
+    scope_paint(0, 0);
+    blit(SCOPE_X, PANEL_Y + 2);
 }
 
 static int meter_lit(int t) { return (int)(fm_clampf(eng_meter(t) * 1.25f, 0.0f, 1.0f) * 7.0f + 0.5f); }
@@ -2555,7 +2598,7 @@ APP_SMALL static void draw_panel(void)
         if (fx)
             fx_meter(0);
         if (pt == PT_LFO || pt == PT_FOLLOW)
-            lfo_scope(0);
+            lfo_scope();
         return;
     }
     memcpy(ui.panel_shown, s, sizeof s);
@@ -2567,7 +2610,10 @@ APP_SMALL static void draw_panel(void)
         break;
     case PT_SON2: panel_plaits(tr, 2, page_accent(ui.page)); break;
     case PT_ENV2: panel_env2(tr, page_accent(ui.page)); break;
-    case PT_LFO: case PT_FOLLOW: panel_lfo(lfo_of(ui.page)); break;
+    case PT_LFO: case PT_FOLLOW:
+        panel_lfo(lfo_of(ui.page));
+        scope_in_panel(lfo_of(ui.page)); /* (0.16.53: in the band, not over it) */
+        break;
     case PT_MIX: case PT_PAN: panel_mixer(pt == PT_PAN); break;
     case PT_SPREAD: panel_spread(); break;
     case PT_EXCL: panel_excl(ui.page - VP_EXCL(0)); break;
@@ -2593,8 +2639,6 @@ APP_SMALL static void draw_panel(void)
     blit(0, PANEL_Y);
     if (fx)
         fx_meter(1);
-    if (pt == PT_LFO || pt == PT_FOLLOW)
-        lfo_scope(1);
 }
 
 /* the knobs: a ring each, lit from its start (or its middle) to its value ---------------------------------------- */
