@@ -9,7 +9,7 @@
 # erased, the dark pad on another track), a new project (INIT: GLO, SELECT, REC held), the saved one back, the stress test (on
 # Plaits, then on the FM drums: their pages, a model chosen bringing its kit; the SDS: its pages, its tom, its perc; ZERO, its knobs; the FM: its three pages,
 # another algorithm (its drawing), a chord, a SHAPE drawn; PADS, its progression playing, its RELEASE, its fourth face (WAVE, TEXTURE), its fifth (LAYER, LEVEL, CHARACTER, TRANSP), SCALE Prog, then FOLLOW its track; POLY, its MODE; REV3, its sweep; TAURUS; VOCODER; CHOIR, alone and four), an FM-1 without the
-# module tables, then the tables arriving; before them, a live recording (REC and PLAY: counted in, notes, a chord, a long
+# module tables (19b: a flash part MIFM1 does not know, 20b/20c: RAM only, then the UC25HQ80 taken), then the tables arriving; before them, a live recording (REC and PLAY: counted in, notes, a chord, a long
 # note; the steps and their keys after) and the metronome off (GLO and PLAY). Screenshots in the output folder.
 wait 1500
 shot 00_intro.png
@@ -1058,7 +1058,26 @@ res 0
 reboot
 wait 1500
 shot 19_no_tables.png
+flash C84014
+reboot
+wait 1500
+shot 19b_flash_not_known.png
+flash 856014
 res 1
 restore out:project.mifm1
 wait 1500
 shot 20_tables_back.png
+flash C84014
+tap GLO
+turn SELECT 1
+wait 600
+shot 20b_flash_ram_only.png
+flash B36014
+turn SELECT -1
+wait 300
+turn SELECT 1
+wait 600
+shot 20c_flash_uc25hq80.png
+flash 856014
+turn SELECT -1
+tap GLO

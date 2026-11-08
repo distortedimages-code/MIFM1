@@ -123,6 +123,14 @@ reste). Les projets et les sons enregistrés avant se relisent : une piste FM CY
 <https://distortedimages-code.github.io/MIFM1/>. Dans Chrome ou Edge, FM-1 branché en USB et à l'arrêt : installer,
 laisser la page écrire les tables des modules après le firmware. Le firmware d'origine se remet de la même façon.
 
+Les FM-1 vendus depuis l'automne 2026 (surtout sur AliExpress) n'ont pas la même mémoire flash : une UC25HQ80
+(identifiant B3 60 14) au lieu de la Puya P25Q80 d'origine (85 60 14), même taille (1 Mo), mêmes commandes. MIFM1 les
+prend toutes les deux depuis 0.16.62 (comme fm1-base depuis le 4 novembre 2026). Avant, sur ces FM-1, rien ne
+s'écrivait : ni les tables des modules (MIFM1 restait sur MODULE TABLES MISSING), ni les sauvegardes, ni les mises à
+jour depuis MIFM1 ; un FM-1 dans ce cas se réinstalle une fois par la récupération (le firmware d'origine, puis la
+page). Une puce que MIFM1 ne connaît pas s'affiche à la place des tables (FLASH NOT KNOWN, avec son identifiant) et
+dans la page PROJECT (« flash … : RAM only ») : rien n'y est écrit ; dites-le dans les issues du dépôt.
+
 ## Dans le navigateur
 
 <https://distortedimages-code.github.io/MIFM1/emu/> : **le firmware tel quel, compilé pour le navigateur**

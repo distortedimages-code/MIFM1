@@ -1,0 +1,119 @@
+MIFM1's changes to fm1-base (base/), applied by tools/patch_base.sh before a build.
+The FM-1s sold since autumn 2026 (mostly AliExpress) carry a UC25HQ80 flash (JEDEC B3 60 14, 1 MiB, the same plain
+SPI NOR commands) instead of the stock Puya P25Q80 (85 60 14): fm1-base's boot knew only the Puya, so on them the
+storage stayed RAM only (no saves, no backup or restore, the resource region not written: MIFM1 without its tables,
+and the update loader not started). As fm1-base upstream's e75b072 (Laurens, 2026-11-04): device/fm1_flash_ok.h, the
+parts the storage may use, both. And plat_flash, the part's JEDEC ID and whether the storage uses it, for the app
+to say so (the host: 85 60 14, its script's "flash ID" another).
+
+diff --git a/device/fm1_flash_ok.h b/device/fm1_flash_ok.h
+new file mode 100644
+--- /dev/null
++++ b/device/fm1_flash_ok.h
+@@ -0,0 +1,24 @@
++/* SPDX-License-Identifier: MPL-2.0
++ * Copyright (C) 2026 Laurens (@profikid) */
++/* Which flash parts the FM-1's storage may use (main_fm1.c's boot, plat_fm1.c's data area).
++ *
++ * The stock FM-1 carries a Puya P25Q80 (JEDEC 85 60 14, 1 MiB). Units sold since autumn 2026 (mostly
++ * AliExpress) carry a UC25HQ80 (JEDEC B3 60 14, 1 MiB, the same plain SPI NOR commands) instead.
++ * A firmware that only knows the Puya takes those units for unknown: its saves stay in RAM and its
++ * update loader refuses to install.
++ *
++ * The list lives here, in fm1-base, and not in felucca-bsp's fm1_flash.h: the chip layer is header-only
++ * and shared with every other firmware on it, while this list is a policy of this platform's storage.
++ * An app that needs a different one (a part it has checked for itself) defines FM1B_FLASH_JEDEC_OK
++ * before including this header.
++ *
++ * Any other answer: RAM only, nothing written. */
++#ifndef FM1B_FLASH_OK_H
++#define FM1B_FLASH_OK_H
++
++/* the Puya P25Q80 (the stock part) and the UC25HQ80 (the newer units' part): both 1 MiB */
++#ifndef FM1B_FLASH_JEDEC_OK
++#define FM1B_FLASH_JEDEC_OK(id) ((id) == 0x856014u || (id) == 0xB36014u)
++#endif
++
++#endif
+diff --git a/device/main_fm1.c b/device/main_fm1.c
+--- a/device/main_fm1.c
++++ b/device/main_fm1.c
+@@ -41,6 +41,7 @@
+ static int dev_frame(const uint8_t *p, uint32_t n);   /* bt_own_central.c */
+ #endif
+ #include "uac_mix.h"                                /* the USB recording, the computer's audio, in that order */
++#include "fm1_flash_ok.h"                          /* the flash parts the storage may use (FM1B_FLASH_JEDEC_OK) */
+ static void render_block(int32_t *o)                /* ALNK0: one half, measured */
+ {
+     uint32_t t0 = fm1_ticks(), us, budget = HALF_FRAMES * 1000000u / FS;
+@@ -894,7 +895,8 @@
+                                                      * VDDIO 3.2 V, WiFi's regulator automatic (fm1_sys.h) */
+         fm1_clock_read(clock_boot);
+         clock_fix = (int8_t)fm1_clock_stock();      /* the stock 360 MHz, whichever bootloader started us (fm1_clock.h) */
+-        flash_ok = FL_FAR(fl_jedec_ram)() == 0x856014u;   /* the expected 1 MiB part, else RAM only */
++        flash_id = FL_FAR(fl_jedec_ram)();         /* (plat_flash) */
++        flash_ok = FM1B_FLASH_JEDEC_OK(flash_id);   /* a known 1 MiB part, else RAM only */
+ #if FM1B_WIFI || FM1B_BLE
+         if (flash_ok)
+             FL_FAR(fl_uid_ram)(flash_uid);
+diff --git a/device/plat_fm1.c b/device/plat_fm1.c
+--- a/device/plat_fm1.c
++++ b/device/plat_fm1.c
+@@ -325,6 +325,7 @@
+     return m;
+ }
+ 
++int plat_flash(uint32_t *id) { if (id) *id = flash_id; return flash_ok; }
+ #if FM1B_WIFI || FM1B_BLE
+ const uint8_t *plat_chip_uid(void) { return flash_ok ? flash_uid : 0; }
+ #else
+diff --git a/device/unity.c b/device/unity.c
+--- a/device/unity.c
++++ b/device/unity.c
+@@ -130,6 +130,7 @@
+ #endif
+ 
+ static uint8_t flash_ok;          /* JEDEC id matched at boot */
++static uint32_t flash_id;         /* the JEDEC id read at boot (plat_flash) */
+ #if FM1B_WIFI || FM1B_BLE
+ static uint8_t flash_uid[16];     /* the flash's factory unique ID (plat_chip_uid), read at boot */
+ #endif
+diff --git a/host/plat_host.c b/host/plat_host.c
+--- a/host/plat_host.c
++++ b/host/plat_host.c
+@@ -563,6 +563,13 @@
+     for (i = 0; i < OBJ_NOBJ; i++)
+         store_len[i] = -1;
+ }
++static uint32_t host_flash = 0x856014u;           /* (the script's flash ID: the stock Puya) */
++int plat_flash(uint32_t *id)
++{
++    if (id)
++        *id = host_flash;
++    return host_flash == 0x856014u || host_flash == 0xB36014u;   /* (device/fm1_flash_ok.h's) */
++}
+ const uint8_t *plat_chip_uid(void)
+ {
+     static const uint8_t U[16] = {0x46, 0x4D, 0x31, 0x2D, 0x68, 0x6F, 0x73, 0x74};   /* "FM1-host" */
+@@ -1468,6 +1475,8 @@
+             printf("\n");
+         } else if (!strcmp(cmd, "expect"))
+             fails += expect(a, b);
++        else if (!strcmp(cmd, "flash"))           /* flash ID: the flash part's JEDEC ID plat_flash gives */
++            host_flash = (uint32_t)strtoul(a, 0, 16);
+ #if FM1B_RES
+         else if (!strcmp(cmd, "res"))             /* res 0|1: the resource region there or not */
+             res_there = atoi(a) != 0;
+diff --git a/include/plat.h b/include/plat.h
+--- a/include/plat.h
++++ b/include/plat.h
+@@ -235,6 +235,9 @@
+ /* 16 bytes unique to this FM-1 (its flash part's factory ID; the same across updates, firmwares and a wiped store):
+  * for an address that must not change (the WiFi MAC, the Bluetooth name); 0 = unknown (and in a build without a radio) */
+ const uint8_t *plat_chip_uid(void);
++/* the flash part: *id its JEDEC ID as read at boot (85 60 14 the stock Puya P25Q80, B3 60 14 the UC25HQ80 of the units
++ * sold since autumn 2026: device/fm1_flash_ok.h); 1 = one the storage uses, 0 = unknown: RAM only, nothing written */
++int plat_flash(uint32_t *id);
+ 
+ /* persistent storage (Felucca storage.c objects: A/B sectors, CRC, torn-write safe) */
+ int plat_store_load(uint32_t obj, void *dst, uint32_t max);   /* bytes loaded, < 0 = none / bad (an empty object is

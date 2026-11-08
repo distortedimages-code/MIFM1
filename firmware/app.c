@@ -3303,6 +3303,15 @@ static void draw_knob_at(int page, int k, int force)
 }
 static void draw_knob(int k) { draw_knob_at(ui.page, k, 0); }
 
+static void flash_hex(uint32_t id, char *d)   /* (0.16.62) a flash part's JEDEC ID: "B3 60 14" */
+{
+    static const char H[] = "0123456789ABCDEF";
+    for (int i = 0; i < 3; i++) {
+        uint32_t b = id >> (16 - 8 * i) & 255u;
+        d[i * 3] = H[b >> 4], d[i * 3 + 1] = H[b & 15u], d[i * 3 + 2] = i < 2 ? ' ' : 0;
+    }
+}
+
 /* lists: the matrix, the global page, the missing tables --------------------------------------------------- */
 static void draw_lines(int y, int h, const char *const *lines, const uint16_t *colours, int n, int sel)
 {
@@ -3471,8 +3480,14 @@ APP_SMALL static void draw_machine(int force)      /* the machine, where the kno
         default: {
             uint32_t u[2];               /* (0.16.35) the USB recording, while a host takes it: its rate, what it lost */
             plat_usb_audio_info(u);
+            uint32_t f = 0;
             l = dirty ? "MIFM1 " APP_VERSION ", not saved" : "MIFM1 " APP_VERSION;
-            if (data_ok && u[0]) {
+            if (!plat_flash(&f)) {       /* (0.16.62) a flash part the storage does not know: RAM only */
+                text_cat(v, "flash ", sizeof v);
+                flash_hex(f, v + 6);
+                text_cat(v, ": RAM only", sizeof v);
+                c = AC3;
+            } else if (data_ok && u[0]) {
                 char n[12];
                 text_cat(v, u[0] == 48000u ? "USB 48k, " : "USB 44.1k, ", sizeof v);
                 int_text((int32_t)(u[1] > 99999u ? 99999u : u[1]), n);
@@ -3503,12 +3518,21 @@ static void draw_missing(void)
 {
     static const char *const L[8] = {"", "MODULE TABLES MISSING", "", "The installer writes them after",
                                      "the firmware: install again from", "the page, the FM-1 stopped.", "", ""};
+    static char id[40] = "Its memory, ";   /* (0.16.62) a flash part the storage does not know: nothing written */
+    const char *F[8] = {"", "FLASH NOT KNOWN", "", id, "is not a part MIFM1 writes on:", "no tables, no saves.",
+                        "Tell us: MIFM1's GitHub issues.", ""};
     uint16_t col[8];
+    uint32_t f = 0;
+    int known = plat_flash(&f);
     if (!ui.full)
         return;
+    if (!known) {
+        flash_hex(f, id + 12);
+        text_cat(id, ",", sizeof id);
+    }
     for (int i = 0; i < 8; i++)
         col[i] = i == 1 ? AC3 : TXT;
-    draw_lines(PANEL_Y + 4, 19, L, col, 8, -1);
+    draw_lines(PANEL_Y + 4, 19, known ? L : F, col, 8, -1);
 }
 
 /* the row at the bottom: the four tracks (an LED lit by its gate or its trig, in its model's colour); on the LFOs'
