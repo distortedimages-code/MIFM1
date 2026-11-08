@@ -1719,8 +1719,10 @@ pistes seules, puis le mix, la réverbe et le delay) :
 - **les effets relancés à chaque temps** (le filtre, le feedback, le drive et la résonance du delay, la réverbe,
   Warps) y vont en ~15 ms au lieu d'un coup (un pas du filtre du delay se répétait avec ses échos) ; le **FILTER du
   delay** change de côté au milieu en partant du repos, et son mélange suit échantillon par échantillon.
-Ce que coûtent ces glissements, comptés en instructions : 2 à 4 µs par bloc de 2,9 ms sur PADS et sur un filtre MS-20
-ou SEM, rien sur le LADDER (les filtres refont leurs constantes seulement quand un potard bouge). Un test les vérifie (un TYPE changé, un accord qui change de taille, le filtre du delay jeté, une note de PADS
+Ce que coûtent ces glissements, comptés en instructions : 2 µs par bloc de 2,9 ms sur PADS (1 µs par note), ±2 µs sur
+les filtres ; en échange, les courbes de DECAY, ATTACK et FM d'un filtre ne sont plus recalculées à chaque bloc mais
+quand leur potard bouge (la préparation, 7 µs de moins par bloc). Les fondus de TYPE tournent depuis la flash : la RAM
+de code du FM-1 (42 Ko) était pleine, le bloc ordinaire y reste tel qu'il était. Un test les vérifie (un TYPE changé, un accord qui change de taille, le filtre du delay jeté, une note de PADS
 sous TRAUMA sortie du silence).
 
 **Les fills** (le dernier quart de la dose, 76 à 100 %) : des trigs en plus à la fin des mesures (comptées depuis

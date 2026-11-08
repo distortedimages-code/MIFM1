@@ -77,6 +77,7 @@ struct Filter {
   // (the model new, the track at rest)
   float drive_t, reso_t, fm_t, env_t;
   int pfresh;
+  float kd, ka, kf;                     // (0.16.65) DECAY, ATTACK, FM as their curves were last made (slow_coefs)
 };
 const float kXfRate = 1.0f / (0.012f * kSr);
 Filter flt[MF_TRACKS];
@@ -285,7 +286,7 @@ inline float vactrol(Filter& f, float vs, int* ramp) {
 struct Run {
   float oct, doct, vs, y1, fm5, ping, nv;   // nv: the noise now (its amount by the envelope)
   int ramp, ti, fm_on, skip;            // (skip: the FM's coefficients at the samples i & skip == 0)
-  int pg;                               // (0.16.65) DRIVE or RESO moved: what they set made again (1 at the start)
+  int pg;                               // (0.16.65) DRIVE or RESO moved: what they set made again
 };
 // the CPU guard (engine.cc): the FM's coefficients every sample (0), every 2nd (1), every 4th (3); -1: no FM
 volatile int fm_skip = 0;
@@ -351,11 +352,47 @@ void ladder_mix(int type, float res, float* w) {
 
 // (0.16.65) XF: a TYPE on its way from the old one (process_xf, in the flash: the RAM's code room full); without it,
 // the block as before, in the RAM
+// what DRIVE and RESO set, a model's: made at its block's start (in the RAM, as before) and again, while they glide
+// (0.16.65), by a copy in the flash (the RAM's code room full; a few blocks after a turn or a throw)
+struct LadK {
+  float r4, drive, lc, w[5], ow[5];
+};
+inline LadK lad_k(const Filter& f, float kc0, bool xf) {
+  LadK k;
+  k.r4 = 4.2f * f.reso, k.drive = 1.0f + 15.0f * f.drive * f.drive;
+  k.lc = 1.0f / (1.0f + 1.4f * f.drive + 1.6f * f.drive * f.drive);   // (louder a little, then squashed)
+  const float res = k.r4 * kc0;
+  ladder_mix(f.type, res, k.w);
+  if (xf) ladder_mix(f.from_type, res, k.ow);
+  return k;
+}
+__attribute__((noinline)) LadK lad_k_glide(const Filter& f, float kc0, bool xf) { return lad_k(f, kc0, xf); }
+struct Ms20K {
+  float st, ist, mk;
+};
+inline Ms20K ms20_k(const Filter& f) {
+  Ms20K k;
+  k.st = 1.0f + 7.0f * f.drive, k.ist = 1.0f / k.st, k.mk = 1.0f + 0.6f * (k.st - 1.0f);   // (mk: its level back)
+  return k;
+}
+__attribute__((noinline)) Ms20K ms20_k_glide(const Filter& f) { return ms20_k(f); }
+struct SvfK {                           // (SEM, VOX: DRIVE's input stage and OTAs; SEM's band, VOX's gain)
+  float k, dg, bias, sb, lvl, q;
+};
+inline SvfK svf_k(const Filter& f, bool vox) {
+  SvfK k;
+  k.k = (vox ? 1.5f : 6.0f) * f.drive;
+  k.dg = 1.0f + 7.0f * f.drive, k.bias = 0.3f * f.drive, k.sb = sat(k.bias);
+  k.lvl = 1.0f / (1.0f + (vox ? 0.04f : 0.08f) * (k.dg - 1.0f));
+  k.q = vox ? 2.0f * f.a0 * (2.4f + 0.14f / (2.0f * f.a0)) : 2.0f * f.a0 * (1.0f + 2.0f * f.reso);
+  return k;
+}
+__attribute__((noinline)) SvfK svf_k_glide(const Filter& f, bool vox) { return svf_k(f, vox); }
+
 template <bool XF>
 void run_ladder(Filter& f, Run& r, float* x, uint32_t n) {
-  float r4 = 0.0f, drive = 0.0f, lc = 0.0f;   // (each sub-block: DRIVE and RESO glide)
   const float kc0 = f.kc;               // (the mix's resonance: at the block's start, as before; not the FM's now)
-  float w[5], ow[5];
+  LadK K = lad_k(f, kc0, XF);
   // (0.16.65) a new TYPE: its mix from the old one's over the block (the states the same for all three)
   const bool xf = XF;
   const float dx = xf ? (f.xa1 - f.xa) / static_cast<float>(n) : 0.0f;
@@ -366,14 +403,10 @@ void run_ladder(Filter& f, Run& r, float* x, uint32_t n) {
   for (uint32_t i0 = 0; i0 < n; i0 += kStep) {
     uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
     sub_block(f, r, i0, i1, &ping_at);
-    if (r.pg) {
-      r.pg = 0;
-      r4 = 4.2f * f.reso, drive = 1.0f + 15.0f * f.drive * f.drive;
-      lc = 1.0f / (1.0f + 1.4f * f.drive + 1.6f * f.drive * f.drive);   // (louder a little, then squashed)
-      const float res = r4 * kc0;
-      ladder_mix(f.type, res, w);
-      if (xf) ladder_mix(f.from_type, res, ow);
-    }
+    if (r.pg) r.pg = 0, K = lad_k_glide(f, kc0, XF);
+    const float r4 = K.r4, drive = K.drive, lc = K.lc;
+    const float* w = K.w;
+    const float* ow = K.ow;
     for (uint32_t i = i0; i < i1; ++i) {
       if (r.fm_on && !(i & r.skip)) fm_coefs(f, r);
       float in = x[i] + (i == ping_at ? r.ping : 0.0f);
@@ -440,7 +473,7 @@ inline float ms20_tick(const Filter& f, float* s, float& pre, int hp, int bp, fl
 
 template <bool XF>
 void run_ms20(Filter& f, Run& r, float* x, uint32_t n) {
-  float st = 1.0f, ist = 1.0f, mk = 1.0f;   // (each sub-block: DRIVE glides; mk: its level back)
+  Ms20K K = ms20_k(f);
   float* s = f.k35;
   const int hp = f.type == MF_HP, bp = f.type == MF_BP;
   // (0.16.65) a new TYPE (its loop another): the old one played on on a copy of the states and the new one faded in
@@ -454,7 +487,8 @@ void run_ms20(Filter& f, Run& r, float* x, uint32_t n) {
   for (uint32_t i0 = 0; i0 < n; i0 += kStep) {
     uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
     sub_block(f, r, i0, i1, &ping_at);
-    if (r.pg) r.pg = 0, st = 1.0f + 7.0f * f.drive, ist = 1.0f / st, mk = 1.0f + 0.6f * (st - 1.0f);
+    if (r.pg) r.pg = 0, K = ms20_k_glide(f);
+    const float st = K.st, ist = K.ist, mk = K.mk;
     for (uint32_t i = i0; i < i1; ++i) {
       if (r.fm_on && !(i & r.skip)) fm_coefs(f, r);
       float in = x[i] + (i == ping_at ? r.ping : 0.0f);
@@ -473,28 +507,20 @@ void run_ms20(Filter& f, Run& r, float* x, uint32_t n) {
 
 template <bool XF>
 void run_sem(Filter& f, Run& r, float* x, uint32_t n) {
-  // DRIVE: its OTAs' input gain k (0: the linear filter, as it was), and its input; (0.16.65) each sub-block, DRIVE and
-  // RESO gliding
-  float k = 0.0f, dg = 1.0f, bias = 0.0f, sb = 0.0f, lvl = 1.0f;
+  // DRIVE: its OTAs' input gain k (0: the linear filter, as it was), and its input
+  SvfK K = svf_k(f, false);
   const float wl = f.type == MF_LP ? 1.0f : 0.0f, wh = f.type == MF_HP ? 1.0f : 0.0f;
-  float wb = 0.0f;                      // (the band: 0 dB, then its Q)
   // (0.16.65) a new TYPE: from the old one's outputs over the block (the states the same for all three)
   const int ot = XF ? f.from_type : f.type;
   const float ol = ot == MF_LP ? 1.0f : 0.0f, oh = ot == MF_HP ? 1.0f : 0.0f;
-  float ob = 0.0f;
   const float dx = XF ? (f.xa1 - f.xa) / static_cast<float>(n) : 0.0f;
   float a = XF ? f.xa : 1.0f;
   for (uint32_t i0 = 0; i0 < n; i0 += kStep) {
     uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
     sub_block(f, r, i0, i1, &ping_at);
-    if (r.pg) {
-      r.pg = 0;
-      k = 6.0f * f.drive;
-      dg = 1.0f + 7.0f * f.drive, bias = 0.3f * f.drive, sb = sat(bias), lvl = 1.0f / (1.0f + 0.08f * (dg - 1.0f));
-      const float q = 2.0f * f.a0 * (1.0f + 2.0f * f.reso);
-      wb = f.type == MF_BP ? q : 0.0f;
-      ob = ot == MF_BP ? q : 0.0f;
-    }
+    if (r.pg) r.pg = 0, K = svf_k_glide(f, false);
+    const float k = K.k, dg = K.dg, bias = K.bias, sb = K.sb, lvl = K.lvl;
+    const float wb = f.type == MF_BP ? K.q : 0.0f, ob = ot == MF_BP ? K.q : 0.0f;   // (the band: 0 dB, then its Q)
     for (uint32_t i = i0; i < i1; ++i) {
       if (r.fm_on && !(i & r.skip)) fm_coefs(f, r);
       float lp, hp, in = x[i] + (i == ping_at ? r.ping : 0.0f);
@@ -514,18 +540,13 @@ void run_sem(Filter& f, Run& r, float* x, uint32_t n) {
 }
 
 void run_vox(Filter& f, Run& r, float* x, uint32_t n) {
-  // DRIVE: the resonators' OTAs (gentler than SEM's: the vowels stay), the input; (0.16.65) each sub-block, DRIVE and
-  // RESO gliding; each formant +7 dB
-  float gain = 1.0f, k = 0.0f, dg = 1.0f, bias = 0.0f, sb = 0.0f, lvl = 1.0f;
+  // DRIVE: the resonators' OTAs (gentler than SEM's: the vowels stay), the input; each formant +7 dB
+  SvfK K = svf_k(f, true);
   for (uint32_t i0 = 0; i0 < n; i0 += kStep) {
     uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
     sub_block(f, r, i0, i1, &ping_at);
-    if (r.pg) {
-      r.pg = 0;
-      gain = 2.0f * f.a0 * (2.4f + 0.14f / (2.0f * f.a0));
-      k = 1.5f * f.drive;
-      dg = 1.0f + 7.0f * f.drive, bias = 0.3f * f.drive, sb = sat(bias), lvl = 1.0f / (1.0f + 0.04f * (dg - 1.0f));
-    }
+    if (r.pg) r.pg = 0, K = svf_k_glide(f, true);
+    const float gain = K.q, k = K.k, dg = K.dg, bias = K.bias, sb = K.sb, lvl = K.lvl;
     for (uint32_t i = i0; i < i1; ++i) {
       if (r.fm_on && !(i & r.skip)) fm_coefs(f, r);
       float lp, hp, sum = 0.0f, in = x[i] + (i == ping_at ? 4.0f * r.ping : 0.0f);
@@ -564,7 +585,7 @@ void process(Filter& f, float* x, uint32_t n) {
   r.y1 = f.y1;
   r.ramp = f.ramp;
   r.ti = 0;
-  r.pg = 1;
+  r.pg = 0;
   int sk = fm_skip;
   r.fm_on = (f.fm != 0.0f || f.fm_t != 0.0f) && sk >= 0;
   r.skip = sk < 0 ? 0 : sk;
@@ -610,6 +631,15 @@ void process(Filter& f, float* x, uint32_t n) {
   f.oct0 = f.oct1;
 }
 
+// (0.16.65) DECAY's, ATTACK's and FM's curves (their exponentials), made again only when their knobs move (each block
+// before: the same values, and their code in the RAM, its room full), in the flash
+__attribute__((noinline)) void slow_coefs(Filter& f, float d, float a, float fk) {
+  f.kd = d, f.ka = a, f.kf = fk;
+  f.short_decay = 200.0f * kInvSr * fm_exp2f(-8.0f * d);   // (Plaits' coefficients, a sample's: 5 ms .. 1.3 s, its
+  f.decay_tail = 20.0f * kInvSr * fm_exp2f(-6.0f * d) - f.short_decay;   // tail 3 s)
+  f.attack = 0.04f * static_cast<float>(kStep) * fm_exp2f(-12.0f * a);   // (0.7 ms .. 2.3 s)
+  f.fm_t = fm_depth(fk);
+}
 // (0.16.65) a new TYPE, the model the same: from the type it was, the MS-20's loop as it was on its own states (in the
 // flash: mf_set is in the RAM, its room full)
 __attribute__((noinline)) void begin_xf(Filter& f) {
@@ -660,6 +690,7 @@ MI_COLD void mf_init(void) {
     f.from_type = -1;
     f.reso_t = f.drive_t = f.fm_t = f.env_t = 0.0f;
     f.pfresh = 1;
+    f.kd = f.ka = f.kf = -9.0f;         // (their curves made at the first set)
     reset_state(f);
   }
 }
@@ -680,17 +711,15 @@ void mf_set(int t, int model, int type, const float* k, float note) {
   f.oct1 = oct;
   f.reso_t = fm_clampf(k[MF_RESO], 0.0f, 1.0f);
   f.env_t = fm_clampf(k[MF_ENV], -1.0f, 1.0f);
-  float d = fm_clampf(k[MF_DECAY], 0.0f, 1.0f);   // (Plaits' coefficients, a sample's: 5 ms .. 1.3 s, its tail 3 s)
-  f.short_decay = 200.0f * kInvSr * fm_exp2f(-8.0f * d);
-  f.decay_tail = 20.0f * kInvSr * fm_exp2f(-6.0f * d) - f.short_decay;
+  const float d = fm_clampf(k[MF_DECAY], 0.0f, 1.0f), a = fm_clampf(k[MF_ATTACK], 0.0f, 1.0f);
+  const float fk = fm_clampf(k[MF_FM], -1.0f, 1.0f);
+  if (d != f.kd || a != f.ka || fk != f.kf) slow_coefs(f, d, a, fk);
   f.drive_t = fm_clampf(k[MF_DRIVE], 0.0f, 1.0f);
   f.ping = fm_clampf(k[MF_PING], 0.0f, 1.0f);
-  f.fm_t = fm_depth(fm_clampf(k[MF_FM], -1.0f, 1.0f));
   if (f.pfresh) f.reso = f.reso_t, f.drive = f.drive_t, f.fm = f.fm_t, f.env = f.env_t, f.pfresh = 0;
-  float nz = fm_clampf(k[MF_NOISE], 0.0f, 1.0f), a = fm_clampf(k[MF_ATTACK], 0.0f, 1.0f);
+  float nz = fm_clampf(k[MF_NOISE], 0.0f, 1.0f);
   f.noise_amt = 0.4f * nz * nz;
   f.color = fm_clampf(k[MF_COLOR], -1.0f, 1.0f);
-  f.attack = 0.04f * static_cast<float>(kStep) * fm_exp2f(-12.0f * a);   // (0.7 ms .. 2.3 s)
   reso_coefs(f);
 }
 

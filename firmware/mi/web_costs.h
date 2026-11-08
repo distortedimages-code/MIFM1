@@ -36,17 +36,17 @@ static const float kWebModel[28] = {   /* a voice playing, by model */
 };
 static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, VOX): plain, its FM's extra, its NOISE's */
     {0.0f, 0.0f, 0.0f},
-    {135.1f, 86.5f, 27.6f},
-    {83.4f, 79.3f, 28.5f},
-    {59.6f, 75.3f, 28.5f},
-    {113.2f, 155.4f, 31.1f},
+    {137.6f, 84.8f, 28.5f},
+    {79.5f, 79.3f, 28.5f},
+    {54.7f, 73.6f, 28.5f},
+    {113.1f, 155.4f, 30.2f},
 };
 static const float kWebFm[3] = {37.1f, 81.8f, 22.2f};   /* the FM's extra: its square, PW, SYNC */
 static const float kWebPads[3] = {124.0f, 11.0f, 19.2f};   /* PADS: its floor, a note (one saw, three) */
 static const float kWebPadsWave[2] = {20.4f, 26.1f};   /* (0.16.57) PADS' WAVE off Saw: a note's more (one saw, three) */
 static const float kWebPadsLayer[9] = {0.0f, 74.2f, 121.3f, 100.0f, 116.0f, 80.3f, 114.6f, 91.5f, 100.8f};   /* its LAYER */
 static const float kWebPadsTex[5] = {0.0f, 10.8f, 0.1f, 25.3f, 13.3f};   /* its TEXTURE (Down: a note's) */
-static const float kWebPoly[2] = {33.6f, 76.6f};   /* POLY: its floor, a voice */
+static const float kWebPoly[2] = {33.5f, 76.6f};   /* POLY: its floor, a voice */
 static const float kWebPro[2] = {34.0f, 108.4f};   /* REV3: its floor, a voice */
 static const float kWebChoir[2] = {18.7f, 154.2f};   /* CHOIR: its floor, a part */
 static const float kWebVoc[3] = {111.5f, 23.4f, 352.6f};   /* VOCODER: its floor, a voice, its bands (MOD on) */
@@ -64,4 +64,4 @@ static const float kWebFxWarps = 87.6f;   /* Warps in the mix (the rest of the s
 static const float kWebFxSpread = 75.2f;   /* (0.16.19) a track's SPREAD */
 static const float kWebFxMetal[2] = {78.3f, 113.6f};   /* (0.16.41) the reverb METAL, SHIMMER: over Clouds' */
 static const float kWebFxBbd = 21.6f;   /* (0.16.65) the delay's BBD: over the clean one's */
-static const float kWebPrep = 371.9f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.9f;   /* the preparation: its floor, a track playing, a cable */
+static const float kWebPrep = 362.1f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.9f;   /* the preparation: its floor, a track playing, a cable */
