@@ -117,9 +117,11 @@ a {{ color: inherit; text-underline-offset: 3px; }} a:hover {{ color: var(--oran
       <span class="go">{t("MIFM1 without the FM-1 →", "MIFM1 sans le FM-1 →")}</span></a></li>
     <li><a href="install/"><span class="n">02</span><h2>{t("Install", "Installer")}</h2>
       <p>{t("In Chrome or Edge, the FM-1 plugged in over USB and switched off. Let the page run to the end: the "
-            "firmware, then the modules' tables.",
+            "firmware, then the modules' tables. An FM-1 sold since autumn 2026 (another flash chip) works too: "
+            "read the page's note on it first.",
             "Dans Chrome ou Edge, le FM-1 branché en USB et à l'arrêt. Laisser la page aller jusqu'au bout : le "
-            "firmware, puis les tables des modules.")}</p>
+            "firmware, puis les tables des modules. Un FM-1 vendu depuis l'automne 2026 (une autre puce mémoire) "
+            "marche aussi : lire d'abord la note de la page à son sujet.")}</p>
       <span class="go">{t(f"Install MIFM1 {version} →", f"Installer MIFM1 {version} →")}</span></a></li>
     <li><a href="backup/"><span class="n">03</span><h2>{t("Back up", "Sauver")}</h2>
       <p>{t("The project saved on the FM-1, to a file on the computer, and back.",

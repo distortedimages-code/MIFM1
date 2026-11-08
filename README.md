@@ -127,9 +127,18 @@ Les FM-1 vendus depuis l'automne 2026 (surtout sur AliExpress) n'ont pas la mêm
 (identifiant B3 60 14) au lieu de la Puya P25Q80 d'origine (85 60 14), même taille (1 Mo), mêmes commandes. MIFM1 les
 prend toutes les deux depuis 0.16.62 (comme fm1-base depuis le 4 novembre 2026). Avant, sur ces FM-1, rien ne
 s'écrivait : ni les tables des modules (MIFM1 restait sur MODULE TABLES MISSING), ni les sauvegardes, ni les mises à
-jour depuis MIFM1 ; un FM-1 dans ce cas se réinstalle une fois par la récupération (le firmware d'origine, puis la
-page). Une puce que MIFM1 ne connaît pas s'affiche à la place des tables (FLASH NOT KNOWN, avec son identifiant) et
-dans la page PROJECT (« flash … : RAM only ») : rien n'y est écrit ; dites-le dans les issues du dépôt.
+jour depuis MIFM1. La page d'installation le rappelle avant d'installer (en anglais et en japonais) :
+- un FM-1 récent qui a encore le firmware d'origine s'installe comme les autres, depuis la même page ;
+- un FM-1 récent sur lequel MIFM1 0.16.61 ou avant est installé, la page ne le trouve pas (cette version n'y prend
+  aucune mise à jour) : remettre d'abord le firmware d'origine avec l'outil de récupération (le lien de la page, sur
+  un Mac ; sa version actuelle prend l'UC25HQ80), puis installer ;
+- sur un FM-1 récent (ou dans le doute), ne pas cocher m-bootloader pour l'instant : on ne sait pas encore s'il prend
+  cette puce ;
+- le firmware V16 d'M-VAVE refuserait les autres firmwares d'après un témoignage, sans confirmation : si la page ne
+  trouve pas un FM-1 en V16, le signaler.
+
+Une puce que MIFM1 ne connaît pas s'affiche à la place des tables (FLASH NOT KNOWN, avec son identifiant) et dans la
+page PROJECT (« flash … : RAM only ») : rien n'y est écrit ; dites-le dans les issues du dépôt.
 
 ## Dans le navigateur
 

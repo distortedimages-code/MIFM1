@@ -27,6 +27,34 @@ from build import read_conf  # noqa: E402
 from fm1_resources import ResError, payload_of  # noqa: E402
 
 
+# (0.16.62) the FM-1s sold since autumn 2026, their UC25HQ80 flash: before the m-bootloader option, in the page's two
+# languages (its EN / 日本語 button sets the page's lang; the Japanese paragraphs on one line each: a line's break
+# would show as a space)
+NEW_UNITS_CSS = """  .units { border-left: 3px solid var(--dim); padding: 2px 0 2px 12px; margin: 16px 0; }
+  .units h2 { font-size: 15px; margin: 0 0 6px; }
+  html[lang="ja"] .units[lang="en"], html[lang="en"] .units[lang="ja"] { display: none; }
+"""
+NEW_UNITS = """  <div class="units" lang="en">
+    <h2>FM-1s sold since autumn 2026</h2>
+    <p class="small">They carry another flash chip (a UC25HQ80 in place of the Puya P25Q80). MIFM1 0.16.62 and later
+      work on them: install as on any FM-1, from M-VAVE's firmware.</p>
+    <p class="small">If MIFM1 0.16.61 or older is on such an FM-1, this page cannot reach it (that version takes no
+      update on this chip): first put the stock firmware back with the recovery link above (a Mac), then install.</p>
+    <p class="small">On these FM-1s (or if you are not sure), leave "Also install m-bootloader" unticked for now:
+      whether it supports this chip is not known yet.</p>
+    <p class="small">M-VAVE's firmware V16 has been said to refuse other firmwares (not confirmed): if this page does
+      not find an FM-1 running V16, say so under "Report a problem" below.</p>
+  </div>
+  <div class="units" lang="ja">
+    <h2>2026年秋以降に販売された FM-1</h2>
+    <p class="small">これらは別のフラッシュチップ（Puya P25Q80 の代わりに UC25HQ80）を搭載しています。MIFM1 0.16.62以降はこれらでも動きます。ほかの FM-1 と同じく、M-VAVE のファームウェアからインストールしてください。</p>
+    <p class="small">このような FM-1 に MIFM1 0.16.61 以前が入っている場合、このページからは届きません（そのバージョンはこのチップではアップデートを受けられません）。まず上の復旧のリンク（Mac）で標準ファームウェアに戻してから、インストールしてください。</p>
+    <p class="small">これらの FM-1 では（またはわからない場合は）、今のところ「m-bootloader も書き込む」にチェックを入れないでください。このチップに対応しているかはまだわかっていません。</p>
+    <p class="small">M-VAVE のファームウェア V16 はほかのファームウェアを受け付けないという話があります（未確認）。V16 の FM-1 がこのページで見つからない場合は、下の「不具合を報告する」から知らせてください。</p>
+  </div>
+"""
+
+
 def main(pkg, version, out):
     pkg, out = Path(pkg), Path(out)
     conf = read_conf(APP / "fm1.toml")
@@ -79,6 +107,11 @@ def main(pkg, version, out):
     if left:
         raise SystemExit(f"base/web/installer.html: {' '.join(left)} not filled in")
     html = html.replace("/*LIB*/", lib).replace("/*META*/", meta).replace("/*APP*/", "null")
+    for mark in ("  <div id=\"mbootopt\" hidden>\n", "</style>"):
+        if html.count(mark) != 1:
+            raise SystemExit(f"base/web/installer.html: {mark.strip()} expected once (another fm1-base version?)")
+    html = html.replace("</style>", NEW_UNITS_CSS + "</style>").replace("  <div id=\"mbootopt\" hidden>\n",
+                                                                       NEW_UNITS + "  <div id=\"mbootopt\" hidden>\n")
     (out / "install" / "index.html").write_text(html, encoding="utf-8")
     for p, h in tool_pages(APP, conf).items():           # backup/index.html
         (out / p).parent.mkdir(parents=True, exist_ok=True)
