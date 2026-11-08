@@ -67,10 +67,10 @@ struct Filter {
   float du1, dcx, dcy;
   int dstale;
   // (0.16.65) TYPE changed, the model the same (the random dose throws it at a trig): the type it was (-1: none), the
-  // way from it to the new one (12 ms: this block's start and end); the MS-20's loop as it was, on its own states.
+  // way from it to the new one (12 ms: this block's start and end).
   // Before, a new type reset the states: the sound cut at once, a click each time
   int from_type;
-  float xa, xa1, xk[3], xpre;
+  float xa, xa1;
   // (0.16.65) DRIVE, RESO, ENV and FM as set (the knobs, the dose's throw at a trig, TRAUMA's): reached over ~8 ms, a
   // step each kStep samples (reso, drive, env, fm: where they are). At once, the levels they set (DRIVE's given back,
   // the resonance's) and the cutoff (ENV, its envelope up) jumped at the trig: a click. pfresh: at once, the next time
@@ -79,7 +79,7 @@ struct Filter {
   int pfresh;
   float kd, ka, kf;                     // (0.16.65) DECAY, ATTACK, FM as their curves were last made (slow_coefs)
 };
-const float kXfRate = 1.0f / (0.012f * kSr);
+const float kXfRate = 1.0f / 512.0f;     // (11.6 ms: a quarter a block of 128, the MS-20's silence at a block's edge)
 Filter flt[MF_TRACKS];
 
 // Peterson and Barney (1952): the formants F1, F2, F3 (Hz) of the vowels a (father), e (bed), i (beet), o (boat),
@@ -131,8 +131,6 @@ void reset_state(Filter& f) {
   f.du1 = f.dcx = f.dcy = 0.0f;
   f.dstale = 1;
   f.pre = f.y1 = f.nlp = 0.0f;
-  for (int i = 0; i < 3; ++i) f.xk[i] = 0.0f;
-  f.xpre = 0.0f;
   f.from_type = -1;                     // (from silence: the new type at once)
 }
 
@@ -287,6 +285,8 @@ struct Run {
   float oct, doct, vs, y1, fm5, ping, nv;   // nv: the noise now (its amount by the envelope)
   int ramp, ti, fm_on, skip;            // (skip: the FM's coefficients at the samples i & skip == 0)
   int pg;                               // (0.16.65) DRIVE or RESO moved: what they set made again
+  int xf;                               // (0.16.65) on the way to a new TYPE (2: the MS-20's old loop, its type for now)
+  float dxa;                            // (its share a sample)
 };
 // the CPU guard (engine.cc): the FM's coefficients every sample (0), every 2nd (1), every 4th (3); -1: no FM
 volatile int fm_skip = 0;
@@ -299,7 +299,7 @@ void reso_coefs(Filter& f) {
   else if (f.model == MF_VOX) f.a0 = 0.5f / (2.0f + 18.0f * f.reso);                    // Q 2 .. 20
 }
 // (0.16.65) DRIVE, RESO, ENV, FM a step closer to where they are set (~8 ms), there once within 1e-4
-__attribute__((noinline)) void param_glide(Filter& f, Run& r) {
+MI_COLD __attribute__((noinline)) void param_glide(Filter& f, Run& r) {
   const float kGl = 0.0443f;            // (16 samples of 8 ms)
   f.drive += (f.drive_t - f.drive) * kGl;
   f.reso += (f.reso_t - f.reso) * kGl;
@@ -350,63 +350,82 @@ void ladder_mix(int type, float res, float* w) {
   else if (type == MF_BP) w[2] = 4.0f, w[3] = -8.0f, w[4] = 4.0f;
 }
 
-// (0.16.65) XF: a TYPE on its way from the old one (process_xf, in the flash: the RAM's code room full); without it,
-// the block as before, in the RAM
-// what DRIVE and RESO set, a model's: made at its block's start (in the RAM, as before) and again, while they glide
-// (0.16.65), by a copy in the flash (the RAM's code room full; a few blocks after a turn or a throw)
+// what DRIVE and RESO set, a model's, and (0.16.65) its TYPE's mix on its way from the old one: made at its block's
+// start (in the RAM, as before) and again each kStep samples while they move, by a copy in the flash (the RAM's code
+// room full; a few blocks after a turn, a throw, a new type). The way to the new type: a (0..1) at this sub-block's end
+inline float xf_at(const Filter& f, const Run& r, uint32_t i1) { return f.xa + r.dxa * static_cast<float>(i1); }
 struct LadK {
-  float r4, drive, lc, w[5], ow[5];
+  float r4, drive, lc, w[5];
 };
-inline LadK lad_k(const Filter& f, float kc0, bool xf) {
+inline __attribute__((always_inline)) LadK lad_k(const Filter& f, float kc0, float a) {
   LadK k;
   k.r4 = 4.2f * f.reso, k.drive = 1.0f + 15.0f * f.drive * f.drive;
   k.lc = 1.0f / (1.0f + 1.4f * f.drive + 1.6f * f.drive * f.drive);   // (louder a little, then squashed)
   const float res = k.r4 * kc0;
   ladder_mix(f.type, res, k.w);
-  if (xf) ladder_mix(f.from_type, res, k.ow);
+  if (a < 1.0f) {                       // (the old type's mix, the states the same for all three)
+    float ow[5];
+    ladder_mix(f.from_type, res, ow);
+    for (int j = 0; j < 5; ++j) k.w[j] = ow[j] + a * (k.w[j] - ow[j]);
+  }
   return k;
 }
-__attribute__((noinline)) LadK lad_k_glide(const Filter& f, float kc0, bool xf) { return lad_k(f, kc0, xf); }
+MI_COLD __attribute__((noinline)) LadK lad_k_glide(const Filter& f, const Run& r, float kc0, uint32_t i1) {
+  return lad_k(f, kc0, r.xf ? xf_at(f, r, i1) : 1.0f);
+}
 struct Ms20K {
   float st, ist, mk;
 };
-inline Ms20K ms20_k(const Filter& f) {
+inline __attribute__((always_inline)) Ms20K ms20_k(const Filter& f, float g) {   // (g: the way to another loop, through silence)
   Ms20K k;
-  k.st = 1.0f + 7.0f * f.drive, k.ist = 1.0f / k.st, k.mk = 1.0f + 0.6f * (k.st - 1.0f);   // (mk: its level back)
+  k.st = 1.0f + 7.0f * f.drive, k.ist = 1.0f / k.st, k.mk = g * (1.0f + 0.6f * (k.st - 1.0f));   // (mk: its level back)
   return k;
 }
-__attribute__((noinline)) Ms20K ms20_k_glide(const Filter& f) { return ms20_k(f); }
-struct SvfK {                           // (SEM, VOX: DRIVE's input stage and OTAs; SEM's band, VOX's gain)
-  float k, dg, bias, sb, lvl, q;
+MI_COLD __attribute__((noinline)) Ms20K ms20_k_glide(const Filter& f, const Run& r, uint32_t i1) {
+  const float a = r.xf ? xf_at(f, r, i1) : 1.0f;
+  return ms20_k(f, a < 1.0f ? fm_fabsf(1.0f - 2.0f * a) : 1.0f);
+}
+struct SvfK {                           // (SEM, VOX: DRIVE's input stage and OTAs; SEM's three outputs' mix, VOX's gain)
+  float k, dg, bias, sb, lvl, wl, wb, wh;
 };
-inline SvfK svf_k(const Filter& f, bool vox) {
+inline void sem_mix(int type, float q, float* l, float* b, float* h) {
+  *l = type == MF_LP ? 1.0f : 0.0f, *h = type == MF_HP ? 1.0f : 0.0f, *b = type == MF_BP ? q : 0.0f;
+}
+inline __attribute__((always_inline)) SvfK svf_k(const Filter& f, bool vox, float a) {
   SvfK k;
   k.k = (vox ? 1.5f : 6.0f) * f.drive;
   k.dg = 1.0f + 7.0f * f.drive, k.bias = 0.3f * f.drive, k.sb = sat(k.bias);
   k.lvl = 1.0f / (1.0f + (vox ? 0.04f : 0.08f) * (k.dg - 1.0f));
-  k.q = vox ? 2.0f * f.a0 * (2.4f + 0.14f / (2.0f * f.a0)) : 2.0f * f.a0 * (1.0f + 2.0f * f.reso);
+  if (vox) {
+    k.wb = 2.0f * f.a0 * (2.4f + 0.14f / (2.0f * f.a0));
+    k.wl = k.wh = 0.0f;
+    return k;
+  }
+  const float q = 2.0f * f.a0 * (1.0f + 2.0f * f.reso);   // (the band: 0 dB, then its Q)
+  sem_mix(f.type, q, &k.wl, &k.wb, &k.wh);
+  if (a < 1.0f) {                       // (the old type's outputs, the states the same for all three)
+    float l, b, h;
+    sem_mix(f.from_type, q, &l, &b, &h);
+    k.wl = l + a * (k.wl - l), k.wb = b + a * (k.wb - b), k.wh = h + a * (k.wh - h);
+  }
   return k;
 }
-__attribute__((noinline)) SvfK svf_k_glide(const Filter& f, bool vox) { return svf_k(f, vox); }
+MI_COLD __attribute__((noinline)) SvfK svf_k_glide(const Filter& f, const Run& r, bool vox, uint32_t i1) {
+  return svf_k(f, vox, r.xf ? xf_at(f, r, i1) : 1.0f);
+}
 
-template <bool XF>
 void run_ladder(Filter& f, Run& r, float* x, uint32_t n) {
   const float kc0 = f.kc;               // (the mix's resonance: at the block's start, as before; not the FM's now)
-  LadK K = lad_k(f, kc0, XF);
-  // (0.16.65) a new TYPE: its mix from the old one's over the block (the states the same for all three)
-  const bool xf = XF;
-  const float dx = xf ? (f.xa1 - f.xa) / static_cast<float>(n) : 0.0f;
-  float a = xf ? f.xa : 1.0f;
+  LadK K = lad_k(f, kc0, 1.0f);
   float* V = f.V;
   float* dV = f.dV;
   float* tV = f.tV;
   for (uint32_t i0 = 0; i0 < n; i0 += kStep) {
     uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
     sub_block(f, r, i0, i1, &ping_at);
-    if (r.pg) r.pg = 0, K = lad_k_glide(f, kc0, XF);
+    if (r.pg | r.xf) r.pg = 0, K = lad_k_glide(f, r, kc0, i1);
     const float r4 = K.r4, drive = K.drive, lc = K.lc;
     const float* w = K.w;
-    const float* ow = K.ow;
     for (uint32_t i = i0; i < i1; ++i) {
       if (r.fm_on && !(i & r.skip)) fm_coefs(f, r);
       float in = x[i] + (i == ping_at ? r.ping : 0.0f);
@@ -428,13 +447,7 @@ void run_ladder(Filter& f, Run& r, float* x, uint32_t n) {
       V[3] += d3 + dV[3];
       dV[3] = d3;
       tV[3] = sat(V[3] * kInvVt2);
-      float y = w[0] * u + w[1] * V[0] + w[2] * V[1] + w[3] * V[2] + w[4] * V[3];
-      if (xf) {
-        a += dx;
-        const float yo = ow[0] * u + ow[1] * V[0] + ow[2] * V[1] + ow[3] * V[2] + ow[4] * V[3];
-        y = yo + a * (y - yo);
-      }
-      x[i] = out(f, r, lc * y);
+      x[i] = out(f, r, lc * (w[0] * u + w[1] * V[0] + w[2] * V[1] + w[3] * V[2] + w[4] * V[3]));
     }
   }
 }
@@ -471,56 +484,33 @@ inline float ms20_tick(const Filter& f, float* s, float& pre, int hp, int bp, fl
   return y;
 }
 
-template <bool XF>
+// (0.16.65) a new TYPE: its loop another, the old one played on to silence over the way's first half (its type there
+// for the block: xf_begin), the new one from there (its states the old one's, at silence: no click)
 void run_ms20(Filter& f, Run& r, float* x, uint32_t n) {
-  Ms20K K = ms20_k(f);
+  Ms20K K = ms20_k(f, 1.0f);
   float* s = f.k35;
   const int hp = f.type == MF_HP, bp = f.type == MF_BP;
-  // (0.16.65) a new TYPE (its loop another): the old one played on on a copy of the states and the new one faded in
-  // over the block (no reset: no click)
-  const bool xf = XF;
-  const int ohp = f.from_type == MF_HP, obp = f.from_type == MF_BP;
-  float* os = f.xk;
-  float opre = f.xpre;
-  const float dx = xf ? (f.xa1 - f.xa) / static_cast<float>(n) : 0.0f;
-  float a = f.xa;
   for (uint32_t i0 = 0; i0 < n; i0 += kStep) {
     uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
     sub_block(f, r, i0, i1, &ping_at);
-    if (r.pg) r.pg = 0, K = ms20_k_glide(f);
+    if (r.pg | r.xf) r.pg = 0, K = ms20_k_glide(f, r, i1);
     const float st = K.st, ist = K.ist, mk = K.mk;
     for (uint32_t i = i0; i < i1; ++i) {
       if (r.fm_on && !(i & r.skip)) fm_coefs(f, r);
       float in = x[i] + (i == ping_at ? r.ping : 0.0f);
       if (r.nv != 0.0f) in += r.nv * cnoise(f);
-      float y = ms20_tick(f, s, f.pre, hp, bp, in, st, ist);
-      if (xf) {
-        a += dx;
-        const float yo = ms20_tick(f, os, opre, ohp, obp, in, st, ist);
-        y = yo + a * (y - yo);
-      }
-      x[i] = out(f, r, y * f.iK * mk);
+      x[i] = out(f, r, ms20_tick(f, s, f.pre, hp, bp, in, st, ist) * f.iK * mk);
     }
   }
-  if (xf) f.xpre = opre;
 }
 
-template <bool XF>
 void run_sem(Filter& f, Run& r, float* x, uint32_t n) {
-  // DRIVE: its OTAs' input gain k (0: the linear filter, as it was), and its input
-  SvfK K = svf_k(f, false);
-  const float wl = f.type == MF_LP ? 1.0f : 0.0f, wh = f.type == MF_HP ? 1.0f : 0.0f;
-  // (0.16.65) a new TYPE: from the old one's outputs over the block (the states the same for all three)
-  const int ot = XF ? f.from_type : f.type;
-  const float ol = ot == MF_LP ? 1.0f : 0.0f, oh = ot == MF_HP ? 1.0f : 0.0f;
-  const float dx = XF ? (f.xa1 - f.xa) / static_cast<float>(n) : 0.0f;
-  float a = XF ? f.xa : 1.0f;
+  SvfK K = svf_k(f, false, 1.0f);       // DRIVE: its OTAs' input gain k (0: the linear filter, as it was), and its input
   for (uint32_t i0 = 0; i0 < n; i0 += kStep) {
     uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
     sub_block(f, r, i0, i1, &ping_at);
-    if (r.pg) r.pg = 0, K = svf_k_glide(f, false);
-    const float k = K.k, dg = K.dg, bias = K.bias, sb = K.sb, lvl = K.lvl;
-    const float wb = f.type == MF_BP ? K.q : 0.0f, ob = ot == MF_BP ? K.q : 0.0f;   // (the band: 0 dB, then its Q)
+    if (r.pg | r.xf) r.pg = 0, K = svf_k_glide(f, r, false, i1);
+    const float k = K.k, dg = K.dg, bias = K.bias, sb = K.sb, lvl = K.lvl, wl = K.wl, wb = K.wb, wh = K.wh;
     for (uint32_t i = i0; i < i1; ++i) {
       if (r.fm_on && !(i & r.skip)) fm_coefs(f, r);
       float lp, hp, in = x[i] + (i == ping_at ? r.ping : 0.0f);
@@ -528,25 +518,18 @@ void run_sem(Filter& f, Run& r, float* x, uint32_t n) {
       if (k > 0.0f) in = drive_in(f, in, dg, bias, sb, lvl);
       else f.dstale = 1;
       float bp = k > 0.0f ? svf_nl(f.sv, f.nl, in, f.g, f.b3, k, &lp, &hp) : svf(f.sv, in, f.g, f.b2, f.b3, &lp, &hp);
-      float y = wl * lp + wb * bp + wh * hp;
-      if (XF && a < 1.0f) {
-        a += dx;
-        const float yo = ol * lp + ob * bp + oh * hp;
-        y = yo + a * (y - yo);
-      }
-      x[i] = out(f, r, y);
+      x[i] = out(f, r, wl * lp + wb * bp + wh * hp);
     }
   }
 }
-
 void run_vox(Filter& f, Run& r, float* x, uint32_t n) {
   // DRIVE: the resonators' OTAs (gentler than SEM's: the vowels stay), the input; each formant +7 dB
-  SvfK K = svf_k(f, true);
+  SvfK K = svf_k(f, true, 1.0f);
   for (uint32_t i0 = 0; i0 < n; i0 += kStep) {
     uint32_t i1 = i0 + kStep > n ? n : i0 + kStep, ping_at;
     sub_block(f, r, i0, i1, &ping_at);
-    if (r.pg) r.pg = 0, K = svf_k_glide(f, true);
-    const float gain = K.q, k = K.k, dg = K.dg, bias = K.bias, sb = K.sb, lvl = K.lvl;
+    if (r.pg) r.pg = 0, K = svf_k_glide(f, r, true, i1);
+    const float gain = K.wb, k = K.k, dg = K.dg, bias = K.bias, sb = K.sb, lvl = K.lvl;
     for (uint32_t i = i0; i < i1; ++i) {
       if (r.fm_on && !(i & r.skip)) fm_coefs(f, r);
       float lp, hp, sum = 0.0f, in = x[i] + (i == ping_at ? 4.0f * r.ping : 0.0f);
@@ -563,18 +546,25 @@ void run_vox(Filter& f, Run& r, float* x, uint32_t n) {
   }
 }
 
-// (0.16.65) a block with a TYPE on its way (12 ms after the random dose throws it): in the flash
-__attribute__((noinline)) void process_xf(Filter& f, Run& r, float* x, uint32_t n) {
+// (0.16.65) a block on the way to a new TYPE: its share (12 ms: a quarter of it a block of 128), and the MS-20's loop
+// the old one's over its first half; then, after the block, its type back, the way on (in the flash)
+MI_COLD __attribute__((noinline)) void xf_begin(Filter& f, Run& r, uint32_t n) {
+  r.xf = 1;
   f.xa1 = fm_minf(1.0f, f.xa + static_cast<float>(n) * kXfRate);
-  switch (f.model) {
-    case MF_LADDER: run_ladder<true>(f, r, x, n); break;
-    case MF_MS20: run_ms20<true>(f, r, x, n); break;
-    default: run_sem<true>(f, r, x, n); break;   // (SEM: VOX's type, its vowels' set, takes no fade, and stays
-  }                                              // in the RAM alone)
-  f.xa = f.xa1;                         // (the new type reached: the old one gone)
-  for (int i = 0; i < 3; ++i) f.xk[i] = fm_flush(f.xk[i]);
-  f.xpre = fm_flush(f.xpre);
-  if (f.xa >= 1.0f || f.from_type < 0) f.from_type = -1;
+  r.dxa = (f.xa1 - f.xa) / static_cast<float>(n);
+  if (f.model == MF_MS20 && f.xa < 0.4999f) {
+    const int t = f.type;
+    f.type = f.from_type, f.from_type = t;   // (swapped back in xf_end)
+    r.xf = 2;
+  }
+}
+MI_COLD __attribute__((noinline)) void xf_end(Filter& f, Run& r) {
+  if (r.xf == 2) {
+    const int t = f.type;
+    f.type = f.from_type, f.from_type = t;
+  }
+  f.xa = f.xa1;
+  if (f.xa >= 1.0f) f.from_type = -1;
 }
 
 void process(Filter& f, float* x, uint32_t n) {
@@ -598,16 +588,15 @@ void process(Filter& f, float* x, uint32_t n) {
     f.from_type = -1;
     return;
   }
-  if (f.from_type >= 0 && f.model != MF_VOX) {
-    process_xf(f, r, x, n);
-  } else {
-    switch (f.model) {
-      case MF_LADDER: run_ladder<false>(f, r, x, n); break;
-      case MF_MS20: run_ms20<false>(f, r, x, n); break;
-      case MF_SEM: run_sem<false>(f, r, x, n); break;
-      default: run_vox(f, r, x, n); break;
-    }
+  r.xf = 0;
+  if (f.from_type >= 0) xf_begin(f, r, n);
+  switch (f.model) {
+    case MF_LADDER: run_ladder(f, r, x, n); break;
+    case MF_MS20: run_ms20(f, r, x, n); break;
+    case MF_SEM: run_sem(f, r, x, n); break;
+    default: run_vox(f, r, x, n); break;
   }
+  if (r.xf) xf_end(f, r);
   if (f.fade) {                          // STOP's fade out (~23 ms), then still
     float g = static_cast<float>(f.fade) * (1.0f / 1024.0f), dg = 1.0f / 1024.0f;
     for (uint32_t i = 0; i < n; ++i) {
@@ -633,20 +622,18 @@ void process(Filter& f, float* x, uint32_t n) {
 
 // (0.16.65) DECAY's, ATTACK's and FM's curves (their exponentials), made again only when their knobs move (each block
 // before: the same values, and their code in the RAM, its room full), in the flash
-__attribute__((noinline)) void slow_coefs(Filter& f, float d, float a, float fk) {
+MI_COLD __attribute__((noinline)) void slow_coefs(Filter& f, float d, float a, float fk) {
   f.kd = d, f.ka = a, f.kf = fk;
   f.short_decay = 200.0f * kInvSr * fm_exp2f(-8.0f * d);   // (Plaits' coefficients, a sample's: 5 ms .. 1.3 s, its
   f.decay_tail = 20.0f * kInvSr * fm_exp2f(-6.0f * d) - f.short_decay;   // tail 3 s)
   f.attack = 0.04f * static_cast<float>(kStep) * fm_exp2f(-12.0f * a);   // (0.7 ms .. 2.3 s)
   f.fm_t = fm_depth(fk);
 }
-// (0.16.65) a new TYPE, the model the same: from the type it was, the MS-20's loop as it was on its own states (in the
-// flash: mf_set is in the RAM, its room full)
-__attribute__((noinline)) void begin_xf(Filter& f) {
+// (0.16.65) a new TYPE, the model the same: on the way from the type it was (in the flash: mf_set is in the RAM, its
+// room full)
+MI_COLD __attribute__((noinline)) void begin_xf(Filter& f) {
   f.from_type = f.type;
   f.xa = 0.0f;
-  for (int i = 0; i < 3; ++i) f.xk[i] = f.k35[i];
-  f.xpre = f.pre;
 }
 }  // namespace
 
