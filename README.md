@@ -123,19 +123,21 @@ reste). Les projets et les sons enregistrés avant se relisent : une piste FM CY
 <https://distortedimages-code.github.io/MIFM1/>. Dans Chrome ou Edge, FM-1 branché en USB et à l'arrêt : installer,
 laisser la page écrire les tables des modules après le firmware. Le firmware d'origine se remet de la même façon.
 
-Les FM-1 vendus depuis l'automne 2026 (surtout sur AliExpress) n'ont pas la même mémoire flash : une UC25HQ80
-(identifiant B3 60 14) au lieu de la Puya P25Q80 d'origine (85 60 14), même taille (1 Mo), mêmes commandes. MIFM1 les
-prend toutes les deux depuis 0.16.62 (comme fm1-base depuis le 4 novembre 2026). Avant, sur ces FM-1, rien ne
-s'écrivait : ni les tables des modules (MIFM1 restait sur MODULE TABLES MISSING), ni les sauvegardes, ni les mises à
-jour depuis MIFM1. La page d'installation le rappelle avant d'installer (en anglais et en japonais) :
+Les FM-1 vendus depuis l'automne 2026 (surtout sur AliExpress, un M-VAVE blanc imprimé sous l'écran) n'ont pas la même
+mémoire flash : une UC25HQ80 (identifiant B3 60 14) au lieu de la Puya P25Q80 d'origine (85 60 14), même taille
+(1 Mo), mêmes commandes. MIFM1 les prend toutes les deux depuis 0.16.62 (comme fm1-base depuis le 4 novembre 2026).
+Avant, sur ces FM-1, rien ne s'écrivait : ni les tables des modules (MIFM1 restait sur MODULE TABLES MISSING), ni les
+sauvegardes, ni les mises à jour depuis MIFM1. La page « Quel FM-1 ? » du site (<https://distortedimages-code.github.io/MIFM1/fm1/>, en anglais
+et en français ; l'installateur et la page d'accueil y mènent) dessine les deux, avec les étapes de chacun et celles de
+la V16 d'M-VAVE. En résumé :
 - un FM-1 récent qui a encore le firmware d'origine s'installe comme les autres, depuis la même page ;
 - un FM-1 récent sur lequel MIFM1 0.16.61 ou avant est installé, la page ne le trouve pas (cette version n'y prend
   aucune mise à jour) : remettre d'abord le firmware d'origine avec l'outil de récupération (le lien de la page, sur
   un Mac ; sa version actuelle prend l'UC25HQ80), puis installer ;
 - sur un FM-1 récent (ou dans le doute), ne pas cocher m-bootloader pour l'instant : on ne sait pas encore s'il prend
   cette puce ;
-- le firmware V16 d'M-VAVE refuserait les autres firmwares d'après un témoignage, sans confirmation : si la page ne
-  trouve pas un FM-1 en V16, le signaler.
+- la V16 d'M-VAVE (nouveau bootloader) : pas besoin de revenir en V15, fm1-base s'installe par-dessus (testé par ses
+  auteurs sur un FM-1) ; m-bootloader décoché ; si la page ne trouve pas le FM-1, ne pas relancer en boucle, le signaler.
 
 Une puce que MIFM1 ne connaît pas s'affiche à la place des tables (FLASH NOT KNOWN, avec son identifiant) et dans la
 page PROJECT (« flash … : RAM only ») : rien n'y est écrit ; dites-le dans les issues du dépôt.
@@ -1754,7 +1756,8 @@ Sources : [Pretty Hate Machine](https://en.wikipedia.org/wiki/Pretty_Hate_Machin
   - `tests/` : le moteur sur l'ordinateur (`native.cc`) et le simulateur de fm1-base (`screens.txt`)
 - `tools/` : la copie du code Mutable (`vendor_mi.sh`, `patch_mi.sh`, `split_tables.py`) et celle du LXR-02
   (`vendor_lxr.py`, depuis un clone de son dépôt ; `lxr_check.cc`), les vérifications « comme
-  sur le FM-1 » (`device_check.sh`, `check_res_links.py`, `no_static_init.py`), l'installeur ; `tools/bench/` : le
+  sur le FM-1 » (`device_check.sh`, `check_res_links.py`, `no_static_init.py`), le site (`make_installer.py`,
+  `make_index.py`, `make_fm1.py` : la page « Quel FM-1 ? ») ; `tools/bench/` : le
   banc d'essai v0.0 (il se construit depuis le tag `bench-0.0` : les ponts vers les modules ont changé depuis)
 - `make test` : le patch par défaut joué 16 s sur l'ordinateur, chaque piste et chaque modèle entendus, sans NaN
   (WAV dans `build/wav`), et `make lxr-check` : les batteries FM comparées au calcul du LXR-02

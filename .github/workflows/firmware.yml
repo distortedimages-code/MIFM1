@@ -104,6 +104,7 @@ jobs:
         run: |
           python3 tools/make_installer.py firmware/build/mifm1-"$VERSION".fwsc "$VERSION" site
           python3 tools/make_index.py site "$VERSION"
+          python3 tools/make_fm1.py site "$VERSION"
       - name: The browser emulator (the firmware compiled to WebAssembly by Zig's clang, tools/web/emcc; the demo groove playing, the FM-1's load modelled)
         run: |
           pip install ziglang==0.17.0

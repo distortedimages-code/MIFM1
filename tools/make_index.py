@@ -80,12 +80,18 @@ a {{ color: inherit; text-underline-offset: 3px; }} a:hover {{ color: var(--oran
 .ways h2 {{ margin: .5rem 0 .8rem; font-size: clamp(3rem, 6vw, 5.4rem); line-height: .8; font-weight: 900; font-stretch: 62%; text-transform: uppercase; }}
 .ways p {{ margin: 0; }}
 .ways .go {{ margin-top: auto; padding-top: 1.2rem; font-weight: 800; font-stretch: 112%; }}
+.which {{ display: flex; align-items: center; gap: 1.4rem; margin: 8px 0 0; padding: 16px 22px; border: 2px solid var(--ink);
+          text-decoration: none; transition: background-color .15s ease; }}
+.which:hover {{ color: inherit; background: var(--paper); }}
+.which b {{ flex: none; font-size: 1.6rem; line-height: 1; font-weight: 900; font-stretch: 62%; text-transform: uppercase; }}
 .fine {{ margin: 56px 0 48px; padding-top: 1rem; border-top: 2px solid var(--ink); color: var(--grey); font-size: 14px; }}
 @media (max-width: 860px) {{ .intro, .ways {{ grid-template-columns: minmax(0, 1fr); }} .ways {{ margin-top: 40px; }} }}
 @media (max-width: 600px) {{
   .wrap {{ padding: 0 16px; }} .mark {{ font-size: 22vw; }} .intro {{ border-top-width: 7px; }} .lead {{ font-size: 2rem; }}
   .top {{ gap: .8rem; font-size: 13px; }} .top nav {{ gap: .8rem; }} .top .name {{ font-stretch: 100%; }}
   .lang button {{ font-size: 13px; padding: 3px 6px 2px; }}
+  .which {{ flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px 16px; }}
+  .top nav .wide {{ display: none; }}   /* (the phone: the bar under the cards leads there) */
 }}
 </style>
 </head>
@@ -95,6 +101,7 @@ a {{ color: inherit; text-underline-offset: 3px; }} a:hover {{ color: var(--oran
   <a class="name" href="./">MIFM1</a>
   <nav>
     <a href="emu/">{t("In the browser", "Dans le navigateur")}</a>
+    <a class="wide" href="fm1/">{t("Which FM-1?", "Quel FM-1 ?")}</a>
     <a href="https://github.com/distortedimages-code/MIFM1">{t("Source code", "Code source")}</a>
   </nav>
   <div class="lang" role="group" aria-label="Language / Langue">
@@ -117,11 +124,9 @@ a {{ color: inherit; text-underline-offset: 3px; }} a:hover {{ color: var(--oran
       <span class="go">{t("MIFM1 without the FM-1 →", "MIFM1 sans le FM-1 →")}</span></a></li>
     <li><a href="install/"><span class="n">02</span><h2>{t("Install", "Installer")}</h2>
       <p>{t("In Chrome or Edge, the FM-1 plugged in over USB and switched off. Let the page run to the end: the "
-            "firmware, then the modules' tables. An FM-1 sold since autumn 2026 (another flash chip) works too: "
-            "read the page's note on it first.",
+            "firmware, then the modules' tables.",
             "Dans Chrome ou Edge, le FM-1 branché en USB et à l'arrêt. Laisser la page aller jusqu'au bout : le "
-            "firmware, puis les tables des modules. Un FM-1 vendu depuis l'automne 2026 (une autre puce mémoire) "
-            "marche aussi : lire d'abord la note de la page à son sujet.")}</p>
+            "firmware, puis les tables des modules.")}</p>
       <span class="go">{t(f"Install MIFM1 {version} →", f"Installer MIFM1 {version} →")}</span></a></li>
     <li><a href="backup/"><span class="n">03</span><h2>{t("Back up", "Sauver")}</h2>
       <p>{t("The project saved on the FM-1, to a file on the computer, and back.",
@@ -134,6 +139,11 @@ a {{ color: inherit; text-underline-offset: 3px; }} a:hover {{ color: var(--oran
             "ou avec le FM-1 comme façade. Ouvrir ce fichier sur l'appareil : l'app l'ajoute.")}</p>
       <span class="go">{t(f"MIFM1 {version} for RemoteFM1 →", f"MIFM1 {version} pour RemoteFM1 →")}</span></a></li>
   </ul>
+  <a class="which" href="fm1/"><b>{t("Which FM-1?", "Quel FM-1 ?")}</b>
+    <span>{t("Two exist: since autumn 2026, a white M-VAVE under the screen and another memory chip. Find yours, "
+             "and its steps, before installing.",
+             "Il en existe deux : depuis l'automne 2026, un M-VAVE blanc sous l'écran et une autre puce mémoire. "
+             "Trouve le tien, et ses étapes, avant d'installer.")} →</span></a>
   <p class="fine">{t('MIFM1 is designed by Yoann, an active member of the Audiotrauma label. Vous êtes le bruit: '
                      '<a href="emu/#about">about the designer</a>. ',
                      'MIFM1 est conçu par Yoann, membre actif du label Audiotrauma. Vous êtes le bruit : '
