@@ -6736,7 +6736,8 @@ int main(int argc, char** argv) {
     // kit, its texts; a pure sine at TIMBRE 0 (its pitch, its partials), the fold's partials as TIMBRE rises, SYMM's
     // even ones; the fold's alias (ADAA) low on a high note; FM at a whole ratio harmonic, at sqrt 2 metallic; a ping:
     // short at DECAY 0, long at the end of its range, VCA shorter than Combo, LP darker; at rest after it, exactly
-    // silent; 300 settings finite and bounded; a project of 0.16.62 (39) and a sound (11) renumbered
+    // silent; (0.16.64) its fall quick then lingering, a run of pings longer as the cell's history fills, each strike
+    // its own; 300 settings finite and bounded; a project of 0.16.62 (39) and a sound (11) renumbered
     const int em = eng_model_find(MK_EASEL, 0), speech = eng_model_find(MK_PLAITS, 15), modal = eng_model_find(MK_PLAITS, 20);
     int ok = em == 21 && ENG_MODELS == 28 && eng_model_bank(em) == 2 && eng_model_own(em) && speech == 22 &&
              modal == ENG_MODELS - 1 && eng_model_find(MK_STATIC, 0) == 20 && !std::strcmp(eng_model_abbr(em), "EASL");
@@ -6852,8 +6853,9 @@ int main(int argc, char** argv) {
     // a ping: its level each 2.9 ms (the peak of a 128-sample block, over 60 Hz: not the coupling capacitor's slow
     // settling after a burst), the time it falls 40 dB under its top
     static float hp[44100 * 3];
-    auto fall40 = [&](const float* x, int len) {
+    auto fall_db = [&](const float* x, int len, double db) {
       double top = 0.0, a1 = 0.0, b1 = 0.0, a2 = 0.0, b2 = 0.0;
+      const double under = std::pow(10.0, -db / 20.0);
       const double r = 1.0 - 2.0 * M_PI * 60.0 / 44100.0;
       for (int i = 0; i < len; ++i) {   // (twice a one-pole high-pass at 60 Hz)
         b1 = x[i] - a1 + r * b1, a1 = x[i];
@@ -6865,14 +6867,18 @@ int main(int argc, char** argv) {
         double m = 0.0;
         for (int i = b; i < b + 128; ++i) m = std::max(m, static_cast<double>(std::fabs(hp[i])));
         if (m > top) top = m, at = -1;
-        else if (at < 0 && m < top * 0.01) at = b;
+        else if (at < 0 && m < top * under) at = b;
       }
       return at < 0 ? 1e9 : at / 44.1;
     };
-    auto zc = [&](const float* x, int a, int b) {   // (its zero crossings in a span: how bright)
-      int z = 0;
-      for (int i = a + 1; i < b; ++i) z += (x[i - 1] < 0.0f) != (x[i] < 0.0f);
-      return z;
+    auto fall40 = [&](const float* x, int len) { return fall_db(x, len, 40.0); };
+    auto bright = [&](const float* x, int a, int b) {   // (its slope's energy over its own, in a span: how bright)
+      double d = 0.0, e = 0.0;
+      for (int i = a + 1; i < b; ++i) {
+        d += static_cast<double>(x[i] - x[i - 1]) * (x[i] - x[i - 1]);
+        e += static_cast<double>(x[i]) * x[i];
+      }
+      return d / (e + 1e-30);
     };
     set(k, 0.5f, 13, 0.7f, 0.0f, 0.5f, 0.5f);   // (DECAY 0: the shortest ping)
     play(k, n220, 44100, 64, buf);
@@ -6885,7 +6891,7 @@ int main(int argc, char** argv) {
     set(k, 0.5f, 13, 0.7f, 0.2f, 0.5f, 0.5f);
     play(k, n220, 44100, 64, buf);
     const double t_combo = fall40(buf, 44100);
-    const int z_combo = zc(buf, 2205, 6615);
+    const double z_combo = bright(buf, 1764, 5292);
     double pk_combo = 0.0, pk_vca = 0.0;   // (VCA's ping as loud, nearly: 3 dB under, here)
     for (int i = 0; i < 44100; ++i) pk_combo = std::max(pk_combo, static_cast<double>(std::fabs(hp[i])));
     set(k, 0.5f, 13, 0.7f, 0.2f, 0.0f, 0.5f);
@@ -6893,11 +6899,32 @@ int main(int argc, char** argv) {
     const double t_vca = fall40(buf, 44100);
     for (int i = 0; i < 44100; ++i) pk_vca = std::max(pk_vca, static_cast<double>(std::fabs(hp[i])));
     const double vca_db = 20.0 * std::log10(pk_vca / pk_combo);
+    // (0.16.64) a struck thing's fall: quick, then lingering (VCA: 20 dB down sooner than the next 20); 0.16.63's
+    // vactrol fell flat, then plunged (47 ms, then 39)
+    const double v20 = fall_db(buf, 44100, 20.0), v40 = fall_db(buf, 44100, 40.0);
     set(k, 0.5f, 13, 0.7f, 0.2f, 1.0f, 0.5f);
     play(k, n220, 44100, 64, buf);
-    const int z_lp = zc(buf, 2205, 6615);
-    const int pings = t_short < 60.0 && t_long > 250.0 && t_long < 2500.0 && t_vca < t_combo && z_lp < z_combo &&
-                      after == 0.0 && vca_db > -6.0 && vca_db < 1.0;
+    const double z_lp = bright(buf, 1764, 5292);
+    // a run of eight pings, 125 ms apart (VCA): the cell's history fills, the last rings on longer than the first;
+    // each strike its own, a little (the seven after the first, the cell lit already: their peaks apart, by less than
+    // 2 dB; the first, from dark, 3 dB under, as 0.16.63's)
+    set(k, 0.5f, 13, 0.7f, 0.2f, 0.0f, 0.5f);
+    easel_reset(1);
+    easel_set(1, n220, k);
+    for (int s = 0; s < 8 * 5504; s += 64) {
+      easel_gate(1, s % 5504 < 64);
+      easel_render(1, buf + s, 64);
+    }
+    double first20 = fall_db(buf, 5504, 20.0), last20 = fall_db(buf + 7 * 5504, 5504, 20.0), hmin = 1e9, hmax = 0.0;
+    for (int h = 1; h < 8; ++h) {
+      double m = 0.0;
+      for (int i = h * 5504; i < h * 5504 + 1024; ++i) m = std::max(m, static_cast<double>(std::fabs(buf[i])));
+      hmin = std::min(hmin, m), hmax = std::max(hmax, m);
+    }
+    const double spread = 20.0 * std::log10(hmax / hmin);
+    const int pings = t_short < 60.0 && t_long > 250.0 && t_long < 2500.0 && t_vca < t_combo && z_lp < 0.7 * z_combo &&
+                      after == 0.0 && vca_db > -6.0 && vca_db < 1.0 && v20 < v40 - v20 && last20 > 1.05 * first20 &&
+                      spread > 0.05 && spread < 2.0;
     // 300 settings, notes 24..96: finite, bounded (its knee: 1.2 at most)
     srand(77);
     int finite = 1;
@@ -6936,12 +6963,13 @@ int main(int argc, char** argv) {
     printf("EASEL: at %d of %d, knobs %s, texts %s; TIMBRE 0 pure (h2 %.4f h3 %.4f of h1 %.3f) %s; folded h3+h5 %.2f of "
            "h1, h2 %.4f, SYMM h2 %.2f %s; alias at 1.1 kHz %.1f dB, FM x2 %.1f dB, x1.41 %.1f dB, AM x2 %.1f dB off the "
            "harmonics %s; low crests a period on %.1f dB %s; ping 40 dB down in %.0f ms (shortest), %.0f ms (longest), "
-           "Combo %.0f, VCA %.0f (%.1f dB), crossings Combo %d LP %d, after %.1e %s; 300 settings peak %.2f %s; "
+           "Combo %.0f, VCA %.0f (%.1f dB; 20 dB down in %.0f ms, 40 in %.0f), brightness Combo %.4f LP %.4f, a run: "
+           "20 dB down in %.0f ms first, %.0f last, peaks %.2f dB apart, after %.1e %s; 300 settings peak %.2f %s; "
            "0.16.62's project %s, its sound %s\n",
            em, ENG_MODELS, knobs ? "ok" : "WRONG", texts ? "ok" : "WRONG", h2, h3, h1, pure ? "ok" : "WRONG",
            (f3 + f5) / f1, f2 / f1, s2 / s1, folds ? "ok" : "WRONG", alias, fm_whole, fm_metal, am_whole,
-           metal ? "ok" : "WRONG", crest, crests ? "ok" : "WRONG", t_short, t_long, t_combo, t_vca, vca_db, z_combo,
-           z_lp, after, pings ? "ok" : "WRONG", pk, bounded ? "ok" : "WRONG", proj_ok ? "ok" : "WRONG",
+           metal ? "ok" : "WRONG", crest, crests ? "ok" : "WRONG", t_short, t_long, t_combo, t_vca, vca_db, v20, v40,
+           z_combo, z_lp, first20, last20, spread, after, pings ? "ok" : "WRONG", pk, bounded ? "ok" : "WRONG", proj_ok ? "ok" : "WRONG",
            snd_ok ? "ok" : "WRONG");
     if (!ok) ++failures, printf("FAIL: EASEL\n");
   }

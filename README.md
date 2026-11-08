@@ -1027,11 +1027,20 @@ frappe.
   Lowpass-Gate*, DAFx-13) : son circuit à deux états (C1 1 nF, C2 220 pF, C3 4,7 nF en LP), par trapèzes, ses trois
   modes, **GATE** : **VCA**, **Combo** (les deux à la fois, le son de l'Easel) et **LP** ; la photorésistance,
   Rf = 3,464 / If^1,4 + 1136 Ω, du courant de la LED (40 mA allumée ; éteinte 0,1 µA : le plancher de 10 µA de
-  l'article laissait la gate entrouverte, −40 dB) ; le vactrol monte en 12 ms (plus vite allumé fort) et retombe plus
-  lentement à mesure qu'il s'éteint. En VCA, Rα vaut 50 kΩ ici (5 kΩ dans l'article : un ping y sortait 20 dB sous
-  celui du Combo), 3 dB de plus : un ping 3 dB sous le Combo, une enveloppe longue 2 dB au-dessus.
-- **DECAY** : son premier tiers est un **Ping** (l'enveloppe une impulsion, la retombée du vactrol de 35 à 700 ms ;
-  l'anneau dit « Ping », le temps dessous) ; au-delà, la descente de l'enveloppe, de 2 ms à 8 s. **T.ENV** et **M.ENV**
+  l'article laissait la gate entrouverte, −40 dB). En VCA, Rα vaut 50 kΩ ici (5 kΩ dans l'article : un ping y sortait
+  20 dB sous celui du Combo), 3 dB de plus : un ping 3 dB sous le Combo, une enveloppe longue 2 dB au-dessus.
+- **Le vactrol** (0.16.64, plus organique) : sa photorésistance se comporte comme une cellule CdS. Allumée, elle monte
+  comme avant (12 ms, plus vite allumée fort : l'attaque douce d'un ping, environ 2 ms). Éteinte, ses porteurs se
+  recombinent de deux façons à la fois : **par paires** (rapide tant qu'elle est claire, puis une longue traîne en
+  1/t) et **seuls** (ce qui coupe la traîne et la ramène au noir). Un ping tombe donc vite, puis s'attarde, sombre :
+  comme un objet qu'on frappe (avant, l'unipolaire de l'article sur son logarithme tombait à plat puis plongeait). Elle
+  a une **mémoire** : allumée un moment, ses pièges se remplissent et elle se recombine plus lentement (jusqu'à 1,6
+  fois ; remplie en 0,25 s, vidée en 2,5 s) : une série de pings rapides sonne plus longue qu'un ping seul, et elle
+  répond un peu plus vite à chaud. **Chaque frappe est un peu différente** : le courant de la LED ±4 %, le temps ±4 %
+  (la main, la chaleur de la cellule ; un tirage fixe : le même projet rejoue les mêmes frappes).
+- **DECAY** : son premier tiers est un **Ping** (l'enveloppe une impulsion ; le temps affiché, de 35 à 700 ms, est
+  celui que met un ping en Combo sur un Do 3 pour tomber de 40 dB ; l'anneau dit « Ping », le temps dessous) ;
+  au-delà, la descente de l'enveloppe, de 2 ms à 8 s. **T.ENV** et **M.ENV**
   (depuis le milieu) laissent la lumière de la gate bouger TIMBRE et MOD : plus brillant et plus modulé à la frappe (à
   droite), ou l'inverse (à gauche).
 
@@ -1041,11 +1050,14 @@ frappe.
 | **2** | **DECAY** Ping 35 ms à 700 ms, puis 2 ms à 8 s | **GATE** VCA, Combo, LP | **T.ENV** −100 à +100 % | **M.ENV** −100 à +100 % |
 | **3** | **SYMM** −100 à +100 % | TRANSP | OCTAVE | F.KEY |
 
-Choisir EASEL met ses réglages aux siens : TIMBRE 30, RATIO x3, MOD FM 0,5, un Ping de 396 ms, Combo, T.ENV +40 %,
-M.ENV +30 %, SYMM Off. Mesuré : un ping retombe de 40 dB en 29 ms au plus court, en 331 ms au plus long (Combo 110 ms,
-VCA 81 ms au même DECAY) ; le LP est plus sombre ; la voix se tait ensuite exactement (zéro). Son niveau, pris sur ses
-noires, est 1 dB au-dessus de TAURUS. Une voix coûte au FM-1 environ 10 % d'un bloc (compté, à mesurer sur la
-machine). Les projets et les sons enregistrés avant se relisent : EASEL prend la place 21, SPEECH et les autres
+Choisir EASEL met ses réglages aux siens : TIMBRE 30, RATIO x3, MOD FM 0,5, un Ping de 253 ms (0.16.63 : 396 ms
+de l'ancien vactrol, à peu près aussi long), Combo, T.ENV +40 %, M.ENV +30 %, SYMM Off. Mesuré : un ping retombe de
+40 dB en 32 ms au plus court, en 644 ms au plus long (Combo 192 ms, VCA 131 ms au même DECAY, 2,4 dB sous lui) ; en
+VCA, il perd ses 20 premiers dB en 52 ms, les 20 suivants en 79 ms (rapide, puis il s'attarde) ; une série de huit
+pings à 125 ms d'écart : le dernier 17 % plus long que le premier ; le LP est plus sombre ; la voix se tait ensuite
+exactement (zéro). Son niveau, pris sur ses noires, est celui de TAURUS. Une voix coûte au FM-1 environ 8 % d'un bloc
+(compté, à mesurer sur la machine ; 0.16.64 : les cellules du repli sous leur seuil sautées, 17 à 27 % d'instructions
+en moins). Les projets et les sons enregistrés avant se relisent : EASEL prend la place 21, SPEECH et les autres
 modèles de Plaits passent un cran plus loin.
 
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
@@ -1137,6 +1149,14 @@ rendus aux presets, le code du son inchangé. En 0.16.1, les seize moteurs de Pl
 distortion, VA-VCF, ses trois batteries) sortent du firmware : un moteur muet tient leurs places (les huit joués gardent
 leurs numéros), une cinquantaine de Ko de flash et 26 Ko de mémoire rendus (l'arène du son passe de 280 à 260 Ko ; le
 projet de travail et le tampon de lecture des anciens projets passent dans le pool, hors de la RAM).
+
+**Moins de calcul** (0.16.64), le même son (à −113 dB près au pire, des arrondis) : PADS ajoute les décalages de
+ses scies une fois pour toutes les voix et écrit les corrections de ses polyBLEP là où elles tombent, au lieu de les
+porter à chaque échantillon, et garde ses états (enveloppe, filtre, cloche) en variables locales sur le bloc : son
+plancher de 134 à 122 µs par bloc, une note à trois scies de 21 à 19 µs. EASEL saute les cellules du repli sous leur
+seuil (une ou deux travaillent la plupart du temps) : 294 à 244 µs. Le mix fait ses envois et son mélange en une passe,
+le delay garde ses états en locales : les effets de 552 à 523 µs. Comptés en instructions (`tools/web/calibrate.py`) ;
+sur le FM-1, ce qui s'exécute depuis la flash paie aussi ses défauts de cache, que ce compte ne voit pas.
 
 **La place dans la flash** (0.16.58) : la 0.16.57 laissait 524 octets libres sur les 581 564 de l'image. La table du
 replieur d'onde de Warps (16 Ko) passe dans la zone de ressources, avec les autres grosses tables (elle se lit au même

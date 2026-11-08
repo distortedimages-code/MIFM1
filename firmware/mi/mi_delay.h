@@ -62,31 +62,40 @@ class Delay {
     float gain = 1.0f + drive_ * 5.0f, makeup = 1.0f / (1.0f + drive_ * 1.5f);
     float fb = feedback_ / (gain * makeup);   // (DRIVE's gain taken back on the loop: FEEDBACK is the loop's gain)
     float env = env_;
+    // (0.16.64: its states in locals over the block, put back after it: out_l, out_r might have been them for the
+    // compiler, loaded and stored again every sample)
+    float time = time_, phase = phase_;
+    uint32_t wr = write_;
+    const float target = target_, mod = mod_, blend = blend_;
+    const int pp = ping_pong_, mode = mode_;
+    int16_t* const line = line_;
+    const uint32_t size = size_;
     for (uint32_t i = 0; i < n; ++i) {
-      time_ += (target_ - time_) * kGlide;
-      phase_ += lfo_inc;
-      if (phase_ >= 1.0f) phase_ -= 1.0f;
-      float tri = phase_ < 0.5f ? 4.0f * phase_ - 1.0f : 3.0f - 4.0f * phase_;
-      float t = time_ * (1.0f + mod_ * 0.006f * tri);
-      float a = Read(t), b = ping_pong_ ? Read(2.0f * t) : a;
-      float x = ping_pong_ ? b : a, m = x < 0.0f ? -x : x;
+      time += (target - time) * kGlide;
+      phase += lfo_inc;
+      if (phase >= 1.0f) phase -= 1.0f;
+      float tri = phase < 0.5f ? 4.0f * phase - 1.0f : 3.0f - 4.0f * phase;
+      float t = time * (1.0f + mod * 0.006f * tri);
+      float a = Read(line, size, wr, t), b = pp ? Read(line, size, wr, 2.0f * t) : a;
+      float x = pp ? b : a, m = x < 0.0f ? -x : x;
       env = m > env ? env + (m - env) * kAttack : env * kRelease;
       float w = in[i] + fb * (env > kCeil ? kCeil / env : 1.0f) * x;
-      if (mode_ == 1) w = Crossfade(w, svf_.Process<stmlib::FILTER_MODE_LOW_PASS>(w), blend_);
-      else if (mode_ == 2) w = Crossfade(w, svf_.Process<stmlib::FILTER_MODE_HIGH_PASS>(w), blend_);
+      if (mode == 1) w = Crossfade(w, svf_.Process<stmlib::FILTER_MODE_LOW_PASS>(w), blend);
+      else if (mode == 2) w = Crossfade(w, svf_.Process<stmlib::FILTER_MODE_HIGH_PASS>(w), blend);
       w = Knee(w * gain) * makeup;
       int32_t s = static_cast<int32_t>(w * 32767.0f);
-      line_[write_] = static_cast<int16_t>(s > 32767 ? 32767 : s < -32767 ? -32767 : s);
-      if (++write_ >= size_) write_ = 0;
+      line[wr] = static_cast<int16_t>(s > 32767 ? 32767 : s < -32767 ? -32767 : s);
+      if (++wr >= size) wr = 0;
       out_l[i] = a;
       out_r[i] = b;
     }
     env_ = env;
+    time_ = time, phase_ = phase, write_ = wr;
   }
 
  private:
-  inline float Read(float delay) {      // delay samples ago, linear between two
-    float pos = static_cast<float>(write_) - delay;
+  static inline float Read(const int16_t* line_, uint32_t size_, uint32_t write_, float delay) {   // delay samples ago,
+    float pos = static_cast<float>(write_) - delay;                                                  // linear between two
     while (pos < 0.0f) pos += static_cast<float>(size_);
     uint32_t i = static_cast<uint32_t>(pos);
     float f = pos - static_cast<float>(i);

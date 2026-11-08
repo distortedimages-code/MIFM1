@@ -228,9 +228,10 @@ const ModelDef kModelDef[ENG_MODELS] = {
 // perc, -28 the cymbal, -29 the hats (from -20 to -35). In quarter decibels, on the voice as it comes out (before its
 // bits, its filter, Warps). (0.16.43: CHOIR's a held C5 as loud as the synths' held notes, -16 LUFS on their
 // average here, measured; 0.16.49: the SDS' as MIFM1's drums, -22 the kick, -24 the snare and the tom, -26 the perc;
-// 0.16.63: EASEL's ping, its quarter notes, 1 dB over TAURUS')
+// 0.16.63: EASEL's ping, its quarter notes, 1 dB over TAURUS'; 0.16.64: its new vactrol falling quicker at first, 2 dB
+// more: as loud as TAURUS')
 const int8_t kModelTrim[ENG_MODELS] = {13, 10, 13, 18, 3, 8, -7, 0, -12, -23, -31, -30, -21, -17, -12, 30, 20, 8, -3, 2, 8,
-                                       4, 35, 1, 14, 10, 32, -8};
+                                       12, 35, 1, 14, 10, 32, -8};
 const int kModels34 = 25, kOtis34 = 15;   // (0.16.24 to 0.16.42's numbers: 25 models, OTIS 15)
 const int8_t kFrom34[kModels34] = {0, 1, 2, 3, 4, 5, 6, 7, 3, 3, 8, 9, 10, 11, 12, 11, 13, 14, 16, 17, 18, 19, 20, 21, 22};
 const char* const kBankNames[ENG_BANKS] = {"DRUMS", "FM DRUMS", "MIFM1", "PLAITS", "NOISE & PHYSICAL", "SDS"};
@@ -2894,27 +2895,31 @@ void mix_job(uint32_t n) {
     gl[t] = mj.gl[t];
     gr[t] = mj.gr[t];
   }
+  // (0.16.64) the sends and the dry mix in one pass, their steps and the tracks' gains in locals (the sums as before,
+  // track by track: the same, bit for bit)
+  float st[ENG_TRACKS], dst[ENG_TRACKS], lt[ENG_TRACKS], rt[ENG_TRACKS], gn[ENG_TRACKS];
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    st[t] = mj.dsend_d[t], dst[t] = mj.ddsend_d[t], lt[t] = mj.dgl[t], rt[t] = mj.dgr[t], gn[t] = mj.gain[t];
+  }
+  const float *x0 = mbuf[0], *x1 = mbuf[1], *x2 = mbuf[2], *x3 = mbuf[3];
+  static_assert(ENG_TRACKS == 4, "the mix's four tracks");
   for (uint32_t i = 0; i < n; ++i) {
-    float s = 0.0f, ds = 0.0f;
+    const float x[ENG_TRACKS] = {x0[i], x1[i], x2[i], x3[i]};
+    float s = 0.0f, ds = 0.0f, dl = 0.0f, dr = 0.0f;
     for (int t = 0; t < ENG_TRACKS; ++t) {
-      sends[t] += mj.dsend_d[t];
-      dsends[t] += mj.ddsend_d[t];
-      s += sends[t] * mbuf[t][i];
-      ds += dsends[t] * mbuf[t][i];
-      float a = fm_fabsf(mbuf[t][i] * mj.gain[t]);
+      sends[t] += st[t];
+      dsends[t] += dst[t];
+      s += sends[t] * x[t];
+      ds += dsends[t] * x[t];
+      float a = fm_fabsf(x[t] * gn[t]);
       if (a > pk[t]) pk[t] = a;
+      gl[t] += lt[t];
+      gr[t] += rt[t];
+      dl += gl[t] * x[t];
+      dr += gr[t] * x[t];
     }
     fx_rsend[i] = s;
     fx_dsend[i] = ds;
-  }
-  for (uint32_t i = 0; i < n; ++i) {
-    float dl = 0.0f, dr = 0.0f;
-    for (int t = 0; t < ENG_TRACKS; ++t) {
-      gl[t] += mj.dgl[t];
-      gr[t] += mj.dgr[t];
-      dl += gl[t] * mbuf[t][i];
-      dr += gr[t] * mbuf[t][i];
-    }
     fx_dry_l[i] = dl;
     fx_dry_r[i] = dr;
   }

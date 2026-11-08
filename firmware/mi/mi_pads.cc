@@ -538,26 +538,28 @@ void pads_gate(int g) {
 namespace {
 
 // a saw's step, its alias taken off by a polyBLEP a sample late: at the wrap (t the sample's fraction past it) the
-// sample before takes -t^2 (written back to it, in the sum: g its gain there), this one (1 - t)^2
-inline void saw(float& p, float d, float id, float& acc, float& cor, float* before, float g) {
+// sample before takes -t^2, this one (1 - t)^2, both written into the sum where they fall (g their gain there; 0.16.64:
+// this one's no more carried to the sum a sample at a time)
+inline void saw(float& p, float d, float id, float& acc, float* before, float g) {
   p += d;
   if (p >= 1.0f) {
     p -= 1.0f;
     float t = p * id;
-    *before -= g * t * t;
-    cor += (1.0f - t) * (1.0f - t);
+    before[0] -= g * t * t;
+    before[1] += g * (1.0f - t) * (1.0f - t);
   }
   acc += p;
 }
 
 // the voices, a block of them summed (NS saws a voice), a sample late: sum[0] the last block's last sample (still
-// open to a wrap's correction), sum[1..n] this block's; each voice through the block in turn, its phases held
+// open to a wrap's correction), sum[1..n] this block's; each voice through the block in turn, its phases held. (0.16.64:
+// the saws' offsets, a constant, in the sum from the start, once for all the voices; a voice's sample two products)
 template <int NS>
 void voices(Pad& v, float* sum, uint32_t n, const float (*inc)[3], const float (*idt)[3], const float* se, float g_saw,
             float g_sin) {
   sum[0] = v.pend;
-  for (uint32_t s = 1; s <= n; ++s) sum[s] = 0.0f;
-  const float off = -static_cast<float>(NS) * g_saw;   // (each saw 2 p - 1)
+  const float off = -static_cast<float>(NS) * g_saw * static_cast<float>(v.nv);   // (each saw 2 p - 1)
+  for (uint32_t s = 1; s <= n; ++s) sum[s] = off;
   const float g2 = 2.0f * g_saw;
   for (int i = 0; i < v.nv; ++i) {
     float p0 = v.ph[i][0], p1 = v.ph[i][1], p2 = v.ph[i][2];
@@ -566,15 +568,15 @@ void voices(Pad& v, float* sum, uint32_t n, const float (*inc)[3], const float (
     float x = v.sx[i], y = v.sy[i];
     const float e = se[i];
     for (uint32_t s = 0; s < n; ++s) {
-      float acc = 0.0f, cor = 0.0f;
-      saw(p0, d0, i0, acc, cor, sum + s, g_saw);
+      float acc = 0.0f;
+      saw(p0, d0, i0, acc, sum + s, g_saw);
       if (NS == 3) {
-        saw(p1, d1, i1, acc, cor, sum + s, g_saw);
-        saw(p2, d2, i2, acc, cor, sum + s, g_saw);
+        saw(p1, d1, i1, acc, sum + s, g_saw);
+        saw(p2, d2, i2, acc, sum + s, g_saw);
       }
       x += e * y;                       // (the sine: x' = x + e y, y' = y - e x')
       y -= e * x;
-      sum[s + 1] += g2 * acc + g_saw * cor + off + g_sin * y;
+      sum[s + 1] += g2 * acc + g_sin * y;
     }
     v.ph[i][0] = p0;
     if (NS == 3) {
@@ -600,19 +602,19 @@ struct WaveW {
   float sin4, tri2, saw, sq, fall;      // 4 w_sine, 2 w_triangle, w_saw, w_square; the fall's (w_saw + w_square)
 };
 template <int SEG>                      // (-1: any, its weights as they are)
-inline void wave(float& p, float d, float id, float& acc, float& cor, float* before, float g, const WaveW& c) {
+inline void wave(float& p, float d, float id, float& acc, float* before, float g, const WaveW& c) {
   p += d;
   if (p >= 1.0f) {
     p -= 1.0f;
     if (SEG != 0) {
       const float t = p * id;
-      *before -= c.fall * g * t * t;
-      cor += c.fall * (1.0f - t) * (1.0f - t);
+      before[0] -= c.fall * g * t * t;
+      before[1] += g * c.fall * (1.0f - t) * (1.0f - t);
     }
   } else if ((SEG == 2 || (SEG < 0 && c.sq > 0.0f)) && p >= 0.5f && p - d < 0.5f) {
     const float t = (p - 0.5f) * id;
-    *before += c.sq * g * t * t;
-    cor -= c.sq * (1.0f - t) * (1.0f - t);
+    before[0] += c.sq * g * t * t;
+    before[1] -= g * c.sq * (1.0f - t) * (1.0f - t);
   }
   const float x = 2.0f * p - 1.0f;
   if (SEG == 0) {
@@ -631,8 +633,9 @@ template <int NS, int SEG>
 void voices_w(Pad& v, float* sum, uint32_t n, const float (*inc)[3], const float (*idt)[3], const float* se,
               float g_saw, float g_sin, const WaveW& c) {
   sum[0] = v.pend;
-  for (uint32_t s = 1; s <= n; ++s) sum[s] = 0.0f;
-  const float off = g_saw * static_cast<float>(NS) * 0.5f * c.tri2;   // (the triangles' 1)
+  const float off = g_saw * static_cast<float>(NS) * 0.5f * c.tri2 * static_cast<float>(v.nv);   // (the triangles' 1)
+  for (uint32_t s = 1; s <= n; ++s) sum[s] = off;
+  const WaveW cw = c;                   // (its weights in registers: the sum's stores could have been them)
   for (int i = 0; i < v.nv; ++i) {
     float p0 = v.ph[i][0], p1 = v.ph[i][1], p2 = v.ph[i][2];
     const float d0 = inc[i][0], d1 = NS == 3 ? inc[i][1] : 0.0f, d2 = NS == 3 ? inc[i][2] : 0.0f;
@@ -640,15 +643,15 @@ void voices_w(Pad& v, float* sum, uint32_t n, const float (*inc)[3], const float
     float x = v.sx[i], y = v.sy[i];
     const float e = se[i];
     for (uint32_t s = 0; s < n; ++s) {
-      float acc = 0.0f, cor = 0.0f;
-      wave<SEG>(p0, d0, i0, acc, cor, sum + s, g_saw, c);
+      float acc = 0.0f;
+      wave<SEG>(p0, d0, i0, acc, sum + s, g_saw, cw);
       if (NS == 3) {
-        wave<SEG>(p1, d1, i1, acc, cor, sum + s, g_saw, c);
-        wave<SEG>(p2, d2, i2, acc, cor, sum + s, g_saw, c);
+        wave<SEG>(p1, d1, i1, acc, sum + s, g_saw, cw);
+        wave<SEG>(p2, d2, i2, acc, sum + s, g_saw, cw);
       }
       x += e * y;
       y -= e * x;
-      sum[s + 1] += g_saw * (acc + cor) + off + g_sin * y;
+      sum[s + 1] += g_saw * acc + g_sin * y;
     }
     v.ph[i][0] = p0;
     if (NS == 3) {
@@ -1123,9 +1126,13 @@ void pads_render(float* out, uint32_t n) {
   const float vox_rate = ly == LY_VOX ? 0.07f * exp2_b(4.0f * la - 2.0f) : 0.0f;
   const float vox_ft = ly == LY_VOX ? exp2_b(tr * (1.0f / 12.0f)) : 1.0f;
   const float air_q = ly == LY_AIR ? 28.0f * exp2_b(4.5f * la - 2.25f) : 28.0f;
-  for (uint32_t s = 0; s < n; ++s) {
-    if ((s & 31u) == 0u) {              // the voices, 32 samples at a time
-      uint32_t m = n - s < 32u ? n - s : 32u;
+  // (0.16.64) the pad's states in locals over the block, put back after it (the compiler kept them in memory, out[]
+  // might have been one of them: loaded and stored again every sample); its 32 samples' chunks, a loop each
+  float att = v.att, dec = v.dec, e = v.env, lp1 = v.lp1, lp2 = v.lp2, dcx = v.dcx, dcy = v.dcy;
+  float bell_m = v.bell_m, bell_c = v.bell_c, bell_e = v.bell_e, bell_i = v.bell_i;
+  for (uint32_t s0 = 0; s0 < n; s0 += 32u) {
+    const uint32_t m = n - s0 < 32u ? n - s0 : 32u;
+    {                                   // the voices, 32 samples at a time
       if (saw_only) {                   // (WAVE on Saw: as before 0.16.57)
         if (nsaw == 3) voices<3>(v, sum, m, inc, idt, se, g_saw, g_sin);
         else voices<1>(v, sum, m, inc, idt, se, g_saw, g_sin);
@@ -1139,13 +1146,13 @@ void pads_render(float* out, uint32_t n) {
       if (g_down > 0.0f)                // (Down: each note's sine an octave under, added)
         for (int i = 0; i < v.nv; ++i) {
           float x = v.dx[i], y = v.dy[i];
-          const float e = de[i];
+          const float de_i = de[i];
           for (uint32_t q = 0; q < m; ++q) {
-            x += e * y;
-            y -= e * x;
+            x += de_i * y;
+            y -= de_i * x;
             sum[q] += g_down * y;
           }
-          const float r = 0.5f * (1.0f + (1.0f - 0.25f * e * e) / (x * x + e * x * y + y * y + 1e-9f));
+          const float r = 0.5f * (1.0f + (1.0f - 0.25f * de_i * de_i) / (x * x + de_i * x * y + y * y + 1e-9f));
           v.dx[i] = x * r;
           v.dy[i] = y * r;
         }
@@ -1160,66 +1167,69 @@ void pads_render(float* out, uint32_t n) {
         if (ly == LY_AIR && v.nv > 0) air(v, lye, m, air_q, tr);
       }
     }
-    float e;
-    if (v.att < 1.0f) {
-      v.att += ainc;
-      float a = v.att < 1.0f ? v.att : 1.0f;
-      e = v.a0 + (1.0f - v.a0) * a * a * (3.0f - 2.0f * a);
-    } else {
-      v.dec *= dk;
-      e = v.dec;
+    for (uint32_t q = 0; q < m; ++q) {
+      if (att < 1.0f) {
+        att += ainc;
+        float a = att < 1.0f ? att : 1.0f;
+        e = v.a0 + (1.0f - v.a0) * a * a * (3.0f - 2.0f * a);
+      } else {
+        dec *= dk;
+        e = dec;
+      }
+      // the low pass (a state variable, trapezoidal: Zavalishin's), its cutoff opening with the envelope (every 16
+      // samples)
+      if ((q & 15u) == 0u) {
+        float x = 3.14159265f * clampf(fc0 * (0.35f + 0.65f * e) / kSr, 0.0f, 0.3f), x2 = x * x;
+        float g = x * (15.0f - x2) / (15.0f - 6.0f * x2);   // (tan, Pade)
+        fa1 = 1.0f / (1.0f + g * (g + 1.4f));
+        fa2 = g * fa1;
+        fa3 = g * fa2;
+      }
+      float v3 = sum[q] - lp2, v1 = fa1 * lp1 + fa2 * v3, v2 = lp2 + fa2 * lp1 + fa3 * v3;
+      lp1 = 2.0f * v1 - lp1;
+      lp2 = 2.0f * v2 - lp2;
+      norm += (norm_to - norm) * gk;
+      float y = v2 * norm * e;
+      if (lay_on) {                     // (the layer: before TEXTURE wears it)
+        y += lay[q];
+        if (lye_on) y += g_lye * norm * e * lye[q];
+      }
+      if (bell_e > 1e-4f) {             // the bell: 1 : 3.5, its index falling fast, its level slowly
+        bell_m += binc * 3.5f;
+        bell_m -= bell_m >= 1.0f ? 1.0f : 0.0f;
+        bell_c += binc;
+        bell_c -= bell_c >= 1.0f ? 1.0f : 0.0f;
+        float ph = bell_c + 0.35f * bell_i * sin_cyc(bell_m);
+        ph -= static_cast<float>(static_cast<int>(ph));
+        ph += ph < 0.0f ? 1.0f : 0.0f;
+        y += 0.3f * bell_e * sin_cyc(ph);
+        bell_e *= bk;
+        bell_i *= bik;
+      }
+      if (tx == TX_TAPE) {              // (Tape: its saturation, the level about kept)
+        const float z = y * drive;
+        y = z / (1.0f + 0.6f * fm_fabsf(z)) * (1.0f + 0.5f * ta) / drive;
+      } else if (tx == TX_DUST) {       // (Dust: held, on fewer bits; hiss, now and then a crackle; its state in locals)
+        if (--d_h <= 0) d_h = hold, d_v = fm_floorf(y * qinv + 0.5f) * qstep;
+        const uint32_t r = xs(d_rnd);   // (one draw: its bits the hiss, its top the crackle's chance)
+        y = d_v + hiss * static_cast<float>(static_cast<int32_t>(r)) + d_cr;
+        if ((r >> 20) < crk) d_cr = ta * 0.12f * bip(d_rnd);   // (~10 a s)
+        d_cr *= 0.55f;
+      }
+      float yd = y - dcx + 0.9995f * dcy;
+      dcx = y;
+      dcy = yd;
+      float ay = fm_fabsf(yd);          // a soft knee above 0.8 (at most 1.2)
+      if (ay > 0.8f) {
+        float z = (ay - 0.8f) * 2.5f;
+        ay = 0.8f + 0.4f * z / (1.0f + z);
+        yd = yd < 0.0f ? -ay : ay;
+      }
+      out[s0 + q] = yd;
     }
-    v.env = e;
-    // the low pass (a state variable, trapezoidal: Zavalishin's), its cutoff opening with the envelope (every 16 samples)
-    if ((s & 15u) == 0u) {
-      float x = 3.14159265f * clampf(fc0 * (0.35f + 0.65f * e) / kSr, 0.0f, 0.3f), x2 = x * x;
-      float g = x * (15.0f - x2) / (15.0f - 6.0f * x2);   // (tan, Pade)
-      fa1 = 1.0f / (1.0f + g * (g + 1.4f));
-      fa2 = g * fa1;
-      fa3 = g * fa2;
-    }
-    float v3 = sum[s & 31u] - v.lp2, v1 = fa1 * v.lp1 + fa2 * v3, v2 = v.lp2 + fa2 * v.lp1 + fa3 * v3;
-    v.lp1 = 2.0f * v1 - v.lp1;
-    v.lp2 = 2.0f * v2 - v.lp2;
-    norm += (norm_to - norm) * gk;
-    float y = v2 * norm * e;
-    if (lay_on) {                       // (the layer: before TEXTURE wears it)
-      y += lay[s & 31u];
-      if (lye_on) y += g_lye * norm * e * lye[s & 31u];
-    }
-    if (v.bell_e > 1e-4f) {             // the bell: 1 : 3.5, its index falling fast, its level slowly
-      v.bell_m += binc * 3.5f;
-      v.bell_m -= v.bell_m >= 1.0f ? 1.0f : 0.0f;
-      v.bell_c += binc;
-      v.bell_c -= v.bell_c >= 1.0f ? 1.0f : 0.0f;
-      float ph = v.bell_c + 0.35f * v.bell_i * sin_cyc(v.bell_m);
-      ph -= static_cast<float>(static_cast<int>(ph));
-      ph += ph < 0.0f ? 1.0f : 0.0f;
-      y += 0.3f * v.bell_e * sin_cyc(ph);
-      v.bell_e *= bk;
-      v.bell_i *= bik;
-    }
-    if (tx == TX_TAPE) {                // (Tape: its saturation, the level about kept)
-      const float z = y * drive;
-      y = z / (1.0f + 0.6f * fm_fabsf(z)) * (1.0f + 0.5f * ta) / drive;
-    } else if (tx == TX_DUST) {         // (Dust: held, on fewer bits; hiss, now and then a crackle; its state in locals)
-      if (--d_h <= 0) d_h = hold, d_v = fm_floorf(y * qinv + 0.5f) * qstep;
-      const uint32_t r = xs(d_rnd);     // (one draw: its bits the hiss, its top the crackle's chance)
-      y = d_v + hiss * static_cast<float>(static_cast<int32_t>(r)) + d_cr;
-      if ((r >> 20) < crk) d_cr = ta * 0.12f * bip(d_rnd);   // (~10 a s)
-      d_cr *= 0.55f;
-    }
-    float yd = y - v.dcx + 0.9995f * v.dcy;
-    v.dcx = y;
-    v.dcy = yd;
-    float ay = fm_fabsf(yd);            // a soft knee above 0.8 (at most 1.2)
-    if (ay > 0.8f) {
-      float z = (ay - 0.8f) * 2.5f;
-      ay = 0.8f + 0.4f * z / (1.0f + z);
-      yd = yd < 0.0f ? -ay : ay;
-    }
-    out[s] = yd;
   }
+  v.att = att, v.dec = dec, v.env = e, v.lp1 = lp1, v.lp2 = lp2, v.dcx = dcx, v.dcy = dcy;
+  v.bell_m = bell_m, v.bell_c = bell_c, v.bell_e = bell_e, v.bell_i = bell_i;
   v.gn = norm;
   v.lring = ring > 0.0f || v.sw_on;
   v.dust_h = d_h, v.dust_v = d_v, v.crack = d_cr, v.rnd = d_rnd;

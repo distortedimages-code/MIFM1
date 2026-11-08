@@ -15,17 +15,18 @@
 //
 // The gate: the Buchla lowpass gate as Julian Parker and Stefano D'Angelo model it ("A Digital Model of the Buchla
 // Lowpass-Gate", DAFx-13): its audio circuit's transfer, H(s) = 1 / (a1 + a2 s + a3 s^2) (C1 1 nF, C2 220 pF, C3 4.7 nF
-// in LP, R-alpha 5 MOhm, 5 kOhm in VCA: 50 k here, its ping nearly as loud), its three modes (VCA, Combo: both at
+// in LP, R-alpha 5 MOhm, 5 kOhm in VCA: 50 k here, its ping as loud, nearly), its three modes (VCA, Combo: both at
 // once, LP), the photoresistor Rf = A / If^1.4 + B (A 3.464, B 1136 Ohm) of the LED's current (40 mA lit; dark here
-// 0.1 uA: the paper's floor of 10 uA leaves the gate ajar), the vactrol a one-pole on that current, in its logarithm
-// (12 ms rising as the paper has it, quicker when lit hard; falling slower as it dims, by ear: a ping's tail), the
-// circuit's two states through the trapezoid (the paper's TPT).
+// 0.1 uA: the paper's floor of 10 uA leaves the gate ajar), the vactrol (0.16.64) a CdS cell's carriers: made at the
+// light's rate, recombining in pairs and alone, slower with its history (the paper's one-pole, 12 ms up, 250 ms down,
+// left: its pings fell as a cliff, flat then plunging; a struck thing falls quick, then lingers), the circuit's two
+// states through the trapezoid (the paper's TPT).
 //
 // Eight knobs (k: 0..1; a bipolar knob from its middle): TIMBRE (the fold), RATIO (the modulation oscillator's rate,
 // times the note: 24 ratios, whole and metallic), MOD (to the left AM, its index: the Easel's crossfade to the fully
 // modulated sound; to the right FM, through zero, its index 0..8), DECAY (its first third a Ping: the envelope a
-// pulse, the vactrol's fall 35 .. 700 ms; then the envelope's decay, 2 ms .. 8 s), GATE (VCA, Combo, LP), T.ENV and
-// M.ENV (the gate's light onto TIMBRE and onto MOD), SYMM (the 259's symmetry).
+// pulse, the cell's fall: 40 dB down in 35 .. 700 ms; then the envelope's decay, 2 ms .. 8 s), GATE (VCA, Combo,
+// LP), T.ENV and M.ENV (the gate's light onto TIMBRE and onto MOD), SYMM (the 259's symmetry).
 #include <stdint.h>
 #include "fastmath.h"
 #include "bridge.h"
@@ -41,8 +42,9 @@ inline float note_hz(float note) { return 440.0f * fm_exp2f((note - 69.0f) * (1.
 
 // the 259's five cells (Esqueda et al., eq. 13-18): above its threshold a cell gives g (|x| - th), its sign x's;
 // the sum 5 x + the cells by their weights (the summing amplifiers'). kC: weight times gain; its integral's, a half
-const float kTh[5] = {0.6f, 2.994f, 5.46f, 1.8f, 4.08f};
-const float kC[5] = {-12.0f * 0.8333f, -27.777f * 0.3768f, -21.428f * 0.2829f, 17.647f * 0.5743f, 36.363f * 0.2673f};
+// (0.16.64: in their thresholds' order, the loop left at the first one over the input: most of the time one or two)
+const float kTh[5] = {0.6f, 1.8f, 2.994f, 4.08f, 5.46f};
+const float kC[5] = {-12.0f * 0.8333f, 17.647f * 0.5743f, -27.777f * 0.3768f, 36.363f * 0.2673f, -21.428f * 0.2829f};
 const float kDirect = 5.0f;
 
 // RATIO: the modulation oscillator times the note; the whole ones and between them the metallic (sqrt 2, phi,
@@ -60,13 +62,26 @@ inline int gate_of(float u) {           // GATE: VCA, Combo, LP
 }
 inline float timbre_a(float u) { return 0.4f * fm_exp2f(u * 4.644f); }   // the sine into the folder: 0.4 .. 10 V
 const float kPing = 1.0f / 3.0f;        // DECAY: its first third a ping
-inline float ping_s(float u) { return 0.035f * fm_exp2f(u * 3.0f * 4.3219f); }  // the vactrol's fall: 35 .. 700 ms
-const float kVactrol = 0.7f;            // (its fall past a ping: an envelope's tail)
+inline float ping_s(float u) { return 0.035f * fm_exp2f(u * 3.0f * 4.3219f); }  // a ping, 40 dB down: 35 .. 700 ms
+const float kVactrol = 0.5f;            // (its fall past a ping: an envelope's tail)
 inline float decay_s(float u) { return 0.002f * fm_exp2f((u - kPing) * 1.5f * 11.97f); }   // the envelope: 2 ms .. 8 s
 
-// the vactrol: the LED's current, its logarithm (dark 0.1 uA, the photoresistor past 20 GOhm: shut; lit 40 mA); its
-// light, 0..1, over the paper's span (10 uA .. 40 mA)
+// the vactrol: the photoresistor's state as the LED's current that would hold it there (the paper's law, Rf of If,
+// kept), its logarithm (dark 0.1 uA, the photoresistor past 20 GOhm: shut; lit 40 mA); its light, 0..1, over the
+// paper's span (10 uA .. 40 mA)
 const float kLnDark = -16.1181f, kLnMin = -11.5129f, kLnMax = -3.2189f, kLnSpan = kLnMax - kLnMin;
+const float kDark = 1e-7f;
+// (0.16.64) the cell as a CdS cell behaves. Lit, it turns on as before (its log rising, 12 ms, quicker lit hard: a
+// ping's soft 2 ms onset), quicker still when warm (its history: 15 % at most). Dark, its carriers recombine, two ways
+// at once: in pairs (i^2: quick while it is bright, then a power law's long tail, 1 / t: the ping's quick drop, its
+// dark lingering end) and alone (i: the tail cut, the cell back to dark); its time T from DECAY (T 0.1 ms at 3 mA for
+// the pairs, 0.35 T alone: a ping 40 dB down at C3, in Combo, in DECAY's time; the one-pole on its log it replaces
+// fell flat, then plunged). Its history: lit a while, its traps full, it recombines slower (up to 1.6 times; filled in
+// 0.25 s, emptied in 2.5 s: a run of pings rings on longer than one). Each strike a little its own: the LED's current
+// +-4 %, T +-4 % (the hands, the cell's warmth). Steps of kSub samples
+const float kStep = static_cast<float>(kSub) / kSr;
+const float kHUp = 7.25361e-4f, kHDown = 7.25598e-5f;   // 1 - e^(-kStep / 0.25 s), / 2.5 s: the history
+const float kAlone = 1.0f / 0.35f, kPairs = 30.0f / 0.003f, kHist = 0.6f;
 
 struct Easel {
   float k[8];
@@ -77,7 +92,9 @@ struct Easel {
   float lpx, lpy;                       // the 259's output lowpass
   float hx, hy;                         // a coupling capacitor before the gate (10 Hz: the fold's DC, FM's)
   float env;                            // the envelope (its pulse, its decay)
-  float ln_i;                           // the vactrol: the LED's current, its log
+  float iv, ln_i, hist;                 // the vactrol: its state (A), its log; its history (0..1)
+  float sv, tj;                         // this strike's LED current, its time (around 1)
+  uint32_t rng;
   float vx, vo, u1;                     // the gate's circuit: C2's voltage, C1's (its output), its last input
   float c0[6];                          // its step's matrix at the last step's end (N, then Mb)
   float dcx, dcy;                       // the coupling capacitor
@@ -135,13 +152,13 @@ __attribute__((noinline)) void voice(Easel& p, float* y, uint32_t m, float dc, f
     // its threshold on one side, d - d1 is x - x1 (its sign x's): the cell (d + d1) / 2, no division (taken as the
     // difference, d - d1 lost its digits as x neared x1: clicks, a low note's folded crest). Crossing its threshold
     // (or zero), d and d1 under |x - x1|: the division as it is, well conditioned
-    const float dx = x - x1, ax = fm_fabsf(x), a1 = fm_fabsf(x1);
-    const float sx = x < 0.0f ? -0.5f : 0.5f, r = dx != 0.0f ? 1.0f / dx : 0.0f;
+    const float dx = x - x1, ax = fm_fabsf(x), a1 = fm_fabsf(x1), top = fm_maxf(ax, a1);
+    const float sx = x < 0.0f ? -0.5f : 0.5f;
     const bool same = (x < 0.0f) == (x1 < 0.0f);
     float v = 0.5f * kDirect * (x + x1);
-    for (int c = 0; c < 5; ++c) {
+    for (int c = 0; c < 5 && top > kTh[c]; ++c) {   // (a cell under its threshold, both ends: nothing)
       const float d = fm_maxf(ax - kTh[c], 0.0f), d1 = fm_maxf(a1 - kTh[c], 0.0f);
-      v += kC[c] * (d + d1) * (same && d > 0.0f && d1 > 0.0f ? sx : 0.5f * (d - d1) * r);
+      v += kC[c] * (d + d1) * (same && d > 0.0f && d1 > 0.0f ? sx : 0.5f * (d - d1) / dx);
     }
     x1 = x;
     lpy = lb * (v + lpx) - la * lpy;   // (the 259's output lowpass)
@@ -173,7 +190,10 @@ MI_COLD void easel_reset(int t) {
   easel_defaults(d);
   for (int i = 0; i < 8; ++i) p.k[i] = d[i];
   p.note = 48.0f;
+  p.iv = kDark;
   p.ln_i = kLnDark;
+  p.sv = p.tj = 1.0f;
+  p.rng = 0x9E3779B9u * static_cast<uint32_t>(t + 1);
   p.pm = 0.25f;                         // (the two never in phase)
 }
 
@@ -186,7 +206,8 @@ MI_COLD void easel_silence(int t) {
   if (t < 0 || t >= MF_TRACKS) return;
   Easel& p = easel[t];
   p.trig = p.alive = 0;
-  p.env = 0.0f;
+  p.env = p.hist = 0.0f;
+  p.iv = kDark;
   p.ln_i = kLnDark;
   p.x1 = p.lpx = p.lpy = p.hx = p.hy = p.vx = p.vo = p.u1 = p.dcx = p.dcy = 0.0f;
 }
@@ -208,15 +229,21 @@ MI_COLD void easel_gate(int t, int g) {
 MI_COLD void easel_render(int t, float* out, uint32_t n) {   // (its glue for size: its samples' loop at -O2)
   if (t < 0 || t >= MF_TRACKS) return;
   Easel& p = easel[t];
-  if (p.trig) {                         // a trig: the envelope up at once (the vactrol rises on its own)
-    p.trig = 0;
+  if (p.trig) {                         // a trig: the envelope up at once (the vactrol rises on its own); this strike's
+    p.trig = 0;                         // own current and time
     p.env = 1.0f;
+    uint32_t r = p.rng;
+    r ^= r << 13, r ^= r >> 17, r ^= r << 5;
+    p.rng = r;
+    p.sv = 1.0f + 0.04f * (static_cast<float>(r >> 16) * (2.0f / 65535.0f) - 1.0f);
+    p.tj = 1.0f + 0.04f * (static_cast<float>(r & 0xFFFFu) * (2.0f / 65535.0f) - 1.0f);
     if (!p.alive) {                     // (from rest: the gate's coefficients from closed)
       gate_coefs(p.ln_i, gate_of(p.k[4]), p.c0);
       p.alive = 1;
     }
   }
-  if (!p.alive) {                       // (at rest: the coupling capacitor's tail out, then nothing)
+  if (!p.alive) {                       // (at rest: its history fading, the coupling capacitor's tail out, then none)
+    if (p.hist > 1e-4f) p.hist *= fm_expf(static_cast<float>(n) * (-1.0f / (2.5f * kSr)));
     for (uint32_t i = 0; i < n; ++i) out[i] = 0.0f;
     if (fm_fabsf(p.dcy) < 1e-6f) {
       p.dcx = p.dcy = 0.0f;
@@ -231,22 +258,31 @@ MI_COLD void easel_render(int t, float* out, uint32_t n) {   // (its glue for si
   const int mode = gate_of(p.k[4]);
   const float dk = p.k[3];
   const float tau_e = dk < kPing ? 0.001f : decay_s(dk);   // (a ping: the envelope a pulse)
-  const float tau_v = dk < kPing ? ping_s(dk) : kVactrol;  // (the vactrol's slowest fall)
+  const float rate = 1.0f / ((dk < kPing ? ping_s(dk) : kVactrol) * p.tj);   // (the vactrol's fall: 1 / T)
   const float te = 2.0f * p.k[5] - 1.0f, me = 2.0f * p.k[6] - 1.0f, sym = 2.0f * p.k[7] - 1.0f;
   const float mod0 = 2.0f * p.k[2] - 1.0f;
   const float ttrack = 1.0f / (1.0f + fc * (1.0f / 3000.0f));   // (the hardware's timbre weaker up high)
   const float fe = fm_expf(-static_cast<float>(kSub) / (tau_e * kSr));
   for (uint32_t s0 = 0; s0 < n; s0 += kSub) {
     const uint32_t m = n - s0 < static_cast<uint32_t>(kSub) ? n - s0 : static_cast<uint32_t>(kSub);
-    // the envelope, the vactrol (the LED's current from it; rising 12 ms, quicker lit hard; falling slower as it
-    // dims), its light (0..1) for T.ENV and M.ENV
+    // the envelope, the LED's current; the cell: rising with it, or recombining (in pairs and alone: the exact step
+    // of i' = -a i - b i^2), slower as its history fills; its light (0..1) for T.ENV and M.ENV, and for its history
+    const float fs = m == static_cast<uint32_t>(kSub) ? 1.0f : static_cast<float>(m) * (1.0f / kSub);
     p.env *= fe;
-    const float c = p.env;
-    const float lt = fm_logf(1e-7f + 0.04f * c);
-    const float lit = fm_maxf(p.ln_i - kLnMin, 0.0f) * (1.0f / kLnSpan);
-    const float tau = lt > p.ln_i ? 0.012f / (1.0f + 24.0f * c) : tau_v * (1.0f - 0.5f * lit);
-    p.ln_i += (lt - p.ln_i) * (1.0f - fm_expf(-static_cast<float>(m) / (tau * kSr)));
-    const float light = fm_maxf(p.ln_i - kLnMin, 0.0f) * (1.0f / kLnSpan);
+    const float c = p.env * p.sv;
+    const float lt = fm_logf(kDark + 0.04f * c);
+    if (lt > p.ln_i) {
+      const float tau = 0.012f / (1.0f + 24.0f * c) * (1.0f - 0.15f * p.hist);
+      p.ln_i += (lt - p.ln_i) * (1.0f - fm_expf(-kStep * fs / tau));
+      p.iv = fm_expf(p.ln_i);
+    } else {
+      const float sl = rate / (1.0f + kHist * p.hist), a = sl * kAlone, b = sl * kPairs;
+      const float ea = fm_expf(-a * kStep * fs);
+      p.iv = a * p.iv * ea / (a + b * p.iv * (1.0f - ea));
+      p.ln_i = fm_logf(fm_maxf(p.iv, kDark));
+    }
+    const float light = clampf((p.ln_i - kLnMin) * (1.0f / kLnSpan), 0.0f, 1.0f);
+    p.hist += (light - p.hist) * (light > p.hist ? kHUp : kHDown) * fs;
     // TIMBRE, MOD and their contours (the light)
     const float tu = clampf(p.k[0] + te * light, 0.0f, 1.0f);
     const float A = timbre_a(tu) * ttrack;
@@ -263,6 +299,7 @@ MI_COLD void easel_render(int t, float* out, uint32_t n) {   // (its glue for si
   if (p.env < 1e-4f && p.ln_i < -15.4f) {   // (its sound over, the gate shut: it rests, its states from rest)
     p.alive = 0;
     p.env = 0.0f;
+    p.iv = kDark;
     p.ln_i = kLnDark;
     p.x1 = p.lpx = p.lpy = p.hx = p.hy = p.vx = p.vo = p.u1 = 0.0f;
   }
@@ -276,7 +313,7 @@ const char* easel_knob_name(int k) {
 }
 
 MI_COLD void easel_defaults(float* k) {         // a ping: some fold, a little FM a fifth and an octave over, Combo
-  static const float kD[8] = {0.3f, 13.5f / 24.0f, 0.62f, 0.27f, 0.5f, 0.7f, 0.65f, 0.5f};
+  static const float kD[8] = {0.3f, 13.5f / 24.0f, 0.62f, 0.22f, 0.5f, 0.7f, 0.65f, 0.5f};
   for (int i = 0; i < 8; ++i) k[i] = kD[i];
 }
 
