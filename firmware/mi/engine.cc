@@ -2456,10 +2456,9 @@ void apply_trauma(int t, float* x, uint32_t n) {
   // at once (this block's peak known before it plays), not over the block from the quiet's gain (up to x12 into the
   // curve: its first samples squared off at full level, a click at each note). A slower rise (a pad's attack) glided
   // as before (at once, what the curve had squared would jump)
-  if (s1 < s.s && pk > 4.0f * was) {
-    s.x1 = s.b + (s.x1 - s.b) * (s1 / s.s);   // (its last input on the new scale: the curve's average not over a jump)
-    s.s = s1;
-  }
+  const float sc = s1 < s.s && pk > 4.0f * was ? s1 / s.s : 1.0f;   // (its last input on the new scale: the curve's
+  s.x1 = s.b + (s.x1 - s.b) * sc;       // average not over a jump; no branch, no call: apply_trauma is in the RAM, its
+  s.s *= sc;                            // room full)
   float inv = 1.0f / static_cast<float>(n), fb1 = tclip(b1);
   float g = s.g * s.s, g1s = g1 * s1, dg = (g1s - g) * inv, b = s.b, db = (b1 - b) * inv, fb = s.fb;
   float dfb = (fb1 - fb) * inv, k = s.k / s.s, dk = (k1 / s1 - k) * inv, m = s.m, dm = (m1 - m) * inv;
