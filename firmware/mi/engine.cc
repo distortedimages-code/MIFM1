@@ -168,8 +168,10 @@ const eng_pdef_t kPages[NPT][4] = {
    {"Transp", K_INT, -24, 24, 0}},       // (0.16.59: page 71, PADS' fifth: one track plays it)
 };
 const char* const kBusModes[2] = {"OFF", "COMP"};   // (0.16.43: OTT gone; a project's OTT read as COMP)
-const char* const kDelayAlgos[2] = {"SYNC", "FREE"};
+const char* const kDelayAlgos[4] = {"SYNC", "FREE", "BBD SYNC", "BBD FREE"};   // (0.16.65: the BBD's)
 const eng_pdef_t kDelayFreeTime = {"Time", K_UNI, 0, 0, 0};   // the delay's TIME when FREE: 1 ms..1.2 s
+const eng_pdef_t kBbdKnobs[2] = {{"Dirt", K_UNI, 0, 0, 0}, {"Width", K_UNI, 0, 0, 0}};   // (0.16.65) the BBD's, for
+                                                                                        // RESO and MODE
 const char* const kReverbAlgos[RV_ALGOS] = {"CLOUDS", "METAL", "SHIMMER"};
 const eng_pdef_t kMetalKnobs[3] = {{"Decay", K_UNI, 0, 0, 0}, {"Size", K_UNI, 0, 0, 0}, {"Tone", K_UNI, 0, 0, 0}};
 
@@ -569,6 +571,11 @@ const int kFxDice = 16;
 uint8_t tp_dice[ENG_TRACKS][ENG_NTP];
 int16_t fx_dice[kFxDice];
 float fx_span[kFxDice], fx_off[kFxDice];
+// (0.16.65) the effects' offsets as they play: glided to the beat's (~15 ms) rather than there at once. At once, at each
+// beat, the delay's filter from its low pass to its high pass on the same states, its loop's gains, the reverb's
+// diffusion: a click in what rang, the delay's repeated with its echoes
+float fx_now[kFxDice];
+const float kFxGlide = 0.18f;           // (a block's share: 2.9 ms of ~15)
 int n_fx_dice, dice_on;                 // (dice_on: the dose was up at the last beat, its offsets drawn)
 inline int iround(float v);
 float dice_curve() {                    // the dose's reach, 0..1: the knob's travel squared
@@ -619,6 +626,7 @@ inline int trauma_takes(int t) { return proj.trauma && !((proj.trauma_out >> t) 
 float tr_f[ENG_TRACKS] = {1.0f, 1.0f, 1.0f, 1.0f};   // this trig's share of the dose's drive (0.2..1)
 uint8_t tr_hard[ENG_TRACKS];            // this trig's drive hard rather than warm
 float tr_w[3];                          // Warps now: its opening (0: shut), TIMBRE (-1..1), LEVEL 2 (0..1)
+float tr_ws[3];                         // (0.16.65) as they play, glided
 // the filter's FM knob for a depth (mi_filter's curve, the other way): ln(1 + depth (e^4 - 1)) / 4
 inline float fm_knob_for(float depth) { return fm_logf(1.0f + depth * 53.59815f) * 0.25f; }
 void trauma_warps() {                   // Warps open or not, its colours: at each trig of its carrier, or each beat
@@ -662,7 +670,10 @@ inline float clamp_fast(int i, float v) { return v < p_lo[i] ? p_lo[i] : v > p_h
 // the random dose's knobs over the effects', each block it is up (0.16.51: in the flash, called from apply_cables in the
 // RAM: the RAM's code room full)
 __attribute__((noinline)) void dice_knobs() {
-  if (!dice_on) make_dice();
+  if (!dice_on) {                       // (the dose up again: its offsets from none)
+    for (int j = 0; j < n_fx_dice; ++j) fx_now[j] = 0.0f;
+    make_dice();
+  }
   float a = dice_curve();
   int shift = iround(proj.val[PG_WARPS(1) * 4 + 3]) == WM_SHIFT;
   int osc = iround(proj.val[PG_WARPS(0) * 4 + 0]) >= WC_OSC1;   // (Warps' own oscillator: LEVEL 1 is its note)
@@ -670,9 +681,10 @@ __attribute__((noinline)) void dice_knobs() {
   const int w_out = (w_dst >= 0 && !dose_takes(w_dst)) || (w_mute >= 0 && !dose_takes(w_mute));
   for (int j = 0; j < n_fx_dice; ++j) {
     const int pg = fx_dice[j] / 4;
+    fx_now[j] += (fx_off[j] - fx_now[j]) * kFxGlide;
     if (w_out && (pg == PG_WARPS(0) || pg == PG_WARPS(1))) continue;
     if (!(shift && fx_dice[j] == PG_WARPS(0) * 4 + 2) && !(osc && fx_dice[j] == PG_WARPS(1) * 4 + 1))
-      fin[fx_dice[j]] += a * fx_off[j];   // (not the shift, not the oscillator's note: 0.8.6, Yoann's call)
+      fin[fx_dice[j]] += a * fx_now[j];   // (not the shift, not the oscillator's note: 0.8.6, Yoann's call)
   }
   // Warps' ALGORITHM on a mark (one cross-modulation): thrown to another mark, never between two (there Warps plays
   // both algorithms, blended: twice its work)
@@ -735,11 +747,12 @@ __attribute__((noinline)) void trauma_knobs() {   // TRAUMA's knobs: the filters
   for (int t = 0; t < ENG_TRACKS; ++t)
     if (trauma_takes(t) && proj.algo[PG_FILT(t, 0)] != MF_OFF) fin[lane_param[t][TP_FDRIVE]] += 0.45f * d;
   const int w_clean = (w_dst >= 0 && !trauma_takes(w_dst)) || (w_mute >= 0 && !trauma_takes(w_mute));
-  if (tr_w[0] > 0.0f && iround(proj.val[PG_WARPS(0) * 4]) > WC_OFF && !w_clean) {   // (Warps: where it is patched;
+  for (int i = 0; i < 3; ++i) tr_ws[i] += (tr_w[i] - tr_ws[i]) * kFxGlide;   // (0.16.65: glided, as the dose's)
+  if (tr_ws[0] > 1e-4f && iround(proj.val[PG_WARPS(0) * 4]) > WC_OFF && !w_clean) {   // (Warps: where it is patched;
                                         // 0.16.51: not where a track left clean goes through it)
-    fin[PG_WARPS(0) * 4 + 3] += 0.4f * tr_w[0];                        // MIX
-    fin[PG_WARPS(1) * 4 + 0] += 0.25f * tr_w[0] * tr_w[1];             // TIMBRE
-    fin[PG_WARPS(1) * 4 + 2] += 0.3f * tr_w[0] * tr_w[2];              // LEVEL 2
+    fin[PG_WARPS(0) * 4 + 3] += 0.4f * tr_ws[0];                       // MIX
+    fin[PG_WARPS(1) * 4 + 0] += 0.25f * tr_ws[0] * tr_ws[1];           // TIMBRE
+    fin[PG_WARPS(1) * 4 + 2] += 0.3f * tr_ws[0] * tr_ws[2];            // LEVEL 2
   }
   float dl = ramp01(d, 0.6f, 1.0f);
   if (dl > 0.0f) fin[PG_DELAY(0) * 4 + 3] += 0.45f * dl;               // the delay's DRIVE
@@ -2434,9 +2447,19 @@ void apply_trauma(int t, float* x, uint32_t n) {
   }
   float pk = 0.0f;                      // the level: this block's peak, or the last falling (0.1 s)
   for (uint32_t i = 0; i < n; ++i) pk = fm_maxf(pk, fm_fabsf(x[i]));
+  const float was = s.env;
   s.env = fm_maxf(pk, s.env * (1.0f - static_cast<float>(n) * (1.0f / 4410.0f)));
   float s1 = 0.6f / fm_maxf(s.env, 0.05f);
-  if (s.m <= 0.0f) s.g = g1, s.b = b1, s.fb = tclip(b1), s.k = k1, s.s = s1;   // (coming in: from where it is)
+  if (s.m <= 0.0f) s.g = g1, s.b = b1, s.fb = tclip(b1), s.k = k1, s.s = s1, s.x1 = b1;   // (coming in: from where it
+                                        // is; 0.16.65: its last input on the bias, no tick)
+  // (0.16.65) a strike (the level up 12 dB in a block: a note out of silence, a tail struck again): brought down to it
+  // at once (this block's peak known before it plays), not over the block from the quiet's gain (up to x12 into the
+  // curve: its first samples squared off at full level, a click at each note). A slower rise (a pad's attack) glided
+  // as before (at once, what the curve had squared would jump)
+  if (s1 < s.s && pk > 4.0f * was) {
+    s.x1 = s.b + (s.x1 - s.b) * (s1 / s.s);   // (its last input on the new scale: the curve's average not over a jump)
+    s.s = s1;
+  }
   float inv = 1.0f / static_cast<float>(n), fb1 = tclip(b1);
   float g = s.g * s.s, g1s = g1 * s1, dg = (g1s - g) * inv, b = s.b, db = (b1 - b) * inv, fb = s.fb;
   float dfb = (fb1 - fb) * inv, k = s.k / s.s, dk = (k1 / s1 - k) * inv, m = s.m, dm = (m1 - m) * inv;
@@ -2520,7 +2543,9 @@ void render_voice(int t, uint32_t n) {
     gl_at[t] = -1;
     gl_busy[t] = 0;
     mf_reset(t);
-    tdrv[t].x1 = tdrv[t].dc = tdrv[t].dcy = tdrv[t].env = 0.0f;
+    // (0.16.65) its last input where silence puts it: on its bias (0 then, a warm drive's first sample a tick)
+    tdrv[t].x1 = tdrv[t].b;
+    tdrv[t].dc = tdrv[t].dcy = tdrv[t].env = 0.0f;
     return;
   }
   mclaim(t);                            // (its machine's state: made if another's was there)
@@ -2962,6 +2987,7 @@ void fx_job(uint32_t n) {
     if (mj.dst >= 0 && !mj.idle) us += kWebFxWarps;
     if (proj.algo[PG_REVERB] == RV_METAL || proj.algo[PG_REVERB] == RV_SHIMMER)   // (0.16.41) METAL's over Clouds'
       us += kWebFxMetal[proj.algo[PG_REVERB] - RV_METAL];
+    if (proj.algo[PG_DELAY(0)] >= DL_BBD_SYNC) us += kWebFxBbd;   // (0.16.65) the BBD over the clean delay
     web_spend(us * static_cast<float>(n) / 128.0f);
   }
 #endif
@@ -3838,7 +3864,9 @@ MI_COLD int eng_factory(int i, eng_sound_t* s) {
 const eng_pdef_t* eng_pdef(int param) {   // (a table, made once: the render asks it hundreds of times a block)
   static const eng_pdef_t* table[ENG_NPARAMS];
   if (param < 0 || param >= ENG_NPARAMS) param = 0;
-  if (param == PG_DELAY(0) * 4 && proj.algo[PG_DELAY(0)] == DL_FREE) return &kDelayFreeTime;   // (FREE: in ms)
+  if (param == PG_DELAY(0) * 4 && (proj.algo[PG_DELAY(0)] & 1)) return &kDelayFreeTime;   // (FREE: in ms)
+  if ((param == PG_DELAY(1) * 4 || param == PG_DELAY(1) * 4 + 1) && proj.algo[PG_DELAY(0)] >= DL_BBD_SYNC)
+    return &kBbdKnobs[param - PG_DELAY(1) * 4];   // (the BBD: DIRT, WIDTH)
   if (param >= PG_REVERB * 4 && param < PG_REVERB * 4 + 3 && proj.algo[PG_REVERB] != RV_CLOUDS)   // (METAL's, SHIMMER's)
     return &kMetalKnobs[param - PG_REVERB * 4];
   if (!table[param]) table[param] = &kPages[page_type(param / 4)][param % 4];
@@ -4191,6 +4219,10 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
       const float c = (v - 0.5f) * 200.0f;
       put_num(b, n, static_cast<int32_t>(c + (c < 0.0f ? -0.5f : 0.5f)), 0, 1);
     }
+  } else if (pt == PT_DELAY2 && k == 1 && proj.algo[PG_DELAY(0)] >= DL_BBD_SYNC) {   // the BBD's WIDTH: mono, %,
+    if (v < 0.005f) put(b, n, "Mono");                                                   // then ping-pong
+    else if (v >= 0.9f) put(b, n, "Ping-pong");
+    else put_num(b, n, static_cast<int32_t>(v * (100.0f / 0.9f) + 0.5f), 0, 0);
   } else if (pt == PT_DELAY1 && k == 1 && v >= 0.99f) {   // FEEDBACK at the end: the loop (held for good)
     put(b, n, "Loop");
   } else if (pt == PT_DELAY1 && k == 0) {   // the delay's TIME, FREE: ms
@@ -4215,7 +4247,7 @@ MI_COLD int eng_algo_count(int page) {
   switch (page_type(page)) {
     case PT_PLAITS1: return ENG_MODELS;
     case PT_FILT1: return MF_MODELS;
-    case PT_DELAY1: return 2;
+    case PT_DELAY1: return 4;
     case PT_REVERB: return RV_ALGOS;
     case PT_COMP: return 2;
     default: return 0;
@@ -5628,10 +5660,13 @@ void eng_render(float* l, float* r, uint32_t n) {
   duck_map();
   mrv_set(reverb, proj.algo[PG_REVERB], E(LANE_REVERB, 0), E(LANE_REVERB, 1), E(LANE_REVERB, 2));
   int div = iround(E(LANE_DELAY, 0));   // its time: a division of the tempo, or (FREE) in ms
-  float dtime = proj.algo[PG_DELAY(0)] == DL_FREE ? delay_ms(E(LANE_DELAY, 0)) * kSr * 0.001f
-                                                  : step_len_now() * kDivMult[div < 0 ? 0 : div >= kDivs ? kDivs - 1 : div];
-  mdl_set(delay, dtime, E(LANE_DELAY, 1), E(LANE_DELAY, 2), E(LANE_DELAY, 4), E(LANE_DELAY, 3),
-          iround(E(LANE_DELAY, 5)), E(LANE_DELAY, 6));
+  float dtime = (proj.algo[PG_DELAY(0)] & 1) ? delay_ms(E(LANE_DELAY, 0)) * kSr * 0.001f
+                                             : step_len_now() * kDivMult[div < 0 ? 0 : div >= kDivs ? kDivs - 1 : div];
+  // (0.16.65) the BBD: RESO its DIRT, MODE its WIDTH (ping-pong at its end); its loop's filter at a fixed Q
+  const int bbd = proj.algo[PG_DELAY(0)] >= DL_BBD_SYNC;
+  mdl_bbd(delay, bbd, E(LANE_DELAY, 4), E(LANE_DELAY, 5));
+  mdl_set(delay, dtime, E(LANE_DELAY, 1), E(LANE_DELAY, 2), bbd ? 0.1f : E(LANE_DELAY, 4), E(LANE_DELAY, 3),
+          bbd ? E(LANE_DELAY, 5) >= 0.9f : iround(E(LANE_DELAY, 5)), E(LANE_DELAY, 6));
   mms_mode(master, proj.algo[PG_COMP] >= MB_OTT ? static_cast<int>(MB_COMP) : proj.algo[PG_COMP]);
   mms_comp(master, comp_threshold(P(PG_COMP, 0)), comp_ratio(P(PG_COMP, 1)), comp_release(P(PG_COMP, 2)),
            P(PG_COMP, 3) * 12.0f);
@@ -5709,13 +5744,21 @@ uint32_t eng_gates(void) { return gates_now; }
 int eng_note(int t) { return t >= 0 && t < ENG_TRACKS ? static_cast<int>(vnote[t] + 0.5f) : 0; }
 uint32_t eng_load(int core) { return core ? load1 : load0; }
 
-// the delay's ALGORITHM, SYNC or FREE: its TIME the same (the division's length now in ms, or the nearest division)
+// the delay's ALGORITHM, SYNC or FREE (and 0.16.65, the BBD's): its TIME the same (the division's length now in ms, or
+// the nearest division); MODE and WIDTH the same knob (Mono 0, Ping-pong 1)
 MI_COLD void eng_delay_mode(int mode) {
-  mode = mode == DL_FREE ? DL_FREE : DL_SYNC;
-  if (mode == proj.algo[PG_DELAY(0)]) return;
+  mode = mode < DL_SYNC ? DL_SYNC : mode > DL_BBD_FREE ? DL_BBD_FREE : mode;
+  const int was = proj.algo[PG_DELAY(0)];
+  if (mode == was) return;
+  proj.algo[PG_DELAY(0)] = static_cast<uint8_t>(mode);
+  float& w = proj.val[PG_DELAY(1) * 4 + 1];
+  if (mode >= DL_BBD_SYNC && was < DL_BBD_SYNC) w = w >= 0.5f ? 1.0f : 0.0f;   // (Ping-pong: at WIDTH's end)
+  else if (mode < DL_BBD_SYNC && was >= DL_BBD_SYNC) w = w >= 0.9f ? 1.0f : 0.0f;
+  fin[PG_DELAY(1) * 4 + 1] = w;          // (0.16.65: the screen, drawn now, shows them before the next block)
+  if ((mode & 1) == (was & 1)) return;
   float& v = proj.val[PG_DELAY(0) * 4];
   float sl_ms = step_len_now() * 1000.0f / kSr;
-  if (mode == DL_FREE) {
+  if (mode & 1) {
     int d = iround(v);
     float ms = sl_ms * kDivMult[d < 0 ? 0 : d >= kDivs ? kDivs - 1 : d];
     v = clampf(fm_log2f(ms > 1.0f ? ms : 1.0f) / 10.228819f, 0.0f, 1.0f);
@@ -5728,7 +5771,7 @@ MI_COLD void eng_delay_mode(int mode) {
     }
     v = static_cast<float>(pick);
   }
-  proj.algo[PG_DELAY(0)] = static_cast<uint8_t>(mode);
+  fin[PG_DELAY(0) * 4] = v;
 }
 uint32_t eng_peak_part(int i) {         // the worst block's: 0..3 the voices, 4 Warps, 5 the effects, 6 the
   return i >= 0 && i < kTasks + 9 ? pct10(peak_of[i], peak_n) : 0u;   // preparation, 7 core 0, 8 core 1, 9 all,

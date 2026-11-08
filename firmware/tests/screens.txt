@@ -1,6 +1,6 @@
 # MIFM1 in fm1-base's host simulator: the intro at power-on, the default patch playing, the pages (a face sliding in), a knob turned, a
 # track's sets (its sound's second page, ENV's two pages, EDIT to its bending (the bits, the glitch), its filter: the models, TYPE, its second page), a Euclidean rhythm, the steps' faces (SPEED on the first, at x1/2; the ratchets: RATCH 3 over 4 steps, CURVE, DIRECTION; CLIMB, a step held: +2 up to 4 semitones, on trigs and hits, bouncing; a bar under the header, a part a face), the three LFOs, the mixer's filters, the duck from T2, the effects (the delay, FREE too, the reverb (CLOUDS, METAL, SHIMMER),
-# Warps, their steps), a cable made in MOD mode (hold an LFO's key, turn a knob), the random dose (OCT- held,
+# Warps, their steps; the delay's BBD, its DIRT and WIDTH), a cable made in MOD mode (hold an LFO's key, turn a knob), the random dose (OCT- held,
 # SELECT: its own screen, its fills), TRAUMA (OCT+ held, SELECT: its screen, 20, 50, 100 %, back to 0), the matrix, every cable erased (REC and SEL held), the global page (the machine: Warps HQ, another theme), STEP mode (REC: a step held and locked, a step held and another pressed (its length), a step's notes (a step held and REC: a chord, a note moved), the lanes on
 # the black keys, the delay's lane and a lock on its time, the pages on OCT- OCT+), the RANDOM page, ENV held, GLO
 # held: ALL, Endless (recorded, played, its options: STRIDE, REST, HOLES, LEAP,
@@ -240,7 +240,15 @@ shot 11b_delay.png
 turn ALGO 1
 wait 400
 shot 11b2_delay_free.png
-turn ALGO -1
+turn ALGO 1
+wait 400
+shot 11b3_delay_bbd.png
+turn SELECT 2
+wait 400
+shot 11b4_delay_bbd_dirt.png
+turn SELECT -2
+wait 300
+turn ALGO -2
 wait 300
 turn SELECT 1
 wait 400

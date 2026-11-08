@@ -87,7 +87,8 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   sans jamais toucher une note, et ne fait rien à 0 ;
 - **trois effets, chacun avec sa propre piste de pas** : un **delay** inspiré des potards du Zen Delay (temps en
   divisions du tempo ou libre en millisecondes, feedback, filtre passe-bas / passe-haut avec résonance, drive, mono ou ping-pong, une légère
-  modulation de bande), une **réverbe** (celle de Clouds, ou depuis 0.16.41 **METAL** et **SHIMMER**, d'après
+  modulation de bande), ou depuis 0.16.65 un **BBD** d'après le Memory Man (sa puce à capacités commutées : des échos
+  qui s'assombrissent avec le temps, un compandeur qui respire, du grain, une largeur stéréo), une **réverbe** (celle de Clouds, ou depuis 0.16.41 **METAL** et **SHIMMER**, d'après
   l'Erbe-Verb de Make Noise : de la boîte de conserve au freeze, l'octave en plus) et **Warps**. Sans pas, l'effet est toujours ouvert ; avec des pas,
   chaque trig l'ouvre et il se referme avec son DECAY (jusqu'à 1 − DEPTH), et ses P-locks changent ses réglages pas
   par pas (le temps du delay, l'algorithme de Warps…) ;
@@ -1085,7 +1086,7 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | --- | --- |
 | **KNOB 1 à 4** | les 4 paramètres de la page affichée |
 | **SELECT** | les pages de ce qu'on regarde (les deux du son de la piste, les deux de son filtre, les faces d'un effet…), en glissant |
-| **ALGORITHM** | le type de ce qu'on a devant soi, là où il y a un choix (le A cerclé en haut) : sur le son de la piste, son modèle (les 20 : les batteries, les batteries FM, ZERO et la FM, Plaits) ; sur son filtre, le modèle de filtre (OFF, LADDER, MS-20, SEM, VOX) ; sur Warps, d'un repère d'ALGO au suivant ; sur le delay, SYNC (vers la gauche) ou FREE (vers la droite) |
+| **ALGORITHM** | le type de ce qu'on a devant soi, là où il y a un choix (le A cerclé en haut) : sur le son de la piste, son modèle (les 20 : les batteries, les batteries FM, ZERO et la FM, Plaits) ; sur son filtre, le modèle de filtre (OFF, LADDER, MS-20, SEM, VOX) ; sur Warps, d'un repère d'ALGO au suivant ; sur le delay, SYNC, FREE, puis (0.16.65) BBD SYNC et BBD FREE, de gauche à droite |
 | **PRESETS** | la piste active, de 1 à 4 (les presets eux-mêmes : EDIT tenu) |
 | **EDIT** | **tapé** : les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son ; **tenu : les presets** de la piste (touches noires : la banque, A celle d'usine ; blanches : le son, posé sur la piste et joué ; SAVE tenu : l'y garde ; REC tenu : l'efface) ; **tenu + SELECT** (0.16.39) : **le niveau de la piste active** (« T1 LEVEL 85 » ; MASTER, lui, est le volume de sortie) |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
@@ -1333,6 +1334,30 @@ puis **RESONANCE**, **MODE** (Mono ou Ping-pong : gauche au temps, droite au dou
 **RETURN**. Le filtre est celui des modules Mutable (le SVF de stmlib) ; la saturation (DRIVE) est propre jusqu'à mi-niveau
 puis arrondie, et son gain ne s'ajoute pas au feedback (elle colore, elle ne pousse pas), dans une ligne
 de 1,2 s. Quand le temps change, la lecture glisse jusqu'au nouveau, comme une bande.
+
+**Le BBD** (0.16.65) : ALGORITHM tourné encore vers la droite, **BBD SYNC** puis **BBD FREE** (le temps en divisions ou
+en millisecondes, comme les deux premiers ; on garde les deux delays, et l'on passe de l'un à l'autre sans rien perdre :
+le temps, le feedback, le filtre et le drive restent). C'est un delay analogique d'après l'**Electro-Harmonix Memory
+Man** : une puce à capacités commutées (un BBD, *bucket-brigade device*) fait passer l'échantillon de case en case au
+rythme d'une horloge, avec autour d'elle un compresseur 2:1 avant et un expandeur 1:2 après (le NE570), et des filtres
+qui coupent ce que l'horloge ne sait pas porter. Ici, tout cela est modélisé, à la moitié de la fréquence (sa bande
+s'arrête sous 8 kHz : moitié moins de calcul) :
+- **l'horloge suit le temps** : plus l'écho est long, plus elle ralentit, et plus les échos s'assombrissent (8 kHz aux
+  temps courts, 2,5 kHz vers 600 ms, comme sur la vraie machine) ; chaque répétition repasse dans la puce et s'assombrit
+  encore ;
+- **le compandeur respire** : les attaques passent un peu en avant, les queues remontent puis retombent, le souffle de la
+  puce (sous −100 dB à vide) suit le signal ;
+- **DIRT** (à la place de RESONANCE) : l'horloge plus lente que ce que la bande demande, les filtres ouverts au-delà :
+  du grain, du repliement, la puce poussée (un peu de pair) ; à 0, le plus propre ;
+- **WIDTH** (à la place de MODE) : une seconde prise à droite, un peu plus loin et modulée à l'envers, du mono au large ;
+  tout au bout, **Ping-pong** (la droite au double) ;
+- **MOD** : de la lente modulation d'un chorus au vibrato d'un écho qui flotte ;
+- **FEEDBACK** au bout : la boucle tenue, sa puce un peu poussée, ses crêtes tenues dès qu'elles passent la moitié du
+  niveau (elle ne s'emballe pas : à peu près aussi forte que la boucle du delay net).
+
+Son coût, compté en instructions : **22 µs de plus** par bloc de 2,9 ms que le delay net (moins de 1 % d'un cœur). Sur la
+machine, c'est la part **FX** de la page machine (GLO) qui le montre : la comparer, le delay net puis le BBD, sur le même
+projet.
 
 **La réverbe** (FX) : **ALGORITHM** choisit **CLOUDS**, **METAL** ou **SHIMMER** (0.16.41 ; les potards gardent leur
 place d'un algorithme à l'autre, et les projets d'avant restent sur CLOUDS). CLOUDS est celle du module (TIME, DAMP,
@@ -1675,6 +1700,28 @@ d'aléatoire, et poussés par TRAUMA au-delà de 60 % (le DRIVE du delay). GLO t
 d'un coup. Le panneau dit la dose et les pistes laissées de côté (T2 CLEAN, 2 AS SET), une colonne par piste, éclairée
 dans sa couleur quand la dose la prend. De quoi passer TRAUMA à fond sur trois pistes et garder une voix propre.
 Les deux réglages se sauvent avec le projet (deux octets de la réserve du projet : sa taille ne change pas).
+
+**Sans clics sous les doses** (0.16.65). Avec la dose d'aléatoire et TRAUMA à fond, des clics revenaient sur les trigs
+et sur les temps ; le CPU n'y était pour rien (aucun bloc perdu) : c'étaient des sauts dans le son, que TRAUMA, en
+remontant les pistes calmes à leur niveau, rendait audibles. Ils ont été cherchés un par un sur des rendus (des
+pistes seules, puis le mix, la réverbe et le delay) :
+- **le TYPE du filtre** tiré au sort sur un trig (LP, BP, HP) remettait le filtre à zéro : maintenant l'ancien type
+  passe au nouveau en fondu sur 12 ms, ses états gardés (le MS-20, dont la boucle change, joue les deux le temps du
+  fondu). Son **DRIVE**, sa **RESO**, son **ENV** et sa **FM**, relancés sur un trig, y vont en ~8 ms au lieu d'un coup
+  (le niveau que rend le DRIVE, et la coupure quand l'enveloppe est ouverte, sautaient) ;
+- **PADS** : une voix que l'accord gagne entre en 10 ms, une qu'il perd s'en va en 10 ms (avant : d'un coup, à chaque
+  trig où l'accord changeait de taille, PROG et VOICING relancés le plus) ; **TONE** glisse (~8 ms) ; repartie d'un
+  niveau (un trig sur l'accord qui sonne), l'attaque ne va jamais plus vite que 6 ms ; et sous −60 dB il ne repart plus
+  de zéro (ses phases, son filtre : un saut minuscule, que TRAUMA remontait) ;
+- **TRAUMA** : sa courbe repart de son biais après un silence (avant, un tic à chaque note sur un drive chaud) ; et
+  quand une note frappe (le niveau monte de plus de 12 dB en un bloc), son gain descend tout de suite, au lieu de
+  glisser depuis celui du silence (jusqu'à ×12 : les premiers échantillons écrêtés à fond) ;
+- **les effets relancés à chaque temps** (le filtre, le feedback, le drive et la résonance du delay, la réverbe,
+  Warps) y vont en ~15 ms au lieu d'un coup (un pas du filtre du delay se répétait avec ses échos) ; le **FILTER du
+  delay** change de côté au milieu en partant du repos, et son mélange suit échantillon par échantillon.
+Ce que coûtent ces glissements, comptés en instructions : 2 à 4 µs par bloc de 2,9 ms sur PADS et sur un filtre MS-20
+ou SEM, rien sur le LADDER (les filtres refont leurs constantes seulement quand un potard bouge). Un test les vérifie (un TYPE changé, un accord qui change de taille, le filtre du delay jeté, une note de PADS
+sous TRAUMA sortie du silence).
 
 **Les fills** (le dernier quart de la dose, 76 à 100 %) : des trigs en plus à la fin des mesures (comptées depuis
 PLAY), comme un batteur, sur les pistes qui jouent des pas (pas sur Endless). À 76 %, un fill sur le dernier temps

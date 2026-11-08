@@ -2455,17 +2455,23 @@ static void panel_delay(void)            /* the delay: its time, its mode, its r
     int y = hero_title("DELAY");
     s[0] = 0;
     if (ui.page == PG_DSEND)
-        text_cat(s, "THE SENDS|", sizeof s);
+        text_cat(s, p->algo[PG_DELAY(0)] >= DL_BBD_SYNC ? "THE SENDS|BBD " : "THE SENDS|", sizeof s);
     eng_param_text(PG_DELAY(0) * 4, eng_final(PG_DELAY(0) * 4), v, sizeof v);
     label_text(v, v, sizeof v);
     text_cat(s, v, sizeof s);
-    if (p->algo[PG_DELAY(0)] == DL_FREE)  /* FREE: in ms, off the tempo */
+    if (p->algo[PG_DELAY(0)] & 1)        /* FREE: in ms, off the tempo */
         text_cat(s, ", FREE", sizeof s);
     if (ui.page != PG_DSEND) {
         text_cat(s, "|", sizeof s);
-        enum_cat(s, PG_DELAY(1) * 4 + 1, sizeof s);
+        if (p->algo[PG_DELAY(0)] >= DL_BBD_SYNC) {   /* (0.16.65) the BBD: its width */
+            text_cat(s, "BBD ", sizeof s);
+            eng_param_text(PG_DELAY(1) * 4 + 1, eng_final(PG_DELAY(1) * 4 + 1), v, sizeof v);
+            text_cat(s, v, sizeof s);
+        } else {
+            enum_cat(s, PG_DELAY(1) * 4 + 1, sizeof s);
+        }
     }
-    if (ui.page != PG_DSEND && p->algo[PG_DELAY(0)] != DL_FREE) {
+    if (ui.page != PG_DSEND && !(p->algo[PG_DELAY(0)] & 1)) {
         text_cat(s, "|FB ", sizeof s);
         eng_param_text(PG_DELAY(0) * 4 + 1, eng_final(PG_DELAY(0) * 4 + 1), v, sizeof v);
         text_cat(s, v, sizeof s);
@@ -6324,7 +6330,9 @@ static void input(void)
         dirty = 1;
     } else if (e && !ui.matrix && (ptype(ui.page) == PT_DELAY1 || ptype(ui.page) == PT_DELAY2 ||
                                    ptype(ui.page) == PT_DSEND)) {
-        eng_delay_mode(e > 0 ? DL_FREE : DL_SYNC);   /* the delay: on the tempo, or free (in ms), its time kept */
+        eng_delay_mode((int)eng_project()->algo[PG_DELAY(0)] + (e > 0 ? 1 : -1));   /* the delay: SYNC, FREE (in ms,
+                                          * its time kept), then (0.16.65) the BBD's two */
+        ui.full = 1;                     /* (its knobs' names: DIRT, WIDTH) */
         dirty = 1;
         ui.touched_at[0] = now;
         ui.touched_k = ui.page == PG_DELAY(0) ? 0 : -1;

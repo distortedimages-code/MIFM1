@@ -16,7 +16,7 @@
 //                                        (bits) T1's EQ, the duck, the delay's filter and drive; the FM's square, PW,
 //                                        SYNC; PADS' MANUAL triad, six notes (PAGE4: its fourth page); POLY's voice, four;
 //                                        CHOIR's four parts; T1's SPREAD; the
-//                                        reverb METAL or SHIMMER
+//                                        reverb METAL or SHIMMER; the delay's BBD
 //   calib blank SECONDS                  nothing playing (the preparation's floor, a resting voice)
 #include <cstdio>
 #include <cstdlib>
@@ -86,6 +86,7 @@ int main(int argc, char** argv) {
     if (extra & 262144) p->val[PG_SPREAD_PARAM(0)] = 1.0f;   // (0.16.19) T1's SPREAD
     if (extra & 8388608) p->algo[PG_REVERB] = RV_METAL;     // (0.16.41) the reverb METAL, 16777216 SHIMMER
     if (extra & 16777216) p->algo[PG_REVERB] = RV_SHIMMER;
+    if (extra & 33554432) p->algo[PG_DELAY(0)] = DL_BBD_SYNC;   // (0.16.65) the delay's BBD
     if (eng_model_kind(model) == MK_VOCODER) {   // (0.16.21) VOCODER: its RELEASE short (a voice), 524288 long (its
       auto vk = [&](int i, float u) {    // voices ringing on, four), 1048576 its MOD on T2 (its bands: T2 silent, its
         int param = PG_TRACK(0, 0) * 4 + 1 + i;   // bands as busy)

@@ -353,6 +353,7 @@ void mdl_init(void *mem);
 void mdl_set(void *d, float time, float feedback, float filter, float resonance, float drive, int ping_pong,
              float mod);
 void mdl_process(void *d, const float *in, float *out_l, float *out_r, uint32_t n);
+void mdl_bbd(void *d, int on, float dirt, float width);   /* (0.16.65) the BBD (a Memory Man): on, DIRT, WIDTH 0..1 */
 
 /* ---- the master bus (mi_master.cc): a compressor, then stmlib's limiter on each side ---- */
 uint32_t mms_size(void);

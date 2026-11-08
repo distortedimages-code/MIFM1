@@ -1886,7 +1886,7 @@ int main(int argc, char** argv) {
       float lvd = 0.0f;
       for (int m = 0; m < 4; ++m)
         for (int g = 1; g < 4; ++g) lvd = std::max(lvd, std::fabs(lv[m][g] - lv[m][0]));
-      printf("the CPU guard on the filters' FM (strong, on a saw): its levels %.1f dB from the FM's at most%s\n", lvd,
+      printf("the CPU guard on the filters' FM (strong, on a saw): its levels %.2f dB from the FM's at most%s\n", lvd,
              gnan ? ", NaN" : "");
       if (gnan || lvd > 8.0f) ok = 0;   // (0.16.30: 6 dB before; the ladder open at the top now, its self-FM at
                                        // every sample reaches higher, 3 dB louder than when it closed up there)
@@ -6972,6 +6972,281 @@ int main(int argc, char** argv) {
            z_combo, z_lp, first20, last20, spread, after, pings ? "ok" : "WRONG", pk, bounded ? "ok" : "WRONG", proj_ok ? "ok" : "WRONG",
            snd_ok ? "ok" : "WRONG");
     if (!ok) ++failures, printf("FAIL: EASEL\n");
+  }
+
+  {                                     // 78. the delay's BBD (0.16.65): ALGORITHM's four (SYNC, FREE, BBD SYNC, BBD
+    // FREE), RESO and MODE its DIRT and WIDTH, their texts, MODE and WIDTH one knob; an echo at its time, as loud as the
+    // clean one's (3 dB); darker as the time grows (its clock slower: 100 ms to 600 ms, its band 8 kHz to 2.5: 4 dB at
+    // least of its slope's energy); DIRT's grit (what folds back); quiet (its hiss
+    // under -100 dB, nothing in); WIDTH: mono, apart, ping-pong (the right at twice); FEEDBACK at full held, bounded;
+    // 100 settings finite
+    eng_defaults(p);
+    int names = 1, texts = 1;
+    eng_delay_mode(DL_SYNC);
+    p->val[PG_DELAY(1) * 4 + 1] = 1.0f;   // (ping-pong)
+    eng_delay_mode(DL_BBD_SYNC);
+    names &= p->algo[PG_DELAY(0)] == DL_BBD_SYNC && !std::strcmp(eng_algo_name(PG_DELAY(0), DL_BBD_FREE), "BBD FREE") &&
+             eng_algo_count(PG_DELAY(0)) == 4 && !std::strcmp(eng_param_name(PG_DELAY(1) * 4), "Dirt") &&
+             !std::strcmp(eng_param_name(PG_DELAY(1) * 4 + 1), "Width") && p->val[PG_DELAY(1) * 4 + 1] == 1.0f &&
+             eng_pdef(PG_DELAY(1) * 4 + 1)->kind == K_UNI;
+    char tx[24];
+    struct { float v; const char* want; } kW[] = {{0.0f, "Mono"}, {0.45f, "50"}, {0.95f, "Ping-pong"}};
+    for (auto& x : kW) {
+      eng_param_text(PG_DELAY(1) * 4 + 1, x.v, tx, sizeof tx);
+      if (std::strcmp(tx, x.want) != 0) texts = 0, printf("  BBD WIDTH at %.2f: %s, not %s\n", x.v, tx, x.want);
+    }
+    p->val[PG_DELAY(1) * 4 + 1] = 0.5f;
+    eng_delay_mode(DL_FREE);              // (back to the clean one: under 0.9, mono; FREE: its time in ms)
+    names &= p->algo[PG_DELAY(0)] == DL_FREE && p->val[PG_DELAY(1) * 4 + 1] == 0.0f &&
+             !std::strcmp(eng_param_name(PG_DELAY(1) * 4 + 1), "Mode");
+    eng_defaults(p);
+    static uint8_t bmem[200000] __attribute__((aligned(16)));
+    static float bl[44100 * 7], br[44100 * 7], bx[44100 * 7];
+    // a run of the delay alone: its settings, an input (0 a 1 kHz burst of 50 ms, 1 plucked saws, 2 nothing)
+    auto run = [&](int bbd, float ms, float fb, float drive, float dirt, float width, float mod, int src, int len) {
+      mdl_init(bmem);
+      mdl_bbd(bmem, bbd, dirt, width);
+      mdl_set(bmem, ms * 44.1f, fb, 0.0f, bbd ? 0.1f : 0.0f, drive, bbd ? width >= 0.9f : width >= 0.5f, mod);
+      for (int i = 0; i < len; ++i) {
+        const float t = static_cast<float>(i) / 44100.0f;
+        float v = 0.0f;
+        if (src == 0 && t < 0.05f) v = 0.5f * std::sin(6.2831853f * 1000.0f * t);
+        if (src == 1 && t < 0.3f) v = 0.5f * (2.0f * std::fmod(t * 220.0f, 1.0f) - 1.0f) * std::exp(-t * 9.0f);
+        bx[i] = v;
+      }
+      for (int i = 0; i < len; i += 128) mdl_process(bmem, bx + i, bl + i, br + i, 128);
+    };
+    auto peak = [&](const float* x, int a, int b, int* at) {
+      double m = 0.0;
+      for (int i = a; i < b; ++i)
+        if (std::fabs(x[i]) > m) m = std::fabs(x[i]), *at = i;
+      return m;
+    };
+    auto hf = [&](const float* x, int a, int b) {   // its slope's energy over its own: how bright
+      double d = 0.0, e = 0.0;
+      for (int i = a + 1; i < b; ++i) d += (x[i] - x[i - 1]) * (x[i] - x[i - 1]), e += x[i] * x[i];
+      return 10.0 * std::log10(d / (e + 1e-30) + 1e-30);
+    };
+    int at = 0;
+    run(0, 300.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 44100);
+    const double clean_pk = peak(bl, 11025, 17640, &at);
+    run(1, 300.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 44100);
+    const double bbd_pk = peak(bl, 11025, 17640, &at);
+    const double lvl = 20.0 * std::log10(bbd_pk / clean_pk);
+    const int on_time = at >= 13230 - 300 && at <= 13230 + 2205 + 300;   // (in the burst's echo)
+    run(1, 100.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1, 44100);
+    const double b100 = hf(bl, 4410, 4410 + 8820);
+    run(1, 600.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1, 44100);
+    const double b600 = hf(bl, 26460, 26460 + 8820);
+    // DIRT: the echo of the burst off its harmonics (its alias), clean against dirty
+    auto off_h = [&](const float* x, int a, int len, double f0) {
+      double e = 0.0, hs = 0.0;
+      for (int i = a; i < a + len; ++i) e += static_cast<double>(x[i]) * x[i];
+      for (int h = 1; h * f0 < 22050.0; ++h) {
+        double c = 0.0, sn = 0.0;
+        for (int i = a; i < a + len; ++i) {
+          const double ph = 2.0 * M_PI * h * f0 * i / 44100.0;
+          c += x[i] * std::cos(ph), sn += x[i] * std::sin(ph);
+        }
+        hs += 2.0 * (c * c + sn * sn) / len;
+      }
+      return 10.0 * std::log10(std::max(e - hs, 1e-30) / (e + 1e-30));
+    };
+    run(1, 500.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 44100);
+    const double d0 = off_h(bl, 22050 + 441, 1764, 1000.0);
+    run(1, 500.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0, 44100);
+    const double d1 = off_h(bl, 22050 + 441, 1764, 1000.0);
+    run(1, 400.0f, 0.6f, 0.0f, 1.0f, 0.0f, 0.0f, 2, 44100 * 2);
+    double hiss = 0.0;
+    for (int i = 0; i < 44100 * 2; ++i) hiss = std::max(hiss, static_cast<double>(std::fabs(bl[i])));
+    // WIDTH: the sides' correlation over the plucks' echoes; ping-pong: the right's first echo at twice the time
+    auto corr = [&]() {
+      double a = 0.0, b = 0.0, c = 0.0;
+      for (int i = 4410; i < 44100 * 2; ++i) a += bl[i] * br[i], b += bl[i] * bl[i], c += br[i] * br[i];
+      return a / std::sqrt(b * c + 1e-30);
+    };
+    run(1, 300.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.2f, 1, 44100 * 2);
+    const double c0 = corr();
+    run(1, 300.0f, 0.5f, 0.0f, 0.0f, 0.5f, 0.2f, 1, 44100 * 2);
+    const double c5 = corr();
+    run(1, 300.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0, 44100);
+    int atl = 0, atr = 0;
+    peak(bl, 4410, 44100, &atl), peak(br, 4410, 44100, &atr);
+    const int pingpong = std::abs(atl - 13230) < 2500 && std::abs(atr - 26460) < 2500;
+    // FEEDBACK at full: held 6 s on, bounded
+    run(1, 250.0f, 1.0f, 0.0f, 0.3f, 0.5f, 0.3f, 1, 44100 * 7);
+    double late = 0.0, top = 0.0;
+    for (int i = 0; i < 44100 * 7; ++i) {
+      top = std::max(top, static_cast<double>(std::max(std::fabs(bl[i]), std::fabs(br[i]))));
+      if (i > 44100 * 6) late = std::max(late, static_cast<double>(std::fabs(bl[i])));
+    }
+    srand(78);
+    int finite = 1;
+    for (int r = 0; r < 100; ++r) {
+      auto u = [&]() { return static_cast<float>(rand()) / RAND_MAX; };
+      run(1, 16.0f + 1100.0f * u(), 1.05f * u(), u(), u(), u(), u(), 1, 8192);
+      for (int i = 0; i < 8192; ++i) finite &= std::isfinite(bl[i]) && std::isfinite(br[i]) && std::fabs(bl[i]) < 2.0f;
+    }
+    const int ok = names && texts && on_time && lvl > -3.0 && lvl < 3.0 && b600 < b100 - 4.0 && d1 > d0 + 15.0 &&
+                   hiss < 1e-5 && c0 > 0.99 && c5 < 0.9 && pingpong && late > 0.05 && top < 1.25 && finite;
+    printf("the BBD: ALGORITHM's four, DIRT and WIDTH %s, texts %s; an echo at its time %s, %.1f dB of the clean one's; "
+           "its slope's energy at 100 ms %.1f dB, at 600 ms %.1f; off the harmonics DIRT 0 %.1f dB, 1 %.1f; quiet %.1e; "
+           "the sides' correlation %.2f (mono), %.2f (WIDTH 0.5), ping-pong %s; the loop 6 s on %.2f, at most %.2f; 100 "
+           "settings finite %s%s\n",
+           names ? "ok" : "WRONG", texts ? "ok" : "WRONG", on_time ? "ok" : "WRONG", lvl, b100, b600, d0, d1, hiss, c0,
+           c5, pingpong ? "ok" : "WRONG", late, top, finite ? "yes" : "NO", ok ? "" : " WRONG");
+    if (!ok) ++failures, printf("FAIL: the BBD\n");
+    eng_defaults(p);
+  }
+
+  {                                     // 79. clicks (0.16.65): the random dose's TYPE thrown on a filter (from the old
+    // type to the new, its states kept: no step past the sound's own); PADS' chord another size over the one sounding
+    // (a voice in, then out: no burst of highs past the chords' own); the delay's FILTER thrown from its middle (no
+    // step into its loop); TRAUMA's drive on a note out of silence (no tick before it)
+    // (a) the filters: a 300 Hz sine, LP then HP; its largest step over the switch's 20 ms against the steady ones'
+    float fworst = 0.0f;
+    for (int m = MF_LADDER; m <= MF_SEM; ++m) {
+      mf_init();
+      float k[MF_KNOBS] = {0.62f, 0.5f, 0.0f, 0.5f, 0.2f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}, buf[128];
+      float ph = 0.0f, last = 0.0f, st_lp = 0.0f, st_hp = 0.0f, sw = 0.0f;
+      for (int b = 0; b < 200; ++b) {
+        mf_set(0, m, b < 100 ? MF_LP : MF_HP, k, 60.0f);
+        for (int i = 0; i < 128; ++i) {
+          ph += 300.0f / 44100.0f;
+          ph -= ph >= 1.0f ? 1.0f : 0.0f;
+          buf[i] = 0.5f * std::sin(6.2831853f * ph);
+        }
+        mf_process(0, buf, 128);
+        for (int i = 0; i < 128; ++i) {
+          const float d = std::fabs(buf[i] - last);
+          last = buf[i];
+          if (b >= 60 && b < 100) st_lp = std::max(st_lp, d);
+          else if (b >= 100 && b < 107) sw = std::max(sw, d);
+          else if (b >= 160) st_hp = std::max(st_hp, d);
+        }
+      }
+      fworst = std::max(fworst, sw / std::max(st_lp, st_hp));
+    }
+    mf_init();
+    // (b) PADS: held, a triad, then its seventh over it, then the triad again; the highs (a 2nd difference, 1 ms at a
+    // time) over the 15 ms after each trig against the most of the steady chords'
+    auto pads_hf = [&](float* worst_in, float* worst_out) {
+      pads_init();
+      float k[8];
+      pads_defaults(k);
+      k[3] = 1.0f;                       // (held)
+      k[5] = 1.0f;                       // (open, WAVE on its sine, one oscillator a voice: a step shows; the
+      k[2] = 0.0f;                       // voicing close: the triad's notes stay where they are under the seventh)
+      const float x4[4] = {0.0f, 0.5f, 0.0f, 0.5f};
+      pads_set_page4(x4);
+      const int c3[3] = {0, 4, 7}, c4[4] = {0, 4, 7, 11};
+      static float o[44100 * 3];
+      int at[2] = {0, 0};
+      pads_set(48.0f, k, c3, 3, 0);
+      pads_gate(1);
+      for (int b = 0; b < 44100 * 3 / 32; ++b) {
+        if (b == 44100 / 32 || b == 2 * 44100 / 32) {   // (a trig: the gate down and up, the next chord)
+          pads_gate(0);
+          if (b == 44100 / 32) pads_set(48.0f, k, c4, 4, 0);
+          else pads_set(48.0f, k, c3, 3, 0);
+          pads_gate(1);
+          at[b == 44100 / 32 ? 0 : 1] = b * 32;
+        }
+        pads_render(o + b * 32, 32);
+      }
+      auto hf1 = [&](int a) {           // the 1 ms from a: its 2nd difference's rms
+        double e = 0.0;
+        for (int i = a; i < a + 44; ++i) {
+          const double d = o[i] - 2.0 * o[i - 1] + o[i - 2];
+          e += d * d;
+        }
+        return std::sqrt(e / 44.0);
+      };
+      for (int j = 0; j < 2; ++j) {
+        double steady = 0.0, trans = 0.0;
+        for (int a = at[j] - 44 * 300; a < at[j] - 44 * 5; a += 44) steady = std::max(steady, hf1(a));
+        for (int a = at[j] + 44 * 200; a < at[j] + 44 * 500; a += 44) steady = std::max(steady, hf1(a));
+        for (int a = at[j]; a < at[j] + 44 * 15; a += 44) trans = std::max(trans, hf1(a));
+        (j ? *worst_out : *worst_in) = static_cast<float>(trans / (steady + 1e-12));
+      }
+      pads_init();
+    };
+    float p_in = 0.0f, p_out = 0.0f;
+    pads_hf(&p_in, &p_out);
+    // (d) the delay (clean, then BBD): FILTER from its middle to a low pass at once (the dose's first step); its
+    // echoes' largest step against a 200 Hz sine's own (the filter taken in from rest: no step into the loop)
+    float dworst = 0.0f;
+    for (int bbd = 0; bbd < 2; ++bbd) {
+      static uint8_t dm[200000] __attribute__((aligned(16)));
+      static float din[128], dl[128], dr[128];
+      mdl_init(dm);
+      mdl_bbd(dm, bbd, 0.0f, 0.0f);
+      float ph = 0.0f, last = 0.0f, st = 0.0f, worst = 0.0f;
+      for (int b = 0; b < 44100 / 128; ++b) {
+        mdl_set(dm, 0.1f * 44100.0f, 0.5f, b < 100 ? 0.0f : -0.3f, bbd ? 0.1f : 0.0f, 0.0f, 0, 0.0f);
+        for (int i = 0; i < 128; ++i) {
+          ph += 200.0f / 44100.0f;
+          ph -= ph >= 1.0f ? 1.0f : 0.0f;
+          din[i] = 0.4f * std::sin(6.2831853f * ph);
+        }
+        mdl_process(dm, din, dl, dr, 128);
+        for (int i = 0; i < 128; ++i) {
+          const float d = std::fabs(dl[i] - last);
+          last = dl[i];
+          if (b >= 40 && b < 100) st = std::max(st, d);
+          if (b >= 100) worst = std::max(worst, d);
+        }
+      }
+      dworst = std::max(dworst, worst / (st + 1e-9f));
+    }
+    // (c) TRAUMA (50 %: its first note warm) on PADS from silence (T3 alone, its sends shut): no tick alone before the
+    // note (its curve's last input at 0, not on its bias: before 0.16.65, -84 dB here, louder on a quiet track), its
+    // first millisecond as quiet as a 0.17 s attack starts
+    eng_defaults(p);
+    eng_fresh();
+    eng_set_model(2, eng_model_find(MK_PADS, 0));
+    for (int t = 0; t < ENG_TRACKS; ++t) {
+      p->val[PG_MIX * 4 + t] = t == 2 ? 0.9f : 0.0f;
+      p->val[eng_track_param(t, TP_SEND)] = p->val[eng_track_param(t, TP_DSEND)] = 0.0f;
+    }
+    p->trauma = 50;
+    eng_fresh();
+    eng_cut();
+    {
+      float l2[128], r2[128];
+      for (int b = 0; b < 3; ++b) eng_render(l2, r2, 128);
+      eng_play(1);
+      static float o[44100 * 4];
+      for (int b = 0; b < 44100 * 4 / 128; ++b) {
+        eng_render(l2, r2, 128);
+        for (int i = 0; i < 128; ++i) o[b * 128 + i] = l2[i];
+      }
+      eng_play(0);
+      float tick = 0.0f;
+      int notes = 0, ticks = 0;
+      for (int i = 882; i < 44100 * 3; ++i)   // (each start out of silence, 10 ms quiet before it, a note after it;
+        if (std::fabs(o[i]) > 1e-6f) {      // the first 20 ms not: what the tests before left, a count-in's ping)
+          int quiet = 1;
+          float after = 0.0f;
+          for (int j = i - 441; j < i; ++j) quiet &= std::fabs(o[j]) <= 1e-6f;
+          for (int j = i; j < i + 22050; ++j) after = std::max(after, std::fabs(o[j]));
+          if (!quiet || after < 0.01f) continue;
+          ++notes;
+          int alone = 1;                 // (a tick: a sample, then silence again before the note)
+          for (int j = i + 1; j < i + 9; ++j) alone &= std::fabs(o[j]) <= 1e-6f;
+          ticks += alone;
+          for (int j = i; j < i + 44; ++j) tick = std::max(tick, std::fabs(o[j]));
+        }
+      p->trauma = 0;
+      eng_defaults(p);
+      eng_fresh();
+      const int ok = fworst < 1.3f && p_in < 1.6f && p_out < 1.6f && dworst < 1.3f && notes > 0 && !ticks && tick < 0.002f;
+      printf("clicks: a filter's TYPE thrown, its steps x%.2f the steady ones' at most; PADS' chord a voice more, its "
+             "highs x%.2f the chords' own, a voice less x%.2f; the delay's FILTER in at once, its echoes' steps x%.2f; TRAUMA "
+             "on PADS out of silence, its first ms %.4f at most, %d ticks alone (%d starts)%s\n",
+             fworst, p_in, p_out, dworst, tick, ticks, notes, ok ? "" : " WRONG");
+      if (!ok) ++failures, printf("FAIL: the clicks\n");
+    }
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

@@ -120,7 +120,8 @@ def main():
     jobs["trauma"] = ("one", VA, 0, 0, 0, 0, 0, -1, 0, SECS, 32768)   # (TRAUMA's drive on the track)
     for b in range(2):
         jobs[f"bus{b}"] = ("one", VA, 0, 0, 0, 0, b, -1, 0, SECS)
-    for e in (1, 2, 4, 262144, 8388608, 16777216):       # (262144: T1's SPREAD; the reverb METAL, SHIMMER)
+    for e in (1, 2, 4, 262144, 8388608, 16777216, 33554432):   # (262144: T1's SPREAD; the reverb METAL, SHIMMER; the
+                                                             # delay's BBD)
         jobs[f"fx{e}"] = ("one", VA, 0, 0, 0, 0, 0, -1, 0, SECS, e)
     for hq in range(2):
         for a in range(6):
@@ -140,7 +141,7 @@ def main():
     fx_s = k(st["tasks"] - st["voice"] - st["warps"], K_FX)   # do that these runs do not: the rest of its figure)
     fx_w = None
     fxe = [k(res[f"fx{e}"]["tasks"] - res[f"fx{e}"]["voice"] - (res["bus0"]["tasks"] - res["bus0"]["voice"]), K_FX)
-           for e in (1, 2, 4, 262144, 8388608, 16777216)]
+           for e in (1, 2, 4, 262144, 8388608, 16777216, 33554432)]
     fx_w = max(fx_s - (fx[1] + 2 * fxe[0] + fxe[1] + fxe[2]), 0.0)   # (the compressor, T3 and T4's EQ, the duck on 3,
                                                                     # the delay's)
     warps = [[k(res[f"warps{hq}.{a}"]["warps"], K_WARPS) for a in range(6)] for hq in range(2)]
@@ -226,6 +227,7 @@ def main():
           f"static const float kWebFxSpread = {f1(max(fxe[3], 0.0))};   /* (0.16.19) a track's SPREAD */",
           f"static const float kWebFxMetal[2] = {{{f1(max(fxe[4], 0.0))}, {f1(max(fxe[5], 0.0))}}};   /* (0.16.41) the "
           "reverb METAL, SHIMMER: over Clouds' */",
+          f"static const float kWebFxBbd = {f1(max(fxe[6], 0.0))};   /* (0.16.65) the delay's BBD: over the clean one's */",
           f"static const float kWebPrep = {f1(prep0)}, kWebPrepTrack = {f1(track)}, kWebPrepCable = {f1(cable)};   /* the "
           "preparation: its floor, a track playing, a cable */",
           ""]

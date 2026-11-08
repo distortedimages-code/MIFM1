@@ -45,6 +45,7 @@
 namespace {
 
 const float kSr = 44100.0f;
+const float kVoiceFade = 1.0f / (0.010f * kSr);   // (0.16.65) a voice's level, coming or going: 10 ms
 const int kMaxV = 6;                    // the chord's notes (an eleventh: 6) with the bass
 
 inline float clampf(float x, float lo, float hi) { return x < lo ? lo : x > hi ? hi : x; }
@@ -208,6 +209,11 @@ struct Pad {
   int since, iv, sw_on, sw_t, sw_len, sw_fade;   // Swell: samples since the last trig, between the last two; where it is
   float swx[3], swy[3], sw_lp, sw_at;   // (1 rising, 2 cut), its circles, its wash, its level when cut
   int lring;                            // a strike, a string or a swell still sounding at the last block's end
+  // (0.16.65) each voice's level (0..1): a note the chord gains comes in, one it loses goes, over 10 ms (before, at
+  // once: a click at each trig where the chord changed its size, the random dose's PROG and VOICING the most); the
+  // voices sounding (nf: those of the chord, then those going); TONE glided (~8 ms)
+  float vg[kMaxV], tone_s;
+  int nf;
 };
 Pad pad;
 const int kPlMax = 404;                 // (a string's line at 110 Hz: lower notes an octave up)
@@ -457,6 +463,8 @@ MI_COLD void pads_silence(void) {
   pad.sw_on = 0;
   pad.lring = 0;
   pad.he = 0.0f;
+  pad.nf = 0;
+  for (int i = 0; i < kMaxV; ++i) pad.vg[i] = 0.0f;
 }
 
 // (0.16.57) the fourth page (0.16.59: WAVE, ENSEMBLE 0..1, TEXTURE a choice 0..4, its AMOUNT 0..1): the engine's,
@@ -554,14 +562,16 @@ inline void saw(float& p, float d, float id, float& acc, float* before, float g)
 // the voices, a block of them summed (NS saws a voice), a sample late: sum[0] the last block's last sample (still
 // open to a wrap's correction), sum[1..n] this block's; each voice through the block in turn, its phases held. (0.16.64:
 // the saws' offsets, a constant, in the sum from the start, once for all the voices; a voice's sample two products)
+// (0.16.65) the voices at their level (fm: those coming or going, bit i, left to voice_fade; ns the others)
 template <int NS>
 void voices(Pad& v, float* sum, uint32_t n, const float (*inc)[3], const float (*idt)[3], const float* se, float g_saw,
-            float g_sin) {
+            float g_sin, int nf, uint32_t fm, int ns) {
   sum[0] = v.pend;
-  const float off = -static_cast<float>(NS) * g_saw * static_cast<float>(v.nv);   // (each saw 2 p - 1)
+  const float off = -static_cast<float>(NS) * g_saw * static_cast<float>(ns);   // (each saw 2 p - 1)
   for (uint32_t s = 1; s <= n; ++s) sum[s] = off;
   const float g2 = 2.0f * g_saw;
-  for (int i = 0; i < v.nv; ++i) {
+  for (int i = 0; i < nf; ++i) {
+    if ((fm >> i) & 1u) continue;
     float p0 = v.ph[i][0], p1 = v.ph[i][1], p2 = v.ph[i][2];
     const float d0 = inc[i][0], d1 = NS == 3 ? inc[i][1] : 0.0f, d2 = NS == 3 ? inc[i][2] : 0.0f;
     const float i0 = idt[i][0], i1 = NS == 3 ? idt[i][1] : 0.0f, i2 = NS == 3 ? idt[i][2] : 0.0f;
@@ -631,12 +641,13 @@ inline void wave(float& p, float d, float id, float& acc, float* before, float g
 }
 template <int NS, int SEG>
 void voices_w(Pad& v, float* sum, uint32_t n, const float (*inc)[3], const float (*idt)[3], const float* se,
-              float g_saw, float g_sin, const WaveW& c) {
+              float g_saw, float g_sin, const WaveW& c, int nf, uint32_t fm, int ns) {
   sum[0] = v.pend;
-  const float off = g_saw * static_cast<float>(NS) * 0.5f * c.tri2 * static_cast<float>(v.nv);   // (the triangles' 1)
+  const float off = g_saw * static_cast<float>(NS) * 0.5f * c.tri2 * static_cast<float>(ns);   // (the triangles' 1)
   for (uint32_t s = 1; s <= n; ++s) sum[s] = off;
   const WaveW cw = c;                   // (its weights in registers: the sum's stores could have been them)
-  for (int i = 0; i < v.nv; ++i) {
+  for (int i = 0; i < nf; ++i) {
+    if ((fm >> i) & 1u) continue;
     float p0 = v.ph[i][0], p1 = v.ph[i][1], p2 = v.ph[i][2];
     const float d0 = inc[i][0], d1 = NS == 3 ? inc[i][1] : 0.0f, d2 = NS == 3 ? inc[i][2] : 0.0f;
     const float i0 = idt[i][0], i1 = NS == 3 ? idt[i][1] : 0.0f, i2 = NS == 3 ? idt[i][2] : 0.0f;
@@ -667,9 +678,36 @@ void voices_w(Pad& v, float* sum, uint32_t n, const float (*inc)[3], const float
 }
 template <int SEG>
 void voices_ws(Pad& v, int nsaw, float* sum, uint32_t n, const float (*inc)[3], const float (*idt)[3], const float* se,
-               float g_saw, float g_sin, const WaveW& c) {
-  if (nsaw == 3) voices_w<3, SEG>(v, sum, n, inc, idt, se, g_saw, g_sin, c);
-  else voices_w<1, -1>(v, sum, n, inc, idt, se, g_saw, g_sin, c);   // (one oscillator: one body for the three, 0.6 KB)
+               float g_saw, float g_sin, const WaveW& c, int nf, uint32_t fm, int ns) {
+  if (nsaw == 3) voices_w<3, SEG>(v, sum, n, inc, idt, se, g_saw, g_sin, c, nf, fm, ns);
+  else voices_w<1, -1>(v, sum, n, inc, idt, se, g_saw, g_sin, c, nf, fm, ns);   // (one oscillator: one body for the
+                                                                                 // three, 0.6 KB)
+}
+// (0.16.65) a voice coming or going: added into the sum (after the others) with its level from g to g + n dg, sample
+// by sample; its saws or its WAVE (so: Saw alone), NS of them. Slower, one body for all (a few chunks a trig at most)
+__attribute__((noinline)) void voice_fade(Pad& v, int i, int ns, int so, float* sum, uint32_t n, const float (*inc)[3],
+                                          const float (*idt)[3], const float* se, float g_saw, float g_sin,
+                                          const WaveW& c, float g, float dg) {
+  float p[3] = {v.ph[i][0], v.ph[i][1], v.ph[i][2]};
+  float x = v.sx[i], y = v.sy[i];
+  const float e = se[i], off = so ? -static_cast<float>(ns) : static_cast<float>(ns) * 0.5f * c.tri2;
+  for (uint32_t s = 0; s < n; ++s) {
+    g += dg;
+    const float gs = g_saw * g;
+    float acc = 0.0f;
+    for (int j = 0; j < ns; ++j) {
+      if (so) saw(p[j], inc[i][j], idt[i][j], acc, sum + s, gs);
+      else wave<-1>(p[j], inc[i][j], idt[i][j], acc, sum + s, gs, c);
+    }
+    x += e * y;
+    y -= e * x;
+    sum[s + 1] += gs * ((so ? 2.0f * acc : acc) + off) + g * g_sin * y;
+  }
+  for (int j = 0; j < ns; ++j) v.ph[i][j] = p[j];
+  float r = (1.0f - 0.25f * e * e) / (x * x + e * x * y + y * y + 1e-9f);
+  r = 0.5f * (1.0f + r);
+  v.sx[i] = x * r;
+  v.sy[i] = y * r;
 }
 
 // ---- LAYER's voices (0.16.57) ----
@@ -948,8 +986,12 @@ MI_COLD __attribute__((noinline)) void pad_trig(Pad& v, int ly, float la, float 
   v.iv = v.since > static_cast<int>(0.12f * kSr) && v.since < static_cast<int>(8.0f * kSr) ? v.since : 0;
   v.since = 0;
   if (v.sw_on == 1) v.sw_on = 2, v.sw_fade = 0;
-  if (!v.alive || v.env < 1e-3f) {    // from silence: the phases scattered (a pad has no first cycle), the filter
-    for (int i = 0; i < kMaxV; ++i) {   // shut
+  if (!v.alive || v.env < 1e-3f) v.nvp = 0;   // (GLIDE: from silence, each voice on its note at once)
+  // from silence: the phases scattered (a pad has no first cycle), the filter shut. (0.16.65) Only once it has stopped:
+  // before, from a tail under -60 dB, its phases, filter and capacitor thrown, a step there; TRAUMA's drive, bringing a
+  // quiet track up to its level, made it a click at each trig
+  if (!v.alive) {
+    for (int i = 0; i < kMaxV; ++i) {
       for (int j = 0; j < 3; ++j) v.ph[i][j] = 0.5f + 0.5f * bip(v.rnd);
       v.sx[i] = 0.0f;
       v.sy[i] = 1.0f;
@@ -958,11 +1000,13 @@ MI_COLD __attribute__((noinline)) void pad_trig(Pad& v, int ly, float la, float 
     }
     for (int i = 0; i < 3; ++i) v.hx[i][0] = v.hx[i][1] = 0.0f, v.hy[i][0] = v.hy[i][1] = 1.0f;
     v.he = 0.0f;
-    v.nvp = 0;                        // (GLIDE: from silence, each voice on its note at once)
     v.lp1 = v.lp2 = 0.0f;
     v.dcx = v.dcy = 0.0f;
     v.pend = 0.0f;
     v.env = 0.0f;
+    for (int i = 0; i < kMaxV; ++i) v.vg[i] = i < v.nv ? 1.0f : 0.0f;   // (from silence: at once, the envelope rises)
+    v.nf = v.nv;
+    v.tone_s = 2.0f * v.k[5] - 1.0f;
   }
   v.a0 = v.env;
   v.att = 0.0f;
@@ -992,7 +1036,8 @@ extern "C" {
 
 void pads_render(float* out, uint32_t n) {
   Pad& v = pad;
-  const float A = attack_s(v.k[4]);
+  // ATTACK; (0.16.65) from a level (a trig over the chord still sounding), never quicker than 6 ms: at 1 ms, a step
+  const float A = fm_maxf(attack_s(v.k[4]), v.a0 > 0.001f ? 0.006f : 0.0f);
   const int held = v.k[3] > 0.98f;
   const float tone = 2.0f * v.k[5] - 1.0f, ens = 2.0f * v.x[1] - 1.0f;   // (0.16.57: ENSEMBLE on the fourth page)
   // (0.16.59) TEXTURE and its AMOUNT on the fourth page; LAYER, its LEVEL, its CHARACTER, its TRANSP on the fifth
@@ -1060,7 +1105,8 @@ void pads_render(float* out, uint32_t n) {
   const int nsaw = ens > 0.02f ? 3 : 1;
   const float vint = ens < 0.0f ? -ens : 0.0f, wide = ens > 0.0f ? ens : 0.0f;
   float inc[kMaxV][3], idt[kMaxV][3], se[kMaxV];
-  for (int i = 0; i < v.nv; ++i) {
+  const int nf = v.nf > v.nv ? v.nf : v.nv;   // (0.16.65: the chord's voices, and those still going)
+  for (int i = 0; i < nf; ++i) {
     float off = (0.04f + vint * 0.22f) * (static_cast<float>(i % 3) - 1.0f) + v.dr[i] * (0.03f + vint * 0.12f) + tape;
     if (tx == TX_DRIFT) off += ta * (0.32f * kDrift[i] + 0.15f * v.dr[i]);   // (Drift: out of tune, each its way)
     float f = note_hz(v.cur[i] + off);
@@ -1072,9 +1118,11 @@ void pads_render(float* out, uint32_t n) {
       idt[i][j] = 1.0f / inc[i][j];
     }
   }
-  const float dark = tone < 0.0f ? -tone : 0.0f;
-  const float g_saw = (1.0f - 0.85f * dark) / static_cast<float>(nsaw), g_sin = 0.15f + 0.85f * dark;
-  const float norm_to = 0.55f / fm_sqrtf(static_cast<float>(v.nv > 0 ? v.nv : 1));
+  // (0.16.65) TONE glided, ~8 ms (its saws, its sine and its cutoff: a chunk at a time); the level for the voices as
+  // they will be (0.55 / sqrt(their levels' squares summed): the chord's notes, as before, once there)
+  const float tk = 1.0f - fm_expf(-32.0f / (0.008f * kSr));
+  float ts = v.tone_s;
+  float norm_to = 0.55f / fm_sqrtf(static_cast<float>(v.nv > 0 ? v.nv : 1));
   if (v.gn <= 0.0f) v.gn = norm_to;
   const float gk = 1.0f - fm_expf(-1.0f / (0.004f * kSr));   // (~4 ms a step)
   float norm = v.gn;
@@ -1083,12 +1131,12 @@ void pads_render(float* out, uint32_t n) {
   const float ainc = 1.0f / (A * kSr);
   // the low pass: TONE, blooming with the envelope (an octave and a half over it)
   const float worn = tx == TX_TAPE ? 0.8f * ta : tx == TX_DOWN ? 0.7f * ta : 0.0f;   // (Tape's top worn, Down's)
-  const float fc0 = 250.0f * exp2_b((tone + 1.0f) * 2.9f - worn);   // 250 Hz .. 14 kHz
+  float fc0 = 0.0f;                     // (250 Hz .. 14 kHz: each chunk, TONE as it glides)
   // Down: an octave under each note (a sine), its step; Dust: its rate (44.1 kHz held down to 8), its bits (12 to 5)
   float de[kMaxV];
   if (tx == TX_DOWN)
-    for (int i = 0; i < v.nv; ++i) de[i] = 0.5f * se[i];
-  const float g_down = tx == TX_DOWN ? 0.9f * ta * (g_saw + g_sin) : 0.0f;
+    for (int i = 0; i < nf; ++i) de[i] = 0.5f * se[i];
+  float g_saw = 0.0f, g_sin = 0.0f, g_down = 0.0f;   // (each chunk)
   const int hold = tx == TX_DUST ? 1 + static_cast<int>(ta * 4.5f) : 1;
   const float qstep = tx == TX_DUST ? exp2_b(-(12.0f - 7.0f * ta)) : 0.0f;
   const float drive = tx == TX_TAPE ? 1.0f + 2.0f * ta : 1.0f;
@@ -1132,25 +1180,58 @@ void pads_render(float* out, uint32_t n) {
   float bell_m = v.bell_m, bell_c = v.bell_c, bell_e = v.bell_e, bell_i = v.bell_i;
   for (uint32_t s0 = 0; s0 < n; s0 += 32u) {
     const uint32_t m = n - s0 < 32u ? n - s0 : 32u;
+    {                                   // TONE, gliding: the saws' and the sine's weights, the cutoff
+      ts += (tone - ts) * tk;
+      const float dark = ts < 0.0f ? -ts : 0.0f;
+      g_saw = (1.0f - 0.85f * dark) / static_cast<float>(nsaw), g_sin = 0.15f + 0.85f * dark;
+      g_down = tx == TX_DOWN ? 0.9f * ta * (g_saw + g_sin) : 0.0f;
+      fc0 = 250.0f * exp2_b((ts + 1.0f) * 2.9f - worn);
+    }
+    // (0.16.65) the voices' levels over these samples: those of the chord up to 1, the others down to 0 (10 ms); a
+    // voice on its way left to voice_fade
+    float g0[kMaxV], dg[kMaxV];
+    uint32_t fm = 0u;
+    int ns = 0;
+    float g2s = 0.0f;
+    for (int i = 0; i < nf; ++i) {
+      const float a = v.vg[i], to = i < v.nv ? 1.0f : 0.0f;
+      const float b = to > a ? fm_minf(to, a + static_cast<float>(m) * kVoiceFade)
+                             : fm_maxf(to, a - static_cast<float>(m) * kVoiceFade);
+      g0[i] = a;
+      dg[i] = (b - a) / static_cast<float>(m);
+      v.vg[i] = b;
+      g2s += b * b;
+      if (a == 1.0f && b == 1.0f) ++ns;
+      else fm |= 1u << i;
+    }
+    if (fm) norm_to = 0.55f / fm_sqrtf(g2s > 1.0f ? g2s : 1.0f);   // (the level: as the voices are)
     {                                   // the voices, 32 samples at a time
       if (saw_only) {                   // (WAVE on Saw: as before 0.16.57)
-        if (nsaw == 3) voices<3>(v, sum, m, inc, idt, se, g_saw, g_sin);
-        else voices<1>(v, sum, m, inc, idt, se, g_saw, g_sin);
+        if (nsaw == 3) voices<3>(v, sum, m, inc, idt, se, g_saw, g_sin, nf, fm, ns);
+        else voices<1>(v, sum, m, inc, idt, se, g_saw, g_sin, nf, fm, ns);
       } else if (wseg == 0) {
-        voices_ws<0>(v, nsaw, sum, m, inc, idt, se, g_saw, g_sin, wc);
+        voices_ws<0>(v, nsaw, sum, m, inc, idt, se, g_saw, g_sin, wc, nf, fm, ns);
       } else if (wseg == 1) {
-        voices_ws<1>(v, nsaw, sum, m, inc, idt, se, g_saw, g_sin, wc);
+        voices_ws<1>(v, nsaw, sum, m, inc, idt, se, g_saw, g_sin, wc, nf, fm, ns);
       } else {
-        voices_ws<2>(v, nsaw, sum, m, inc, idt, se, g_saw, g_sin, wc);
+        voices_ws<2>(v, nsaw, sum, m, inc, idt, se, g_saw, g_sin, wc, nf, fm, ns);
+      }
+      if (fm) {
+        for (int i = 0; fm >> i; ++i)
+          if (((fm >> i) & 1u) && (g0[i] > 0.0f || dg[i] > 0.0f))
+            voice_fade(v, i, nsaw, saw_only, sum, m, inc, idt, se, g_saw, g_sin, wc, g0[i], dg[i]);
+        v.pend = sum[m];                // (the last sample, still open: theirs in it too)
       }
       if (g_down > 0.0f)                // (Down: each note's sine an octave under, added)
-        for (int i = 0; i < v.nv; ++i) {
+        for (int i = 0; i < nf; ++i) {
           float x = v.dx[i], y = v.dy[i];
-          const float de_i = de[i];
+          const float de_i = de[i], dd = g_down * dg[i];
+          float gd = g_down * g0[i];
           for (uint32_t q = 0; q < m; ++q) {
             x += de_i * y;
             y -= de_i * x;
-            sum[q] += g_down * y;
+            gd += dd;
+            sum[q] += gd * y;
           }
           const float r = 0.5f * (1.0f + (1.0f - 0.25f * de_i * de_i) / (x * x + de_i * x * y + y * y + 1e-9f));
           v.dx[i] = x * r;
@@ -1229,6 +1310,12 @@ void pads_render(float* out, uint32_t n) {
     }
   }
   v.att = att, v.dec = dec, v.env = e, v.lp1 = lp1, v.lp2 = lp2, v.dcx = dcx, v.dcy = dcy;
+  v.tone_s = ts;
+  {
+    int k = nf;                         // (the voices gone: out of the count)
+    while (k > v.nv && v.vg[k - 1] <= 0.0f) --k;
+    v.nf = k;
+  }
   v.bell_m = bell_m, v.bell_c = bell_c, v.bell_e = bell_e, v.bell_i = bell_i;
   v.gn = norm;
   v.lring = ring > 0.0f || v.sw_on;

@@ -108,7 +108,8 @@ enum { LW_SINE, LW_TRI, LW_SAW, LW_RAMP, LW_SQUARE, LW_SH, LW_SMOOTH,   /* an LF
 enum { LF_FOLLOW, LF_TRIG, LF_T1 };     /* FOLLOW's MODE (in the LFO's MODE): the level followed; an attack and decay
                                           * at each rise over THRESH; at each of T1's (..T4's) trigs */
 enum { LM_FREE, LM_SYNC, LM_T1 };       /* an LFO's MODE: free, synced to the tempo, started at T1's (..T4's) trigs */
-enum { DL_SYNC, DL_FREE };              /* the delay's ALGORITHM: its time in divisions of the tempo, or in ms */
+enum { DL_SYNC, DL_FREE, DL_BBD_SYNC, DL_BBD_FREE };   /* the delay's ALGORITHM: its time in divisions of the tempo,
+                                         * or in ms (its bit 0); (0.16.65) the clean line or the BBD (a Memory Man) */
 
 /* a track's parameters as a trig sees them (a lock, a random): its Plaits' 12, its level, sends and pan, its step
  * page's note, probability and ratchets, its duck, its filter. An effect lane's are its effect's knobs
@@ -494,7 +495,7 @@ float eng_lfo_phase(int i);              /* an LFO's phase now, 0..1 (MOD mode: 
 uint32_t eng_gates(void);                /* bit t: track t's gate now */
 int eng_note(int track);                 /* its note now (MIDI number) */
 uint32_t eng_load(int core);             /* the render's time on core 0 or 1, in tenths of % of the block (smoothed) */
-void eng_delay_mode(int mode);           /* the delay's ALGORITHM (DL_SYNC, DL_FREE), its TIME kept */
+void eng_delay_mode(int mode);           /* the delay's ALGORITHM (DL_SYNC .. DL_BBD_FREE), its TIME kept */
 uint32_t eng_prep_load(void);            /* core 0's preparation of a block (the sequencer, the LFOs, the cables), the same */
 uint32_t eng_peak(void);                 /* the worst total of the last second, same unit */
 uint32_t eng_peak_core1(void);           /* the worst block's tasks core 1 played (bit i: 0..3 the voices, 4 Warps, 5
