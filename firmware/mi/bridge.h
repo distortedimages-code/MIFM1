@@ -234,6 +234,22 @@ void taurus_defaults(float *k);
 int taurus_knob_steps(int k);            /* VOICE's 9, the others 128 */
 void taurus_knob_text(int k, float u, char *b, int n);
 
+/* ---- EASEL (mi_easel.cc, 0.16.63): a West Coast voice after Buchla's Music Easel (the 208): its complex oscillator,
+ * a sine Buchla's timbre circuit folds (the 259's, Esqueda et al., DAFx-17), FM or AM by its modulation oscillator (a
+ * ratio of the note), its lowpass gate and the vactrol an envelope or a ping lights (Parker and D'Angelo, DAFx-13).
+ * Eight knobs, 0..1: TIMBRE, RATIO, MOD (AM < > FM), DECAY (a ping, then the envelope), GATE (VCA, Combo, LP), T.ENV,
+ * M.ENV (the gate's light onto TIMBRE, onto MOD), SYMM */
+void easel_init(void);
+void easel_reset(int t);
+void easel_silence(int t);
+void easel_set(int t, float note, const float *k);
+void easel_gate(int t, int g);
+void easel_render(int t, float *out, uint32_t n);
+const char *easel_knob_name(int k);
+void easel_defaults(float *k);
+int easel_knob_steps(int k);             /* RATIO's 24, GATE's 3, the others 128 */
+void easel_knob_text(int k, float u, char *b, int n);
+
 /* ---- VOCODER (mi_vocoder.cc, 0.16.21): a 16-band channel vocoder and its own carrier, after Roland's VP-330 (its
  * vocoder, its strings, its choir, its ensemble): four voices a track, each three saws (TONE: fat saws, strings, a
  * choir's formants), the ensemble over it all; the voice another track's last block (voc_modulator, before the tracks

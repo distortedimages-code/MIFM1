@@ -217,6 +217,7 @@ const ModelDef kModelDef[ENG_MODELS] = {
   {"FM", "FM", MK_FM, 0, 2}, {"PADS", "PADS", MK_PADS, 0, 2}, {"POLY", "POLY", MK_POLY, 0, 2},
   {"REV3", "REV3", MK_PROPHET, 0, 2}, {"TAURUS", "TAUR", MK_TAURUS, 0, 2},
   {"VOCODER", "VOCO", MK_VOCODER, 0, 2}, {"CHOIR", "CHOR", MK_CHOIR, 0, 2}, {"STATIC", "STAT", MK_STATIC, 0, 2},
+  {"EASEL", "EASL", MK_EASEL, 0, 2},
   {"SPEECH", "SPCH", MK_PLAITS, 15, 3},
   {"SWARM", "SWRM", MK_PLAITS, 16, 4}, {"NOISE", "NOIS", MK_PLAITS, 17, 4}, {"PARTICLES", "PART", MK_PLAITS, 18, 4},
   {"STRING", "STRG", MK_PLAITS, 19, 4}, {"MODAL", "MODL", MK_PLAITS, 20, 4},
@@ -226,13 +227,15 @@ const ModelDef kModelDef[ENG_MODELS] = {
 // were spread from -16, ZERO, to -30, POLY and SPEECH), -22 the kicks, -24 the snares and the toms, -25 the clap, -26 the
 // perc, -28 the cymbal, -29 the hats (from -20 to -35). In quarter decibels, on the voice as it comes out (before its
 // bits, its filter, Warps). (0.16.43: CHOIR's a held C5 as loud as the synths' held notes, -16 LUFS on their
-// average here, measured; 0.16.49: the SDS' as MIFM1's drums, -22 the kick, -24 the snare and the tom, -26 the perc)
+// average here, measured; 0.16.49: the SDS' as MIFM1's drums, -22 the kick, -24 the snare and the tom, -26 the perc;
+// 0.16.63: EASEL's ping, its quarter notes, 1 dB over TAURUS')
 const int8_t kModelTrim[ENG_MODELS] = {13, 10, 13, 18, 3, 8, -7, 0, -12, -23, -31, -30, -21, -17, -12, 30, 20, 8, -3, 2, 8,
-                                       35, 1, 14, 10, 32, -8};
+                                       4, 35, 1, 14, 10, 32, -8};
 const int kModels34 = 25, kOtis34 = 15;   // (0.16.24 to 0.16.42's numbers: 25 models, OTIS 15)
 const int8_t kFrom34[kModels34] = {0, 1, 2, 3, 4, 5, 6, 7, 3, 3, 8, 9, 10, 11, 12, 11, 13, 14, 16, 17, 18, 19, 20, 21, 22};
 const char* const kBankNames[ENG_BANKS] = {"DRUMS", "FM DRUMS", "MIFM1", "PLAITS", "NOISE & PHYSICAL", "SDS"};
 const int kSdsAt = 8, kSdsN = 4;        // (0.16.49: the SDS' four at 8, the models from there four further on)
+const int kEaselAt = 21;                // (0.16.63: EASEL at 21, after STATIC; Plaits' from 22)
 inline const ModelDef& mdef(int m) { return kModelDef[m < 0 ? 0 : m >= ENG_MODELS ? ENG_MODELS - 1 : m]; }
 
 const char* const kSrcNames[NSRC] = {"-", "L1", "L2", "L3"};
@@ -580,6 +583,7 @@ int dice_interval(int m) {              // the parameter (tp) of a model that is
   if (d.kind == MK_TAURUS) return 1;    // (TAURUS' VOICE: a preset, a wave)
   if (d.kind == MK_VOCODER) return 1;   // (VOCODER's MOD: which track it listens to, kept; its PLAY too, below)
   if (d.kind == MK_STATIC) return 1;    // (0.16.28: STATIC's MODE, its other knobs another generator's)
+  if (d.kind == MK_EASEL) return 5;     // (0.16.63: EASEL's GATE, a switch: VCA, Combo, LP)
   if (d.kind != MK_PLAITS) return 0;
   return d.sub == 16 || d.sub == 18 ? 1 : 0;
 }
@@ -1886,6 +1890,7 @@ void mclaim(int t) {
   else if (k == MK_TAURUS) taurus_reset(t);
   else if (k == MK_VOCODER) voc_reset(t);
   else if (k == MK_STATIC) static_reset(t);
+  else if (k == MK_EASEL) easel_reset(t);
   mowner[t] = static_cast<uint8_t>(k);
 }
 uint16_t harmony_mask() {               // the harmony's scale (POLY's chords): PADS' (its chords'), else the project's
@@ -1916,6 +1921,7 @@ MI_COLD void kit_of(int m, float* k) {          // a model's knobs as its kit ha
   else if (d.kind == MK_TAURUS) taurus_defaults(k);
   else if (d.kind == MK_VOCODER) voc_defaults(k);
   else if (d.kind == MK_STATIC) static_defaults(k);
+  else if (d.kind == MK_EASEL) easel_defaults(k);
   else if (d.kind == MK_LXR) lx_defaults(d.sub, k);
   else
     for (int i = 0; i < LX_KNOBS; ++i) k[i] = 0.5f;
@@ -2152,6 +2158,8 @@ void set_voice(int t) {
       taurus_set(t, note, k);
     } else if (kind == MK_STATIC) {
       static_set(t, note, k);
+    } else if (kind == MK_EASEL) {
+      easel_set(t, note, k);
     } else if (kind == MK_VOCODER) {    // (0.16.28: Mono a voice; Poly the step's chord; a progression's, Manual's)
       float sc[4];
       const int pl = voc_pl(t);
@@ -2550,7 +2558,7 @@ void render_voice(int t, uint32_t n) {
   int lx = kind == MK_LXR, ac = kind == MK_ZERO, dr = kind == MK_DRUM, fm = kind == MK_FM;   // drum, the FM, PADS:
   int pd = kind == MK_PADS, pd_on = pd && t == pad_track;   // their gate, their own render (PADS: one track's)
   int po = kind == MK_POLY, px = kind == MK_PROPHET, ch = kind == MK_CHOIR, tau = kind == MK_TAURUS;
-  int vc = kind == MK_VOCODER, stc = kind == MK_STATIC, sd = kind == MK_SDS;
+  int vc = kind == MK_VOCODER, stc = kind == MK_STATIC, sd = kind == MK_SDS, ea = kind == MK_EASEL;
   uint32_t step = n / kFrames, pos = 0;
   for (uint32_t k = 0; k < kFrames; ++k) {
     int g = fg[t][k];
@@ -2568,6 +2576,7 @@ void render_voice(int t, uint32_t n) {
       else if (tau) taurus_render(t, &vbuf[t][pos], at - pos);
       else if (vc) voc_render(t, &vbuf[t][pos], at - pos);
       else if (stc) static_render(t, &vbuf[t][pos], at - pos);
+      else if (ea) easel_render(t, &vbuf[t][pos], at - pos);
       else if (pd) {
         if (pd_on) pads_render(&vbuf[t][pos], at - pos);
         else for (uint32_t i = pos; i < at; ++i) vbuf[t][i] = 0.0f;
@@ -2593,6 +2602,7 @@ void render_voice(int t, uint32_t n) {
     else if (tau) taurus_gate(t, g);
     else if (vc) voc_gate(t, g);
     else if (stc) static_gate(t, g);
+    else if (ea) easel_gate(t, g);
     else if (pd) {
       if (pd_on) pads_gate(g);
     }
@@ -2612,6 +2622,7 @@ void render_voice(int t, uint32_t n) {
     else if (tau) taurus_render(t, &vbuf[t][pos], n - pos);
     else if (vc) voc_render(t, &vbuf[t][pos], n - pos);
     else if (stc) static_render(t, &vbuf[t][pos], n - pos);
+    else if (ea) easel_render(t, &vbuf[t][pos], n - pos);
     else if (pd) {
       if (pd_on) pads_render(&vbuf[t][pos], n - pos);
       else for (uint32_t i = pos; i < n; ++i) vbuf[t][i] = 0.0f;
@@ -3385,6 +3396,7 @@ MI_COLD const char* eng_param_name(int param) {
                                            : track_kind(t) == MK_TAURUS ? taurus_knob_name(lk)
                                            : track_kind(t) == MK_VOCODER ? voc_knob_name(lk)
                                            : track_kind(t) == MK_STATIC ? static_knob_name(lk, static_mode_u(t))
+                                           : track_kind(t) == MK_EASEL ? easel_knob_name(lk)
                                                                      : lx_knob_name(lx_model(t), lk);
   }
   if (param >= PG_LFO(0) * 4 && param < PG_LFO(3) * 4 && param % 4 && Pi(param / 4, 0) == LW_FOLLOW) {
@@ -3413,6 +3425,8 @@ int eng_param_centered(int param) {
   if (k == MK_VOCODER) return lk == 6;  // (SHIFT: the voice lower or higher)
   if (k == MK_CHOIR) return 0;
   if (k == MK_SDS) return lk == 7;      // (0.16.49: BEND down or up; HIT, DRIVE from the left)
+  if (k == MK_EASEL) return lk == 2 || lk >= 5;   // (0.16.63: MOD, AM to the left and FM to the right; T.ENV, M.ENV,
+                                        // SYMM)
   return c;
 }
 
@@ -3602,6 +3616,7 @@ MI_COLD float eng_lx_step(int param, float v, int detents) {
                                             : track_kind(t) == MK_TAURUS ? taurus_knob_steps(lk)
                                             : track_kind(t) == MK_VOCODER ? voc_knob_steps(lk)
                                             : track_kind(t) == MK_STATIC ? static_knob_steps(lk, static_mode_u(t))
+                                            : track_kind(t) == MK_EASEL ? easel_knob_steps(lk)
                                                                       : lx_knob_steps(lx_model(t), lk);
   float u = bip ? (v + 1.0f) * 0.5f : v;
   if (track_kind(t) == MK_LXR) {        // (0.16.50) an FM drum's WAVE: its waves, then PWM's widths
@@ -3735,6 +3750,7 @@ MI_COLD int eng_sound_set(int t, const eng_sound_t* s) {
     m = m >= 0 && m < kModels34 ? kFrom34[m] : 0;
   }
   if (s->version <= 8 && m >= kSdsAt) m += kSdsN;   // (0.16.49: the SDS at 8, the models from there four further on)
+  if (s->version <= 11 && m >= kEaselAt) ++m;   // (0.16.63: EASEL at 21, Plaits' from there one further on)
   m = m >= 0 && m < ENG_MODELS ? m : 0;
   if (!eng_model_free(t, m)) return -2;   // (PADS: once a project)
   for (int i = 0; i < SND_PAGES; ++i) {
@@ -3896,6 +3912,8 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
     voc_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0 && track_kind(param / 12) == MK_STATIC) {   // STATIC's (its mode's: Hz, ms, rad, %)
     static_knob_text(lk, lx_u(param, v), static_mode_u(param / 12), b, n);
+  } else if (lk >= 0 && track_kind(param / 12) == MK_EASEL) {   // EASEL's (a ratio, AM or FM, a ping or a time)
+    easel_knob_text(lk, lx_u(param, v), b, n);
   } else if (lk >= 0) {                   // an FM drum's: as the LXR-02 shows it (0..127, a wave)
     lx_knob_text(lx_model(param / 12), lk, lx_u(param, v), b, n);
   } else if (pt == PT_WARPS1 && k == 0 && i_of(v) >= WC_OSC1) {   // the oscillator's shape, as the algorithm uses it
@@ -4737,6 +4755,14 @@ MI_COLD void sds_in(project_t* p) {      // (0.16.49) 0.16.43's to 0.16.48's num
       p->lock[i].v = static_cast<uint8_t>(sds_at(p->lock[i].v));
 }
 MI_COLD void taurus_in(project_t* p) { models_from(p, 16); }   // (0.16.20)
+MI_COLD void easel_in(project_t* p) {    // (0.16.63) a project before: EASEL at 21, after STATIC, Plaits' models from
+  for (int t = 0; t < ENG_TRACKS; ++t) { // there one further on, a step's model too
+    const int o = p->algo[PG_TRACK(t, 0)];
+    if (o >= kEaselAt && o + 1 < ENG_MODELS) p->algo[PG_TRACK(t, 0)] = static_cast<uint8_t>(o + 1);
+  }
+  for (int i = 0; i < ENG_PLOCKS; ++i)
+    if (p->lock[i].lane < ENG_TRACKS && p->lock[i].tp == kTpModel && p->lock[i].v >= kEaselAt) ++p->lock[i].v;
+}
 MI_COLD void vocoder_in(project_t* p) { models_from(p, 17); }  // (0.16.21)
 MI_COLD void static_in(project_t* p) { models_from(p, 18); }   // (0.16.24)
 MI_COLD void models_v27(project_t* p) {   // (0.13 to 0.16.13's numbers: ..., PROPHET 14, CHIPTUNE 15, FORMANT 16,
@@ -4986,11 +5012,13 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
     if (v <= 36) pads_in(p);            // (0.16.57: PADS' fourth page)
     pads_v37_in(p);                     // (0.16.59: its fourth page now, its fifth)
     climb_v39(p);
+    easel_in(p);
     return 1;
   }
-  if (v == 38 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
-    p->version = PROJECT_VERSION;       // (0.16.59's: the same layout, CLIMB a step's alone now)
-    climb_v39(p);
+  if ((v == 38 || v == 39) && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+    p->version = PROJECT_VERSION;       // (0.16.59's to 0.16.62's: the same layout; 0.16.60: CLIMB a step's alone,
+    if (v == 38) climb_v39(p);          // 0.16.63: EASEL at 21)
+    easel_in(p);
     return 1;
   }
   if (v >= 27 && v <= 32 && bytes == static_cast<int>(sizeof(project_v32)) && p->size == sizeof(project_v32)) {
@@ -5003,6 +5031,7 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
     if (v <= 31) vocoder_in(p);         // SPEECH again in its place, at noon)
     static_in(p);
     models_v35(p);
+    easel_in(p);
     if (v == 29)
       for (int t = 0; t < ENG_TRACKS; ++t)
         if (p->algo[PG_TRACK(t, 0)] == eng_model_find(MK_PLAITS, 15)) kit_fresh(p, t);
@@ -5017,6 +5046,7 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
   models_v35(p);
   pads_in(p);
   pads_v37_in(p);
+  easel_in(p);
   return 1;
 }
 MI_COLD int upgrade_any(project_t* p, int bytes) {
@@ -5061,6 +5091,7 @@ MI_COLD int eng_init(void) {
   pads_init();
   poly_init();
   taurus_init();
+  easel_init();
   voc_init();
   static_init();
   pro_init();
@@ -5132,6 +5163,7 @@ MI_COLD void cut_now() {
     else if (k == MK_TAURUS) taurus_silence(t);
     else if (k == MK_VOCODER) voc_silence(t);
     else if (k == MK_STATIC) static_silence(t);
+    else if (k == MK_EASEL) easel_silence(t);
   }
   pads_silence();
   for (int t = 0; t < ENG_TRACKS; ++t) mf_reset(t);   // (the filters' rings)

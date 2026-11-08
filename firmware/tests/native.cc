@@ -5152,7 +5152,7 @@ int main(int argc, char** argv) {
     // (SPEECH on T1 after it, sounding); a project of 0.16.20 (31) and a sound (5) renumbered (TAURUS 16 kept, SPEECH
     // 17 now 18, MODAL the last)
     const int vm = eng_model_find(MK_VOCODER, 0), speech = eng_model_find(MK_PLAITS, 15);
-    int ok = vm == 18 && ENG_MODELS == 27 && eng_model_bank(vm) == 2 && eng_model_own(vm) && speech == 21 &&
+    int ok = vm == 18 && ENG_MODELS == 28 && eng_model_bank(vm) == 2 && eng_model_own(vm) && speech == 22 &&
              eng_model_find(MK_TAURUS, 0) == 17;   // (0.16.49's numbers: the SDS at 8)
     project_t* p = eng_project();
     eng_defaults(p);
@@ -5514,7 +5514,7 @@ int main(int argc, char** argv) {
   // no NaN, no peak over the soft knee's 1.2, at any knobs; a project of 0.16.23 (33) and a sound (6) renumbered
   {
     const int sm = eng_model_find(MK_STATIC, 0), speech = eng_model_find(MK_PLAITS, 15);
-    int ok = sm == 20 && ENG_MODELS == 27 && eng_model_bank(sm) == 2 && eng_model_own(sm) && speech == 21;
+    int ok = sm == 20 && ENG_MODELS == 28 && eng_model_bank(sm) == 2 && eng_model_own(sm) && speech == 22;
     project_t* p = eng_project();
     eng_defaults(p);
     eng_fresh();
@@ -6168,7 +6168,7 @@ int main(int argc, char** argv) {
     static float l[128], r[128];
     static float buf[44100];
     const int cm = eng_model_find(MK_CHOIR, 0);
-    int ok = cm == 19 && ENG_MODELS == 27 && eng_model_bank(cm) == 2 && eng_model_own(cm) &&
+    int ok = cm == 19 && ENG_MODELS == 28 && eng_model_bank(cm) == 2 && eng_model_own(cm) &&
              !std::strcmp(eng_algo_name(PG_TRACK(0, 0), cm), "CHOIR") && eng_model_find(MK_LXR, 2) < 0 &&
              eng_model_find(MK_LXR, 1) == 7;
     auto knob = [&](int t, int i, float u) {
@@ -6314,7 +6314,7 @@ int main(int argc, char** argv) {
     static float buf[44128];
     const uint32_t n = 128;
     const int s0 = eng_model_find(MK_SDS, 0), speech = eng_model_find(MK_PLAITS, 15);
-    int ok = s0 == 8 && ENG_MODELS == 27 && eng_model_bank(s0) == 5 && eng_model_own(s0) && speech == 21 &&
+    int ok = s0 == 8 && ENG_MODELS == 28 && eng_model_bank(s0) == 5 && eng_model_own(s0) && speech == 22 &&
              !std::strcmp(eng_bank_name(5), "SDS") && eng_model_find(MK_LXR, 1) == 7 && eng_model_find(MK_ZERO, 0) == 12;
     eng_play(0);
     eng_defaults(p);
@@ -6730,6 +6730,220 @@ int main(int argc, char** argv) {
            "dB; DECAY up: its tail %+.1f dB; a trig left out under the kick: %.2f\n", own[0], old[0], own[1], old[1],
            own[2], old[2], own[3], old[3], lvd[0], lvd[1], lvd[2], lvd[3], longer, left_out);
     if (!ok) ++failures, printf("FAIL: a step's model's kit\n");
+  }
+
+  {                                     // 77. EASEL (0.16.63): after STATIC (20), Plaits' one further on; its knobs, its
+    // kit, its texts; a pure sine at TIMBRE 0 (its pitch, its partials), the fold's partials as TIMBRE rises, SYMM's
+    // even ones; the fold's alias (ADAA) low on a high note; FM at a whole ratio harmonic, at sqrt 2 metallic; a ping:
+    // short at DECAY 0, long at the end of its range, VCA shorter than Combo, LP darker; at rest after it, exactly
+    // silent; 300 settings finite and bounded; a project of 0.16.62 (39) and a sound (11) renumbered
+    const int em = eng_model_find(MK_EASEL, 0), speech = eng_model_find(MK_PLAITS, 15), modal = eng_model_find(MK_PLAITS, 20);
+    int ok = em == 21 && ENG_MODELS == 28 && eng_model_bank(em) == 2 && eng_model_own(em) && speech == 22 &&
+             modal == ENG_MODELS - 1 && eng_model_find(MK_STATIC, 0) == 20 && !std::strcmp(eng_model_abbr(em), "EASL");
+    project_t* p = eng_project();
+    eng_defaults(p);
+    eng_fresh();
+    eng_set_model(0, em);
+    float kd[8];
+    easel_defaults(kd);
+    int knobs = 1;
+    for (int i = 0; i < 8; ++i) {
+      int param = PG_TRACK(0, 0) * 4 + 1 + i;
+      float u = eng_pdef(param)->kind == K_BIP ? (p->val[param] + 1.0f) * 0.5f : p->val[param];
+      if (std::fabs(u - kd[i]) > 1e-6f || std::strcmp(eng_param_name(param), easel_knob_name(i)) != 0) knobs = 0;
+      if (eng_param_centered(param) != (i == 2 || i >= 5)) knobs = 0;
+    }
+    knobs &= easel_knob_steps(1) == 24 && easel_knob_steps(4) == 3 && easel_knob_steps(0) == 128;
+    char tx[24];
+    struct { int k; float u; const char* want; } kTx[] = {
+        {0, 0.0f, "0"}, {0, 1.0f, "100"}, {1, 0.0f, "x0.25"}, {1, 3.5f / 24.0f, "x1"}, {1, 5.5f / 24.0f, "x1.41"},
+        {1, 6.5f / 24.0f, "x1.5"}, {1, 12.5f / 24.0f, "x2.76"}, {1, 1.0f, "x8.93"}, {2, 0.5f, "Off"}, {2, 0.0f, "AM 100%"},
+        {2, 0.75f, "FM 2.0"}, {2, 1.0f, "FM 8.0"}, {3, 0.0f, "Ping 35ms"}, {3, 1.0f, "8.0s"}, {3, 0.34f, "2ms"},
+        {4, 0.0f, "VCA"}, {4, 0.5f, "Combo"}, {4, 1.0f, "LP"}, {5, 0.5f, "Off"}, {6, 1.0f, "+100%"}, {7, 0.0f, "-100%"}};
+    int texts = 1;
+    for (auto& x : kTx) {
+      easel_knob_text(x.k, x.u, tx, sizeof tx);
+      if (std::strcmp(tx, x.want) != 0) texts = 0, printf("  EASEL knob %d at %.3f: %s, not %s\n", x.k, x.u, tx, x.want);
+    }
+    eng_defaults(p);
+    eng_fresh();
+    easel_init();                       // (its state on track 1 the machine's own, here; the others' made again later)
+    static float buf[44100 * 3];
+    // a note held (its gate the first `on` samples) on track 1, len samples
+    auto play = [&](const float* k, float note, int len, int on, float* out) {
+      easel_reset(1);
+      easel_set(1, note, k);
+      for (int s = 0; s < len; s += 64) {
+        easel_gate(1, s < on);
+        easel_render(1, out + s, 64);
+      }
+    };
+    auto tone = [&](const float* x, int a, int b, double hz) {
+      double c = 0, sn = 0;
+      for (int i = a; i < b; ++i) {
+        const double ph = 2.0 * M_PI * hz * i / 44100.0;
+        c += x[i] * std::cos(ph), sn += x[i] * std::sin(ph);
+      }
+      return 2.0 * std::sqrt(c * c + sn * sn) / (b - a);
+    };
+    auto set = [&](float* k, float timbre, float ratio_i, float mod, float decay, float gate, float symm) {
+      for (int i = 0; i < 8; ++i) k[i] = kd[i];
+      k[0] = timbre, k[1] = (ratio_i + 0.5f) / 24.0f, k[2] = mod, k[3] = decay, k[4] = gate, k[5] = 0.5f, k[6] = 0.5f;
+      k[7] = symm;
+    };
+    // an exact period: 1102.5 Hz (40 samples), its note; 220.5 Hz (200 samples)
+    const float n1102 = 69.0f + 12.0f * static_cast<float>(std::log2(1102.5 / 440.0));
+    const float n220 = 69.0f + 12.0f * static_cast<float>(std::log2(220.5 / 440.0));
+    float k[8];
+    set(k, 0.0f, 9, 0.5f, 0.95f, 0.5f, 0.5f);   // (TIMBRE 0, no MOD, a long decay, Combo)
+    play(k, n220, 44100, 44100, buf);
+    const double h1 = tone(buf, 8820, 17820, 220.5), h2 = tone(buf, 8820, 17820, 441.0), h3 = tone(buf, 8820, 17820, 661.5);
+    const int pure = h1 > 0.05 && h2 < 0.01 * h1 && h3 < 0.01 * h1;
+    set(k, 1.0f, 9, 0.5f, 0.95f, 0.5f, 0.5f);
+    play(k, n220, 44100, 44100, buf);
+    const double f1 = tone(buf, 8820, 17820, 220.5), f3 = tone(buf, 8820, 17820, 661.5), f5 = tone(buf, 8820, 17820, 1102.5);
+    const double f2 = tone(buf, 8820, 17820, 441.0);
+    set(k, 0.7f, 9, 0.5f, 0.95f, 0.5f, 0.9f);
+    play(k, n220, 44100, 44100, buf);
+    const double s1 = tone(buf, 8820, 17820, 220.5), s2 = tone(buf, 8820, 17820, 441.0);
+    const int folds = (f3 + f5) > 0.3 * f1 && f2 < 0.01 * f1 && s2 > 0.05 * s1;
+    // what is not a harmonic of f0 (its share of the energy, dB): the fold's alias; FM's sidebands
+    auto off_harm = [&](const float* x, int a, int len, double f0) {
+      double e = 0.0, hsum = 0.0;
+      for (int i = a; i < a + len; ++i) e += static_cast<double>(x[i]) * x[i];
+      e /= len;
+      for (int h = 1; h * f0 < 22050.0; ++h) {
+        const double am = tone(x, a, a + len, h * f0);
+        hsum += 0.5 * am * am;
+      }
+      return 10.0 * std::log10(std::max(e - hsum, 1e-30) / e);
+    };
+    set(k, 1.0f, 9, 0.5f, 0.95f, 0.5f, 0.5f);
+    play(k, n1102, 44100, 44100, buf);
+    const double alias = off_harm(buf, 8820, 8000, 1102.5);
+    set(k, 0.0f, 9, 0.8f, 0.95f, 0.5f, 0.5f);   // (FM at x2: harmonic)
+    play(k, n220, 44100, 44100, buf);
+    const double fm_whole = off_harm(buf, 8820, 8000, 220.5);
+    set(k, 0.0f, 5, 0.8f, 0.95f, 0.5f, 0.5f);   // (FM at x1.41: metallic)
+    play(k, n220, 44100, 44100, buf);
+    const double fm_metal = off_harm(buf, 8820, 8000, 220.5);
+    set(k, 0.0f, 9, 0.0f, 0.95f, 0.5f, 0.5f);   // (AM, its index at 100 %, x2: harmonic)
+    play(k, n220, 44100, 44100, buf);
+    const double am_whole = off_harm(buf, 8820, 8000, 220.5);
+    const int metal = alias < -35.0 && fm_whole < -40.0 && fm_metal > -10.0 && am_whole < -40.0;
+    // the folded crests of a low note, clean: a note of whole-sample periods (35, 70, 140 Hz) against itself a period
+    // on, TIMBRE and SYMM up; their worst difference to the rms (0.16.63's first ADAA, the cells' d - d1 taken as a
+    // difference: -22 dB, clicks)
+    double crest = -200.0;
+    static const int kPer[3] = {1260, 630, 315};
+    for (int pi = 0; pi < 3; ++pi)
+      for (int ti = 0; ti < 3; ++ti)
+        for (int si = 0; si < 2; ++si) {
+          set(k, 0.5f + 0.25f * ti, 9, 0.5f, 0.95f, 0.5f, 0.5f + 0.4f * si);
+          play(k, 69.0f + 12.0f * static_cast<float>(std::log2(44100.0 / kPer[pi] / 440.0)), 32768, 32768, buf);
+          double mx = 0.0, e = 0.0;
+          for (int i = 22050; i < 30000; ++i) {
+            mx = std::max(mx, static_cast<double>(std::fabs(buf[i] - buf[i - kPer[pi]])));
+            e += static_cast<double>(buf[i]) * buf[i];
+          }
+          crest = std::max(crest, 20.0 * std::log10(mx / std::sqrt(e / 7950.0) + 1e-30));
+        }
+    const int crests = crest < -45.0;
+    // a ping: its level each 2.9 ms (the peak of a 128-sample block, over 60 Hz: not the coupling capacitor's slow
+    // settling after a burst), the time it falls 40 dB under its top
+    static float hp[44100 * 3];
+    auto fall40 = [&](const float* x, int len) {
+      double top = 0.0, a1 = 0.0, b1 = 0.0, a2 = 0.0, b2 = 0.0;
+      const double r = 1.0 - 2.0 * M_PI * 60.0 / 44100.0;
+      for (int i = 0; i < len; ++i) {   // (twice a one-pole high-pass at 60 Hz)
+        b1 = x[i] - a1 + r * b1, a1 = x[i];
+        b2 = b1 - a2 + r * b2, a2 = b1;
+        hp[i] = static_cast<float>(b2);
+      }
+      int at = -1;
+      for (int b = 0; b + 128 <= len; b += 128) {
+        double m = 0.0;
+        for (int i = b; i < b + 128; ++i) m = std::max(m, static_cast<double>(std::fabs(hp[i])));
+        if (m > top) top = m, at = -1;
+        else if (at < 0 && m < top * 0.01) at = b;
+      }
+      return at < 0 ? 1e9 : at / 44.1;
+    };
+    auto zc = [&](const float* x, int a, int b) {   // (its zero crossings in a span: how bright)
+      int z = 0;
+      for (int i = a + 1; i < b; ++i) z += (x[i - 1] < 0.0f) != (x[i] < 0.0f);
+      return z;
+    };
+    set(k, 0.5f, 13, 0.7f, 0.0f, 0.5f, 0.5f);   // (DECAY 0: the shortest ping)
+    play(k, n220, 44100, 64, buf);
+    const double t_short = fall40(buf, 44100);
+    set(k, 0.5f, 13, 0.7f, 0.33f, 0.5f, 0.5f);   // (the longest)
+    play(k, n220, 44100 * 3, 64, buf);
+    const double t_long = fall40(buf, 44100 * 3);
+    double after = 0.0;                 // (2 s after it: at rest, exactly silent)
+    for (int i = 44100 * 2 + 22050; i < 44100 * 3; ++i) after = std::max(after, static_cast<double>(std::fabs(buf[i])));
+    set(k, 0.5f, 13, 0.7f, 0.2f, 0.5f, 0.5f);
+    play(k, n220, 44100, 64, buf);
+    const double t_combo = fall40(buf, 44100);
+    const int z_combo = zc(buf, 2205, 6615);
+    double pk_combo = 0.0, pk_vca = 0.0;   // (VCA's ping as loud, nearly: 3 dB under, here)
+    for (int i = 0; i < 44100; ++i) pk_combo = std::max(pk_combo, static_cast<double>(std::fabs(hp[i])));
+    set(k, 0.5f, 13, 0.7f, 0.2f, 0.0f, 0.5f);
+    play(k, n220, 44100, 64, buf);
+    const double t_vca = fall40(buf, 44100);
+    for (int i = 0; i < 44100; ++i) pk_vca = std::max(pk_vca, static_cast<double>(std::fabs(hp[i])));
+    const double vca_db = 20.0 * std::log10(pk_vca / pk_combo);
+    set(k, 0.5f, 13, 0.7f, 0.2f, 1.0f, 0.5f);
+    play(k, n220, 44100, 64, buf);
+    const int z_lp = zc(buf, 2205, 6615);
+    const int pings = t_short < 60.0 && t_long > 250.0 && t_long < 2500.0 && t_vca < t_combo && z_lp < z_combo &&
+                      after == 0.0 && vca_db > -6.0 && vca_db < 1.0;
+    // 300 settings, notes 24..96: finite, bounded (its knee: 1.2 at most)
+    srand(77);
+    int finite = 1;
+    double pk = 0.0;
+    for (int r = 0; r < 300; ++r) {
+      for (int i = 0; i < 8; ++i) k[i] = static_cast<float>(rand()) / RAND_MAX;
+      play(k, 24.0f + 72.0f * static_cast<float>(rand()) / RAND_MAX, 4096, 1024, buf);
+      for (int i = 0; i < 4096; ++i) {
+        finite &= std::isfinite(buf[i]) ? 1 : 0;
+        pk = std::max(pk, static_cast<double>(std::fabs(buf[i])));
+      }
+    }
+    const int bounded = finite && pk < 1.25;
+    // a project of 0.16.62 (39): SPEECH (21 then) on T2, a step's model 21, STATIC (20) on T3; a sound (11) of SPEECH
+    static project_t q;
+    eng_defaults(&q);
+    q.version = 39;
+    q.algo[PG_TRACK(1, 0)] = 21;
+    q.algo[PG_TRACK(2, 0)] = 20;
+    for (int i = 0; i < ENG_PLOCKS; ++i) q.lock[i].lane = 0xFF;
+    q.lock[0] = plock_t{3, 4, static_cast<uint8_t>(ENG_NTP + 4), 21};
+    const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.version == PROJECT_VERSION &&
+                        q.algo[PG_TRACK(1, 0)] == speech && q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_STATIC, 0) &&
+                        q.lock[0].v == speech;
+    eng_defaults(p);
+    eng_set_model(1, speech);
+    static eng_sound_t snd;
+    eng_sound_get(1, &snd);
+    snd.version = 11;
+    snd.algo[0] = 21;
+    eng_set_model(1, em);
+    const int snd_ok = eng_sound_set(1, &snd) == 0 && p->algo[PG_TRACK(1, 0)] == speech;
+    eng_defaults(p);
+    eng_fresh();
+    ok = ok && knobs && texts && pure && folds && metal && crests && pings && bounded && proj_ok && snd_ok;
+    printf("EASEL: at %d of %d, knobs %s, texts %s; TIMBRE 0 pure (h2 %.4f h3 %.4f of h1 %.3f) %s; folded h3+h5 %.2f of "
+           "h1, h2 %.4f, SYMM h2 %.2f %s; alias at 1.1 kHz %.1f dB, FM x2 %.1f dB, x1.41 %.1f dB, AM x2 %.1f dB off the "
+           "harmonics %s; low crests a period on %.1f dB %s; ping 40 dB down in %.0f ms (shortest), %.0f ms (longest), "
+           "Combo %.0f, VCA %.0f (%.1f dB), crossings Combo %d LP %d, after %.1e %s; 300 settings peak %.2f %s; "
+           "0.16.62's project %s, its sound %s\n",
+           em, ENG_MODELS, knobs ? "ok" : "WRONG", texts ? "ok" : "WRONG", h2, h3, h1, pure ? "ok" : "WRONG",
+           (f3 + f5) / f1, f2 / f1, s2 / s1, folds ? "ok" : "WRONG", alias, fm_whole, fm_metal, am_whole,
+           metal ? "ok" : "WRONG", crest, crests ? "ok" : "WRONG", t_short, t_long, t_combo, t_vca, vca_db, z_combo,
+           z_lp, after, pings ? "ok" : "WRONG", pk, bounded ? "ok" : "WRONG", proj_ok ? "ok" : "WRONG",
+           snd_ok ? "ok" : "WRONG");
+    if (!ok) ++failures, printf("FAIL: EASEL\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

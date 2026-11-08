@@ -19,14 +19,14 @@ def t(en, fr, tag="span"):
 
 SUB_EN = ("Its own drums, those of the LXR-02, the Simmons SDS 8's (SDS), ZERO, a four-operator FM, PADS and its "
           "chord progressions, two analog polysynths (POLY, REV3), a Moog bass (TAURUS), a vocoder (VOCODER), a singing "
-          "voice and its choir (CHOIR), electric events (STATIC), the best engines from Plaits: 27 machines. Four "
-          "modeled analog filters, a sequencer with P-locks and a random dose that reinvents every note. All the sound "
-          "is open source.")
+          "voice and its choir (CHOIR), electric events (STATIC), a West Coast voice (EASEL), the best engines from "
+          "Plaits: 28 machines. Four modeled analog filters, a sequencer with P-locks and a random dose that reinvents "
+          "every note. All the sound is open source.")
 SUB_FR = ("Ses propres batteries, celles du LXR-02, celles du Simmons SDS 8 (SDS), ZERO, une FM à quatre opérateurs, "
           "PADS et ses progressions d'accords, deux polyphoniques analogiques (POLY, REV3), une basse Moog (TAURUS), un "
-          "vocodeur (VOCODER), une voix chantée et son chœur (CHOIR), des événements électriques (STATIC), les "
-          "meilleurs moteurs de Plaits : 27 machines. Quatre filtres analogiques modélisés, un séquenceur à P-locks et "
-          "une dose d'aléatoire qui réinvente chaque note. Tout le son est open source.")
+          "vocodeur (VOCODER), une voix chantée et son chœur (CHOIR), des événements électriques (STATIC), une voix de "
+          "la côte Ouest (EASEL), les meilleurs moteurs de Plaits : 28 machines. Quatre filtres analogiques modélisés, "
+          "un séquenceur à P-locks et une dose d'aléatoire qui réinvente chaque note. Tout le son est open source.")
 
 page = f"""<!doctype html>
 <html lang="en">

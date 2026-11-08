@@ -46,6 +46,10 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   Ikeda** ; trois générateurs, un par piste ou un par pas : **BODY** (un sinus sub, sa hauteur qui tombe, pur ou
   saturé), **ARC** (une porteuse modulée en phase par un modulateur libre en Hz, son feedback, un modulateur en anneau),
   **SPARK** (des salves de bruit, de bruit tenu ou d'impulsions dans un passe-haut ou un passe-bande) (voir plus bas) ;
+- **EASEL** (0.16.63) : une voix de la **côte Ouest** d'après la **Music Easel** de Buchla (1973), au plus près du
+  circuit : un sinus replié par le **wavefolder du 259**, un oscillateur de modulation à des **rapports métalliques** de
+  la note (FM à travers zéro ou AM), la **lowpass gate** et son vactrol ; une impulsion brève l'allume, elle s'ouvre
+  d'un coup et se referme lentement, plus sombre en s'éteignant : le **ping** (voir plus bas) ;
 - **Plaits** sur chaque piste, 6 de ses modèles (ses trois batteries, treize de ses oscillateurs, sa puce 8 bits et ses
   formants ont laissé la place aux moteurs de MIFM1), et un **circuit bending** par piste (0.7, à la place du
   grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
@@ -149,7 +153,7 @@ page PROJECT (« flash … : RAM only ») : rien n'y est écrit ; dites-le dans 
 machine (le même moteur, les mêmes modules, les mêmes calculs en flottants simples), le même écran, les mêmes
 pages ; « Allumer et lancer la démo » démarre le son et PLAY. Autour de la machine, un mini guide : la prise en main
 en quatre gestes, le chemin du son (un schéma), le panneau (chaque numéro allume son repère sur la machine ;
-« Repères » les montre tous), les 27 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
+« Repères » les montre tous), les 28 moteurs avec les icônes de l'écran (`tools/web/icons_svg.py` les reprend d'`app.c`)
 et ce qu'ils modélisent, leur histoire et des photos d'archives (Wikimedia Commons), les quatre filtres avec leur réponse, le schéma de leur circuit et leur histoire, le circuit bending,
 les effets, le séquenceur, la dose d'aléatoire, les spécifications, et des jauges de la charge du FM-1. « Essayer »,
 sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_try). Pour écouter MIFM1 sur un autre système (une
@@ -206,8 +210,8 @@ plus d'exemple depuis la 0.16.46 : un peu de mystère. Et les potards des filtre
 et crépitaient sur un téléphone ; la recherche du réglage juste sous l'auto-oscillation (la courbe dessinée quand le
 filtre chante) se fait par moitiés, 7 mesures au lieu de 50 par image.
 
-Les histoires des machines récentes (POLY, REV3, TAURUS, VOCODER, CHOIR, STATIC) ont leurs photos d'archives depuis la
-0.16.44, et METAL la sienne : la plaque EMT 140 (1957), puis l'Erbe-Verb de Tom Erbe et Make Noise (2014). Un seul son à la fois sur la page : un
+Les histoires des machines récentes (POLY, REV3, TAURUS, VOCODER, CHOIR, STATIC, et EASEL depuis la 0.16.63) ont leurs
+photos d'archives depuis la 0.16.44, et METAL la sienne : la plaque EMT 140 (1957), puis l'Erbe-Verb de Tom Erbe et Make Noise (2014). Un seul son à la fois sur la page : un
 exemple lancé arrête celui d'avant et met la machine en pause là où elle en est ; toucher la machine, « Essayer » ou
 l'allumer arrête l'exemple et la relance.
 
@@ -1000,6 +1004,50 @@ de la piste vers la réverbe reste sur la page du mixer. Les projets enregistré
 0.16.21 à 0.16.23 se relisent : STATIC prend la place 18, SPEECH et les autres modèles de Plaits passent un cran plus
 loin ; un projet qui jouait l'ancienne STATIC garde ses valeurs, qui veulent dire autre chose.
 
+**EASEL** (0.16.63 ; ALGORITHM après STATIC, la banque MIFM1) : une voix de la **côte Ouest** d'après la **Music
+Easel** de Buchla (1973 : le 208 et son clavier 218 dans une valise), au plus près du circuit, faite pour les **pings**
+très courts et les rapports harmoniques **métalliques**. Là où la côte Est filtre une onde riche, Buchla construit le
+timbre en modulant et en repliant un sinus, puis le laisse passer par une **lowpass gate** : un filtre et un ampli à la
+fois, une photorésistance éclairée par une LED (le vactrol). Une impulsion très brève l'allume à peine (quelques mA
+sur 40) ; elle s'ouvre d'un coup et se referme lentement, plus sombre à mesure qu'elle s'éteint, comme un objet qu'on
+frappe.
+
+- **L'oscillateur complexe** : un sinus à la note, replié par **TIMBRE** dans le **wavefolder du 259** tel que Fabian
+  Esqueda, Henri Pöntynen, Vesa Välimäki et Julian Parker le modélisent (*Virtual Analog Buchla 259 Wavefolder*,
+  DAFx-17) : cinq cellules en parallèle du chemin direct, leurs seuils et leurs poids ceux du circuit, son passe-bas de
+  sortie (1,33 kHz). L'aliasing est tenu par l'antidérivée (ADAA du premier ordre, chaque cellule calculée sans
+  soustraction de nombres voisins : sur une note grave, les crêtes repliées ne claquent pas) : −69 dB à 1,1 kHz,
+  TIMBRE à fond. Comme sur l'appareil, le repli faiblit dans les aigus. **SYMM** décale le sinus dans le repli (la
+  symétrie du 259 : les partiels pairs).
+- **L'oscillateur de modulation** : un triangle à **RATIO** fois la note, 24 rapports, entiers (harmoniques, de x0,25 à
+  x7) et entre eux, **métalliques** : √2, φ, √3, √5, 1+√2, le 2,76 de la cloche, π, 3,5, √18, 5,4, 2π, 8,93. **MOD**,
+  depuis le milieu : à gauche l'**AM** (jusqu'au son entièrement modulé, comme le fondu de l'Easel), à droite la **FM**
+  à travers zéro (index 0 à 8).
+- **La lowpass gate**, telle que Julian Parker et Stefano D'Angelo la modélisent (*A Digital Model of the Buchla
+  Lowpass-Gate*, DAFx-13) : son circuit à deux états (C1 1 nF, C2 220 pF, C3 4,7 nF en LP), par trapèzes, ses trois
+  modes, **GATE** : **VCA**, **Combo** (les deux à la fois, le son de l'Easel) et **LP** ; la photorésistance,
+  Rf = 3,464 / If^1,4 + 1136 Ω, du courant de la LED (40 mA allumée ; éteinte 0,1 µA : le plancher de 10 µA de
+  l'article laissait la gate entrouverte, −40 dB) ; le vactrol monte en 12 ms (plus vite allumé fort) et retombe plus
+  lentement à mesure qu'il s'éteint. En VCA, Rα vaut 50 kΩ ici (5 kΩ dans l'article : un ping y sortait 20 dB sous
+  celui du Combo), 3 dB de plus : un ping 3 dB sous le Combo, une enveloppe longue 2 dB au-dessus.
+- **DECAY** : son premier tiers est un **Ping** (l'enveloppe une impulsion, la retombée du vactrol de 35 à 700 ms ;
+  l'anneau dit « Ping », le temps dessous) ; au-delà, la descente de l'enveloppe, de 2 ms à 8 s. **T.ENV** et **M.ENV**
+  (depuis le milieu) laissent la lumière de la gate bouger TIMBRE et MOD : plus brillant et plus modulé à la frappe (à
+  droite), ou l'inverse (à gauche).
+
+| page | 1 | 2 | 3 | 4 |
+| --- | --- | --- | --- | --- |
+| **1** | FREQ | **TIMBRE** 0 à 100 | **RATIO** x0,25 à x8,93 | **MOD** AM 100 % · Off · FM 8,0 |
+| **2** | **DECAY** Ping 35 ms à 700 ms, puis 2 ms à 8 s | **GATE** VCA, Combo, LP | **T.ENV** −100 à +100 % | **M.ENV** −100 à +100 % |
+| **3** | **SYMM** −100 à +100 % | TRANSP | OCTAVE | F.KEY |
+
+Choisir EASEL met ses réglages aux siens : TIMBRE 30, RATIO x3, MOD FM 0,5, un Ping de 396 ms, Combo, T.ENV +40 %,
+M.ENV +30 %, SYMM Off. Mesuré : un ping retombe de 40 dB en 29 ms au plus court, en 331 ms au plus long (Combo 110 ms,
+VCA 81 ms au même DECAY) ; le LP est plus sombre ; la voix se tait ensuite exactement (zéro). Son niveau, pris sur ses
+noires, est 1 dB au-dessus de TAURUS. Une voix coûte au FM-1 environ 10 % d'un bloc (compté, à mesurer sur la
+machine). Les projets et les sons enregistrés avant se relisent : EASEL prend la place 21, SPEECH et les autres
+modèles de Plaits passent un cran plus loin.
+
 L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
 icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis
 les quatre potards côte à côte, dans l'ordre des KNOB 1 à 4 : un anneau fin allumé de son début (ou de son milieu,
@@ -1125,7 +1173,7 @@ de la piste valent tels quels. Un trig verrouillé que sa PROB (ou la dose) lais
 sonne encore (avant, la queue du kick passait sur le modèle du pas). Mesuré sur 40 bandes : SNARE sur une piste KICK à
 4 dB par bande de la SNARE de sa propre piste (23 avant), HAT 1,7 (33), SDS SNARE 5,1 (27,5), FM SNARE 5,6 (20),
 au même niveau à 0,5 dB près ; l'écart restant est celui des tirages du bruit d'un coup à l'autre. Les autres
-machines (ZERO, FM, PADS, POLY, REV3, TAURUS, VOCODER, CHOIR, STATIC) ont chacune leur mémoire et leurs potards à elles :
+machines (ZERO, FM, PADS, POLY, REV3, TAURUS, VOCODER, CHOIR, STATIC, EASEL) ont chacune leur mémoire et leurs potards à elles :
 pas de modèle par pas. Le clavier joue toujours le modèle de la piste ; changer la piste de famille enlève les modèles
 de ses pas. Tenir un pas et taper SEL efface ses locks. **Tenir un trig une seconde, puis appuyer sur un pas plus
 loin** (0.16.15 ; la seconde depuis 0.16.38, l'en-tête passe alors de « STEP 5 » à « STEP 5 LEN ») lui donne sa
@@ -1676,6 +1724,11 @@ Chaque moteur de MIFM1 doit quelque chose à une machine, et le site le raconte,
 - STATIC : **ARC/01**, le cahier des charges DSP de Yoann (novembre 2026) ; **Ryoji Ikeda** (*+/−*, 1996 : des
   sinus et du bruit blanc, rien d'autre), **Pan Sonic** (Mika Vainio et Ilpo Väisänen, Turku, 1992 : un minimalisme
   dur et fort, sur des machines construites pour eux), et le sample and hold de l'**ECHON 6** de Morphor (2025) ;
+- EASEL : la **Music Easel** de **Don Buchla** (1973) et la côte Ouest (la série 100, commandée en 1963 par Ramon
+  Sender et Morton Subotnick pour le San Francisco Tape Music Center) ; **Suzanne Ciani** et **Kaitlyn Aurelia Smith**
+  (*Sunergy*, 2016 : un Buchla 200e et une Music Easel) ; les modèles de la lowpass gate de **Julian Parker** et
+  **Stefano D'Angelo** (DAFx-13) et du wavefolder du 259 de **Fabian Esqueda**, **Henri Pöntynen**, **Vesa Välimäki**
+  et Julian Parker (DAFx-17) ;
 - les filtres : l'échelle de **Moog**, le Korg 35 du **MS-20**, le **SEM** d'Oberheim ; le circuit bending : le
   **Biscuit** d'OTO et le **Data Bender** de Qu-Bit ; le delay : les potards du **Zen Delay** ; la réverbe et Warps :
   **Clouds** et **Warps** de Mutable Instruments ; METAL et SHIMMER : l'**Erbe-Verb** de Make Noise (conçue avec

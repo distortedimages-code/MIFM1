@@ -590,6 +590,7 @@ static const char *module_name(int page)
                                                                         : track_kind(ptrack(page)) == MK_TAURUS ? "Taurus"
                                                                         : track_kind(ptrack(page)) == MK_VOCODER ? "Vocoder"
                                                                         : track_kind(ptrack(page)) == MK_STATIC ? "Static"
+                                                                        : track_kind(ptrack(page)) == MK_EASEL ? "Easel"
                                                                         : "Plaits";
     }
     case PT_LFO: case PT_FOLLOW: {
@@ -1164,6 +1165,10 @@ static const vop_t ICONS[NICON][IOPS] = {
                                                                                                      * row */
     {{'R', 4, 7, 24, 18}, {'D', 8, 11, 1, 0}, {'D', 14, 14, 1, 0}, {'D', 21, 10, 1, 0}, {'D', 11, 19, 1, 0},
      {'D', 18, 20, 1, 0}, {'D', 24, 16, 1, 0}, {'L', 10, 28, 22, 28}, {'L', 16, 25, 16, 28}},       /* STATIC */
+    {{'L', 3, 16, 7, 6}, {'L', 7, 6, 9, 11}, {'L', 9, 11, 11, 6}, {'L', 11, 6, 15, 16}, {'L', 15, 16, 19, 26},
+     {'L', 19, 26, 21, 21}, {'L', 21, 21, 23, 26}, {'L', 23, 26, 27, 16}, {'D', 29, 16, 1, 0}},     /* EASEL: a sine
+                                                                                                     * folded (its
+                                                                                                     * timbre) */
     {{'R', 5, 6, 22, 14}, {'L', 10, 20, 8, 27}, {'L', 8, 27, 16, 20}},                              /* SPEECH */
     {{'C', 10, 18, 5, 0}, {'C', 17, 13, 6, 0}, {'C', 23, 19, 5, 0}},                                /* SWARM */
     {{'L', 4, 18, 7, 10}, {'L', 7, 10, 10, 23}, {'L', 10, 23, 13, 8}, {'L', 13, 8, 16, 21}, {'L', 16, 21, 19, 11},

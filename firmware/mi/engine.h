@@ -152,10 +152,11 @@ int eng_model_enveloped(int model);      /* 1: a Plaits model with its own envel
  * four, the pitch envelope's. Its kind says what plays it, its sub its index there (Plaits' engine, the LXR's voice,
  * the drum, the FM's kit) */
 enum { MK_PLAITS, MK_LXR, MK_ZERO, MK_DRUM, MK_FM, MK_PADS, MK_POLY, MK_PROPHET, MK_CHOIR, MK_TAURUS, MK_VOCODER,
-       MK_STATIC, MK_SDS };
-#define ENG_MODELS 27                    /* (0.16.43: FM CYMBAL, FM HI-HAT, OTIS gone; CHOIR at 15, after VOCODER;
+       MK_STATIC, MK_SDS, MK_EASEL };
+#define ENG_MODELS 28                    /* (0.16.43: FM CYMBAL, FM HI-HAT, OTIS gone; CHOIR at 15, after VOCODER;
                                           * STATIC at 16, Plaits' from 17. 0.16.49: the SDS' four at 8, after the FM
-                                          * drums: the models from 8 four further on) */
+                                          * drums: the models from 8 four further on. 0.16.63: EASEL at 21, after
+                                          * STATIC: Plaits' from 22) */
 #define ENG_BANKS 6                      /* (0.16.49: SDS the sixth, its models after the FM drums') */
 int eng_model_kind(int m);
 int eng_model_sub(int m);
@@ -192,7 +193,8 @@ int eng_model_lock_set(int lane, int step, int m);   /* 0 ok, -1 no room or not 
  * knobs' randoms, a name. Saved by the screen (app.c, pat_store.h), read onto any track */
 #define SND_PAGES 8
 #define SND_MAGIC 0x31444E53u            /* "SND1" */
-#define SND_VERSION 11                   /* (10: 0.16.57's and 0.16.58's: PADS' fourth page in four algorithm bytes (engine.cc
+#define SND_VERSION 12                   /* (11: 0.16.59's to 0.16.62's: EASEL not yet at 21: read, the models from
+                                          * there one further on; 10: 0.16.57's and 0.16.58's: PADS' fourth page in four algorithm bytes (engine.cc
                                           * kPads4At), as 0.16.57 had it, its fifth not yet: read, both made from it
                                           * (pads_from_v37); a sound before 11 is pads[] shorter (SND_SIZE_10);
                                           * 9: 0.16.49's to 0.16.56's: PADS' fourth page (0.16.57) not in it: read,
@@ -254,7 +256,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 39u              /* (38: 0.16.59's, CLIMB the track's and its TIMES: read, the track's CLIMB 0, a
+#define PROJECT_VERSION 40u              /* (39: 0.16.60's to 0.16.62's, the same layout: EASEL not yet at 21: read, the
+                                          * models from there one further on (easel_in); 38: 0.16.59's, CLIMB the track's and its TIMES: read, the track's CLIMB 0, a
                                           * step's lock its jump, its LIMIT TIMES - 1 jumps (climb_v39); 37: 0.16.57's and 0.16.58's: 71 pages, 367 locks, PADS' fourth page as 0.16.57 had
                                           * it: read, its fourth and fifth pages made from it (pads_from_v37), its
                                           * locks past 363 out; 33 to 36 the same layout, their changes after;

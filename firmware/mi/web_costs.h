@@ -4,7 +4,7 @@
  * (2902 us), from the instructions it runs (tools/web/calibrate.py writes this file: see there how). */
 #pragma once
 static const float kWebRest = 2.7f;   /* a resting voice */
-static const float kWebModel[27] = {   /* a voice playing, by model */
+static const float kWebModel[28] = {   /* a voice playing, by model */
     202.2f,  /*  0 KICK */
     200.1f,  /*  1 SNARE */
     201.1f,  /*  2 CLAP */
@@ -26,12 +26,13 @@ static const float kWebModel[27] = {   /* a voice playing, by model */
     177.8f,  /* 18 VOCODER */
     172.9f,  /* 19 CHOIR */
     127.2f,  /* 20 STATIC */
-    303.7f,  /* 21 SPEECH */
-    491.7f,  /* 22 SWARM */
-    402.1f,  /* 23 NOISE */
-    615.8f,  /* 24 PARTICLES */
-    516.2f,  /* 25 STRING */
-    781.7f,  /* 26 MODAL */
+    294.4f,  /* 21 EASEL */
+    303.7f,  /* 22 SPEECH */
+    491.7f,  /* 23 SWARM */
+    402.1f,  /* 24 NOISE */
+    615.8f,  /* 25 PARTICLES */
+    516.2f,  /* 26 STRING */
+    781.7f,  /* 27 MODAL */
 };
 static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, VOX): plain, its FM's extra, its NOISE's */
     {0.0f, 0.0f, 0.0f},
@@ -62,4 +63,4 @@ static const float kWebFxEq = 37.3f, kWebFxDuck = 6.9f, kWebFxDelay = 15.9f;   /
 static const float kWebFxWarps = 86.9f;   /* Warps in the mix (the rest of the stress test's effects) */
 static const float kWebFxSpread = 75.2f;   /* (0.16.19) a track's SPREAD */
 static const float kWebFxMetal[2] = {78.3f, 113.6f};   /* (0.16.41) the reverb METAL, SHIMMER: over Clouds' */
-static const float kWebPrep = 367.8f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.9f;   /* the preparation: its floor, a track playing, a cable */
+static const float kWebPrep = 368.9f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.9f;   /* the preparation: its floor, a track playing, a cable */
