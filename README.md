@@ -1082,7 +1082,9 @@ des effets, les 16 pas de la piste (allumés : un trig ; un point : des locks ; 
 à droite, à quel point il est ouvert). Quand on change de face dans un même module (SELECT), la nouvelle page glisse
 depuis le côté vers lequel on tourne : les potards de la page suivante poussent les autres, l'icône du module
 reste, et les noms (le module, le titre, la ligne dessous) se réécrivent, leurs lettres au hasard un instant avant
-de retomber sur les bons. Les noms des potards sont courts (FREQ, HARMO, T.ENV, FDBK, RATCH…) pour qu'ils soient
+de retomber sur les bons (jusqu'en 0.16.74, le nom du module en haut pouvait rester sur sa dernière lettre au hasard,
+LFO 1 affiché LFO C par exemple, quand l'écran du FM-1 avait dessiné sa dernière image un peu tôt : il est maintenant
+toujours redessiné à la fin). Les noms des potards sont courts (FREQ, HARMO, T.ENV, FDBK, RATCH…) pour qu'ils soient
 écrits plus gros et que l'écran respire ; sur les pages des quatre pistes (niveaux, pans, envois), chaque potard
 porte le numéro de sa piste dans sa couleur.
 

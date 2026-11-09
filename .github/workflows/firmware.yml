@@ -20,7 +20,7 @@ concurrency:                     # a newer push of the same branch replaces a ru
   group: firmware-${{ github.ref }}
   cancel-in-progress: true
 env:
-  VERSION: "0.16.74"
+  VERSION: "0.16.75"
 jobs:
   test:
     runs-on: ubuntu-latest

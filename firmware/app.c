@@ -5189,9 +5189,13 @@ APP_SMALL static void draw(void)
     anim_p = 1.0f;
     if (ui.anim) {                       /* the names written again */
         uint32_t t = plat_ms() - ui.anim_at;
-        if (t >= DECODE_MS)
-            ui.anim = 0;                 /* the last frame: written */
-        else
+        if (t >= DECODE_MS) {
+            ui.anim = 0;                 /* the last frame: written; (0.16.75) the header's too, its name as it is
+                                          * (a frame came 20 ms or more before the end, as on the FM-1, its last
+                                          * letter still a random one: LFO 1 left as LFO C, the header then the same
+                                          * as it had drawn it, not drawn again) */
+            ui.head_shown[0] = -1;
+        } else
             anim_p = (float)t / (float)DECODE_MS;
         ui.body_panel = 1;
     }
