@@ -82,6 +82,12 @@ int main(int argc, char** argv) {
       p->val[PG_BEND(0) * 4 + 1] = 0.3f;
       p->val[PG_BEND(0) * 4 + 2] = 2.0f;
     }
+    if (bend == 2) {                     // (0.16.74: their second page, all four on: MIX, DEPTH, BAND's lows, FOLLOW)
+      p->val[PG_BITS2(0) * 4 + 0] = 0.7f;
+      p->val[PG_BITS2(0) * 4 + 1] = 0.6f;
+      p->val[PG_BITS2(0) * 4 + 2] = -0.5f;
+      p->val[PG_BITS2(0) * 4 + 3] = 0.5f;
+    }
     p->algo[PG_COMP] = static_cast<uint8_t>(bus);
     int extra = argc > 11 ? atoi(argv[11]) : 0;          // the effects' own costs: 1 T1's EQ, 2 the duck on T2..T4,
     if (extra & 1) p->val[PG_EQ * 4 + 0] = 0.25f;        // 4 the delay's filter and drive (the stress test's)

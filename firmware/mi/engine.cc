@@ -169,6 +169,8 @@ const eng_pdef_t kPages[NPT][4] = {
    {"Filter", K_BIP, 0, 0, 0}},
   {{"Layer", K_ENUM, 0, 8, kPadsLayNames}, {"Level", K_UNI, 0, 0, 0}, {"Character", K_UNI, 0, 0, 0},
    {"Transp", K_INT, -14, 14, 0}},      // (0.16.68: steps of the scale, two octaves of seven; semitones before)       // (0.16.59: page 71, PADS' fifth: one track plays it)
+  {{"Mix", K_UNI, 0, 0, 0}, {"Depth", K_UNI, 0, 0, 0}, {"Band", K_BIP, 0, 0, 0}, {"Follow", K_BIP, 0, 0, 0}},
+                                        // (0.16.74: pages 72..75, the bits' second)
 };
 const char* const kBusModes[2] = {"OFF", "COMP"};   // (0.16.43: OTT gone; a project's OTT read as COMP)
 const char* const kDelayAlgos[4] = {"SYNC", "FREE", "BBD SYNC", "BBD FREE"};   // (0.16.65: the BBD's)
@@ -252,6 +254,7 @@ const char* const kLfoRatioNames[9] = {"4 / beat", "2 / beat", "1 / beat", "1 / 
                                          "1 / 2 bars", "1 / 4 bars", "1 / 8 bars", "1 / 16 bars"};
 
 int page_type(int page) {
+  if (page >= PG_BITS2(0)) return PT_BITS2;
   if (page == PG_PADS5) return PT_PADS5;
   if (page >= PG_FOLLOW(0)) return PT_FOLLOW;
   if (page >= PG_GLITCH(0)) return PT_GLITCH;
@@ -2267,6 +2270,13 @@ struct Bend {
   int pos, zc;                          // the zero crossings: above, their count
   float dx, dy;                         // the coupling capacitor
   float ei, eo, lg;                     // (0.16.31) its level: what goes in and out (followed), the gain given back
+  // (0.16.74) the second page: MIX, DEPTH, BAND, FOLLOW; off its marks (more), the bits played from the flash
+  // (bend_more), the RAM's code as it was otherwise
+  int more, band;                       // band: -1 the lows bent, 1 the highs, 0 all of it
+  float mix, depth, fol;
+  float s1, s2, a1, a2, a3;             // BAND's split: a state-variable low pass (Zavalishin's), its states, coefficients
+  float ef, pk, ipk;                    // FOLLOW: the level followed, its peak (falling slowly), 1 / it (the last block's)
+  float mnow;                           // (the screen's: MIX as FOLLOW weighed it at the block's end)
 };
 Bend bend[ENG_TRACKS];
 
@@ -2289,9 +2299,28 @@ void set_bend(int t) {
   int on = g.shape != BS_OFF || g.rate < 1.0f || g.steps > 0.0f || g.mask != 0;
   int dc = g.shape == BS_RECT || g.shape == BS_SWAP || g.mask != 0;
   if (dc && !g.dc) g.dx = g.dy = 0.0f;
-  if (on && !g.on) g.ei = g.eo = 0.0f, g.lg = 1.0f;   // (its level: as it was, then followed)
+  // (0.16.74) the second page
+  const int pg = PG_BITS2(t), band = P(pg, 2) < -kEqDead ? -1 : P(pg, 2) > kEqDead ? 1 : 0;
+  const float fol = fm_fabsf(P(pg, 3)) < 0.005f ? 0.0f : P(pg, 3);
+  if (on && !g.on) {                    // (its level as it was, then followed; the split and the follower from rest)
+    g.ei = g.eo = 0.0f, g.lg = 1.0f;
+    g.s1 = g.s2 = g.ef = g.pk = g.ipk = 0.0f;
+  }
+  if (band && !g.band) g.s1 = g.s2 = 0.0f;
+  if (fol == 0.0f) g.ef = g.pk = g.ipk = 0.0f;
   g.on = on;
   g.dc = dc;
+  g.mix = P(pg, 0);
+  g.depth = P(pg, 1);
+  g.fol = fol;
+  g.band = band;
+  if (band) {                           // (the mixer's EQ's cutoffs: the lows 18 kHz down to 125 Hz, the highs 20 Hz up
+    const float w = fm_tanf(3.14159265f * clampf(eq_hz(P(pg, 2)) / kSr, 0.0004f, 0.41f)), k = 1.41421356f;   // to
+    g.a1 = 1.0f / (1.0f + w * (w + k));                                     // 8 kHz; Q 0.707)
+    g.a2 = w * g.a1;
+    g.a3 = w * g.a2;
+  }
+  g.more = on && (g.mix < 0.999f || g.depth < 0.999f || band || g.fol != 0.0f);
 }
 
 inline float bend_word(float x, int mask, int swap) {   // the sample as an 8-bit word, its mask or its halves swapped
@@ -2307,22 +2336,22 @@ inline float bend_word(float x, int mask, int swap) {   // the sample as an 8-bi
   return (static_cast<float>(v) + frac) * (1.0f / 128.0f);
 }
 
-inline float bend_one(Bend& g, float x) {
-  if (g.shape != BS_OFF && g.shape != BS_SWAP) {
-    if (g.shape == BS_RECT) {
-      x = 1.6f * fm_fabsf(x);
-    } else if (g.shape == BS_FOLD) {
-      float u = (3.0f * x + 1.0f) * 0.25f;   // (a period of 4: up from -1 to 1, then back down)
-      u -= fm_floorf(u);
-      x = 1.0f - 4.0f * fm_fabsf(u - 0.5f);
-    } else {                            // DOWN, DOWN 3: a divider on the rising zero crossings (a hysteresis)
-      if (!g.pos && x > 0.02f) g.pos = 1, ++g.zc;
-      else if (g.pos && x < -0.02f) g.pos = 0;
-      int flip = g.shape == BS_DOWN ? (g.zc & 1) : (g.zc % 3 == 2);
-      if (g.zc >= 6) g.zc -= 6;
-      if (flip) x = -x;
-    }
+// the bits' stages, in their order (bend_one: all at once; bend_two, the second page's: SHAPE and the word weighed
+// by DEPTH)
+inline float bend_shape(Bend& g, float x) {   // SHAPE (not SWAP: the word's)
+  if (g.shape == BS_RECT) return 1.6f * fm_fabsf(x);
+  if (g.shape == BS_FOLD) {
+    float u = (3.0f * x + 1.0f) * 0.25f;   // (a period of 4: up from -1 to 1, then back down)
+    u -= fm_floorf(u);
+    return 1.0f - 4.0f * fm_fabsf(u - 0.5f);
   }
+  if (!g.pos && x > 0.02f) g.pos = 1, ++g.zc;   // DOWN, DOWN 3: a divider on the rising zero crossings (a hysteresis)
+  else if (g.pos && x < -0.02f) g.pos = 0;
+  int flip = g.shape == BS_DOWN ? (g.zc & 1) : (g.zc % 3 == 2);
+  if (g.zc >= 6) g.zc -= 6;
+  return flip ? -x : x;
+}
+inline float bend_hold(Bend& g, float x) {   // CLOCK, then BITS
   if (g.rate < 1.0f) {
     g.cnt += g.rate;
     if (g.cnt >= 1.0f) {
@@ -2332,26 +2361,90 @@ inline float bend_one(Bend& g, float x) {
     x = g.hold;
   }
   if (g.steps > 0.0f) x = fm_floorf(x * g.steps + 0.5f) / g.steps;
-  if (g.mask || g.shape == BS_SWAP) x = bend_word(x, g.mask, g.shape == BS_SWAP);
+  return x;
+}
+inline float bend_dc(Bend& g, float x) {   // the coupling capacitor
   if (!g.dc) return x;
   float z = x - g.dx + 0.99857f * g.dy;   // (10 Hz)
   g.dx = x;
   g.dy = z;
   return z;
 }
+inline float bend_one(Bend& g, float x) {
+  if (g.shape != BS_OFF && g.shape != BS_SWAP) x = bend_shape(g, x);
+  x = bend_hold(g, x);
+  if (g.mask || g.shape == BS_SWAP) x = bend_word(x, g.mask, g.shape == BS_SWAP);
+  return bend_dc(g, x);
+}
+inline float bend_two(Bend& g, float x) {
+  if (g.shape != BS_OFF && g.shape != BS_SWAP) x += g.depth * (bend_shape(g, x) - x);
+  x = bend_hold(g, x);
+  if (g.mask || g.shape == BS_SWAP) x += g.depth * (bend_word(x, g.mask, g.shape == BS_SWAP) - x);
+  return bend_dc(g, x);
+}
 
 // (0.16.31) the bits keep the track's level: what comes out brought back to what went in, both followed over ~50 ms
 // (a mask, or few bits on a quiet sound, made it up to 13 dB louder): down as far as it takes, up 3 dB at most
-__attribute__((noinline)) void level_keep(float* x, uint32_t n, float ei, float eo, float* fi, float* fo, float* lg, float a, float up) {
+inline void level_glide(float ei, float eo, float* fi, float* fo, float* lg, float a, float up) {
   *fi += (ei - *fi) * a;
   *fo += (eo - *fo) * a;
   float k = *fo > 1e-9f ? fm_minf(fm_sqrtf(*fi / *fo), up) : 1.0f;
   *lg += (k - *lg) * 0.3f;              // (a gain a block, glided from block to block: the bits' steps stay steps)
+}
+__attribute__((noinline)) void level_keep(float* x, uint32_t n, float ei, float eo, float* fi, float* fo, float* lg, float a, float up) {
+  level_glide(ei, eo, fi, fo, lg, a, up);
   for (uint32_t i = 0; i < n; ++i) x[i] *= *lg;
+}
+// (0.16.74) the second page, from the flash (the RAM's code full): BAND takes a part of the sound (a state-variable
+// filter's low pass or high pass, 12 dB/oct), the bits on it, the rest (what it leaves: the two add up to the sound
+// as it was) clean; MIX weighs
+// them against what came in; FOLLOW weighs MIX by the level (followed: 1 ms up, 60 ms down; against its peak, held and
+// falling over a second, -40 dB at the least): to the right the louder the more, to the left the softer. The level
+// kept on the bent part alone, the gain the blocks before's
+const float kFolUp = 0.02242f, kFolDown = 3.778e-4f, kFolPeak = 0.99710f;   // (1 ms, 60 ms; 1 s a 128-sample block)
+__attribute__((noinline)) void bend_more(Bend& g, float* x, uint32_t n) {
+  float ei = 0.0f, eo = 0.0f, top = 0.0f, m_last = g.mix;
+  const float lg = g.lg, mix = g.mix, fol = g.fol, ipk = g.ipk;
+  for (uint32_t i = 0; i < n; ++i) {
+    const float in = x[i];
+    float p = in;
+    if (g.band) {
+      const float v3 = in - g.s2, v1 = g.a1 * g.s1 + g.a2 * v3, v2 = g.s2 + g.a2 * g.s1 + g.a3 * v3;
+      g.s1 = 2.0f * v1 - g.s1;
+      g.s2 = 2.0f * v2 - g.s2;
+      p = g.band < 0 ? v2 : in - 1.41421356f * v1 - v2;   // (its low pass, its high pass)
+    }
+    float m = mix;
+    if (fol != 0.0f) {
+      const float a = fm_fabsf(in);
+      g.ef += (a - g.ef) * (a > g.ef ? kFolUp : kFolDown);
+      top = fm_maxf(top, g.ef);
+      const float e = fm_minf(g.ef * ipk, 1.0f);
+      m *= fol > 0.0f ? 1.0f - fol * (1.0f - e) : 1.0f + fol * e;
+    }
+    const float y = p + m * (bend_two(g, p) - p);
+    m_last = m;
+    ei += p * p;
+    eo += y * y;
+    x[i] = in - p + lg * y;
+  }
+  g.mnow = m_last;
+  if (fol != 0.0f) {
+    g.pk = fm_maxf(top, g.pk * kFolPeak);
+    g.ipk = 1.0f / fm_maxf(g.pk, 0.01f);
+    if (g.ef < 1e-20f) g.ef = 0.0f;
+  }
+  if (fm_fabsf(g.s1) < 1e-20f) g.s1 = 0.0f;   // (never down into the subnormals)
+  if (fm_fabsf(g.s2) < 1e-20f) g.s2 = 0.0f;
+  level_glide(ei, eo, &g.ei, &g.eo, &g.lg, 0.06f, 1.41f);
 }
 void apply_bend(int t, float* x, uint32_t n) {
   Bend& g = bend[t];
   if (!g.on) return;
+  if (g.more) {
+    bend_more(g, x, n);
+    return;
+  }
   float ei = 0.0f, eo = 0.0f;
   for (uint32_t i = 0; i < n; ++i) {
     ei += x[i] * x[i];
@@ -2618,7 +2711,7 @@ void render_voice(int t, uint32_t n) {
     if (track_kind(t) == MK_VOCODER)     // (its voices; its bands, MOD on)
       own = kWebVoc[0] + static_cast<float>(voc_voices(t)) * kWebVoc[1] +
             (voc_mod_track(lx_u(lx_param(t, 0), E(t, 1))) >= 0 ? kWebVoc[2] : 0.0f);
-    web_spend((own + fm + (bend[t].on ? kWebBend : 0.0f) +
+    web_spend((own + fm + (bend[t].on ? kWebBend + (bend[t].more ? kWebBend2 : 0.0f) : 0.0f) +
                (glitch[t].on || glitch[t].mix > 0.0f ? kWebGlitch : 0.0f) +
                (trauma_takes(t) || tdrv[t].m > 0.0f ? kWebTrauma : 0.0f)) * static_cast<float>(n) / 128.0f);
   }
@@ -3297,6 +3390,7 @@ int eng_page_track(int page) {
   if (page < 12) return page / 3;
   if (page >= PG_BEND(0) && page < PG_BEND(ENG_TRACKS)) return page - PG_BEND(0);
   if (page >= PG_GLITCH(0) && page < PG_GLITCH(ENG_TRACKS)) return page - PG_GLITCH(0);
+  if (page >= PG_BITS2(0) && page < PG_BITS2(ENG_TRACKS)) return page - PG_BITS2(0);
   if (page >= PG_FILT(0, 0) && page < PG_FILT(ENG_TRACKS, 0)) return (page - PG_FILT(0, 0)) / 3;
   if (page >= PG_EUC(0) && page < PG_EUC(ENG_TRACKS)) return page - PG_EUC(0);
   if (page >= PG_ARP(0) && page < PG_ARP(0) + ENG_TRACKS) return page - PG_ARP(0);
@@ -3847,14 +3941,23 @@ MI_COLD void eng_sound_get(int t, eng_sound_t* s) {
   sound_name(s, mdef(proj.algo[PG_TRACK(t, 0)]).name);
   if (mdef(proj.algo[PG_TRACK(t, 0)]).kind == MK_PADS)
     for (int i = 0; i < 4; ++i) s->pads[i] = proj.val[PG_PADS4 * 4 + i], s->pads[4 + i] = proj.val[PG_PADS5 * 4 + i];
+  for (int i = 0; i < 4; ++i) s->bits2[i] = proj.val[PG_BITS2(t) * 4 + i];   // (0.16.74)
+}
+static void sound_bits2_new(eng_sound_t* s) {   // (a sound before 13, a factory's: the bits' second page as new)
+  s->bits2[0] = s->bits2[1] = 1.0f;
+  s->bits2[2] = s->bits2[3] = 0.0f;
 }
 int eng_sound_check(const eng_sound_t* s, int bytes) {
   if (bytes < static_cast<int>(SND_SIZE_10) || s->magic != SND_MAGIC || s->version < 1 || s->version > SND_VERSION)
     return 0;                           // (1, 2, 3: before 0.16.14, 0.16.14 to 0.16.16, 0.16.17: read as this one)
-  const int size = s->version >= 11 ? static_cast<int>(sizeof *s) : static_cast<int>(SND_SIZE_10);   // (0.16.59:
-  if (s->size != size || bytes < size) return 0;   // before 11, without PADS' pages)
-  for (int i = 0; i < SND_PAGES * 4; ++i)
+  const int size = s->version >= 13 ? static_cast<int>(sizeof *s) : s->version >= 11 ? static_cast<int>(SND_SIZE_12)
+                                                                                         : static_cast<int>(SND_SIZE_10);
+  if (s->size != size || bytes < size) return 0;   // (0.16.59: before 11, without PADS' pages; 0.16.74: before 13,
+  for (int i = 0; i < SND_PAGES * 4; ++i)          // without the bits' second)
     if (!(s->val[i] > -1000.0f && s->val[i] < 1000.0f)) return 0;   // (a NaN fails both)
+  if (s->version >= 13)
+    for (int i = 0; i < 4; ++i)
+      if (!(s->bits2[i] > -1000.0f && s->bits2[i] < 1000.0f)) return 0;
   return 1;
 }
 MI_COLD int eng_sound_set(int t, const eng_sound_t* s) {
@@ -3888,6 +3991,8 @@ MI_COLD int eng_sound_set(int t, const eng_sound_t* s) {
     else if (i == 4) proj.algo[pg] = static_cast<uint8_t>(s->algo[i] < MF_MODELS ? s->algo[i] : MF_OFF);
     else proj.algo[pg] = s->algo[i];
   }
+  for (int i = 0; i < 4; ++i)           // (0.16.74: the bits' second page; a sound before 13: as new)
+    proj.val[PG_BITS2(t) * 4 + i] = s->version >= 13 ? s->bits2[i] : i < 2 ? 1.0f : 0.0f;
   if (was_plaits) {                     // (its knobs its kit's, SQ-1's or SPEECH's noon; their randoms none)
     lx_kit(&proj, t);
     for (int k = 0; k < LX_KNOBS; ++k) proj.rnd[t][1 + k] = 0;
@@ -3946,6 +4051,7 @@ MI_COLD int eng_factory(int i, eng_sound_t* s) {
   for (int k = 0; k < 4; ++k) s->val[12 + k] = f.bits[k], s->val[28 + k] = f.glitch[k];
   for (int k = 0; k < 12; ++k) s->val[16 + k] = f.f[k];
   s->algo[4] = f.filt;
+  sound_bits2_new(s);
   sound_name(s, f.name);
   if (f.kind == MK_PADS) {              // (0.16.57) DARK PAD's fourth page: Saw, its ensemble, Tape at 60 % (its knobs
     static const float kDark4[4] = {2.0f / 3.0f, 0.875f, 0.0f, 0.1675f};   // until then: GLIDE Off, RELEASE as it
@@ -4216,6 +4322,31 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
       put_num(b, n, static_cast<int32_t>(crush_bits(v) + 0.5f), 0, 0);
       put_end(b, n, " bit");
     }
+  } else if (pt == PT_BITS2 && k == 2) {   // (0.16.74) BAND: all, the lows under a cutoff, the highs over one
+    if (v > -kEqDead && v < kEqDead) {
+      put(b, n, "Full");
+    } else {
+      const float hz = eq_hz(v);
+      put(b, n, v < 0 ? "Lo " : "Hi ");
+      if (hz < 1000.0f) {
+        put_num(b + 3, n - 3, static_cast<int32_t>(hz + 0.5f), 0, 0);
+      } else {
+        put_num(b + 3, n - 3, static_cast<int32_t>(hz * 0.01f + 0.5f), 1, 0);
+        put_end(b, n, "k");
+      }
+    }
+  } else if (pt == PT_BITS2 && k == 3) {   // FOLLOW: off, the louder (Loud) or the softer (Tail) the more
+    const int c = static_cast<int>(v * 100.0f + (v < 0 ? -0.5f : 0.5f));
+    if (c == 0) {
+      put(b, n, "Off");
+    } else {
+      put(b, n, c > 0 ? "Loud " : "Tail ");
+      put_num(b + 5, n - 5, c < 0 ? -c : c, 0, 0);
+      put_end(b, n, "%");
+    }
+  } else if (pt == PT_BITS2) {          // MIX, DEPTH: %
+    put_num(b, n, static_cast<int32_t>(v * 100.0f + 0.5f), 0, 0);
+    put_end(b, n, "%");
   } else if (pt == PT_GLITCH && k == 2) {   // BEND: each repeat lower (Fall) or higher (Rise), in semitones
     int st = static_cast<int>(v * 6.0f + (v < 0 ? -0.5f : 0.5f));
     if (!st) {
@@ -4393,6 +4524,15 @@ static void lfo_blank(project_t* p) {
   for (int pg = 12; pg < 16; ++pg) p->algo[pg] = 0;
 }
 
+// (0.16.74) the bits' second pages as new: MIX and DEPTH full, BAND all of it, FOLLOW off (the bits as before)
+static MI_COLD void bits2_in(project_t* p) {
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    float* x = &p->val[PG_BITS2(t) * 4];
+    x[0] = x[1] = 1.0f;
+    x[2] = x[3] = 0.0f;
+    p->algo[PG_BITS2(t)] = 0;
+  }
+}
 MI_COLD void eng_blank(project_t* p) {
   ++lock_gen;                           // (the live project's locks, maybe: the lock map made again)
   uint8_t* raw = reinterpret_cast<uint8_t*>(p);
@@ -4413,6 +4553,7 @@ MI_COLD void eng_blank(project_t* p) {
     p->val[PG_ARP(t) * 4 + 1] = 0.5f;
     p->val[PG_GLITCH(t) * 4 + 1] = static_cast<float>(GL_16);   // the glitch: off, its slice a sixteenth
   }
+  bits2_in(p);
   for (int l = 0; l < ENG_LANES; ++l) {
     p->val[PG_STEP(l) * 4 + 3] = 16.0f;
     p->seed[l] = static_cast<uint16_t>(0x2A5 + 977 * l);
@@ -4773,9 +4914,22 @@ MI_COLD void eng_bend_preview(int t, float* y, int n) {   // a cycle of a sine t
   for (int pass = 0; pass < 7; ++pass)            // (its divider and its capacitor settled: six cycles first)
     for (int i = 0; i < n; ++i) {
       float x = 0.9f * fm_sinf(6.2831853f * static_cast<float>(i) / static_cast<float>(n));
-      float v = g.on ? bend_one(g, x) : x;
+      float v = !g.on ? x : g.more ? x + g.mix * (bend_two(g, x) - x) : bend_one(g, x);   // (0.16.74: DEPTH, MIX)
       if (pass == 6) y[i] = clampf(v, -1.2f, 1.2f);
     }
+}
+#ifdef PLAT_HOST
+MI_COLD void eng_test_bend(int t, float* x, uint32_t n) {   // (0.16.74, the tests: a buffer through the track's bits,
+  set_bend(t);                                             // its knobs as the last block took them)
+  apply_bend(t, x, n);
+}
+#endif
+MI_COLD int eng_bits2_view(int t, float* hz, float* now) {   // (0.16.74) BAND's side (-1 the lows, 1 the highs, 0 all),
+  if (t < 0 || t >= ENG_TRACKS) return 0;                     // its cutoff; MIX as FOLLOW weighs it now
+  const Bend& g = bend[t];
+  if (hz) *hz = eq_hz(P(PG_BITS2(t), 2));
+  if (now) *now = !g.on ? 0.0f : g.more ? g.mnow : 1.0f;
+  return g.band;
 }
 MI_COLD void eng_bend_mask(int t, uint8_t* inv, uint8_t* cut) {
   int m = t >= 0 && t < ENG_TRACKS ? bend[t].mask : 0;
@@ -5012,10 +5166,38 @@ struct project_v37 {
 };
 static_assert(sizeof(project_v37) == PROJECT_SIZE_32, "0.16.23's to 0.16.58's layout: the same size as now (PADS' "
               "fifth page in four locks' room and a spare byte)");
+// 0.16.59's to 0.16.73's (versions 38 to 43): 72 pages (no bits' second pages), 363 locks; the same size as now
+const int kV43Pages = 72;
+struct project_v43 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[kV43Pages * 4];
+  uint8_t algo[kV43Pages];
+  uint8_t out_mode, warps_hq, theme, dice, dice_seed;
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+  int8_t rnd[ENG_LANES][ENG_NTP];
+  uint16_t seed[ENG_LANES];
+  plock_t lock[363];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+  uint8_t rseed[ENG_LANES][ENG_NTP];
+  uint8_t trauma;
+  int8_t speed[ENG_LANES];
+  uint8_t dir[ENG_LANES];
+  uint8_t endless_opt[ENG_TRACKS][4];
+  uint8_t arp_opt[ENG_TRACKS];
+  uint8_t dice_out, trauma_out;
+  uint8_t rsv[1];
+};
+static_assert(sizeof(project_v43) == PROJECT_SIZE_32, "0.16.59's to 0.16.73's layout: the same size as now (the bits' "
+              "second pages in seventeen locks' room)");
 union UpgBuf {                           // (0.16.32: the projects before 0.16 no longer read)
   project_v26 v26;
   project_v32 v32;
   project_v37 v37;
+  project_v43 v43;
 };
 UpgBuf upg PLAT_POOL;                    // (0.16.1: in the pool, out of the RAM the screen and the engine share)
 MI_COLD void upgrade_v26(project_t* p, const project_v26& o) {   // (CLIMB off: its parameter 0, its options 0)
@@ -5045,6 +5227,7 @@ MI_COLD void upgrade_v26(project_t* p, const project_v26& o) {   // (CLIMB off: 
     for (int i = 0; i < 3; ++i) p->endless_opt[t][i] = o.endless_opt[t][i];
   }
   p->trauma = o.trauma;
+  bits2_in(p);
 }
 MI_COLD void upgrade_v37(project_t* p, const project_v37& o) {   // (PADS' fifth page 0, made after; the locks past
   uint8_t* raw = reinterpret_cast<uint8_t*>(p);                     // 363 out)
@@ -5076,6 +5259,39 @@ MI_COLD void upgrade_v37(project_t* p, const project_v37& o) {   // (PADS' fifth
   p->trauma = o.trauma;
   p->dice_out = o.dice_out;
   p->trauma_out = o.trauma_out;
+  bits2_in(p);
+}
+MI_COLD void upgrade_v43(project_t* p, const project_v43& o) {   // (the bits' second pages as new; the locks past
+  uint8_t* raw = reinterpret_cast<uint8_t*>(p);                     // 346 out)
+  for (uint32_t i = 0; i < sizeof(project_t); ++i) raw[i] = 0;
+  p->magic = PROJECT_MAGIC;
+  p->version = PROJECT_VERSION;
+  p->size = sizeof(project_t);
+  for (int i = 0; i < kV43Pages * 4; ++i) p->val[i] = o.val[i];
+  for (int i = 0; i < kV43Pages; ++i) p->algo[i] = o.algo[i];
+  p->out_mode = o.out_mode, p->warps_hq = o.warps_hq, p->theme = o.theme, p->dice = o.dice;
+  p->dice_seed = o.dice_seed;
+  for (int g = 0; g <= ENG_TRACKS; ++g)
+    for (int c = 0; c < ENG_CABLES; ++c) p->cable[g][c] = o.cable[g][c];
+  for (int l = 0; l < ENG_LANES; ++l) {
+    for (int b = 0; b < ENG_STEPS / 8; ++b) p->trig[l][b] = o.trig[l][b];
+    for (int i = 0; i < ENG_NTP; ++i) p->rnd[l][i] = o.rnd[l][i], p->rseed[l][i] = o.rseed[l][i];
+    p->seed[l] = o.seed[l];
+    p->speed[l] = o.speed[l];
+    p->dir[l] = o.dir[l];
+  }
+  locks_from(p, o.lock, 363);
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    for (int i = 0; i < ENG_ENDLESS; ++i) p->endless[t][i] = o.endless[t][i];
+    p->endless_len[t] = o.endless_len[t];
+    p->endless_key[t] = o.endless_key[t];
+    for (int i = 0; i < 4; ++i) p->endless_opt[t][i] = o.endless_opt[t][i];
+    p->arp_opt[t] = o.arp_opt[t];
+  }
+  p->trauma = o.trauma;
+  p->dice_out = o.dice_out;
+  p->trauma_out = o.trauma_out;
+  bits2_in(p);
 }
 MI_COLD void upgrade_v32(project_t* p, const project_v32& o) {   // (the followers' pages 0; the locks past 367 out)
   uint8_t* raw = reinterpret_cast<uint8_t*>(p);
@@ -5105,6 +5321,7 @@ MI_COLD void upgrade_v32(project_t* p, const project_v32& o) {   // (the followe
     p->arp_opt[t] = o.arp_opt[t];
   }
   p->trauma = o.trauma;
+  bits2_in(p);
 }
 MI_COLD void climb_off_all(project_t* p) {   // (a project before 0.16.7: CLIMB where nothing was, 0)
   for (int l = 0; l < ENG_LANES; ++l) p->val[PG_EUC(l) * 4 + 2] = p->val[PG_EUC(l) * 4 + 3] = 0.0f;
@@ -5170,13 +5387,16 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
     theme_v42(p);
     return 1;
   }
-  if (v >= 38 && v <= 42 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
-    p->version = PROJECT_VERSION;       // (0.16.59's to 0.16.67's: the same layout; 0.16.60: CLIMB a step's alone,
-    if (v == 38) climb_v39(p);          // 0.16.63: EASEL at 21, 0.16.66: NOTE wider, 0.16.67: the themes, 0.16.68:
-    if (v <= 39) easel_in(p);           // TRANSP in steps)
+  if (v >= 38 && v <= 43 && bytes == static_cast<int>(sizeof(project_v43)) && p->size == sizeof(project_v43)) {
+    const uint8_t* from = reinterpret_cast<const uint8_t*>(p);   // (0.16.59 to 0.16.73: 72 pages, 363 locks; 0.16.60:
+    uint8_t* to = reinterpret_cast<uint8_t*>(&upg.v43);          // CLIMB a step's alone, 0.16.63: EASEL at 21, 0.16.66:
+    for (uint32_t i = 0; i < sizeof(project_v43); ++i) to[i] = from[i];   // NOTE wider, 0.16.67: the themes, 0.16.68:
+    upgrade_v43(p, upg.v43);            // TRANSP in steps)
+    if (v == 38) climb_v39(p);
+    if (v <= 39) easel_in(p);
     if (v <= 40) note_widen(p);
     if (v <= 41) theme_v42(p);
-    transp_steps(p);
+    if (v <= 42) transp_steps(p);
     return 1;
   }
   if (v >= 27 && v <= 32 && bytes == static_cast<int>(sizeof(project_v32)) && p->size == sizeof(project_v32)) {
@@ -5363,7 +5583,8 @@ void eng_play(int on) {
     for (int t = 0; t < ENG_TRACKS; ++t) {
       raw_left[t] = 0.0f;
       rat_on[t] = 0;
-    }
+      if (!arp_down[t] && eng_arp_opt(t, AO_LATCH)) arp_n[t] = 0;   // (0.16.74: STOP lets the latched chords go,
+    }                                                                 //  the keys still down keep theirs)
   playing = on != 0;
 }
 MI_COLD int eng_playing(void) { return playing; }

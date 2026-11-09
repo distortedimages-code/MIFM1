@@ -53,8 +53,10 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
 - **Plaits** sur chaque piste, 6 de ses modèles (ses trois batteries, treize de ses oscillateurs, sa puce 8 bits et ses
   formants ont laissé la place aux moteurs de MIFM1), et un **circuit bending** par piste (0.7, à la place du
   grit) : ses **bits** à la manière du Biscuit d'OTO (une horloge calée sur la note, la résolution, les huit bits du mot
-  allumés, inversés ou coupés, des formes numériques) et son **glitch** à la manière du Data Bender de Qu-Bit (des
-  répétitions calées au tempo, ralenties ou accélérées, des accidents) ;
+  allumés, inversés ou coupés, des formes numériques ; depuis 0.16.74 une deuxième page : leur dosage, la force des
+  formes et du masque, sur tout le spectre ou seulement les graves ou les aigus, un suiveur d'enveloppe) et son
+  **glitch** à la manière du Data Bender de Qu-Bit (des répétitions calées au tempo, ralenties ou accélérées, des
+  accidents) ;
 - **deux batteries FM** comme modèles de piste en plus : les voix du **LXR-02** (son firmware est open source,
   GPL-3.0), grosse caisse et toms, caisse claire, leur code tel quel (voir plus bas) ;
 - **ZERO** (0.8.1), la voix propre de MIFM1 : des sinusoïdes pures en vraie FM à travers zéro (un modulateur sinus,
@@ -1096,7 +1098,7 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **SELECT** | les pages de ce qu'on regarde (les deux du son de la piste, les deux de son filtre, les faces d'un effet…), en glissant |
 | **ALGORITHM** | le type de ce qu'on a devant soi, là où il y a un choix (le A cerclé en haut) : sur le son de la piste, son modèle (les 20 : les batteries, les batteries FM, ZERO et la FM, Plaits) ; sur son filtre, le modèle de filtre (OFF, LADDER, MS-20, SEM, VOX) ; sur Warps, d'un repère d'ALGO au suivant ; sur le delay, SYNC, FREE, puis (0.16.65) BBD SYNC et BBD FREE, de gauche à droite |
 | **PRESETS** | la piste active, de 1 à 4 (les presets eux-mêmes : EDIT tenu) |
-| **EDIT** | **tapé** : les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son ; **tenu : les presets** de la piste (touches noires : la banque, A celle d'usine ; blanches : le son, posé sur la piste et joué ; SAVE tenu : l'y garde ; REC tenu : l'efface) ; **tenu + SELECT** (0.16.39) : **le niveau de la piste active** (« T1 LEVEL 85 » ; MASTER, lui, est le volume de sortie) |
+| **EDIT** | **tapé** : les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : leur dosage, MIX, DEPTH, BAND, FOLLOW ; SELECT encore : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son ; **tenu : les presets** de la piste (touches noires : la banque, A celle d'usine ; blanches : le son, posé sur la piste et joué ; SAVE tenu : l'y garde ; REC tenu : l'efface) ; **tenu + SELECT** (0.16.39) : **le niveau de la piste active** (« T1 LEVEL 85 » ; MASTER, lui, est le volume de sortie) |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
 | **SEQ** | tapé : les pas de la piste (NOTE, PROB, SPEED, LENGTH ; puis RATCHETS : RATCH, SPAN, CURVE, DIR ; puis CLIMB : CLIMB et LIMIT d'un pas tenu, ON, SHAPE ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns**, qui restent ouverts quand on lâche SEQ (touches noires ou SELECT : la banque, blanches : le pattern ; SEQ tenu et plusieurs : un enchaînement ; REC tenu : efface ; SEQ à nouveau : on en sort) |
 | **ARP** | Endless, celui de la piste (voir plus bas) ; à nouveau : ses options (STRIDE, REST, HOLES, LEAP) |
@@ -1310,7 +1312,8 @@ plus) ; les pas lockés gardent leur saut, et l'ancien NOTES devient leur limite
 notes, la gamme éteinte). Ceux d'avant 0.16.7 sont relus sans CLIMB ; ils avaient 384 locks, il y en a eu 380 (les
 quatre derniers ont fait la place de CLIMB : un projet qui les utilisait tous perd les quatre derniers), puis 367
 depuis 0.16.23 (treize ont fait la place des followers des LFO ; un projet en relit 367 au plus, dans l'ordre), puis
-363 depuis 0.16.59 (la cinquième page de PADS).
+363 depuis 0.16.59 (la cinquième page de PADS), puis 346 depuis 0.16.74 (la deuxième page des bits : un projet
+d'avant en relit 346 au plus, dans l'ordre).
 
 La deuxième page du son (EDIT,
 SELECT) donne la **GATE** de la note (5 à 95 % du pas, lockable : des notes courtes et longues dans le même pattern),
@@ -1547,14 +1550,31 @@ gardée tant que son dernier bit n'est pas coupé) ; **SHAPE**, une forme numér
 au-dessus), Down et Down 3 (le signe retourné tous les deux ou trois cycles, comme un diviseur : une octave, une
 octave et une quinte en dessous), Fold (replié) ou Swap (les deux moitiés du mot échangées). Un condensateur de
 liaison enlève le continu qu'un redresseur ou un bit retourné laissent. L'écran montre ce que les bits font d'une
-sinusoïde et les huit interrupteurs (allumé, inversé, coupé). **Deuxième page (SELECT), le glitch**, après le
+sinusoïde et les huit interrupteurs (allumé, inversé, coupé). **Deuxième page (SELECT, 0.16.74), le dosage des
+bits** : **MIX**, ce qu'on en entend, du son propre (0 %) aux bits seuls (100 %, comme avant) ; **DEPTH**, la force de
+SHAPE et de MASK ensemble (CLOCK et BITS ne bougent pas) : à 0 %, ils ne font plus rien ; **BAND**, là où les bits
+agissent : au milieu (*Full*) tout le spectre, à gauche **seulement les graves** (sous une coupure qui descend de
+18 kHz à 125 Hz), à droite **seulement les aigus** (au-dessus d'une coupure qui monte de 20 Hz à 8 kHz), le reste
+passe propre (un filtre à 12 dB par octave sépare les deux ; ensemble, ils refont le son tel qu'il était) ;
+**FOLLOW**, un suiveur d'enveloppe : à droite (*Loud*), plus le son est fort, plus les bits mordent (l'attaque
+cassée, la queue propre) ; à gauche (*Tail*), l'inverse, les bits sur les queues. Le niveau est suivi en 1 ms à la
+montée et 60 ms à la descente, comparé à son pic récent (qui retombe en une seconde) : il marche à tous les volumes.
+Le niveau que les bits gardent (0.16.31) ne porte que sur la part cassée. L'écran montre le spectre, la part que les bits
+prennent remplie, à la hauteur où MIX s'entend à cet instant (FOLLOW la fait bouger avec le son) ; les quatre
+potards sont grisés tant que les bits sont propres, DEPTH tant qu'il n'y a ni SHAPE ni MASK. Ces potards ne se
+lockent pas (pas de place pour eux dans les pas) mais se modulent par les câbles ; ils sont dans les sons (presets).
+À leurs réglages de départ (MIX et DEPTH à 100 %, BAND au milieu, FOLLOW à 0), les bits tournent exactement comme
+avant, depuis la RAM ; dès qu'un des quatre bouge, une version qui les prend en compte tourne depuis la flash (la RAM
+du FM-1 pour le code audio est pleine), environ 2 % d'un bloc en plus par piste (54 µs sur 2,9 ms). Les projets, les patterns et
+les sons d'avant 0.16.74 s'ouvrent avec cette page à ses réglages de départ (le même son) ; un projet garde sa
+taille : la page prend la place de 17 locks (346 au lieu de 363). **Troisième page (SELECT), le glitch**, après le
 filtre, à la manière du Data Bender de Qu-Bit : à chaque double croche, **GLITCH** est la chance que la piste bégaie ;
 elle prend alors une tranche du son qui passe (**SIZE** : 1/64, 1/32, 1/16 ou 1/8, divisée par deux tant qu'elle ne
 tient pas dans la mémoire) et la rejoue jusqu'à ce qu'une double croche en décide autrement ; **BEND** rend chaque
 répétition plus lente et plus grave (une bande qui s'arrête) ou plus rapide et plus aiguë ; **DROP** est la chance
 qu'une répétition ait un accident (jouée à l'envers ou un trou). Les tranches sont gardées en 8 bits mu-law à 44,1 kHz, 8 Ko par piste (186 ms), dans la mémoire que la réverbe a rendue
 en passant ses lignes de retard sur 16 bits : un peu de grain, comme un sampler tordu.
-Tout se locke pas par pas, a son aléatoire, et les potards continus se modulent par les câbles.
+Tout (sauf la deuxième page) se locke pas par pas, a son aléatoire, et les potards continus se modulent par les câbles.
 
 **Le filtre** (EDIT, troisième ensemble de la piste : entre les bits et le glitch, avant Warps et le mixer). **ALGORITHM** choisit le
 modèle (GLO tenu : sur les quatre pistes). OFF par défaut : il ne coûte alors rien, et ses potards sont grisés.
@@ -1639,8 +1659,8 @@ monte d'une octave.
 (son accord compris, 0.16.73) ; *Chord*, **l'accord que joue PADS**, qui change avec la progression. Les trois ne jouent
 que tenus (0.16.73) : par une touche, ou par un trig de la piste le temps de sa longueur ; une piste en *Keys* ou en
 *Chord* ne joue plus ses pas elle-même, ses trigs tiennent l'ARP. **OCTAVES** (1 à 4) les répète plus haut ; **LATCH** garde les notes une
-fois lâchées (la touche suivante, après avoir tout lâché, recommence un nouvel accord ; LATCH remis à Off : tout
-s'arrête) ; **ORDER** les range par hauteur (*Pitch*) ou dans l'ordre où on les a jouées (*Played*). Tout le reste
+fois lâchées (la touche suivante, après avoir tout lâché, recommence un nouvel accord ; LATCH remis à Off ou **STOP**
+(0.16.74) : tout s'arrête, sauf les notes dont la touche est encore enfoncée) ; **ORDER** les range par hauteur (*Pitch*) ou dans l'ordre où on les a jouées (*Played*). Tout le reste
 d'Endless s'y applique : RATE, GATE, DIRECTION (montée, descente, aller-retour, au hasard, +2-1, CONVERGE), STRIDE
 (des sauts), REST, HOLES, LEAP, les ratchets, l'aléatoire et le quantiseur. Il joue avec le séquenceur et **sans lui** :
 séquenceur en marche ou arrêté, une touche tenue le lance (en *Keys*, les touches elles-mêmes ; en *Chord*, n'importe

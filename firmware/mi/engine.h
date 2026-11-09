@@ -26,14 +26,16 @@ extern "C" {
 #define LANE_REVERB 5
 #define LANE_WARPS 6
 #define ENG_CABLES 8                     /* per track, and as many global */
-#define ENG_NPAGES 72                     /* (68 until 0.16.22: the followers' three pages after them, 0.16.23; 71
-                                          * until 0.16.57: PADS' fifth page after them, 0.16.59) */
+#define ENG_NPAGES 76                     /* (68 until 0.16.22: the followers' three pages after them, 0.16.23; 71
+                                          * until 0.16.57: PADS' fifth page after them, 0.16.59; 72 until 0.16.73:
+                                          * the bits' second pages after it, 0.16.74) */
 #define ENG_NPARAMS (ENG_NPAGES * 4)
 #define ENG_STEPS 64                     /* the steps a lane: four pages of 16 */
-#define ENG_PLOCKS 363                   /* parameter locks, for all the lanes' steps (384 until 0.16.6: four gave
+#define ENG_PLOCKS 346                   /* parameter locks, for all the lanes' steps (384 until 0.16.6: four gave
                                           * their room to CLIMB's randoms, 0.16.7; 380 until 0.16.22: thirteen to the
                                           * followers' pages, 0.16.23; 367 until 0.16.57: four to PADS' fifth page,
-                                          * 0.16.59; the project the same size) */
+                                          * 0.16.59; 363 until 0.16.73: seventeen to the bits' second pages, 0.16.74;
+                                          * the project the same size) */
 #define ENG_ENDLESS 64                   /* an Endless sequence's notes (and rests), a track */
 #define ENDLESS_REST 0xFF
 
@@ -85,12 +87,17 @@ extern "C" {
                                           * (the slice: 1/64 .. 1/8), BEND (each repeat slower and lower, or faster
                                           * and higher), DROP (a repeat's chance of an accident: backwards, a hole) */
 #define PG_PADS5 71                      /* (0.16.59) PADS' fifth page: LAYER, LEVEL, CHARACTER, TRANSP */
+#define PG_BITS2(t) (72 + (t))           /* (0.16.74) a track's bits, their second page: MIX (how much of them is heard,
+                                          * 0 the sound clean, 1 the bits alone: as before), DEPTH (SHAPE's and
+                                          * MASK's strength), BAND (to the left the bits on the lows alone, to the
+                                          * right on the highs, the rest clean; 0 all of it), FOLLOW (to the right the
+                                          * louder, the more bits; to the left the softer: the tails) */
 #define PG_FOLLOW(i) (68 + (i))          /* (0.16.23) an LFO's follower (its WAVE on FOLLOW), its input: SOURCE (the
                                           * track it listens to), GAIN (-24..+24 dB), THRESH (-60..0 dB: TRIG's,
                                           * FOLLOW's floor), FILTER (to the left the highs cut, to the right the lows) */
 enum { PT_PLAITS1, PT_PLAITS2, PT_PLAITS3, PT_LFO, PT_MIX, PT_PAN, PT_REVERB, PT_RSEND, PT_DELAY1,
        PT_DELAY2, PT_DSEND, PT_STEP, PT_LANE, PT_GLOBAL, PT_ARP, PT_WARPS1, PT_WARPS2, PT_DUCK, PT_COMP, PT_OTT, PT_EQ,
-       PT_BEND, PT_EUC, PT_FILT1, PT_FILT2, PT_FILT3, PT_GLITCH, PT_CURVE, PT_FOLLOW, PT_PADS5, NPT };
+       PT_BEND, PT_EUC, PT_FILT1, PT_FILT2, PT_FILT3, PT_GLITCH, PT_CURVE, PT_FOLLOW, PT_PADS5, PT_BITS2, NPT };
 enum { BS_OFF, BS_RECT, BS_DOWN, BS_DOWN3, BS_FOLD, BS_SWAP, BS_N };   /* the bits' SHAPE */
 #define BM_N 12                          /* the bits' MASKs */
 enum { GL_64, GL_32, GL_16, GL_8, GL_N };   /* the glitch's SIZE */
@@ -194,7 +201,9 @@ int eng_model_lock_set(int lane, int step, int m);   /* 0 ok, -1 no room or not 
  * knobs' randoms, a name. Saved by the screen (app.c, pat_store.h), read onto any track */
 #define SND_PAGES 8
 #define SND_MAGIC 0x31444E53u            /* "SND1" */
-#define SND_VERSION 12                   /* (11: 0.16.59's to 0.16.62's: EASEL not yet at 21: read, the models from
+#define SND_VERSION 13                   /* (12: 0.16.63's to 0.16.73's, the bits' second page (0.16.74) not in it: read,
+                                          * as new (MIX and DEPTH full, BAND all, FOLLOW off); a sound before 13 is
+                                          * bits2[] shorter (SND_SIZE_12); 11: 0.16.59's to 0.16.62's: EASEL not yet at 21: read, the models from
                                           * there one further on; 10: 0.16.57's and 0.16.58's: PADS' fourth page in four algorithm bytes (engine.cc
                                           * kPads4At), as 0.16.57 had it, its fifth not yet: read, both made from it
                                           * (pads_from_v37); a sound before 11 is pads[] shorter (SND_SIZE_10);
@@ -216,8 +225,10 @@ typedef struct {
     uint8_t rseed[SND_PAGES * 4];
     char name[12];                       /* a factory sound's, or its model's */
     float pads[8];                       /* (11, 0.16.59) PADS' fourth and fifth pages (its own: 0 for another model) */
+    float bits2[4];                      /* (13, 0.16.74) the bits' second page: MIX, DEPTH, BAND, FOLLOW */
 } eng_sound_t;
-#define SND_SIZE_10 ((unsigned)sizeof(eng_sound_t) - 32u)   /* a sound's size before 11 (0.16.58 and before) */
+#define SND_SIZE_12 ((unsigned)sizeof(eng_sound_t) - 16u)   /* a sound's size before 13 (0.16.73 and before) */
+#define SND_SIZE_10 ((unsigned)sizeof(eng_sound_t) - 48u)   /* a sound's size before 11 (0.16.58 and before) */
 void eng_sound_get(int t, eng_sound_t *s);
 int eng_sound_set(int t, const eng_sound_t *s);   /* 0 done; -1 not a sound; -2 PADS (once a project) on another track */
 int eng_sound_check(const eng_sound_t *s, int bytes);   /* 1: a sound this version reads */
@@ -257,7 +268,10 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 43u              /* (42: 0.16.67's, the same layout: PADS' LAYER TRANSP in semitones then:
+#define PROJECT_VERSION 44u              /* (43: 0.16.68's to 0.16.73's: 72 pages (the bits' second pages, 0.16.74, not
+                                          * yet), 363 locks: read, the pages as new (engine.cc bits2_in), the locks
+                                          * past 346 out; 38 to 42 that layout too, their changes after;
+                                          * 42: 0.16.67's, the same layout: PADS' LAYER TRANSP in semitones then:
                                           * read, in steps of the scale (transp_steps); 41: 0.16.66's, the same layout: its theme in the list before 0.16.67's (Acid,
                                           * Ember, Neon, Ice, Rust, Mono, Mutable, Graphite): read onto the new one
                                           * (theme_v42); 40: 0.16.63's to 0.16.65's, the same layout: NOTE -24..24 then, its locks'
@@ -384,6 +398,8 @@ float eng_filter_env(int t);             /* its envelope now, 0..1 */
  * so far, their speed */
 void eng_bend_preview(int t, float *y, int n);
 void eng_bend_mask(int t, uint8_t *inv, uint8_t *cut);
+int eng_bits2_view(int t, float *hz, float *now);   /* (0.16.74) the bits' second page as it plays: BAND's side (-1 the
+                                          * lows bent, 1 the highs, 0 all), its cutoff; MIX as FOLLOW weighs it now */
 int eng_glitch_state(int t, int *reps, float *speed);
 uint32_t eng_filter_load(int t);         /* its time, in tenths of % of the block (its voice's task holds it), averaged */
 const char *eng_algo_name(int page, int a);

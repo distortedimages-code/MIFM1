@@ -48,11 +48,23 @@ turn K3 5
 turn K4 4
 wait 400
 shot 05b_bits.png
+turn SELECT 1
+wait 400
+turn K1 -30
+turn K3 -12
+turn K4 15
+wait 1500
+shot 05b1_bits2.png
+turn K1 30
+turn K3 12
+turn K4 -15
+turn SELECT -1
+wait 400
 turn K1 -25
 turn K2 -18
 turn K3 -5
 turn K4 -4
-turn SELECT 1
+turn SELECT 2
 wait 400
 turn K1 30
 turn K3 8

@@ -321,7 +321,7 @@ static int track_cat(int page)           /* the set a track's page is in */
     switch (ptype(page)) {
     case PT_PLAITS1: case PT_PLAITS3: case PT_SON2: case PT_PAD4: case PT_PAD5: return CAT_SOUND;
     case PT_PLAITS2: return drum_track(ptrack(page)) ? CAT_SOUND : CAT_ENV;   /* (an FM drum's knobs 4..7) */
-    case PT_BEND: case PT_GLITCH: return CAT_BEND;
+    case PT_BEND: case PT_BITS2: case PT_GLITCH: return CAT_BEND;
     case PT_VFLT1: case PT_VFLT2: case PT_FILT1: case PT_FILT2: case PT_FILT3: return CAT_FILTER;
     case PT_ENV2: return CAT_ENV;
     default: return CAT_NONE;
@@ -344,7 +344,7 @@ static int cat_pages(int cat, int t, int *f)   /* a set's pages on track t, in o
         }
         f[1] = VP_SON2(t);
         return 2;
-    case CAT_BEND: f[0] = PG_BEND(t); f[1] = PG_GLITCH(t); return 2;
+    case CAT_BEND: f[0] = PG_BEND(t); f[1] = PG_BITS2(t); f[2] = PG_GLITCH(t); return 3;   /* (0.16.74: the bits' second) */
     case CAT_FILTER: f[0] = VP_FLT1(t); f[1] = VP_FLT2(t); return 2;
     default:
         if (drum_track(t)) {             /* (an FM drum: its own envelopes; the filter's) */
@@ -381,7 +381,7 @@ static int module_pages(int page, int *f)   /* its module's pages (its faces), i
 {
     int t = ptrack(page);
     switch (ptype(page)) {
-    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_BEND: case PT_GLITCH: case PT_FILT1: case PT_FILT2: case PT_FILT3:
+    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_BEND: case PT_BITS2: case PT_GLITCH: case PT_FILT1: case PT_FILT2: case PT_FILT3:
     case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2: case PT_PAD4: case PT_PAD5:
         return cat_pages(track_cat(page), t, f);
     case PT_LFO: case PT_FOLLOW: {       /* the three LFOs; (0.16.23) a follower's input after its LFO */
@@ -578,7 +578,7 @@ static const char *knob_name(int page, int k, int param)   /* its name: the para
 static const char *module_name(int page)
 {
     switch (ptype(page)) {
-    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_BEND: case PT_GLITCH: case PT_FILT1: case PT_FILT2: case PT_FILT3:
+    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_BEND: case PT_BITS2: case PT_GLITCH: case PT_FILT1: case PT_FILT2: case PT_FILT3:
     case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2: case PT_PAD4: case PT_PAD5: {
         int c = track_cat(page);
         return c == CAT_BEND ? "Bend" : c == CAT_FILTER ? "Filter" : c == CAT_ENV ? "Envelope"
@@ -656,7 +656,7 @@ static uint16_t page_accent(int page)
     case PT_DUCK: return track_accent(eng_duck_track(0));   /* its source's: it ducks the others */
     case PT_COMP: return AC2;
     case PT_OTT: return AC3;
-    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_BEND: case PT_GLITCH: case PT_FILT1: case PT_FILT2: case PT_FILT3:
+    case PT_PLAITS1: case PT_PLAITS2: case PT_PLAITS3: case PT_BEND: case PT_BITS2: case PT_GLITCH: case PT_FILT1: case PT_FILT2: case PT_FILT3:
     case PT_SON2: case PT_VFLT1: case PT_VFLT2: case PT_ENV2: case PT_PAD4: case PT_PAD5:
         return model_accent(p->algo[PG_TRACK(ptrack(page), 0)]);
     case PT_EUC: return lane_accent(eng_page_lane(page));
@@ -2102,6 +2102,63 @@ APP_SMALL static void panel_bend(int t)
     cv_text(85 + 8 * 13 + 4, 60, &FONT_XS, "MSB  LSB", DIM);
 }
 
+/* (0.16.74) the bits' second page (MIX, DEPTH, BAND, FOLLOW): under the line, where the bits' page has its switches,
+ * the spectrum from 20 Hz to 20 kHz, the part the bits take filled (BAND: all of it, the lows under its cutoff, the
+ * highs over it, a sketch of the split) as high as MIX is heard now (FOLLOW moves it with the sound) */
+APP_SMALL static void panel_bits2(int t)
+{
+    char s[48], v[16];
+    int pg = PG_BITS2(t);
+    float mix = eng_final(pg * 4), depth = eng_final(pg * 4 + 1), bd = eng_final(pg * 4 + 2), fol = eng_final(pg * 4 + 3);
+    float hz = 1000.0f, now = 0.0f;
+    int side = eng_bits2_view(t, &hz, &now);
+    uint16_t c = track_accent(t);
+    hero_icon(IC_BEND, c);
+    int y = hero_title("BITS 2");
+    s[0] = 0;                            /* (what runs off the screen left out: the least first) */
+    text_cat(s, "MIX ", sizeof s);
+    eng_param_text(pg * 4, mix, v, sizeof v);
+    text_cat(s, v, sizeof s);
+    text_cat(s, "|", sizeof s);
+    eng_param_text(pg * 4 + 2, bd, v, sizeof v);
+    text_cat(s, v, sizeof s);
+    if (fol <= -0.005f || fol >= 0.005f) {
+        text_cat(s, "|", sizeof s);
+        eng_param_text(pg * 4 + 3, fol, v, sizeof v);
+        text_cat(s, v, sizeof s);
+    }
+    if (depth < 0.995f) {
+        text_cat(s, "|DEPTH ", sizeof s);
+        eng_param_text(pg * 4 + 1, depth, v, sizeof v);
+        text_cat(s, v, sizeof s);
+    }
+    char u[48];
+    label_text(s, u, sizeof u);
+    hero_line(y, u);
+    const int x0 = 85, w = 148, y0 = 58, h = 13;
+    for (int o = 0; o <= 3; o++) {       /* 20 Hz, 200 Hz, 2 kHz, 20 kHz */
+        int x = x0 + (int)((float)w * (float)o * 3.3219f / 9.9658f + 0.5f);
+        cv_rect(x, y0 + h - 3, 1, 4, RULE);
+    }
+    cv_rect(x0, y0 + h, w + 1, 1, RULE);
+    uint16_t fill = tint(c, BG, 4);
+    int py = 0;
+    for (int i = 0; i <= w; i++) {
+        float f = 20.0f * fm_exp2f(9.9658f * (float)i / (float)w), r = f / hz, r4 = r * r * r * r;
+        float m = side < 0 ? 1.0f / fm_sqrtf(1.0f + r4) : side > 0 ? r * r / fm_sqrtf(1.0f + r4) : 1.0f;
+        int yb = y0 + h - (int)((float)h * fm_clampf(now * m, 0.0f, 1.0f) + 0.5f);
+        if (yb < y0 + h)
+            cv_rect(x0 + i, yb, 1, y0 + h - yb, fill);
+        if (i)
+            cv_line(x0 + i - 1, py, x0 + i, yb, c);
+        py = yb;
+    }
+    if (side) {                          /* the cutoff */
+        int xc = x0 + (int)((float)w * fm_log2f(fm_maxf(hz, 20.0f) / 20.0f) / 9.9658f + 0.5f);
+        cv_rect(xc < x0 ? x0 : xc > x0 + w ? x0 + w : xc, y0 - 1, 1, h + 1, HI);
+    }
+}
+
 /* the bending's glitch (GLITCH, SIZE, BEND, DROP): its chance, then a beat of what it does, the slice repeated its
  * size wide, each repeat lower or higher (BEND), the dropped ones dotted (DROP); lit while it repeats */
 APP_SMALL static void panel_glitch(int t)
@@ -2600,6 +2657,14 @@ APP_SMALL static void draw_panel(void)
         for (int k = 0; k < 4; k++)
             s[2] = s[2] * 131 + (int)(eng_final(ui.page * 4 + k) * 100.0f);
         break;
+    case PT_BITS2: {                     /* (0.16.74: its knobs, MIX as FOLLOW weighs it now) */
+        float now = 0.0f;
+        eng_bits2_view(tr, 0, &now);
+        for (int k = 0; k < 4; k++)
+            s[2] = s[2] * 131 + (int)(eng_final(ui.page * 4 + k) * 100.0f);
+        s[2] = s[2] * 131 + (int)(now * 40.0f);
+        break;
+    }
     case PT_GLITCH: {                    /* (its knobs, and the glitch as it plays: taking, repeating, how many) */
         int reps = 0;
         float sp = 1.0f;
@@ -2702,6 +2767,7 @@ APP_SMALL static void draw_panel(void)
     case PT_EXCL: panel_excl(ui.page - VP_EXCL(0)); break;
     case PT_EQ: panel_eq(); break;
     case PT_BEND: panel_bend(tr); break;
+    case PT_BITS2: panel_bits2(tr); break;
     case PT_GLITCH: panel_glitch(tr); break;
     case PT_VFLT1: case PT_VFLT2: panel_filter(tr, page_accent(ui.page)); break;
     case PT_EUC: panel_euclid(eng_page_lane(ui.page)); break;
@@ -2845,6 +2911,20 @@ static int knob_idle(int param)
         return !eng_lane_has_trigs(eng_page_lane(page));
     if (page >= PG_EUC(0) && page < PG_EUC(ENG_TRACKS) && k == 2)   /* (0.16.60) CLIMB: a held step's alone */
         return 1;
+    if (page >= PG_BITS2(0) && page < PG_BITS2(ENG_TRACKS)) {   /* (0.16.74) the bits' second page: all four while
+                                          * the bits are clean (their knobs and as they play), DEPTH without SHAPE
+                                          * and MASK */
+        int pb = PG_BEND(page - PG_BITS2(0)), on = 0, word = 0;
+        for (int j = 0; j < 2; j++) {
+            const float a = j ? eng_final(pb * 4) : eng_project()->val[pb * 4];
+            const float b = j ? eng_final(pb * 4 + 1) : eng_project()->val[pb * 4 + 1];
+            const float m = j ? eng_final(pb * 4 + 2) : eng_project()->val[pb * 4 + 2];
+            const float s = j ? eng_final(pb * 4 + 3) : eng_project()->val[pb * 4 + 3];
+            word |= m >= 0.5f || s >= 0.5f;
+            on |= a >= 0.005f || b >= 0.005f || m >= 0.5f || s >= 0.5f;
+        }
+        return !on || (k == 1 && !word);
+    }
     return 0;
 }
 
@@ -6561,7 +6641,7 @@ APP_SMALL static void input(void)
             [PT_MIX] = B_HOME, [PT_PAN] = B_HOME, [PT_REVERB] = B_FX, [PT_RSEND] = B_FX, [PT_DELAY1] = B_FX,
             [PT_DELAY2] = B_FX, [PT_DSEND] = B_FX, [PT_STEP] = B_SEQ, [PT_LANE] = B_FX, [PT_GLOBAL] = B_GLO,
             [PT_ARP] = B_ARP, [PT_WARPS1] = B_FX, [PT_WARPS2] = B_FX, [PT_DUCK] = B_HOME, [PT_COMP] = B_HOME,
-            [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_BEND] = B_EDIT, [PT_GLITCH] = B_EDIT, [PT_EUC] = B_SEQ, [PT_RND] = B_SEQ,
+            [PT_OTT] = B_HOME, [PT_EQ] = B_HOME, [PT_BEND] = B_EDIT, [PT_BITS2] = B_EDIT, [PT_GLITCH] = B_EDIT, [PT_EUC] = B_SEQ, [PT_RND] = B_SEQ,
             [PT_FILT1] = B_EDIT, [PT_FILT2] = B_EDIT, [PT_FILT3] = B_EDIT, [PT_SON2] = B_EDIT, [PT_VFLT1] = B_EDIT,
             [PT_VFLT2] = B_EDIT, [PT_ENV2] = B_ENV, [PT_SYS] = B_GLO, [PT_PLAY] = B_SEQ, [PT_ARP2] = B_ARP,
             [PT_CLIMB] = B_SEQ, [PT_ARP3] = B_ARP, [PT_SPREAD] = B_HOME, [PT_EXCL] = B_GLO, [PT_PAD4] = B_EDIT, [PT_PAD5] = B_EDIT};

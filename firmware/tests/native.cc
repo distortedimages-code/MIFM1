@@ -22,6 +22,7 @@ extern "C" {
 #include "mi/res_tables.h"
 #include "Soundengine/DSPAudio/SlopeEg2.h"
 extern "C" int mi_res_check(const uint8_t* payload, uint32_t len);
+extern "C" void eng_test_bend(int t, float* x, uint32_t n);   // (0.16.74: engine.cc, PLAT_HOST)
 
 extern "C" {
 uint32_t plat_ticks24(void) {
@@ -223,6 +224,60 @@ static void as_v37(project_t* q, int version, const plock_t* locks = 0) {   // (
   memcpy(o.seed, q->seed, sizeof o.seed);
   if (locks) memcpy(o.lock, locks, sizeof o.lock);
   else old_locks(o.lock, q->lock, 367);
+  memcpy(o.endless, q->endless, sizeof o.endless);
+  memcpy(o.endless_len, q->endless_len, sizeof o.endless_len);
+  memcpy(o.endless_key, q->endless_key, sizeof o.endless_key);
+  memcpy(o.rseed, q->rseed, sizeof o.rseed);
+  o.trauma = q->trauma;
+  memcpy(o.speed, q->speed, sizeof o.speed);
+  memcpy(o.dir, q->dir, sizeof o.dir);
+  memcpy(o.endless_opt, q->endless_opt, sizeof o.endless_opt);
+  memcpy(o.arp_opt, q->arp_opt, sizeof o.arp_opt);
+  o.dice_out = q->dice_out, o.trauma_out = q->trauma_out;
+  memset(q, 0xA5, sizeof *q);
+  memcpy(q, &o, sizeof o);
+}
+
+// (0.16.74) a project of now, written as 0.16.59 to 0.16.73 kept theirs (versions 38 to 43: 72 pages, no bits' second
+// pages, 363 locks; 3824 bytes, as now), its version as the test set it
+struct V43 {
+  uint32_t magic;
+  uint16_t version, size;
+  float val[72 * 4];
+  uint8_t algo[72];
+  uint8_t out_mode, warps_hq, theme, dice, dice_seed;
+  cable_t cable[ENG_TRACKS + 1][ENG_CABLES];
+  uint8_t trig[ENG_LANES][ENG_STEPS / 8];
+  int8_t rnd[ENG_LANES][ENG_NTP];
+  uint16_t seed[ENG_LANES];
+  plock_t lock[363];
+  uint8_t endless[ENG_TRACKS][ENG_ENDLESS];
+  uint8_t endless_len[ENG_TRACKS];
+  int8_t endless_key[ENG_TRACKS];
+  uint8_t rseed[ENG_LANES][ENG_NTP];
+  uint8_t trauma;
+  int8_t speed[ENG_LANES];
+  uint8_t dir[ENG_LANES];
+  uint8_t endless_opt[ENG_TRACKS][4];
+  uint8_t arp_opt[ENG_TRACKS];
+  uint8_t dice_out, trauma_out;
+  uint8_t rsv[1];
+};
+static_assert(sizeof(V43) == PROJECT_SIZE_32 && sizeof(V43) == sizeof(project_t), "0.16.73's layout");
+static V43 v43_o;
+static void as_v43(project_t* q, int version, const plock_t* locks = 0) {   // (locks: its 363, else now's 346)
+  V43& o = v43_o;
+  memset(&o, 0, sizeof o);
+  o.magic = q->magic, o.version = static_cast<uint16_t>(version), o.size = PROJECT_SIZE_32;
+  memcpy(o.val, q->val, sizeof o.val);
+  memcpy(o.algo, q->algo, sizeof o.algo);
+  o.out_mode = q->out_mode, o.warps_hq = q->warps_hq, o.theme = q->theme, o.dice = q->dice, o.dice_seed = q->dice_seed;
+  memcpy(o.cable, q->cable, sizeof o.cable);
+  memcpy(o.trig, q->trig, sizeof o.trig);
+  memcpy(o.rnd, q->rnd, sizeof o.rnd);
+  memcpy(o.seed, q->seed, sizeof o.seed);
+  if (locks) memcpy(o.lock, locks, sizeof o.lock);
+  else old_locks(o.lock, q->lock, 363);
   memcpy(o.endless, q->endless, sizeof o.endless);
   memcpy(o.endless_len, q->endless_len, sizeof o.endless_len);
   memcpy(o.endless_key, q->endless_key, sizeof o.endless_key);
@@ -2767,6 +2822,7 @@ int main(int argc, char** argv) {
       q42.version = 42;
       q42.theme = 3;
       q42.val[PG_PADS5 * 4 + 3] = 12.0f;
+      as_v43(&q42, 42);
       const int up = eng_upgrade(&q42, sizeof q42) && eng_check(&q42) && q42.val[PG_PADS5 * 4 + 3] == 7.0f &&
                      q42.theme == 3;
       printf("PADS' LAYER TRANSP in steps of the scale: %s; a project of 0.16.67: +12 semitones -> %+.0f steps, its "
@@ -3755,6 +3811,7 @@ int main(int argc, char** argv) {
     q.endless_opt[1][3] = static_cast<uint8_t>(2u | CLON_RATCH << 4);   // (TIMES 3, ON its hits)
     q.lock[0] = plock_t{1, 4, TP_CLIMB, 159};   // (+3 three times: up to 6)
     q.lock[1] = plock_t{2, 6, TP_CLIMB, 170};   // (+4, TIMES 4 then: up to 12, no lock)
+    as_v43(&q, 38);
     int v59 = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.val[PG_EUC(1) * 4 + 2] == 0.0f &&
               q.endless_opt[1][3] == (CLON_RATCH << 4) && q.lock[0].v == 159 && q.lock[1].v == 170;
     int lims = 0;
@@ -4304,6 +4361,7 @@ int main(int argc, char** argv) {
       q40.version = 40;
       for (int i = 0; i < ENG_PLOCKS; ++i) q40.lock[i].lane = 0xFF;
       q40.lock[0] = plock_t{1, 3, TP_NOTE, 191};   // (+12 over -24..24)
+      as_v43(&q40, 40);
       ok &= eng_upgrade(&q40, sizeof q40) && eng_check(&q40) && q40.lock[0].v == note_byte_v41(191) &&
             static_cast<int>(std::floor(-48.0f + q40.lock[0].v * (108.0f / 255.0f) + 0.5f)) == 12;
       for (int t = 0; t < 8; ++t) {     // (0.16.67) a project of 0.16.66 (41): its NOTE as it is, its theme on the new
@@ -4313,6 +4371,7 @@ int main(int argc, char** argv) {
         q41.theme = static_cast<uint8_t>(t);
         for (int i = 0; i < ENG_PLOCKS; ++i) q41.lock[i].lane = 0xFF;
         q41.lock[0] = plock_t{1, 3, TP_NOTE, 200};
+        as_v43(&q41, 41);
         ok &= eng_upgrade(&q41, sizeof q41) && eng_check(&q41) && q41.version == PROJECT_VERSION &&
               q41.lock[0].v == 200 && q41.theme == (t == 7 ? 6 : 0);
       }
@@ -7021,6 +7080,7 @@ int main(int argc, char** argv) {
     q.algo[PG_TRACK(2, 0)] = 20;
     for (int i = 0; i < ENG_PLOCKS; ++i) q.lock[i].lane = 0xFF;
     q.lock[0] = plock_t{3, 4, static_cast<uint8_t>(ENG_NTP + 4), 21};
+    as_v43(&q, 39);
     const int proj_ok = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.version == PROJECT_VERSION &&
                         q.algo[PG_TRACK(1, 0)] == speech && q.algo[PG_TRACK(2, 0)] == eng_model_find(MK_STATIC, 0) &&
                         q.lock[0].v == speech;
@@ -7029,6 +7089,7 @@ int main(int argc, char** argv) {
     static eng_sound_t snd;
     eng_sound_get(1, &snd);
     snd.version = 11;
+    snd.size = static_cast<uint16_t>(SND_SIZE_12);   // (0.16.74: a sound before 13, shorter)
     snd.algo[0] = 21;
     eng_set_model(1, em);
     const int snd_ok = eng_sound_set(1, &snd) == 0 && p->algo[PG_TRACK(1, 0)] == speech;
@@ -7502,6 +7563,195 @@ int main(int argc, char** argv) {
         kick[0] < 0.01f || kick[1] < 0.8f * kick[0])
       ++failures, printf("FAIL: the reverb and the delay asleep\n");
     eng_defaults(p);
+  }
+
+  {                                     // 81. (0.16.74) STOP lets a latched ARP go (a key still down keeps its own)
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    uint8_t lst[16];
+    eng_play(0);
+    eng_blank(p);
+    eng_fresh();
+    eng_arp_opt_set(p, 0, AO_MODE, AM_KEYS);
+    eng_arp_opt_set(p, 0, AO_LATCH, 1);
+    eng_arp_release_all();
+    eng_arp_key(0, 60, 1), eng_arp_key(0, 64, 1), eng_arp_key(0, 60, 0), eng_arp_key(0, 64, 0);
+    const int latched = eng_arp_list(0, lst, 16);
+    eng_play(1);
+    for (int b = 0; b < 40; ++b) eng_render(l, r, 128);
+    const int playing = eng_arp_list(0, lst, 16);
+    eng_play(0);
+    const int stopped = eng_arp_list(0, lst, 16);
+    eng_arp_key(0, 67, 1);
+    eng_play(1);
+    eng_render(l, r, 128);
+    eng_play(0);
+    const int down = eng_arp_list(0, lst, 16);
+    eng_arp_key(0, 67, 0);
+    const int up = eng_arp_list(0, lst, 16);
+    eng_arp_opt_set(p, 0, AO_LATCH, 0);  // (not latched: its keys as they are, STOP or not)
+    eng_arp_key(0, 62, 1);
+    eng_play(1);
+    eng_play(0);
+    const int free_down = eng_arp_list(0, lst, 16);
+    eng_arp_key(0, 62, 0);
+    eng_arp_release_all();
+    printf("ARP LATCH and STOP: latched %d, playing %d, stopped %d; a key down at the stop %d, let go %d; not latched, "
+           "held through a stop %d\n", latched, playing, stopped, down, up, free_down);
+    if (latched != 2 || playing != 2 || stopped != 0 || down != 1 || up != 1 || free_down != 1)
+      ++failures, printf("FAIL: ARP LATCH and STOP\n");
+    eng_defaults(p);
+    eng_fresh();
+  }
+
+  {                                     // 82. (0.16.74) the bits' second page (MIX, DEPTH, BAND, FOLLOW): a buffer through
+    // T2's bits (eng_test_bend): BAND's lows bent, its highs as they were (and the other way); MIX 0 the sound as it
+    // came, 0.5 about half the change; DEPTH 0 a mask that does nothing; FOLLOW's Loud the bits on the attack, Tail on
+    // the decay; their texts; a project and a sound of 0.16.73 read with the page as new (the same sound), its locks
+    // past 346 out
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    const int t = 1, N = 16384, H = 8192;   // (the second half measured: its bins whole)
+    static float in[16384], out[16384];
+    eng_play(0);
+    eng_blank(p);
+    eng_fresh();
+    float* b1 = &p->val[PG_BEND(t) * 4];
+    float* b2 = &p->val[PG_BITS2(t) * 4];
+    const int defs = b2[0] == 1.0f && b2[1] == 1.0f && b2[2] == 0.0f && b2[3] == 0.0f;
+    const double sr = 44100.0, f_lo = 64.0 * sr / H, f_hi = 930.0 * sr / H;   // (345 Hz, 5007 Hz: bins of the half;
+                                        // the low one 128 samples a cycle, what the bits make of it as periodic)
+    auto two_tones = [&]() {
+      for (int i = 0; i < N; ++i)
+        in[i] = static_cast<float>(0.5 * std::sin(2.0 * M_PI * f_lo * i / sr) + 0.1 * std::sin(2.0 * M_PI * f_hi * i / sr));
+    };
+    auto pass = [&](const float* x) {   // (the knobs taken by a block, then the buffer through)
+      eng_render(l, r, 128);
+      for (int i = 0; i < N; ++i) out[i] = x[i];
+      for (int i = 0; i < N; i += 128) eng_test_bend(t, out + i, 128);
+    };
+    auto bin = [&](const float* x, int k, double* re, double* im) {
+      double a = 0.0, b = 0.0;
+      for (int i = 0; i < H; ++i) {
+        const double w = 2.0 * M_PI * k * i / H;
+        a += x[N - H + i] * std::cos(w), b -= x[N - H + i] * std::sin(w);
+      }
+      *re = a, *im = b;
+    };
+    auto apart = [&](int k) {           // (that bin out against in: how far, of it)
+      double ar, ai, br, bi;
+      bin(in, k, &ar, &ai);
+      bin(out, k, &br, &bi);
+      return std::sqrt((br - ar) * (br - ar) + (bi - ai) * (bi - ai)) / std::sqrt(ar * ar + ai * ai);
+    };
+    auto dev = [&](int a, int b) {      // (out against in over a .. b: the change's rms, of in's)
+      double e = 0.0, s = 0.0;
+      for (int i = a; i < b; ++i) e += (out[i] - in[i]) * (out[i] - in[i]), s += in[i] * in[i];
+      return std::sqrt(e / std::max(s, 1e-30));
+    };
+    b1[1] = 1.0f;                       // BITS: 1 bit
+    two_tones();
+    pass(in);
+    const double full_hi = apart(930), full_lo = apart(64), full_dev = dev(N - H, N);
+    b2[2] = -0.7f;                      // BAND: the lows (555 Hz down)
+    pass(in);
+    const double lows_hi = apart(930), lows_lo = apart(64);
+    b2[2] = 0.8f;                       // the highs (2.4 kHz up)
+    pass(in);
+    const double highs_hi = apart(930), highs_lo = apart(64);
+    b2[2] = 0.0f;
+    b2[0] = 0.0f;                       // MIX 0
+    pass(in);
+    double worst0 = 0.0;
+    for (int i = N - H; i < N; ++i) worst0 = std::max(worst0, static_cast<double>(std::fabs(out[i] - in[i])));
+    b2[0] = 0.5f;
+    pass(in);
+    const double half_dev = dev(N - H, N);
+    b2[0] = 1.0f;
+    b1[1] = 0.0f;                       // DEPTH: MASK "Sign inv" alone
+    b1[2] = 8.0f;
+    pass(in);
+    const double mask1 = dev(N - H, N);
+    b2[1] = 0.0f;
+    pass(in);
+    const double mask0 = dev(N - H, N);
+    b2[1] = 1.0f;
+    b1[2] = 0.0f;
+    b1[1] = 1.0f;                       // FOLLOW: a sound dying (100 ms), 1 bit; the change early (30..60 ms) and late
+    auto dying = [&]() {                // (250..370 ms)
+      for (int i = 0; i < N; ++i)
+        in[i] = static_cast<float>(0.8 * std::exp(-i / (0.1 * sr)) * std::sin(2.0 * M_PI * f_lo * i / sr));
+    };
+    const int a0 = static_cast<int>(0.03 * sr), a1 = static_cast<int>(0.06 * sr);
+    const int c0 = static_cast<int>(0.25 * sr), c1 = N;
+    double fe[3], fl[3];
+    for (int m = 0; m < 3; ++m) {       // (none, Loud, Tail)
+      b2[3] = m == 0 ? 0.0f : m == 1 ? 1.0f : -1.0f;
+      eng_render(l, r, 128);
+      for (int i = 0; i < N; ++i) in[i] = 0.0f;   // (the follower settled on silence first)
+      for (int i = 0; i < N; i += 128) eng_test_bend(t, in + i, 128);
+      dying();
+      pass(in);
+      fe[m] = dev(a0, a1), fl[m] = dev(c0, c1);
+    }
+    b2[3] = 0.0f;
+    const int band_ok = full_hi > 0.3 && lows_hi < 0.05 && lows_lo > 0.3 && highs_lo < 0.05 && highs_hi > 0.3;
+    const int mix_ok = worst0 < 1e-3 && half_dev > 0.3 * full_dev && half_dev < 0.7 * full_dev;
+    const int depth_ok = mask1 > 0.5 && mask0 < 0.05;   // (0: the coupling capacitor's phase alone, 10 Hz's at 345 Hz)
+    const int fol_ok = fe[1] > 2.0 * fl[1] && fl[2] > 2.0 * fe[2] && fe[2] < 0.6 * fe[0] && fl[1] < 0.6 * fl[0];
+    char tx[8][16];
+    eng_param_text(PG_BITS2(0) * 4 + 2, -0.7f, tx[0], 16);
+    eng_param_text(PG_BITS2(0) * 4 + 2, 0.7f, tx[1], 16);
+    eng_param_text(PG_BITS2(0) * 4 + 2, 0.0f, tx[2], 16);
+    eng_param_text(PG_BITS2(0) * 4 + 3, 0.5f, tx[3], 16);
+    eng_param_text(PG_BITS2(0) * 4 + 3, -0.25f, tx[4], 16);
+    eng_param_text(PG_BITS2(0) * 4 + 3, 0.0f, tx[5], 16);
+    eng_param_text(PG_BITS2(0) * 4 + 0, 1.0f, tx[6], 16);
+    eng_param_text(PG_BITS2(0) * 4 + 1, 0.4f, tx[7], 16);
+    const int texts = !std::strcmp(tx[0], "Lo 555") && !std::strcmp(tx[1], "Hi 1.3k") && !std::strcmp(tx[2], "Full") &&
+                      !std::strcmp(tx[3], "Loud 50%") && !std::strcmp(tx[4], "Tail 25%") && !std::strcmp(tx[5], "Off") &&
+                      !std::strcmp(tx[6], "100%") && !std::strcmp(tx[7], "40%") &&
+                      !std::strcmp(eng_param_name(PG_BITS2(2) * 4 + 3), "Follow");
+    // a project of 0.16.73 (43): the page as new, its 363 locks' first 346 kept
+    static project_t q;
+    eng_defaults(&q);
+    static plock_t many[363];
+    for (int i = 0; i < 363; ++i) many[i] = plock_t{static_cast<uint8_t>(i % 4), static_cast<uint8_t>(i / 4 % 64),
+                                                     static_cast<uint8_t>(TP_CUTOFF + i / 256), static_cast<uint8_t>(i)};
+    q.val[PG_PADS5 * 4 + 3] = 5.0f;
+    as_v43(&q, 43, many);
+    int kept = 0;
+    const int up = eng_upgrade(&q, sizeof q) && eng_check(&q);
+    for (int i = 0; i < ENG_PLOCKS; ++i) kept += q.lock[i].lane != 0xFF && q.lock[i].v == static_cast<uint8_t>(i);
+    int new_page = 1;
+    for (int k = 0; k < ENG_TRACKS; ++k)
+      new_page &= q.val[PG_BITS2(k) * 4] == 1.0f && q.val[PG_BITS2(k) * 4 + 1] == 1.0f &&
+                  q.val[PG_BITS2(k) * 4 + 2] == 0.0f && q.val[PG_BITS2(k) * 4 + 3] == 0.0f;
+    const int proj_ok = up && kept == ENG_PLOCKS && new_page && q.val[PG_PADS5 * 4 + 3] == 5.0f;
+    // the sound: the page in it (13); one of 0.16.73 (12) read with the page as new
+    static eng_sound_t snd;
+    b2[0] = 0.6f, b2[1] = 0.3f, b2[2] = -0.4f, b2[3] = 0.2f;
+    eng_sound_get(t, &snd);
+    int snd_ok = snd.version == SND_VERSION && snd.size == sizeof snd && eng_sound_set(3, &snd) == 0 &&
+                 p->val[PG_BITS2(3) * 4] == 0.6f && p->val[PG_BITS2(3) * 4 + 2] == -0.4f &&
+                 p->val[PG_BITS2(3) * 4 + 3] == 0.2f;
+    snd.version = 12;
+    snd.size = static_cast<uint16_t>(SND_SIZE_12);
+    snd_ok &= eng_sound_check(&snd, SND_SIZE_12) && eng_sound_set(3, &snd) == 0 && p->val[PG_BITS2(3) * 4] == 1.0f &&
+              p->val[PG_BITS2(3) * 4 + 1] == 1.0f && p->val[PG_BITS2(3) * 4 + 2] == 0.0f &&
+              p->val[PG_BITS2(3) * 4 + 3] == 0.0f;
+    printf("the bits' second page: as new %s; BAND (1 bit): all of it, the highs %.2f apart, the lows %.2f; the lows "
+           "bent, the highs %.3f apart, the lows %.2f; the highs bent, the lows %.3f, the highs %.2f; MIX 0 %.1e at "
+           "most, 0.5 %.2f of 1's change; DEPTH (Sign inv) 1 %.2f, 0 %.3f; FOLLOW (a sound dying) early and late: none "
+           "%.2f %.2f, Loud %.2f %.2f, Tail %.2f %.2f; texts %s (%s %s %s %s %s %s); a project of 0.16.73 %s (%d locks "
+           "kept), its sound and one of then %s\n",
+           defs ? "ok" : "WRONG", full_hi, full_lo, lows_hi, lows_lo, highs_lo, highs_hi, worst0, half_dev / full_dev,
+           mask1, mask0, fe[0], fl[0], fe[1], fl[1], fe[2], fl[2], texts ? "ok" : "WRONG", tx[0], tx[1], tx[2], tx[3],
+           tx[4], tx[5], proj_ok ? "ok" : "WRONG", kept, snd_ok ? "ok" : "WRONG");
+    if (!defs || !band_ok || !mix_ok || !depth_ok || !fol_ok || !texts || !proj_ok || !snd_ok)
+      ++failures, printf("FAIL: the bits' second page\n");
+    eng_defaults(p);
+    eng_fresh();
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
