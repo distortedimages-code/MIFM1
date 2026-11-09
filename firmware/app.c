@@ -1511,6 +1511,14 @@ static void hero_icon(int which, uint16_t c)
     hoop(HX, HY, 27.0f, 2.0f, c);
     vicon(HX, HY, 1.05f, 2.4f, c, which, 0);
 }
+static void hero_machine(int which, uint16_t c)   /* (0.16.76) a machine's own pages (its sound set: the model, its
+                                                   * knobs, its note, PADS' faces): its icon in reverse, knocked out of
+                                                   * a disc of its colour; the modules around it (the envelopes, the
+                                                   * bending, the filter, the LFOs, the effects) drawn in outline */
+{
+    disc(HX, HY, 27.0f, c);
+    vicon(HX, HY, 1.05f, 2.4f, BG, which, 0);
+}
 
 static int hero_title(const char *name)  /* the name: one line of L, two cut at a space, else M; the y under it */
 {
@@ -1607,7 +1615,11 @@ static void panel_plaits(int t, int face, uint16_t ac)
     int m = p->algo[PG_TRACK(t, 0)];
     char s[40], n[8];
     int alg = eng_fm_algo(t);            /* (the FM: its algorithm, as it plays) */
-    hero_icon(alg >= 0 ? IC_ALG + alg : IC_MODEL + m, ac);
+    /* (0.16.76) the machine's pages: its icon in reverse; the low-pass gate, an envelope's page: in outline */
+    if (track_cat(ui.page) == CAT_SOUND)
+        hero_machine(alg >= 0 ? IC_ALG + alg : IC_MODEL + m, ac);
+    else
+        hero_icon(alg >= 0 ? IC_ALG + alg : IC_MODEL + m, ac);
     if (face == 0) {                     /* the model (PADS: its progression, its chord) */
         int y = hero_title(eng_algo_name(PG_TRACK(t, 0), m));
         s[0] = 0;
@@ -1694,7 +1706,7 @@ APP_SMALL static void panel_pad4(int t, uint16_t ac)
     int wi = wz >= 3.0f ? 2 : (int)wz;
     wt[wi] = 1.0f - (wz - (float)wi);
     wt[wi + 1] = wz - (float)wi;
-    hero_icon(IC_MODEL + eng_project()->algo[PG_TRACK(t, 0)], ac);
+    hero_machine(IC_MODEL + eng_project()->algo[PG_TRACK(t, 0)], ac);
     cv_text(84, 0, &FONT_XS, dec("WAVE", 1), MUTED);
     eng_param_text(PG_PADS4 * 4, eng_final(PG_PADS4 * 4), v, sizeof v);
     label_text(v, u, sizeof u);
@@ -1740,7 +1752,7 @@ APP_SMALL static void panel_pad4(int t, uint16_t ac)
 APP_SMALL static void panel_pad5(int t, uint16_t ac)
 {
     char s[48], v[24], u[24];
-    hero_icon(IC_MODEL + eng_project()->algo[PG_TRACK(t, 0)], ac);
+    hero_machine(IC_MODEL + eng_project()->algo[PG_TRACK(t, 0)], ac);
     const int on = eng_pads_layer(eng_final(PG_PADS5 * 4));
     eng_param_text(PG_PADS5 * 4, eng_final(PG_PADS5 * 4), v, sizeof v);
     label_text(v, u, sizeof u);
@@ -2114,7 +2126,7 @@ APP_SMALL static void panel_bits2(int t)
     int side = eng_bits2_view(t, &hz, &now);
     uint16_t c = track_accent(t);
     hero_icon(IC_BEND, c);
-    int y = hero_title("BITS 2");
+    int y = hero_title("INJECT");
     s[0] = 0;                            /* (what runs off the screen left out: the least first) */
     text_cat(s, "MIX ", sizeof s);
     eng_param_text(pg * 4, mix, v, sizeof v);

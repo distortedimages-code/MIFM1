@@ -1072,7 +1072,11 @@ en moins). Les projets et les sons enregistrés avant se relisent : EASEL prend 
 modèles de Plaits passent un cran plus loin.
 
 L'écran est noir (le thème Mono, celui d'un projet neuf ; six autres plus bas, **Les couleurs**), ses lumières en
-blanc, argent et rouge. En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis
+blanc, argent et rouge. En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état ;
+sur les pages de la machine elle-même (EDIT, le son : le modèle, ses potards, sa note, les faces de PADS), son icône est
+**en défonce**, découpée en noir dans un disque plein de sa couleur (0.16.76), et celles des modules autour (les
+enveloppes, le bending, le filtre, les LFO, les effets) restent dessinées au trait : on sait d'un coup d'œil si l'on
+règle la machine ou ce qui la traite. Puis
 les quatre potards côte à côte, dans l'ordre des KNOB 1 à 4 : un anneau fin allumé de son début (ou de son milieu,
 avec « − + ») jusqu'à la valeur, la valeur dedans, un câble en pointillé et son point d'arrivée dans l'autre couleur,
 la source écrite dessous. En bas les quatre pistes, une LED chacune allumée par sa gate dans la couleur de son modèle,
@@ -1100,7 +1104,7 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **SELECT** | les pages de ce qu'on regarde (les deux du son de la piste, les deux de son filtre, les faces d'un effet…), en glissant |
 | **ALGORITHM** | le type de ce qu'on a devant soi, là où il y a un choix (le A cerclé en haut) : sur le son de la piste, son modèle (les 20 : les batteries, les batteries FM, ZERO et la FM, Plaits) ; sur son filtre, le modèle de filtre (OFF, LADDER, MS-20, SEM, VOX) ; sur Warps, d'un repère d'ALGO au suivant ; sur le delay, SYNC, FREE, puis (0.16.65) BBD SYNC et BBD FREE, de gauche à droite |
 | **PRESETS** | la piste active, de 1 à 4 (les presets eux-mêmes : EDIT tenu) |
-| **EDIT** | **tapé** : les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : leur dosage, MIX, DEPTH, BAND, FOLLOW ; SELECT encore : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son ; **tenu : les presets** de la piste (touches noires : la banque, A celle d'usine ; blanches : le son, posé sur la piste et joué ; SAVE tenu : l'y garde ; REC tenu : l'efface) ; **tenu + SELECT** (0.16.39) : **le niveau de la piste active** (« T1 LEVEL 85 » ; MASTER, lui, est le volume de sortie) |
+| **EDIT** | **tapé** : les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : INJECT, leur dosage, MIX, DEPTH, BAND, FOLLOW ; SELECT encore : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son ; **tenu : les presets** de la piste (touches noires : la banque, A celle d'usine ; blanches : le son, posé sur la piste et joué ; SAVE tenu : l'y garde ; REC tenu : l'efface) ; **tenu + SELECT** (0.16.39) : **le niveau de la piste active** (« T1 LEVEL 85 » ; MASTER, lui, est le volume de sortie) |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
 | **SEQ** | tapé : les pas de la piste (NOTE, PROB, SPEED, LENGTH ; puis RATCHETS : RATCH, SPAN, CURVE, DIR ; puis CLIMB : CLIMB et LIMIT d'un pas tenu, ON, SHAPE ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns**, qui restent ouverts quand on lâche SEQ (touches noires ou SELECT : la banque, blanches : le pattern ; SEQ tenu et plusieurs : un enchaînement ; REC tenu : efface ; SEQ à nouveau : on en sort) |
 | **ARP** | Endless, celui de la piste (voir plus bas) ; à nouveau : ses options (STRIDE, REST, HOLES, LEAP) |
@@ -1552,8 +1556,8 @@ gardée tant que son dernier bit n'est pas coupé) ; **SHAPE**, une forme numér
 au-dessus), Down et Down 3 (le signe retourné tous les deux ou trois cycles, comme un diviseur : une octave, une
 octave et une quinte en dessous), Fold (replié) ou Swap (les deux moitiés du mot échangées). Un condensateur de
 liaison enlève le continu qu'un redresseur ou un bit retourné laissent. L'écran montre ce que les bits font d'une
-sinusoïde et les huit interrupteurs (allumé, inversé, coupé). **Deuxième page (SELECT, 0.16.74), le dosage des
-bits** : **MIX**, ce qu'on en entend, du son propre (0 %) aux bits seuls (100 %, comme avant) ; **DEPTH**, la force de
+sinusoïde et les huit interrupteurs (allumé, inversé, coupé). **Deuxième page (SELECT, 0.16.74), INJECT, le dosage
+des bits** : **MIX**, ce qu'on en entend, du son propre (0 %) aux bits seuls (100 %, comme avant) ; **DEPTH**, la force de
 SHAPE et de MASK ensemble (CLOCK et BITS ne bougent pas) : à 0 %, ils ne font plus rien ; **BAND**, là où les bits
 agissent : au milieu (*Full*) tout le spectre, à gauche **seulement les graves** (sous une coupure qui descend de
 18 kHz à 125 Hz), à droite **seulement les aigus** (au-dessus d'une coupure qui monte de 20 Hz à 8 kHz), le reste
