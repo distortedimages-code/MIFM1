@@ -7774,10 +7774,17 @@ int main(int argc, char** argv) {
     uint32_t la = 0, lb = 0;
     float lw = 0.0f;
     eng_test_split(light, 27.0f, fx, 0xFu, &la, &lb, &lw);
+    // (0.16.78) another worst block, trigs on all four (prep 37, the voices as their rises cost: 25 27 17 35, the
+    // effects 43): split on their averages (13 24 18 25), core 0 took T1 and T4 (97 %, core 1 88); on these, 95 at most
+    const float hit[6] = {25.0f, 27.0f, 17.0f, 35.0f, 0.0f, 43.0f};
+    uint32_t ha = 0, hb = 0;
+    float hw = 0.0f;
+    eng_test_split(hit, 37.0f, fx, 0xFu, &ha, &hb, &hw);
     printf("the cores' split, a worst block (prep 27, voices 16 21 12 22, effects 45): core 1 the effects %s and voices "
            "0x%X, the cores' ends %.0f and %.0f %% (the split's %.0f; the old split's %.0f); a light one (effects 10): "
-           "%.0f %%\n", ja == fx ? "yes" : "no", jb, c0, c1, worst, old_end, lw);
-    if (std::max(c0, c1) > 80.0f || std::fabs(std::max(c0, c1) - worst) > 0.01f || lw > 66.0f)
+           "%.0f %%; trigs on all four (prep 37, 25 27 17 35, effects 43): %.0f %% (on their averages: 97)\n",
+           ja == fx ? "yes" : "no", jb, c0, c1, worst, old_end, lw, hw);
+    if (std::max(c0, c1) > 80.0f || std::fabs(std::max(c0, c1) - worst) > 0.01f || lw > 66.0f || hw > 95.5f)
       ++failures, printf("FAIL: the cores' split\n");
   }
 

@@ -1152,6 +1152,10 @@ pendant la préparation (le même bloc : 73 % au lieu de 98). La préparation el
 pistes des effets, les réglages des bits, le reste du rendu) est compilée pour la taille plutôt que pour la vitesse :
 elle tourne depuis la flash, que les voix et les effets lui reprennent à chaque bloc, et ce sont ses octets qui
 coûtent, pas ses instructions (le séquenceur y pesait jusqu'à 13,5 % d'un bloc) ; un tiers d'octets en moins.
+Depuis 0.16.78, le partage compte aussi ce que coûte une voix dans les blocs où sa gate monte (sa note qui démarre :
+une grosse caisse à 25 % là où elle en prend 13 en moyenne), appris sur ses trigs précédents : dans un bloc où les
+quatre pistes jouent ensemble, il ne met plus les deux plus chères du même côté (le pire bloc mesuré : 95 % au lieu
+de 103).
 
 **Le code en RAM** (0.14.4) : le FM-1 exécute son programme depuis la flash, à travers un petit cache ; du code qui
 n'y est pas encore attend la flash, une ligne de 32 octets à la fois (environ 1 µs). Sur le stress test, la première

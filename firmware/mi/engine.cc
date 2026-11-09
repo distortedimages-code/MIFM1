@@ -364,6 +364,7 @@ float vnote[ENG_TRACKS];                // its note (latched at the gate's rise)
 volatile uint32_t vrises[ENG_TRACKS];   // the trigs it played
 uint32_t gates_now;
 int gate_seen[ENG_TRACKS];              // its gate was high in the last block
+uint8_t gate_rose[ENG_TRACKS];          // (0.16.78) its gate rose in this block (a trig, a key): its voice costs more
 // the duck: T1's gate rising, frame by frame (this block's), then the envelope it starts (sample by sample: its jump
 // to 1, its fall with DECAY, a ~1 ms glide over both) and each track's depth, glided
 uint8_t duck_hit[kFrames];
@@ -1579,6 +1580,7 @@ __attribute__((noinline)) PREP_SMALL void sequence(uint32_t n) {
     int r = Pi(PG_ARP(t), 0);
     el[t] = sl * kArpMult[r < 0 ? 0 : r > 5 ? 5 : r];
     gate_seen[t] = 0;
+    gate_rose[t] = 0;
   }
   for (int l = 0; l < ENG_LANES; ++l) lane_sl[l] = sl / kSpeedMul[lane_speed(l)];
   for (int t = 0; t < ENG_TRACKS; ++t) gl_at[t] = -1;
@@ -1808,6 +1810,7 @@ __attribute__((noinline)) PREP_SMALL void sequence(uint32_t n) {
         if (key_hold[t] > 0) --key_hold[t];
       }
       fg[t][k] = static_cast<uint8_t>(g);
+      gate_rose[t] |= static_cast<uint8_t>(g && !last_g[t]);
       if (t == pad_track && g && !last_g[t]) {   // PADS: a trig, its progression's next chord
         ++pad_pos;
         pads_now(fnote[t][k]);
@@ -3236,6 +3239,11 @@ const int kTasks = ENG_TRACKS + 2;
 const int kTaskWarps = ENG_TRACKS, kTaskFx = ENG_TRACKS + 1;
 volatile uint32_t task_ticks[kTasks];
 float task_cost[kTasks] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+// (0.16.78) a voice's cost in the blocks its gate rises (averaged over ~4 of them): its note starting, its code
+// read in again, its envelopes from their top. The machine page's worst block: T1 25 % there, 13 on average; T4 35,
+// 25: split on their averages, core 0 took both (97 %) while core 1 ended at 88. The split counts it for a voice
+// whose gate rose in the block
+float task_hit[ENG_TRACKS];
 float warps_chunk_cost = 1.0f;           // Warps' cost a Process call: a block makes 2 or 3 of them (mw_calls)
 uint32_t warps_calls;
 float w_ei, w_eo, w_lg;                  // (0.16.31) its level: what goes in and out (followed), the gain given back
@@ -3288,12 +3296,12 @@ void core1_job(uint32_t arg) {
 // each time was 4 % of a block on core 0 (its preparation runs from the flash, through the cache). The same sums as one
 // task at a time from the lowest: bit for bit what they were
 float sub_cost[1u << kTasks];
-void make_sub_costs() {
+void make_sub_costs(const float* c = task_cost) {   // (0.16.78: c, the costs to count: task_cost, or the block's own)
   int hi = 0;
   sub_cost[0] = 0.0f;
   for (uint32_t m = 1; m < (1u << kTasks); ++m) {
     if (m == 2u << hi) ++hi;            // (its highest task)
-    sub_cost[m] = sub_cost[m & ~(1u << hi)] + task_cost[hi];
+    sub_cost[m] = sub_cost[m & ~(1u << hi)] + c[hi];
   }
 }
 inline float cost_of(uint32_t m) { return sub_cost[m & ((1u << kTasks) - 1u)]; }
@@ -5842,6 +5850,11 @@ PREP_SMALL void eng_render(float* l, float* r, uint32_t n) {
   eng_prof[0] += plat_ticks24() - t0;
 #endif
   const float prepped = static_cast<float>(prep_t);   // (core 1's voices from now on, at the soonest)
+  float est[kTasks];                    // (0.16.78) this block's costs: a voice whose gate rose, its blocks' with a rise
+  for (int i = 0; i < kTasks; ++i) est[i] = task_cost[i];
+  for (int t = 0; t < ENG_TRACKS; ++t)
+    if (gate_rose[t]) est[t] = fm_maxf(est[t], task_hit[t]);
+  make_sub_costs(est);
   uint32_t jb = c1ok ? split_voices(v, fm_maxf(cost_of(ja), prepped), prepped + cost_of(early & ~ja), 0) : 0u;
   uint32_t mine = (early & ~ja) | (v & ~jb), done = 0;
   int offered = 0;
@@ -5884,7 +5897,7 @@ PREP_SMALL void eng_render(float* l, float* r, uint32_t n) {
     int pick = -1;
     for (int i = kTasks - 1; i >= 0; --i) {
       if (!((mine >> i) & 1u)) continue;
-      if (pick < 0 || (i < ENG_TRACKS && pick < ENG_TRACKS && task_cost[i] > task_cost[pick])) pick = i;
+      if (pick < 0 || (i < ENG_TRACKS && pick < ENG_TRACKS && est[i] > est[pick])) pick = i;
     }
     if (jb && !(jobs & 2)) hand_b(0);
     run_task(pick, n);
@@ -5895,7 +5908,7 @@ PREP_SMALL void eng_render(float* l, float* r, uint32_t n) {
     if (hand_b(offered)) break;         // soon as it is free (offered: they are its, once its first job ends)
     int pick = -1;
     for (int i = 0; i < ENG_TRACKS; ++i)
-      if (((jb >> i) & 1u) && (pick < 0 || task_cost[i] < task_cost[pick])) pick = i;
+      if (((jb >> i) & 1u) && (pick < 0 || est[i] < est[pick])) pick = i;
     run_task(pick, n);
     jb &= ~(1u << pick);
   }
@@ -5918,6 +5931,7 @@ PREP_SMALL void eng_render(float* l, float* r, uint32_t n) {
     if ((todo >> i) & 1u) {
       task_cost[i] += (static_cast<float>(task_ticks[i]) - task_cost[i]) * 0.125f;
       filt_cost[i] += (static_cast<float>(filt_ticks[i]) - filt_cost[i]) * 0.125f;   // (its filter's share)
+      if (gate_rose[i]) task_hit[i] += (static_cast<float>(task_ticks[i]) - task_hit[i]) * 0.25f;
     }
   if (w_job && warps_calls)
     warps_chunk_cost += (static_cast<float>(task_ticks[kTaskWarps]) / static_cast<float>(warps_calls) -
