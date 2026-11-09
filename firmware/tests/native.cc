@@ -4261,6 +4261,16 @@ int main(int argc, char** argv) {
       q40.lock[0] = plock_t{1, 3, TP_NOTE, 191};   // (+12 over -24..24)
       ok &= eng_upgrade(&q40, sizeof q40) && eng_check(&q40) && q40.lock[0].v == note_byte_v41(191) &&
             static_cast<int>(std::floor(-48.0f + q40.lock[0].v * (108.0f / 255.0f) + 0.5f)) == 12;
+      for (int t = 0; t < 8; ++t) {     // (0.16.67) a project of 0.16.66 (41): its NOTE as it is, its theme on the new
+        static project_t q41;           // list (the six gone on Mono, Graphite 7 -> 6)
+        eng_defaults(&q41);
+        q41.version = 41;
+        q41.theme = static_cast<uint8_t>(t);
+        for (int i = 0; i < ENG_PLOCKS; ++i) q41.lock[i].lane = 0xFF;
+        q41.lock[0] = plock_t{1, 3, TP_NOTE, 200};
+        ok &= eng_upgrade(&q41, sizeof q41) && eng_check(&q41) && q41.version == PROJECT_VERSION &&
+              q41.lock[0].v == 200 && q41.theme == (t == 7 ? 6 : 0);
+      }
     }
     eng_play(1);
     int vmax = 0;

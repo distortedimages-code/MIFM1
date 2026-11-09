@@ -4791,6 +4791,12 @@ MI_COLD void sds_in(project_t* p) {      // (0.16.49) 0.16.43's to 0.16.48's num
       p->lock[i].v = static_cast<uint8_t>(sds_at(p->lock[i].v));
 }
 MI_COLD void taurus_in(project_t* p) { models_from(p, 16); }   // (0.16.20)
+// (0.16.67) a project before: its theme (app.c's THEMES) in the list before: Acid, Ember, Neon, Ice, Rust, Mono,
+// Mutable, Graphite. Now Mono, the arcade's five, Graphite: the ones gone on Mono, Graphite where it is now
+MI_COLD void theme_v42(project_t* p) {
+  static const uint8_t kTo[8] = {0, 0, 0, 0, 0, 0, 0, 6};
+  p->theme = kTo[p->theme & 7u];
+}
 // (0.16.66) a project before: NOTE -24..24 (C1 to C5), now -48..60 (C-1 to C8: all the keyboard reaches, its octaves
 // up and down; the live recording's high notes, out of it, were left a trig on the track's note). Its locks' bytes
 // over the new travel, the same notes
@@ -5060,13 +5066,15 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
     climb_v39(p);
     easel_in(p);
     note_widen(p);
+    theme_v42(p);
     return 1;
   }
-  if (v >= 38 && v <= 40 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
-    p->version = PROJECT_VERSION;       // (0.16.59's to 0.16.65's: the same layout; 0.16.60: CLIMB a step's alone,
-    if (v == 38) climb_v39(p);          // 0.16.63: EASEL at 21, 0.16.66: NOTE wider)
+  if (v >= 38 && v <= 41 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+    p->version = PROJECT_VERSION;       // (0.16.59's to 0.16.66's: the same layout; 0.16.60: CLIMB a step's alone,
+    if (v == 38) climb_v39(p);          // 0.16.63: EASEL at 21, 0.16.66: NOTE wider, 0.16.67: the themes)
     if (v <= 39) easel_in(p);
-    note_widen(p);
+    if (v <= 40) note_widen(p);
+    theme_v42(p);
     return 1;
   }
   if (v >= 27 && v <= 32 && bytes == static_cast<int>(sizeof(project_v32)) && p->size == sizeof(project_v32)) {
@@ -5087,6 +5095,7 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
     pads_v37_in(p);
     climb_v39(p);
     note_widen(p);
+    theme_v42(p);
     return 1;
   }
   if (!upgrade_any(p, bytes)) return 0;   // (0.16.32: before 0.16, a project is no longer read: 0)
@@ -5097,6 +5106,7 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
   pads_v37_in(p);
   easel_in(p);
   note_widen(p);
+  theme_v42(p);
   return 1;
 }
 MI_COLD int upgrade_any(project_t* p, int bytes) {

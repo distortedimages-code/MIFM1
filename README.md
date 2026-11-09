@@ -1061,8 +1061,8 @@ exactement (zéro). Son niveau, pris sur ses noires, est celui de TAURUS. Une vo
 en moins). Les projets et les sons enregistrés avant se relisent : EASEL prend la place 21, SPEECH et les autres
 modèles de Plaits passent un cran plus loin.
 
-L'écran est noir, ses lumières aux couleurs de Mutable Instruments (bleu-vert, orange, rose, celles de leurs
-icônes). En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis
+L'écran est noir (le thème Mono, celui d'un projet neuf ; six autres plus bas, **Les couleurs**), ses lumières en
+blanc, argent et rouge. En haut, l'icône du module dans un anneau de sa couleur, son nom en grand et une ligne sur son état. Puis
 les quatre potards côte à côte, dans l'ordre des KNOB 1 à 4 : un anneau fin allumé de son début (ou de son milieu,
 avec « − + ») jusqu'à la valeur, la valeur dedans, un câble en pointillé et son point d'arrivée dans l'autre couleur,
 la source écrite dessous. En bas les quatre pistes, une LED chacune allumée par sa gate dans la couleur de son modèle,
@@ -1106,7 +1106,7 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **SEL** | le mode MOD (voir plus bas) ; **tenu** : la matrice de la piste |
 | **SAVE tenu** | sauvegarde le pattern dans sa case (à l'arrêt) ; EDIT tenu, avec une touche blanche : le son de la piste dans ce preset |
 | **GLO** | TEMPO, SCALE, ROOT, SWING ; SELECT : le projet (INIT) et la machine ; GLO encore : retour |
-| **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en noir sur la couleur du thème. Les réglages restent ; pendant 4 s (cinq carrés jaunes en bas), **GLO** les remet comme avant ALL au début de la mesure suivante (GLO encore avant la mesure : ils restent) |
+| **GLO tenu + potard** | **ALL** : le même réglage sur les 4 pistes (ex. DECAY) ; GLO tenu + ALGORITHM : le même modèle. Tant que GLO est tenu, l'écran passe en noir sur la couleur ALL du thème. Les réglages restent ; pendant 4 s (cinq carrés jaunes en bas), **GLO** les remet comme avant ALL au début de la mesure suivante (GLO encore avant la mesure : ils restent) |
 | **ENV tenu + potard** | **RND** : l'aléatoire de ce réglage (avec GLO tenu aussi : sur les 4 pistes) |
 | **REC tenu** (pas) | efface la piste de pas affichée : ses trigs, ses locks, ses aléatoires (et les câbles d'une piste) |
 | **GLO + REC tenus 3 s** | **ERASE ALL**, depuis n'importe quelle page : tout revient comme dans un projet neuf (INIT) sauf **les quatre sons** (leurs modèles et leurs réglages : le son, l'enveloppe de Plaits, la gate, la hauteur), **le tempo, la gamme et sa tonique** : plus de pas, de locks, d'aléatoires (aucun potard RND), de câbles ni d'Endless ; les niveaux comme neufs, les pans au centre, pas de filtre (ni l'EQ, ni le filtre de piste : OFF), aucun envoi, le circuit bending coupé, les LFO, les effets (delay, réverbe, Warps coupé), le duck et le bus master comme neufs, pas de swing, la dose d'aléatoire et TRAUMA à 0. La sortie, la qualité de Warps et le thème restent |
@@ -1746,13 +1746,15 @@ canal droit inversé, ils reçoivent tout le mix, en mono (une oreille en opposi
 « dans la tête »). Pour la stéréo, un casque sans micro ou un adaptateur casque/micro. Le réglage reste quand on
 charge un autre projet.
 
-**Les couleurs** (GLO, SELECT, K4) : huit thèmes, chacun un fond sombre et trois couleurs pour l'état des modules
-(celles que les icônes et les anneaux prennent) et ALL : **Acid** (citron vert, violet, rouge orangé), **Ember**
-(or, orange, cramoisi sur un noir chaud), **Neon** (menthe, lavande, rose sur indigo), **Ice** (cyan, pervenche,
-magenta), **Rust** (vert-de-gris, rouille, jaune danger sur graphite), **Mono** (blanc, argent, rouge) et
-**Mutable** (le teal, l'orange et le rose des modules, ceux des versions 0.1 à 0.3.6) et **Graphite** (des gris et
-une seule lumière, orange, comme le Machinedrum d'Elektron : celui de la démo dans le navigateur). Comme la sortie et la
-qualité de Warps, le thème reste quand on charge un autre projet ; il est gardé avec le projet sauvegardé.
+**Les couleurs** (GLO, SELECT, K4) : sept thèmes, chacun un fond, trois couleurs pour l'état des modules (celles que
+les icônes et les anneaux prennent) et celle d'ALL. **Mono** (blanc, argent, rouge sur noir, celui d'un projet neuf),
+puis cinq d'arcade au fond en couleur : **Phantom** (le rouge de Persona 5 en fond, blanc, noir, jaune), **Neo Geo**
+(bleu nuit, jaune, rouge, blanc), **Wario** (violet, jaune, rose, cyan), **Game Boy** (les quatre verts de l'écran
+d'origine) et **Papier** (clair : encre noire sur papier, orange et bleu) ; enfin **Graphite** (des gris et une seule
+lumière, orange, comme le Machinedrum d'Elektron : celui de la démo dans le navigateur). ALL passe le dessin en noir
+sur sa couleur quel que soit le fond, même clair. Depuis 0.16.67, Acid, Ember, Neon, Ice, Rust et Mutable ne sont
+plus là : un projet qui les avait se rouvre en Mono (Graphite reste Graphite). Comme la sortie et la qualité de
+Warps, le thème reste quand on charge un autre projet ; il est gardé avec le projet sauvegardé.
 
 **Le clavier** relance la note à chaque touche, même jouée legato, et une touche tapée très vite sonne quand même.
 Depuis 0.16.15, il **garde les touches tenues** : une voix seule (la FM, ZERO, Plaits, les batteries, POLY en Mono…)

@@ -375,7 +375,7 @@ shot 16b_project.png
 turn K3 1
 turn K4 2
 wait 400
-shot 16b2_hq_neon.png
+shot 16b2_hq_neogeo.png
 turn K3 -1
 turn K4 -2
 wait 300

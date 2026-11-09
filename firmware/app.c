@@ -81,45 +81,44 @@ int mi_res_check(const uint8_t *payload, uint32_t len);   /* mi/res_symbols.cc: 
 #define FOOT_Y 204
 #define FOOT_H 36
 
-/* the colours: a theme (GLO's second face, K4), each a dark panel, its greys, three accents (the module's state as its
- * icons print it: in Mutable Instruments' colours, teal, orange and pink) and the colour ALL fills the screen with */
+/* the colours: a theme (GLO's second face, K4), its panel, its greys, three accents (the module's state as its icons
+ * print it: Mutable Instruments' teal, orange and pink at first; by bank since) and the colour ALL fills the screen
+ * with. (0.16.67) Mono, the arcade's five (their panels in colour: Persona 5's red, Neo Geo's blue, WarioWare's purple,
+ * the Game Boy's green, paper), Graphite; Acid, Ember, Neon, Ice, Rust and Mutable gone (a project's theme from before
+ * read onto these: engine.cc theme_v42) */
 typedef struct {
     const char *name;
     uint16_t bg, txt, hi, muted, dim;
     uint16_t track, off, rule, sel;      /* a ring's travel unlit (1 px), an LED off, a rule, the chosen row */
     uint16_t a1, a2, a3, knock;
 } theme_t;
-#define NTHEMES 8
-#define THEME_GRAPHITE 7                 /* (the browser emulator's demo: its drawn machine's greys and orange) */
+#define NTHEMES 7
+#define THEME_GRAPHITE 6                 /* (the browser emulator's demo: its drawn machine's greys and orange) */
 static const theme_t THEMES[NTHEMES] = {
-    {"Acid",                             /* black; lime, violet, a red-orange */
-     RGB(0, 0, 0), RGB(236, 240, 228), RGB(255, 255, 255), RGB(150, 154, 146), RGB(102, 106, 98),
-     RGB(58, 62, 54), RGB(46, 50, 42), RGB(34, 38, 30), RGB(42, 46, 38),
-     RGB(184, 255, 46), RGB(160, 112, 255), RGB(255, 84, 46), RGB(200, 255, 0)},
-    {"Ember",                            /* a warm black; gold, orange, crimson */
-     RGB(18, 10, 6), RGB(244, 230, 207), RGB(255, 247, 232), RGB(170, 148, 126), RGB(118, 100, 82),
-     RGB(66, 52, 40), RGB(54, 42, 32), RGB(42, 31, 23), RGB(58, 42, 30),
-     RGB(255, 201, 74), RGB(255, 108, 44), RGB(230, 36, 78), RGB(255, 108, 44)},
-    {"Neon",                             /* indigo; mint, lavender, pink */
-     RGB(11, 8, 32), RGB(236, 232, 255), RGB(255, 255, 255), RGB(154, 147, 191), RGB(106, 99, 144),
-     RGB(50, 44, 86), RGB(40, 34, 72), RGB(30, 25, 58), RGB(44, 37, 84),
-     RGB(60, 242, 208), RGB(180, 140, 255), RGB(255, 79, 163), RGB(60, 242, 208)},
-    {"Ice",                              /* a blue black; cyan, periwinkle, magenta */
-     RGB(4, 9, 15), RGB(230, 241, 250), RGB(255, 255, 255), RGB(142, 163, 181), RGB(94, 113, 130),
-     RGB(38, 52, 64), RGB(30, 42, 52), RGB(22, 32, 41), RGB(30, 44, 57),
-     RGB(69, 224, 255), RGB(124, 140, 255), RGB(255, 79, 216), RGB(69, 224, 255)},
-    {"Rust",                             /* a graphite; verdigris, rust, a hazard yellow */
-     RGB(10, 12, 12), RGB(232, 228, 218), RGB(250, 247, 240), RGB(150, 148, 140), RGB(100, 98, 92),
-     RGB(54, 57, 55), RGB(43, 46, 44), RGB(32, 35, 34), RGB(42, 46, 44),
-     RGB(78, 196, 164), RGB(226, 100, 42), RGB(242, 196, 48), RGB(226, 100, 42)},
     {"Mono",                             /* black; white, silver, red */
      RGB(0, 0, 0), RGB(237, 237, 237), RGB(255, 255, 255), RGB(154, 154, 154), RGB(102, 102, 102),
      RGB(58, 58, 58), RGB(46, 46, 46), RGB(36, 36, 36), RGB(46, 46, 46),
      RGB(245, 245, 245), RGB(176, 176, 176), RGB(255, 42, 42), RGB(255, 42, 42)},
-    {"Mutable",                          /* 0.1 to 0.3.6: black; teal, orange, pink (the modules' LEDs), ALL yellow */
-     RGB(0, 0, 0), RGB(240, 239, 235), RGB(255, 255, 255), RGB(154, 151, 152), RGB(107, 104, 105),
-     RGB(60, 58, 59), RGB(48, 46, 47), RGB(38, 36, 37), RGB(46, 44, 45),
-     RGB(24, 201, 212), RGB(255, 178, 46), RGB(255, 74, 125), RGB(255, 214, 0)},
+    {"Phantom",                          /* Persona 5: a red panel; white, black, yellow; ALL white */
+     RGB(196, 0, 26), RGB(255, 255, 255), RGB(255, 255, 255), RGB(233, 158, 168), RGB(220, 102, 118),
+     RGB(211, 66, 86), RGB(208, 51, 72), RGB(205, 41, 63), RGB(209, 56, 76),
+     RGB(255, 255, 255), RGB(10, 10, 10), RGB(255, 224, 0), RGB(255, 255, 255)},
+    {"Neo Geo",                          /* a night blue panel; yellow, red, white */
+     RGB(8, 26, 110), RGB(255, 255, 255), RGB(255, 255, 255), RGB(166, 173, 203), RGB(112, 122, 171),
+     RGB(65, 79, 143), RGB(52, 67, 136), RGB(43, 58, 130), RGB(52, 67, 136),
+     RGB(255, 212, 0), RGB(255, 52, 52), RGB(255, 255, 255), RGB(255, 212, 0)},
+    {"Wario",                            /* WarioWare: a purple panel; yellow, pink, cyan */
+     RGB(58, 14, 114), RGB(255, 244, 192), RGB(255, 255, 255), RGB(184, 161, 164), RGB(141, 111, 147),
+     RGB(103, 67, 132), RGB(93, 55, 128), RGB(86, 46, 125), RGB(93, 55, 128),
+     RGB(255, 224, 26), RGB(255, 79, 168), RGB(70, 230, 255), RGB(255, 224, 26)},
+    {"Game Boy",                         /* the DMG's four greens */
+     RGB(15, 56, 15), RGB(155, 188, 15), RGB(216, 240, 112), RGB(105, 140, 15), RGB(74, 111, 15),
+     RGB(47, 86, 15), RGB(40, 80, 15), RGB(35, 74, 15), RGB(40, 80, 15),
+     RGB(200, 232, 90), RGB(110, 154, 18), RGB(224, 248, 208), RGB(155, 188, 15)},
+    {"Papier",                           /* light: paper, ink; orange, black, blue */
+     RGB(236, 232, 223), RGB(20, 20, 20), RGB(0, 0, 0), RGB(98, 96, 93), RGB(145, 143, 138),
+     RGB(186, 183, 176), RGB(197, 194, 186), RGB(206, 202, 195), RGB(197, 194, 186),
+     RGB(255, 74, 0), RGB(20, 20, 20), RGB(36, 86, 255), RGB(255, 74, 0)},
     {"Graphite",                         /* greys and one light, orange (Elektron's Machinedrum: a graphite panel, an
                                           * aluminium sleeve): orange, silver, a pale orange */
      RGB(12, 12, 13), RGB(232, 232, 229), RGB(255, 255, 255), RGB(150, 150, 147), RGB(100, 100, 98),
@@ -136,9 +135,9 @@ static const theme_t *th = &THEMES[0];
 #define OFF (th->off)
 #define RULE (th->rule)
 #define SEL (th->sel)
-#define AC1 (th->a1)                     /* (Mutable's teal) */
-#define AC2 (th->a2)                     /* (orange) */
-#define AC3 (th->a3)                     /* (pink) */
+#define AC1 (th->a1)                     /* (Plaits' bank, the speech; Mutable's teal at first) */
+#define AC2 (th->a2)                     /* (MIFM1's voices; orange at first) */
+#define AC3 (th->a3)                     /* (the drums, the noises, the physical ones; pink at first) */
 #define KNOCK (th->knock)
 
 /* ------------------------------------------------------------------ state --- */
@@ -1294,8 +1293,8 @@ static void vicon(float cx, float cy, float s, float w, uint16_t c, int which, i
 
 /* -------------------------------------------------------------- drawing --- */
 /* ALL (GLO held a moment, or with a knob): the screen in the theme's KNOCK colour, everything on it knocked out in
- * black, until GLO is let go. Each canvas goes out through blit: its pixels by their brightness, from KNOCK (black)
- * to black (white) */
+ * black, until GLO is let go. Each canvas goes out through blit: its pixels by their brightness, from KNOCK (the
+ * panel's) to black (the text's; 0.16.67: between the theme's own two, a panel in colour or light as a black one) */
 static int knock;
 /* another face of the module (SELECT): its knobs slide in, pushing the others out (each row drawn shifted by slide_s
  * px, only its part on the screen sent); the module's display stays, its names written again (dec) */
@@ -1305,11 +1304,15 @@ static int32_t slide_s;
 static void blit(uint32_t x, uint32_t y)
 {
     if (knock) {
+        int32_t lb = (int32_t)(((BG >> 11) * 16u + ((BG >> 5) & 63u) * 20u + (BG & 31u) * 8u) / 8u);   /* 0..250 */
+        int32_t dl = (int32_t)(((TXT >> 11) * 16u + ((TXT >> 5) & 63u) * 20u + (TXT & 31u) * 8u) / 8u) - lb;
+        if (dl > -8 && dl < 8)
+            dl = dl < 0 ? -8 : 8;
         for (uint32_t i = 0, n = cv_w * cv_h; i < n; i++) {
             uint32_t c = swap16(cv_px[i]);
-            uint32_t l = ((c >> 11) * 16u + ((c >> 5) & 63u) * 20u + (c & 31u) * 8u) / 8u;   /* 0..250 */
-            l = l * 3u / 2u;
-            l = l > 255u ? 0u : 255u - l;   /* what is left of the colour */
+            int32_t q = (int32_t)(((c >> 11) * 16u + ((c >> 5) & 63u) * 20u + (c & 31u) * 8u) / 8u);
+            q = (q - lb) * 384 / dl;        /* the panel 0, the text 384 (a black panel: x 1.5, as before) */
+            uint32_t l = q <= 0 ? 255u : q > 255 ? 0u : 255u - (uint32_t)q;   /* what is left of the colour */
             cv_px[i] = swap16((uint16_t)(((uint32_t)(KNOCK >> 11) * l / 255u) << 11 |
                                          ((uint32_t)((KNOCK >> 5) & 63u) * l / 255u) << 5 |
                                          (uint32_t)(KNOCK & 31u) * l / 255u));
