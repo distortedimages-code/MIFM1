@@ -200,6 +200,8 @@ Les histoires des machines récentes (POLY, REV3, TAURUS, VOCODER, CHOIR, STATIC
 photos d'archives depuis la 0.16.44, et METAL la sienne : la plaque EMT 140 (1957), puis l'Erbe-Verb de Tom Erbe et
 Make Noise (2014). La slide du SDS (0.16.49) a l'histoire des hexagones (Dave Simmons, Richard James Burgess, Warren
 Cann qui essaie le SDS 8 pour Electronics & Music Maker), le schéma de sa voix, la mesure du tom et deux photos.
+Depuis la 0.16.81, la fiche du SDS TOM a la longueur de ses voisines : ce qu'elle disait des potards (BEND depuis
+le milieu, HIT à verrouiller pas par pas, le modèle de chaque pas) est passé dans l'introduction du SDS.
 
 **Le sommaire et les carrousels** (0.16.46). Passé le sommaire, une barre reste en haut de la page : les sept chapitres,
 celui qu'on lit marqué, et le lien vers Audiotrauma. Les machines, les filtres et les effets sont des **carrousels** :
