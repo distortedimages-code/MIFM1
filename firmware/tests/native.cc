@@ -25,6 +25,7 @@ extern "C" int mi_res_check(const uint8_t* payload, uint32_t len);
 extern "C" void eng_test_bend(int t, float* x, uint32_t n);   // (0.16.74: engine.cc, PLAT_HOST)
 extern "C" void eng_test_split(const float* cost, float prep, uint32_t early, uint32_t voices, uint32_t* ja,
                                uint32_t* jb, float* worst);   // (0.16.77)
+extern "C" void eng_test_poison(int t);   // (0.16.82)
 
 extern "C" {
 uint32_t plat_ticks24(void) {
@@ -7786,6 +7787,118 @@ int main(int argc, char** argv) {
            ja == fx ? "yes" : "no", jb, c0, c1, worst, old_end, lw, hw);
     if (std::max(c0, c1) > 80.0f || std::fabs(std::max(c0, c1) - worst) > 0.01f || lw > 66.0f || hw > 95.5f)
       ++failures, printf("FAIL: the cores' split\n");
+  }
+
+  {                                     // 84. (0.16.82) PADS high up, and a NaN in the mix. LAYER on Bell, a chord over
+    // C7 with TRANSP up: the bell over 12.6 kHz, its modulator's phase grew without end, a NaN; the pad silent for good,
+    // the effects and the master with it (the whole machine). Now the bell an octave down there, the pad sound; a NaN
+    // all the same (a voice gone wrong, eng_test_poison) silences a block of the mix, not the machine, every sound
+    // made new at the next block, the sequencer going on. (The first key here: before, silent, the pad's gate left high
+    // by the tests before, as STOP twice left it: pads_silence lets it down)
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    eng_play(0);
+    eng_defaults(p);
+    eng_fresh();
+    const int pads = eng_model_find(MK_PADS, 0);
+    eng_set_model(3, pads);
+    p->val[PG_PADS5 * 4 + 0] = 1.0f;    // (Bell)
+    p->val[PG_PADS5 * 4 + 1] = 1.0f;
+    p->val[PG_PADS5 * 4 + 3] = 14.0f;   // (TRANSP: two octaves up)
+    int nan_hi = 0;
+    double e_hi[3] = {0.0, 0.0, 0.0}, e_after = 0.0;
+    for (int kk = 0; kk < 3; ++kk) {    // (the keys, then C4 again: the pad sounding after them)
+      const int note = 96 + 12 * kk;
+      eng_key(3, note, 1);
+      for (int b = 0; b < 300; ++b) {
+        eng_render(l, r, 128);
+        for (int i = 0; i < 128; ++i) {
+          if (!std::isfinite(l[i]) || !std::isfinite(r[i])) nan_hi = 1;
+          e_hi[kk] += l[i] * l[i];
+        }
+      }
+      eng_key(3, note, 0);
+      for (int b = 0; b < 100; ++b) eng_render(l, r, 128);
+    }
+    eng_key(3, 60, 1);
+    for (int b = 0; b < 300; ++b) {
+      eng_render(l, r, 128);
+      for (int i = 0; i < 128; ++i) {
+        if (!std::isfinite(l[i])) nan_hi = 1;
+        e_after += l[i] * l[i];
+      }
+    }
+    eng_key(3, 60, 0);
+    eng_key_release_all();
+    // the pad alone over its notes and settings: every LAYER (TRANSP at its ends, CHARACTER too), every TEXTURE, the
+    // notes from 0 to 150, each followed by C4: no NaN, sounding after each
+    float k[8], x4[4], x5[4];
+    int ch[8], raised, pad_nan = 0, pad_dead = 0, cases = 0;
+    for (int ly = 0; ly <= 8; ++ly)
+      for (int tx = 0; tx <= 4; ++tx)
+        for (int tr : {-14, 14})
+          for (float la : {0.0f, 1.0f}) {
+            pads_init();
+            pads_defaults(k);
+            pads_page4_defaults(x4);
+            pads_page5_defaults(x5);
+            x4[2] = static_cast<float>(tx), x4[3] = 1.0f;
+            x5[0] = static_cast<float>(ly), x5[1] = 1.0f, x5[2] = la, x5[3] = static_cast<float>(tr);
+            pads_set_page4(x4);
+            pads_set_page5(x5);
+            for (float note : {0.0f, 100.0f, 115.0f, 130.0f, 150.0f, 60.0f}) {
+              const int cn = pads_chord(0, 0, 0, 0xAB5, k[1], ch, &raised);
+              pads_set(note, k, ch, cn, 0, 0xAB5);
+              pads_gate(1);
+              double e = 0.0;
+              for (int b = 0; b < 120; ++b) {
+                float tmp[32];
+                pads_render(tmp, 32);
+                for (int i = 0; i < 32; ++i) {
+                  if (!std::isfinite(tmp[i])) pad_nan = 1;
+                  e += tmp[i] * tmp[i];
+                }
+              }
+              pads_gate(0);
+              for (int b = 0; b < 40; ++b) {
+                float tmp[32];
+                pads_render(tmp, 32);
+              }
+              if (note == 60.0f && std::sqrt(e / (120.0 * 32.0)) < 0.01) ++pad_dead;
+            }
+            ++cases;
+          }
+    pads_init();
+    // a NaN into T1's mix, the default pattern playing: every output finite, the sound back after it
+    eng_defaults(p);
+    eng_fresh();
+    eng_play(1);
+    double e_before = 0.0, e_back = 0.0;
+    int nan_mix = 0, silent = 0;
+    for (int b = 0; b < 1200; ++b) {
+      if (b == 600) eng_test_poison(0);
+      eng_render(l, r, 128);
+      double e = 0.0;
+      for (int i = 0; i < 128; ++i) {
+        if (!std::isfinite(l[i]) || !std::isfinite(r[i])) nan_mix = 1;
+        e += l[i] * l[i] + r[i] * r[i];
+      }
+      if (b >= 300 && b < 600) e_before += e;
+      if (b >= 900) e_back += e;
+      if (b >= 600 && b < 610 && e == 0.0) ++silent;
+    }
+    eng_play(0);
+    const double back = 10.0 * std::log10((e_back + 1e-12) / (e_before + 1e-12));
+    const double e_min = std::min(e_hi[0], std::min(e_hi[1], e_hi[2]));
+    printf("PADS high up (Bell, TRANSP +14, keys 96 108 120): NaN %s, their energy %.0f %.0f %.0f, C4 after them %s (%.0f); "
+           "the pad alone, %d settings x 6 notes: NaN %s, silent after %d; a NaN into T1's mix: the output %s, %d silent "
+           "blocks, the sound back %+.1f dB\n", nan_hi ? "YES" : "none", e_hi[0], e_hi[1], e_hi[2],
+           e_after > 1.0 ? "sounding" : "SILENT", e_after, cases, pad_nan ? "YES" : "none", pad_dead,
+           nan_mix ? "NaN" : "finite", silent, back);
+    if (nan_hi || e_min < 0.3 * e_after || e_after <= 1.0 || pad_nan || pad_dead || nan_mix || silent < 1 || back < -6.0)
+      ++failures, printf("FAIL: PADS high up, a NaN in the mix\n");
+    eng_defaults(p);
+    eng_fresh();
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

@@ -59,7 +59,7 @@ static const float kWebWarps[2][6] = {   /* Warps, its algorithm's mark (Eco, HQ
     {569.6f, 567.0f, 637.7f, 538.2f, 585.4f, 605.8f},
     {983.6f, 978.4f, 1119.7f, 920.9f, 1015.1f, 1056.0f},
 };
-static const float kWebFx[2] = {519.4f, 543.2f};   /* the effects, the mix and the master bus (OFF, COMP) */
+static const float kWebFx[2] = {520.9f, 544.6f};   /* the effects, the mix and the master bus (OFF, COMP) */
 static const float kWebFxEq = 37.3f, kWebFxDuck = 6.9f, kWebFxDelay = 14.5f;   /* a track's EQ (playing), the duck on a track, the delay's filter and drive */
 static const float kWebFxWarps = 87.6f;   /* Warps in the mix (the rest of the stress test's effects) */
 static const float kWebFxSpread = 75.2f;   /* (0.16.19) a track's SPREAD */
@@ -67,4 +67,4 @@ static const float kWebFxMetal[2] = {78.3f, 113.6f};   /* (0.16.41) the reverb M
 static const float kWebFxBbd = 21.6f;   /* (0.16.65) the delay's BBD: over the clean one's */
 static const float kWebFxRev = 229.4f, kWebFxDly = 75.4f;   /* (0.16.71) the reverb, the delay: awake (in kWebFx) */
 static const float kWebFxSkip[2] = {5.2f, 7.8f};   /* (0.16.71) asleep: their clocks moved on */
-static const float kWebPrep = 375.0f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.9f;   /* the preparation: its floor, a track playing, a cable */
+static const float kWebPrep = 396.1f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.9f;   /* the preparation: its floor, a track playing, a cable */

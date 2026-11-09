@@ -469,6 +469,24 @@ MI_COLD void pads_silence(void) {
   pad.he = 0.0f;
   pad.nf = 0;
   for (int i = 0; i < kMaxV; ++i) pad.vg[i] = 0.0f;
+  // (0.16.82) its gate down, as the engine's (vgate: 0, a key still held a new trig). Before, a gate high at STOP twice
+  // stayed high here: the next rise, not one for the pad, its first chord silent
+  pad.gate = 0;
+  pad.let_go = 0;
+  // (0.16.82) every state that rings made new as well (the voices' own at the next trig, from silence): whatever went
+  // wrong in one (a NaN, a value run away), silent here, sounding again at the next trig
+  pad.bell_c = pad.bell_m = 0.0f;
+  pad.lp1 = pad.lp2 = pad.dcx = pad.dcy = pad.pend = 0.0f;
+  pad.dust_v = pad.crack = 0.0f;
+  for (int f = 0; f < 3; ++f) pad.vs[f][0] = pad.vs[f][1] = 0.0f;
+  for (int j = 0; j < 4; ++j) pad.as[j][0] = pad.as[j][1] = 0.0f;
+  pad.alp = pad.sw_lp = 0.0f;
+  for (int j = 0; j < 3; ++j) {
+    pad.swx[j] = 0.0f, pad.swy[j] = 1.0f;
+    pad.hx[j][0] = pad.hx[j][1] = 0.0f, pad.hy[j][0] = pad.hy[j][1] = 1.0f;
+  }
+  for (int i = 0; i < 4; ++i)
+    for (int j = 0; j < 3; ++j) pad.mx[i][j] = 0.0f, pad.my[i][j] = 1.0f;
 }
 
 // (0.16.57) the fourth page (0.16.59: WAVE, ENSEMBLE 0..1, TEXTURE a choice 0..4, its AMOUNT 0..1): the engine's,
@@ -1037,7 +1055,13 @@ MI_COLD __attribute__((noinline)) void pad_trig(Pad& v, int ly, float la, float 
   v.let_go = 0;
   v.alive = 1;
   if (ly == LY_BELL && v.nv > 0) {    // the bell: on the top note, an octave up; CHARACTER its index (as 0.16.57's
-    v.bell_hz = note_hz(v.pitch[v.nv - 1] + 12.0f + v.lt[v.nv - 1]);   // at 0.5: x 1/2 .. x 2)
+    float hz = note_hz(v.pitch[v.nv - 1] + 12.0f + v.lt[v.nv - 1]);   // at 0.5: x 1/2 .. x 2)
+    // (0.16.82) its modulator (3.5 x) under 0.44 of the rate: higher, the bell an octave down, as often as it takes.
+    // Before, over 12.6 kHz (a high chord, TRANSP up) the modulator's phase stepped more than a cycle a sample, its wrap
+    // (one cycle) fell behind, the phase grew without end: the sine's fit off its cycle, huge, then a NaN, the pad
+    // silent for good (its phase never wrapped back, not even STOP twice made it new)
+    while (hz * 3.5f > 0.44f * kSr) hz *= 0.5f;
+    v.bell_hz = hz;
     v.bell_e = lv;
     v.bell_i = exp2_b(2.0f * la - 1.0f);
   }
@@ -1345,6 +1369,13 @@ void pads_render(float* out, uint32_t n) {
   v.gn = norm;
   v.lring = ring > 0.0f || v.sw_on;
   v.dust_h = d_h, v.dust_v = d_v, v.crack = d_cr, v.rnd = d_rnd;
+  // (0.16.82) a state gone wrong (a NaN, a value run away: the DC blocker's sees all the pad gives, the layer's too):
+  // this block silent, the pad made new, sounding again at the next trig
+  if (!(fm_fabsf(dcy) < 1e6f)) {
+    for (uint32_t i = 0; i < n; ++i) out[i] = 0.0f;
+    pads_silence();
+    return;
+  }
   if (v.att >= 1.0f && !(held && v.gate && !v.let_go) && v.env < 1e-5f && v.bell_e < 1e-4f && ring == 0.0f &&
       !v.sw_on) {
     v.alive = 0;

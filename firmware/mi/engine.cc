@@ -2976,6 +2976,24 @@ __attribute__((noinline)) void spread_track(int t, const float* x, uint32_t n, f
   }
 }
 
+// (0.16.82) a block's mix with a NaN or an infinity in it (a voice gone wrong): the block silent (nothing of it
+// reaches the effects, the master or the USB: their states stay sound), the tracks' filters made new here (their
+// states the mix's), and at the next block every sound made new, as STOP twice does (cut_now), the sequencer going on:
+// the sound back at the next trigs. Before, the NaN reached the reverb, the delay and the master, the whole machine
+// silent until STOP twice; for good when the voice's own state stayed wrong (PADS' bell over 12.6 kHz)
+volatile uint8_t mix_nan;
+#ifdef PLAT_HOST
+int test_poison = -1;                   // (the tests: a NaN into this track's next mix)
+#endif
+MI_COLD __attribute__((noinline)) void mix_poisoned(uint32_t n) {
+  for (uint32_t i = 0; i < n; ++i) fx_rsend[i] = fx_dsend[i] = fx_dry_l[i] = fx_dry_r[i] = 0.0f;
+  for (int t = 0; t < ENG_TRACKS; ++t) {
+    for (uint32_t i = 0; i < n; ++i) mbuf[t][i] = 0.0f;
+    eq_p[t]->f[0].Init();
+    eq_p[t]->f[1].Init();
+  }
+  mix_nan = 1;
+}
 void mix_job(uint32_t n) {
   float inv = 1.0f / static_cast<float>(n);
   if (mj.dst >= 0 && !mj.idle) {         // Warps' output in its track's place, the modulator's track silenced
@@ -3075,7 +3093,11 @@ void mix_job(uint32_t n) {
   }
   const float *x0 = mbuf[0], *x1 = mbuf[1], *x2 = mbuf[2], *x3 = mbuf[3];
   static_assert(ENG_TRACKS == 4, "the mix's four tracks");
-  for (uint32_t i = 0; i < n; ++i) {
+#ifdef PLAT_HOST
+  if (test_poison >= 0) mbuf[test_poison][n / 2] = -__builtin_nanf(""), test_poison = -1;   // (the tests: a NaN)
+#endif
+  float chk = 0.0f;                      // (0.16.82) the dry mix's sum: a NaN or an infinity in it if in any track's
+  for (uint32_t i = 0; i < n; ++i) {     // block (a gain of 0 times a NaN: a NaN)
     const float x[ENG_TRACKS] = {x0[i], x1[i], x2[i], x3[i]};
     float s = 0.0f, ds = 0.0f, dl = 0.0f, dr = 0.0f;
     for (int t = 0; t < ENG_TRACKS; ++t) {
@@ -3094,7 +3116,9 @@ void mix_job(uint32_t n) {
     fx_dsend[i] = ds;
     fx_dry_l[i] = dl;
     fx_dry_r[i] = dr;
+    chk += dl;
   }
+  if (!(fm_fabsf(chk) < 1e30f)) mix_poisoned(n);
   for (int t = 0; t < ENG_TRACKS; ++t) mj.pk[t] = pk[t];
   int spread = 0;
   for (int t = 0; t < ENG_TRACKS; ++t) {  // (0.16.19) SPREAD: the tracks spread, their sides
@@ -4955,6 +4979,7 @@ MI_COLD void eng_test_bend(int t, float* x, uint32_t n) {   // (0.16.74, the tes
   set_bend(t);                                             // its knobs as the last block took them)
   apply_bend(t, x, n);
 }
+MI_COLD void eng_test_poison(int t) { test_poison = t; }   // (0.16.82, the tests: a NaN into track t's next mix)
 #endif
 MI_COLD int eng_bits2_view(int t, float* hz, float* now) {   // (0.16.74) BAND's side (-1 the lows, 1 the highs, 0 all),
   if (t < 0 || t >= ENG_TRACKS) return 0;                     // its cutoff; MIX as FOLLOW weighs it now
@@ -5735,7 +5760,12 @@ PREP_SMALL void eng_render(float* l, float* r, uint32_t n) {
     cut_now();
     for (uint32_t i = 0; i < n; ++i) l[i] = r[i] = 0.0f;
     cut_req = 0;
+    mix_nan = 0;
     return;
+  }
+  if (mix_nan) {                        // (0.16.82) a NaN in the last block's mix (mix_poisoned): every sound made
+    mix_nan = 0;                        // new, the sequencer going on (this block's mix silent: fx_n 0)
+    cut_now();
   }
   uint32_t t0 = plat_ticks24();
   // 0. what can start at once, on core 1 while core 0 prepares the block: the effects (the last block's mix) and

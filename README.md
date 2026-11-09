@@ -643,7 +643,11 @@ une corde lancée sonne jusqu'au bout, même si on change de couche.
 
 - **Bell** : la **cloche FM** sur la note du haut, une octave au-dessus (deux opérateurs, 1 : 3,5, son index qui retombe
   vite, son niveau lentement) ; avant 0.16.57, la première TEXTURE. CHARACTER (*Bright*) : son index, de moitié moins à
-  deux fois plus (une cloche ronde, une cloche brillante).
+  deux fois plus (une cloche ronde, une cloche brillante). Depuis la 0.16.82, une cloche au-dessus de 5,5 kHz descend
+  d'une octave (autant de fois qu'il faut) : son modulateur reste sous 0,44 de la fréquence d'échantillonnage. Avant,
+  au-dessus de 12,6 kHz (un accord aigu, TRANSP vers le haut), la phase du modulateur avançait de plus d'un cycle par
+  échantillon, ne revenait plus jamais dans son cycle et finissait en NaN : le pad muet pour de bon, même après STOP
+  deux fois.
 - **Chime** : un carillon à vent. Une des quatre notes du haut, deux octaves au-dessus, frappée au trig puis de temps en
   temps tant que l'accord sonne, plus ou moins fort ; chaque frappe, les trois premiers modes d'une barre libre (1 :
   2,756 : 5,404), chacun sa retombée. CHARACTER (*Wind*) : le vent, une frappe toutes les 1,6 s en moyenne à gauche,
@@ -1113,6 +1117,13 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 
 Les appuis tenus (SAVE, REC pour effacer ou charger, SEL pour la matrice) affichent en bas ce qu'ils vont faire et
 cinq carrés qui se vident un à un : lâcher avant le dernier annule. Ceux qui effacent ou écrasent durent une seconde.
+
+**Un son qui part en vrille** (0.16.82). Si une voix sort un NaN ou un infini (un bug), le mixage le voit avant les
+effets : ce bloc-là est muet (rien n'atteint le delay, la réverbe, le master ni l'USB), puis, au bloc suivant, tous les
+sons repartent de zéro comme après STOP STOP, mais le séquenceur continue : le son revient aux trigs suivants. Avant,
+le NaN gagnait la réverbe, le delay et le master, et la machine entière restait muette jusqu'à STOP STOP, ou pour de
+bon si la voix elle-même ne s'en remettait pas (la cloche des PADS très haut). Les PADS se remettent aussi à zéro tout
+seuls, et STOP STOP baisse leur gate : avant, le premier accord après pouvait rester muet.
 
 La charge de calcul est toujours affichée en haut à droite (le cœur le plus chargé, en %) ; GLO puis SELECT
 détaille ce que coûte chaque piste, Warps et les effets (FX : le mixer, le delay, la réverbe et le bus master). En
