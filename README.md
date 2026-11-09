@@ -165,65 +165,34 @@ sur un moteur ou un filtre, le charge sur la piste jouée (`firmware/web.c` web_
 voiture, des enceintes de studio) ou montrer la machine sans elle. Les potards se tournent en glissant vers le haut
 ou le bas ; sur un ordinateur, des raccourcis clavier jouent les touches. SAVE tenu garde le projet dans le
 navigateur. L'écran du téléphone reste allumé tant que la page joue ; sur iPhone, le son passe même en mode
-silencieux, celui des exemples aussi, sans avoir allumé la machine (0.16.29).
+silencieux (0.16.29).
 
-**Les exemples à jouer** (0.16.25 ; dessinés en 0.16.30). Le long des articles, de petits modules : un bouton Play, et
-**le schéma est le potard** : chacun dessine ce qu'il explique, et on le joue en tirant ce dessin (au doigt, à la
-souris ou aux flèches, le dessin pris au clavier). Papier et encre, la poignée en orange, ce qui est mesuré en
-bleu-vert ; un son simple à chaque fois (une forme d'onde, un kick seul, un charleston seul), jamais une séquence à
-plusieurs pistes. Chacun joue le **vrai code** : une deuxième copie du firmware compilé, dans son propre worklet audio,
-jamais démarrée comme machine (`firmware/web.c` lab_*, `web/emu/app_worklet.js`) ; et ce qu'il dessine vient d'une
-troisième, sur la page elle-même, qui ne joue jamais : réglée comme l'exemple, elle mesure le filtre, rend le coup,
-écrit les valeurs comme l'écran du FM-1. Le dessin est donc là sans avoir rien allumé, et il suit le son quand il joue.
-- **LADDER, MS-20, SEM** : la courbe du filtre, mesurée sur sa réponse impulsionnelle (son module du moteur, réglé
-  comme les potards), et sous elle les harmoniques d'une dent de scie grave (La 1, 55 Hz, sans repliement) qui passent
-  ou non ; on tire le point de coupure (à gauche, à droite : CUTOFF ; vers le haut : RESO), une barre à gauche pour
-  DRIVE (le SEM : passe-bas, bande, passe-haut). Quand la résonance dépasse le seuil, le filtre **chante tout seul** :
-  une sinusoïde à lui, marquée à sa hauteur.
-- **VOX** : la carte des voyelles (F2 de gauche à droite, F1 de haut en bas, celles de Peterson et Barney), le chemin
-  a, e, i, o, u que suit CUTOFF ; on glisse le point le long du chemin, RESO à droite, la voix en dessous.
-- **KICK** : un coup figé, rendu par le moteur : son onde qui s'éteint et sa hauteur qui tombe (mesurée à ses passages
-  par zéro, de 379 à 56 Hz) ; on tire SWEEP et DECAY dans le temps, WAVE à gauche.
-- **P-locks** (nouveau) : un kick seul sur 16 pas, la ligne pointillée le potard, et chaque pas qui garde sa valeur à
-  lui (sa note, ou son DECAY) ; on tire la barre d'un pas, double-clic pour l'enlever.
-- **Euclide** (nouveau) : un cercle de 16 pas et N coups répartis au mieux (le calcul du séquenceur) ; au centre on en
-  met plus ou moins, sur l'anneau on le tourne.
-- **Ratchets** : les charlestons seuls sur les contretemps, un pas agrandi : où tombent ses coups (CURVE les
-  rapproche ou les écarte), à quel volume, à quelle hauteur (CLIMB).
+**Les petites animations** (0.16.79). Les exemples à jouer (de la 0.16.25 à la 0.16.78 : de petits modules qu'on
+jouait en tirant leur schéma, chacun sur deux copies de plus du firmware, l'une dans son propre worklet audio, l'autre
+sur la page pour le dessin) sont retirés : ils alourdissaient la page, et `firmware/web.c` comme
+`web/emu/app_worklet.js` perdent leur code (~1 500 lignes de moins en tout). À leur place, huit petites animations,
+rien que du SVG et du CSS, au pied des fiches :
+- **KICK** : un coup, son onde qui s'éteint, sa hauteur qui tombe (en pointillé) ;
+- **SDS TOM** : la hauteur qui descend moins vite que le son ne s'éteint ;
+- **TAURUS** : l'oscillateur B (bleu-vert) qui bat lentement contre A ;
+- **VOCODER** : les bandes de la voix qui ouvrent et ferment celles du synthé ;
+- **CHOIR** : trois formants qui glissent d'une voyelle à l'autre, les harmoniques qui tremblent en vibrato ;
+- **STATIC** : l'anneau de cuivre d'ARC, les étincelles de SPARK ;
+- **la réverbe** : un coup, puis ses réflexions, de plus en plus denses, qui s'éteignent ;
+- **Warps** : la porteuse fois la modulante, le produit d'un modulateur en anneau.
 
-TAURUS, STATIC et Warps gardent pour l'instant leur écran noir (spectre ou niveau en
-direct, leurs 16 pas dessous) et leurs potards : ils seront dessinés à leur tour. Depuis la 0.16.44, trois de plus,
-sur le même écran :
-- **CHOIR** : la soprano seule sur une ligne lente en fa mineur (un pas par croche), chaque note tenue jusqu'à la
-  suivante : elle glisse de l'une à l'autre ; VOICES, VOWEL, TIMBRE, BREATH. Mesuré : ses notes à 5 dB près l'une de
-  l'autre seule, à 2,5 dB en chœur ;
-- **VOCODER** : SPEECH dit ses mots sur T3, muette, le VOCODER de T4 les chante (MOD T3) sur la progression Lament,
-  un accord par mesure, le kick dessous ; TONE, ENSEMBLE, SHIFT, AIR ;
-- **METAL** : les stabs de la démo, ouverts et une octave plus haut, envoyés loin dans la réverbe ; DECAY (jusqu'à
-  Freeze), SIZE, TONE, et MODE pour passer à SHIMMER.
-- **SDS** (0.16.49) : un SDS sur trois pistes, comme ses canaux : la grosse caisse (1, 9, 11), la caisse claire sur le
-  deux et le quatre (une note fantôme frappée doucement au pas 8 : HIT verrouillé), le roulement de toms qui descend la
-  fin de la mesure, un peu de réverbe ; le BEND et le DECAY des toms, la BALANCE de la caisse claire, le CLICK de la
-  grosse caisse. Sa slide a aussi l'histoire des hexagones (Dave Simmons, Richard James Burgess, Warren Cann qui essaie
-  le SDS 8 pour Electronics & Music Maker), le schéma de sa voix, la mesure du tom et deux photos.
-
-En 0.16.45, TAURUS joue une boucle (sans légende depuis la 0.16.46) : le kick sur chaque temps, la caisse claire sur
-le deux et le quatre, la basse qui galope entre les kicks sur les doubles croches (fa mineur, ses sauts d'octave), la
-dent de scie du Minimoog poussée dans l'échelle ; CUTOFF, EMPH, CONTOUR, DECAY. TRAUMA et la dose d'aléatoire n'ont
-plus d'exemple depuis la 0.16.46 : un peu de mystère. Et les potards des filtres **glissent** (~10 ms, par 16
-échantillons) : un doigt qui tire le dessin envoie ses valeurs par à-coups (~60 par seconde), RESO et DRIVE sautaient
-et crépitaient sur un téléphone ; la recherche du réglage juste sous l'auto-oscillation (la courbe dessinée quand le
-filtre chante) se fait par moitiés, 7 mesures au lieu de 50 par image.
+Elles ne bougent que tant qu'elles sont à l'écran, et restent entières et immobiles quand le système demande moins de
+mouvement. Pour entendre un moteur, « Essayer » le charge toujours sur la machine.
 
 Les histoires des machines récentes (POLY, REV3, TAURUS, VOCODER, CHOIR, STATIC, et EASEL depuis la 0.16.63) ont leurs
-photos d'archives depuis la 0.16.44, et METAL la sienne : la plaque EMT 140 (1957), puis l'Erbe-Verb de Tom Erbe et Make Noise (2014). Un seul son à la fois sur la page : un
-exemple lancé arrête celui d'avant et met la machine en pause là où elle en est ; toucher la machine, « Essayer » ou
-l'allumer arrête l'exemple et la relance.
+photos d'archives depuis la 0.16.44, et METAL la sienne : la plaque EMT 140 (1957), puis l'Erbe-Verb de Tom Erbe et
+Make Noise (2014). La slide du SDS (0.16.49) a l'histoire des hexagones (Dave Simmons, Richard James Burgess, Warren
+Cann qui essaie le SDS 8 pour Electronics & Music Maker), le schéma de sa voix, la mesure du tom et deux photos.
 
 **Le sommaire et les carrousels** (0.16.46). Passé le sommaire, une barre reste en haut de la page : les sept chapitres,
 celui qu'on lit marqué, et le lien vers Audiotrauma. Les machines, les filtres et les effets sont des **carrousels** :
 une slide par machine (ou par groupe : les six batteries, les deux batteries FM, les bruits et modèles physiques), avec
-tout ce qui la concerne, sa fiche, son exemple, son histoire et ses photos ; on passe de l'une à l'autre par ses
+tout ce qui la concerne, sa fiche, son histoire et ses photos ; on passe de l'une à l'autre par ses
 onglets, les flèches, un glissement du doigt ou les flèches du clavier. Le carrousel prend la hauteur de la slide
 montrée. En 0.16.47, tous les textes de la page sont réécrits, en anglais et en français : un ton plus scientifique et
 plus curieux, des anecdotes vérifiées (Émilie Gillet et ses mots dans le manuel de Plaits, la découverte de la FM par
