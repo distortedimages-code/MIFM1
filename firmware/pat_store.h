@@ -22,6 +22,10 @@
  *
  * Main loop only (an erase or a write stops the sound for a moment: plat.h). Included by app.c, and by
  * tests/pat_store_test.c (a simulated flash, power cuts anywhere) */
+#ifndef PAT_SMALL                        /* (0.16.69: app.c's APP_SMALL, its code small rather than fast; a test's
+                                          * as it is) */
+#define PAT_SMALL
+#endif
 #define PAT_BANKS 11
 #define PAT_PER_BANK 16
 #define PAT_SLOTS (PAT_BANKS * PAT_PER_BANK)   /* the patterns' keys: 0 .. 175 */
@@ -89,7 +93,7 @@ static uint16_t pat_crc(const uint8_t *p, uint32_t n)   /* CRC-16/CCITT-FALSE */
 /* LZSS: a flags byte (bit set: a literal) then up to 8 items; a match 2 bytes, its distance (1..4095) on 12 bits,
  * its length (3..18) on 4. One candidate a position (a hash of its 3 bytes): quick, and enough for a project */
 static uint32_t lz_hash(const uint8_t *p) { return ((p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16) * 2654435761u) >> 22; }
-static uint32_t lz_pack(const uint8_t *in, uint32_t n, uint8_t *out, uint32_t max)   /* bytes out, 0: no room */
+PAT_SMALL static uint32_t lz_pack(const uint8_t *in, uint32_t n, uint8_t *out, uint32_t max)   /* bytes out, 0: no room */
 {
     uint16_t head[1024];
     uint32_t i = 0, o = 0, fpos = 0, bit = 0;
@@ -132,7 +136,7 @@ static uint32_t lz_pack(const uint8_t *in, uint32_t n, uint8_t *out, uint32_t ma
     }
     return o;
 }
-static int lz_unpack(const uint8_t *in, uint32_t n, uint8_t *out, uint32_t max)   /* bytes out, < 0 bad */
+PAT_SMALL static int lz_unpack(const uint8_t *in, uint32_t n, uint8_t *out, uint32_t max)   /* bytes out, < 0 bad */
 {
     uint32_t i = 0, o = 0;
     while (i < n) {
@@ -161,7 +165,7 @@ static int lz_unpack(const uint8_t *in, uint32_t n, uint8_t *out, uint32_t max) 
     return (int)o;
 }
 
-static int pat_write(uint32_t at, const uint8_t *p, uint32_t n)   /* from RAM, never across a 256-byte page */
+PAT_SMALL static int pat_write(uint32_t at, const uint8_t *p, uint32_t n)   /* from RAM, never across a 256-byte page */
 {
     while (n) {
         uint32_t k = 256u - (at & 255u);
@@ -173,7 +177,7 @@ static int pat_write(uint32_t at, const uint8_t *p, uint32_t n)   /* from RAM, n
     return 0;
 }
 
-static int pat_rec_at(uint32_t at, pat_rec_t *r)   /* 1: a committed record whose bytes are whole */
+PAT_SMALL static int pat_rec_at(uint32_t at, pat_rec_t *r)   /* 1: a committed record whose bytes are whole */
 {
     const uint8_t *f = plat_data(at);
     if (!f)
@@ -183,7 +187,7 @@ static int pat_rec_at(uint32_t at, pat_rec_t *r)   /* 1: a committed record whos
            pat_key(r) < PAT_KEYS && pat_crc(f + sizeof *r, r->len) == r->crc;
 }
 
-static int pat_format(uint32_t i)        /* erased, and MIFM1's: its header */
+PAT_SMALL static int pat_format(uint32_t i)        /* erased, and MIFM1's: its header */
 {
     pat_sec_t h = {PAT_SEC_MAGIC, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
     pat_end[i] = PAT_USE;
@@ -220,7 +224,7 @@ static uint32_t pat_walk(uint32_t i, pat_visit_t fn, void *arg)
 
 static uint32_t *pat_best, *pat_rank;    /* (pat_init: each slot's sequence number so far, the move its copy came in) */
 static uint32_t pat_newest_seq;
-static void pat_visit_init(uint32_t at, const pat_rec_t *r, int ok, void *arg)
+PAT_SMALL static void pat_visit_init(uint32_t at, const pat_rec_t *r, int ok, void *arg)
 {
     uint32_t rank = *(const uint32_t *)arg, k = pat_key(r);
     if (!ok)
@@ -250,7 +254,7 @@ static int pat_full(int slot)            /* 1: a pattern there (a preset: its ke
     return r.kind != 0;
 }
 
-static int pat_init(void)                /* at boot: each slot's record; the sectors not MIFM1's erased and made its */
+PAT_SMALL static int pat_init(void)                /* at boot: each slot's record; the sectors not MIFM1's erased and made its */
 {
     uint32_t best[PAT_KEYS], rank[PAT_KEYS], live[PAT_NSEC];
     pat_ok = plat_data(pat_sec(0)) && plat_data(pat_sec(PAT_NSEC - 1u));
@@ -297,7 +301,7 @@ static uint32_t pat_rec_size(const pat_rec_t *r) { return (uint32_t)sizeof *r + 
 typedef struct {
     uint32_t live;
 } pat_live_t;
-static void pat_visit_live(uint32_t at, const pat_rec_t *r, int ok, void *arg)
+PAT_SMALL static void pat_visit_live(uint32_t at, const pat_rec_t *r, int ok, void *arg)
 {
     if (ok && pat_at[pat_key(r)] == at)
         ((pat_live_t *)arg)->live += pat_rec_size(r);
@@ -307,7 +311,7 @@ typedef struct {
     uint32_t to;
     int err;
 } pat_move_t;
-static void pat_visit_move(uint32_t at, const pat_rec_t *r, int ok, void *arg)   /* a live record copied to ->to */
+PAT_SMALL static void pat_visit_move(uint32_t at, const pat_rec_t *r, int ok, void *arg)   /* a live record copied to ->to */
 {
     pat_move_t *m = (pat_move_t *)arg;
     uint8_t buf[256];
@@ -329,7 +333,7 @@ static void pat_visit_move(uint32_t at, const pat_rec_t *r, int ok, void *arg)  
 
 /* room again: the sector with the most dead records gives its live ones to the empty one kept for this, and is
  * erased (the empty one from then on). 0 done, -1 nothing to gain */
-static int pat_gc(void)
+PAT_SMALL static int pat_gc(void)
 {
     int sp = -1, v = -1;
     uint32_t vdead = 0;
@@ -364,7 +368,7 @@ static int pat_gc(void)
     return pat_format((uint32_t)v);
 }
 
-static int pat_place(uint32_t need)      /* a sector with room for need bytes (the last empty one kept), -1 none */
+PAT_SMALL static int pat_place(uint32_t need)      /* a sector with room for need bytes (the last empty one kept), -1 none */
 {
     int empty = 0, first_empty = -1;
     for (uint32_t i = 0; i < PAT_NSEC; i++) {
@@ -380,7 +384,7 @@ static int pat_place(uint32_t need)      /* a sector with room for need bytes (t
 }
 
 /* 0 done, -1 no room, -2 flash, -3 room to make (pat_quick) */
-static int pat_append(int slot, uint32_t kind, const uint8_t *p, uint32_t n)
+PAT_SMALL static int pat_append(int slot, uint32_t kind, const uint8_t *p, uint32_t n)
 {
     pat_rec_t r;
     uint32_t need = (uint32_t)sizeof r + ((n + 3u) & ~3u), at;
@@ -417,7 +421,7 @@ static int pat_append(int slot, uint32_t kind, const uint8_t *p, uint32_t n)
  * bytes; every knob, lock and trig at random some 3100). (0.16.68: it was refused before being packed, from 0.16.2 on,
  * its 3820 bytes over 3808: NOT SAVED) */
 #define PAT_REC_MAX (PAT_USE - (uint32_t)sizeof(pat_sec_t) - (uint32_t)sizeof(pat_rec_t))   /* 3808 */
-static int pat_save(int slot, const void *src, uint32_t n)
+PAT_SMALL static int pat_save(int slot, const void *src, uint32_t n)
 {
     uint8_t buf[PAT_REC_MAX];
     uint32_t k;
@@ -436,7 +440,7 @@ static int pat_save(int slot, const void *src, uint32_t n)
     return e;
 }
 
-static int pat_erase(int slot)           /* 0 done (or nothing there), -1 no room, -2 flash, -3 (pat_quick) */
+PAT_SMALL static int pat_erase(int slot)           /* 0 done (or nothing there), -1 no room, -2 flash, -3 (pat_quick) */
 {
     int e;
     if (!pat_full(slot))
@@ -447,7 +451,7 @@ static int pat_erase(int slot)           /* 0 done (or nothing there), -1 no roo
     return e;
 }
 
-static int pat_load(int slot, void *dst, uint32_t max)   /* its bytes into dst: their count, < 0 none or bad */
+PAT_SMALL static int pat_load(int slot, void *dst, uint32_t max)   /* its bytes into dst: their count, < 0 none or bad */
 {
     pat_rec_t r;
     const uint8_t *f;

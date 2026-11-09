@@ -612,6 +612,7 @@ shot 18p2_patterns_order.png
 release SEQ
 wait 300
 shot 18p3_patterns_stay.png
+leds
 tap SEQ
 wait 300
 shot 18p3b_pattern_a2_new.png
@@ -675,6 +676,7 @@ key 0 down
 key 0 up
 wait 300
 shot 18p9c_open_a1_alone.png
+leds
 press EDIT
 wait 450
 shot 18q1_presets_factory.png

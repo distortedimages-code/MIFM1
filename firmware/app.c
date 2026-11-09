@@ -58,10 +58,12 @@
 /* (0.16.31) the screens seen less often drawn small rather than fast (their pixels are gfx.c's, as fast as ever): the
  * machine's, the matrix, the panels of the bits, the glitch, the filter, the envelopes, the LFOs, the mixer, Warps,
  * Endless and the Euclidean rhythms. A few kilobytes of program flash for a little time a frame there */
-#define APP_SMALL __attribute__((minsize))
 /* (0.16.31) the screen's parts drawn small rather than fast (their pixels are gfx.c's, as fast as ever): 4 KB of
- * program flash, for a few microseconds a frame */
+ * program flash, for a few microseconds a frame. (0.16.69) draw's own (the pages' choice, what it inlines) and input
+ * (the buttons, keys, knobs and LEDs, once a frame) too, and the patterns' store (pat_store.h: its flash, a press
+ * away): some 1.3 KB, for the patterns' LEDs and room after them */
 #define APP_SMALL __attribute__((minsize))
+#define PAT_SMALL APP_SMALL
 #include "mi/bridge.h"                   /* (the filters' models and types: MF_*) */
 
 const void *mi_res_where(void);          /* mi/res_symbols.cc: where the moved tables are (FM-1: the region) */
@@ -5021,7 +5023,7 @@ static void trauma_close(void)
     }
 }
 
-static void draw(void)
+APP_SMALL static void draw(void)
 {
     int k = held(B_GLO) && !all.press && (ui.used[B_GLO] || plat_ms() - ui.down_at[B_GLO] >= 250u);
     const theme_t *t = &THEMES[eng_project()->theme % NTHEMES];
@@ -6254,7 +6256,7 @@ static void poll_keys(void)
     ui.keys = keys;
 }
 
-static void input(void)
+APP_SMALL static void input(void)
 {
     uint32_t now = plat_ms(), btn = plat_buttons(), k;
     int32_t e;
@@ -6547,8 +6549,16 @@ static void input(void)
                 if (eng_lfo_phase(i) < 0.5f)
                     kk |= 1u << W[i];
         }
-        if (pat_open)                    /* (0.16.68) the patterns: SEQ lit, the bank's black key */
-            bb = 1u << B_SEQ | (bb & (LED_PLAY_GREEN | 1u << B_SAVE)), kk = 1u << Bk[pat_bank], mk = 0;
+        if (pat_open) {                  /* (0.16.68) the patterns: SEQ lit; (0.16.69) the bank's black key, its
+                                          * saved ones' white keys, the one playing blinking */
+            bb = 1u << B_SEQ | (bb & (LED_PLAY_GREEN | 1u << B_SAVE));
+            kk = 1u << Bk[pat_bank], mk = 0;
+            for (int i = 0; i < 16; i++) {
+                int s = pat_bank * PAT_PER_BANK + i;
+                if (!!pat_full(s) != (s == pat_cur && ((now / 250u) & 1u)))
+                    kk |= 1u << W[i];
+            }
+        }
         plat_leds(bb, kk);
         plat_lights_mid(0, mk);
         plat_glow(1);
