@@ -55,6 +55,11 @@
    brightest (FOLD, XOR, COMPARATOR) up high (tests/native.cc 25: ECO against 6x, -36 to -47 dB apart, XOR -18).
    MIFM1 plays ECO unless GLO's machine page (K3) says HQ.
 
+9. `plaits/dsp/voice.cc` (MIFM1 0.16.1): the engines MIFM1 does not play registered as a silent one, in their
+   places (the others keep their numbers: speech, swarm, noise, particles, string, modal). (0.16.70) Its `Render` no
+   longer fetches the six-op FM's factory banks (`fm_patches_table`) for engines 2..4, silent: that reference alone
+   kept `syx_bank_0..2` (12 KB) in the image. Nothing else reads them.
+
 Not changed, but used differently from the modules: Marbles and Tides 2 run at the control rate (Marbles 8 frames
 per audio block, Tides one), their time constants given that rate; Clouds' granular processor (written for 32 kHz)
 is not played yet (Rings, measured at v0.0, is no longer part of the firmware: Plaits' MODAL and STRING models

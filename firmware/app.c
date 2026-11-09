@@ -4100,6 +4100,52 @@ static void draw_row(int page, int32_t sh)
 #define INTRO_RULE_Y (INTRO_NAME_Y + 32)
 #define INTRO_LINE_Y (INTRO_RULE_Y + 6)
 #include "logo_font.h"
+/* (0.16.70) a row of runs (a byte: the coverage << 4 | the length - 1; tools/gen_logo_font.py's fonts, the TRAUMA
+ * slogan's glyphs) w pixels from x, at the canvas row py, blended as cv_text blends (in: the row in the band); where
+ * the next row's runs start */
+static const uint8_t *run_row(const uint8_t *p, int32_t px, int32_t py, int32_t w, int in, uint16_t c)
+{
+    uint32_t r = c >> 11, gg = (c >> 5) & 63u, b = c & 31u;
+    for (int32_t k = 0; k < w;) {
+        uint32_t v = *p++, a = v >> 4, n = (v & 15u) + 1u;
+        for (uint32_t m = 0; in && a && m < n; m++) {
+            uint32_t at = (uint32_t)py * cv_w + (uint32_t)(px + (int32_t)m);
+            if ((uint32_t)(px + (int32_t)m) >= cv_w)
+                continue;
+            if (a == 15u) {
+                cv_px[at] = swap16(c);
+            } else {
+                uint32_t bg = swap16(cv_px[at]), br = bg >> 11, bgg = (bg >> 5) & 63u, bb = bg & 31u;
+                cv_px[at] = swap16(((r * a + br * (15u - a)) / 15u) << 11 |
+                                   ((gg * a + bgg * (15u - a)) / 15u) << 5 | (b * a + bb * (15u - a)) / 15u);
+            }
+        }
+        k += (int32_t)n;
+        px += (int32_t)n;
+    }
+    return p;
+}
+
+/* (0.16.70) cv_text for a font whose glyphs are rows of runs (FONT_LOGO, FONT_RAND): the same pixels from a third of
+ * the bytes */
+static int32_t cv_text_runs(int32_t x, int32_t y, const felucca_font_t *f, const char *s, uint16_t c)
+{
+    for (; *s; s++) {
+        uint32_t gi = glyph(f, (uint8_t)*s);
+        const uint8_t *p = f->data + f->off[gi];
+        for (int32_t row = 0; row < (int32_t)f->h; row++) {
+            int32_t py = y + row + cv_oy;
+            p = run_row(p, x - f->pad, py, f->bw[gi], py >= cv_y0 && py < cv_y1, c);
+        }
+        x += f->adv[gi];
+    }
+    return x;
+}
+
+static int32_t intro_glyphs(int32_t x, int32_t y, const felucca_font_t *f, const char *s, uint16_t c)
+{
+    return f == &FONT_LOGO ? cv_text_runs(x, y, f, s, c) : cv_text(x, y, f, s, c);
+}
 static const char LOGO_SIGNS[] = "#%+0268";   /* (tools/gen_logo_font.py: the font has these, and the name's) */
 static const char TEXT_SIGNS[] = "ABCDEFGHJKLMNPRSTUVWXYZ0123456789#%/*+";
 static int intro_on;
@@ -4122,7 +4168,7 @@ static void intro_text(int32_t x, int32_t y, const felucca_font_t *f, const char
         int32_t w = text_w(f, one);
         uint32_t land = t0 + (t1 - t0) * (uint32_t)(i + 1) / (uint32_t)n;
         if (t >= land || s[i] == ' ') {
-            cv_text(x, y, f, one, c);
+            intro_glyphs(x, y, f, one, c);
         } else {                         /* a sign about as wide as the letter (Syne's are wide: a # over an I would
                                           * cover its neighbours) */
             char fit[48];
@@ -4135,7 +4181,7 @@ static void intro_text(int32_t x, int32_t y, const felucca_font_t *f, const char
             }
             h ^= h >> 15;
             r[0] = nf ? fit[(h >> 8) % (uint32_t)nf] : g[(h >> 8) % (uint32_t)ng];
-            cv_text(x + (w - text_w(f, r)) / 2, y, f, r, accent3((int)(h % 3u)));
+            intro_glyphs(x + (w - text_w(f, r)) / 2, y, f, r, accent3((int)(h % 3u)));
         }
         x += w;
     }
@@ -4220,7 +4266,7 @@ static void rand_word(const char *w, int row, int32_t y, uint32_t t, int n, uint
         if (t < 120u)
             ;                            /* (not yet) */
         else if (t >= land && !thrown) {
-            cv_text(x, y, &FONT_RAND, one, c);
+            cv_text_runs(x, y, &FONT_RAND, one, c);
         } else {                         /* a sign about as wide as the letter */
             char fit[16];
             int nf = 0;
@@ -4231,7 +4277,7 @@ static void rand_word(const char *w, int row, int32_t y, uint32_t t, int n, uint
                     fit[nf++] = RAND_SIGNS[k];
             }
             r[0] = nf ? fit[(h >> 8) % (uint32_t)nf] : w[i];
-            cv_text(x + (lw - text_w(&FONT_RAND, r)) / 2, y, &FONT_RAND, r, c);
+            cv_text_runs(x + (lw - text_w(&FONT_RAND, r)) / 2, y, &FONT_RAND, r, c);
         }
         x += lw;
     }
@@ -4871,30 +4917,12 @@ static uint32_t trauma_lang_at;          /* since when */
 static void noise_glyph(const noise_glyph_t *g, const uint8_t *runs, int32_t x, int32_t y, uint16_t c)
 {
     const uint8_t *p = runs + g->off;
-    uint32_t r = c >> 11, gg = (c >> 5) & 63u, b = c & 31u;
     int32_t y0 = y + g->y0 + cv_oy;
     for (int32_t row = 0; row < (int32_t)g->h; row++) {
-        int32_t py = y0 + row, px = x + g->x0;
-        int in = py >= cv_y0;
+        int32_t py = y0 + row;
         if (py >= cv_y1)
             break;                       /* (the rows under the band: none needed) */
-        for (int32_t k = 0; k < (int32_t)g->w;) {
-            uint32_t v = *p++, a = v >> 4, n = (v & 15u) + 1u;
-            for (uint32_t m = 0; in && a && m < n; m++) {
-                uint32_t at = (uint32_t)py * cv_w + (uint32_t)(px + (int32_t)m);
-                if ((uint32_t)(px + (int32_t)m) >= cv_w)
-                    continue;
-                if (a == 15u) {
-                    cv_px[at] = swap16(c);
-                } else {
-                    uint32_t bg = swap16(cv_px[at]), br = bg >> 11, bgg = (bg >> 5) & 63u, bb = bg & 31u;
-                    cv_px[at] = swap16(((r * a + br * (15u - a)) / 15u) << 11 |
-                                       ((gg * a + bgg * (15u - a)) / 15u) << 5 | (b * a + bb * (15u - a)) / 15u);
-                }
-            }
-            k += (int32_t)n;
-            px += (int32_t)n;
-        }
+        p = run_row(p, x + g->x0, py, g->w, py >= cv_y0, c);   /* (0.16.70: run_row, the fonts' too) */
     }
 }
 

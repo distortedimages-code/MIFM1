@@ -3227,7 +3227,7 @@ MI_COLD int eng_page_lane(int page) {
 
 // the Euclidean rhythm: fills spread over len steps as evenly as they go (step i has one when i * fills, modulo len,
 // is under fills: the first step always), then turned rot steps later
-int eng_euclid(int len, int fills, int rot, int step) {
+MI_COLD int eng_euclid(int len, int fills, int rot, int step) {
   if (len < 1 || fills < 1 || step < 0 || step >= len) return 0;
   if (fills >= len) return 1;
   int i = ((step - rot) % len + len) % len;
@@ -3245,7 +3245,7 @@ int eng_endless_opt(int t, int o) {
     default: return 0;
   }
 }
-void eng_endless_opt_set(project_t* p, int t, int o, int v) {
+MI_COLD void eng_endless_opt_set(project_t* p, int t, int o, int v) {
   if (t < 0 || t >= ENG_TRACKS) return;
   uint8_t* b = p->endless_opt[t];
   if (o == EO_STRIDE) b[0] = static_cast<uint8_t>((b[0] & ~7u) | static_cast<unsigned>(v < 1 ? 1 : v > 7 ? 7 : v));
@@ -3263,15 +3263,15 @@ int eng_climb_opt(int t, int o) {
   if (o == CL_SHAPE) { int v = static_cast<int>(b >> 6); return v >= CLSH_N ? CLSH_RAMP : v; }
   return 0;
 }
-void eng_climb_opt_set(project_t* p, int t, int o, int v) {
+MI_COLD void eng_climb_opt_set(project_t* p, int t, int o, int v) {
   if (t < 0 || t >= ENG_TRACKS) return;
   unsigned b = p->endless_opt[t][3];
   if (o == CL_ON) b = (b & ~0x30u) | static_cast<unsigned>(v < 0 ? 0 : v >= CLON_N ? CLON_N - 1 : v) << 4;
   else if (o == CL_SHAPE) b = (b & 0x3Fu) | static_cast<unsigned>(v < 0 ? 0 : v >= CLSH_N ? CLSH_N - 1 : v) << 6;
   p->endless_opt[t][3] = static_cast<uint8_t>(b);
 }
-const char* eng_climb_on_name(int v) { return kClimbOn[v < 0 || v >= CLON_N ? 0 : v]; }
-int eng_climb_lim(int lane, int step) {   // (0.16.60) a step's LIMIT
+MI_COLD const char* eng_climb_on_name(int v) { return kClimbOn[v < 0 || v >= CLON_N ? 0 : v]; }
+MI_COLD int eng_climb_lim(int lane, int step) {   // (0.16.60) a step's LIMIT
   int i = lane >= 0 && lane < ENG_TRACKS ? lock_find(lane, step, kTpClimbLim) : -1;
   return i >= 0 && proj.lock[i].v ? proj.lock[i].v : ENG_CLIMB_LIM;
 }
@@ -3293,10 +3293,12 @@ MI_COLD int eng_climb_lim_set(int lane, int step, int v) {   // 0 ok, -1 no room
   ++lock_gen;
   return 0;
 }
-const char* eng_climb_shape_name(int v) { return kClimbShape[v < 0 || v >= CLSH_N ? 0 : v]; }
+MI_COLD const char* eng_climb_shape_name(int v) { return kClimbShape[v < 0 || v >= CLSH_N ? 0 : v]; }
 
-const char* eng_speed_name(int s) { return kSpeedNames[(s + 4) < 0 ? 0 : (s + 4) >= ENG_SPEEDS ? ENG_SPEEDS - 1 : s + 4]; }
-const char* eng_dir_name(int d) { return kDirNames[d < 0 || d >= DIR_N ? 0 : d]; }
+MI_COLD const char* eng_speed_name(int s) {
+  return kSpeedNames[(s + 4) < 0 ? 0 : (s + 4) >= ENG_SPEEDS ? ENG_SPEEDS - 1 : s + 4];
+}
+MI_COLD const char* eng_dir_name(int d) { return kDirNames[d < 0 || d >= DIR_N ? 0 : d]; }
 int eng_ratch_hits(int r, int* span) {
   r = r < 1 ? 1 : r > ENG_RATCH_MAX ? ENG_RATCH_MAX : r;
   if (span) *span = (r - 1) / 16 + 1;
@@ -3406,8 +3408,8 @@ int eng_lx_knob(int param) {            // an FM drum's knob (lx_knob): which, -
   return own_knobs(t) && i >= 0 && i < LX_KNOBS ? i : -1;
 }
 
-int eng_voc_play(int param) { return voc_play_param(param); }
-int eng_voc_chord(int t, float* out) {  // (0.16.28) VOCODER's chord now (Manual's, a progression's): its notes
+MI_COLD int eng_voc_play(int param) { return voc_play_param(param); }
+MI_COLD int eng_voc_chord(int t, float* out) {  // (0.16.28) VOCODER's chord now (Manual's, a progression's): its notes
   if (t < 0 || t >= ENG_TRACKS || track_kind(t) != MK_VOCODER || voc_pl(t) <= 0) return 0;
   for (int i = 0; i < vc_n[t]; ++i) out[i] = vc_ch[t][i];
   return vc_n[t];
@@ -3445,7 +3447,7 @@ MI_COLD const char* eng_param_name(int param) {
 // (0.16.16) a knob drawn from its middle (its - +): a bipolar parameter's, a negative range's; a machine's own knobs say
 // where theirs start (PADS' GLIDE and RELEASE from the left on bipolar places, 0.16.57: TEXTURE's before; TAURUS' CONTOUR, VOCODER's SHIFT from the middle;
 // CHOIR's all from the left)
-int eng_param_centered(int param) {
+MI_COLD int eng_param_centered(int param) {
   if (param == PG_PADS4 * 4 + 1) return 1;   // (0.16.57: PADS' ENSEMBLE, VINTAGE to the left, WIDE to the right)
   const eng_pdef_t* d = eng_pdef(param);
   const int c = d->kind == K_BIP || (d->kind == K_INT && d->lo < 0);
@@ -3462,33 +3464,34 @@ int eng_param_centered(int param) {
   return c;
 }
 
-int eng_model_enveloped(int m) {        // (Plaits' string, modal; the models with their own knobs)
+MI_COLD int eng_model_enveloped(int m) {        // (Plaits' string, modal; the models with their own knobs)
   const ModelDef& d = mdef(m);
   return d.kind != MK_PLAITS || d.sub >= 19;
 }
 int eng_model_kind(int m) { return mdef(m).kind; }
-int eng_model_sub(int m) { return mdef(m).sub; }
-int eng_model_bank(int m) { return mdef(m).bank; }
-const char* eng_model_abbr(int m) { return mdef(m).abbr; }
-const char* eng_bank_name(int b) { return b >= 0 && b < ENG_BANKS ? kBankNames[b] : ""; }
+MI_COLD int eng_model_sub(int m) { return mdef(m).sub; }
+MI_COLD int eng_model_bank(int m) { return mdef(m).bank; }
+MI_COLD const char* eng_model_abbr(int m) { return mdef(m).abbr; }
+MI_COLD const char* eng_bank_name(int b) { return b >= 0 && b < ENG_BANKS ? kBankNames[b] : ""; }
 MI_COLD int eng_model_free(int t, int m) {
   if (mdef(m).kind != MK_PADS) return 1;
   for (int u = 0; u < ENG_TRACKS; ++u)
     if (u != t && mdef(proj.algo[PG_TRACK(u, 0)]).kind == MK_PADS) return 0;
   return 1;
 }
-int eng_pads_track(void) { return pad_track; }
-int eng_pads_layer(float u) { return pads_layer_of(u); }
-int eng_pads_texture(float u) { return pads_texture_of(u); }
-int eng_choir_parts(int t, float note, int nv, float* out) {   // (0.16.43: the tests')
+MI_COLD int eng_pads_track(void) { return pad_track; }
+MI_COLD int eng_pads_layer(float u) { return pads_layer_of(u); }
+MI_COLD int eng_pads_texture(float u) { return pads_texture_of(u); }
+MI_COLD int eng_choir_parts(int t, float note, int nv, float* out) {   // (0.16.43: the tests')
   return t >= 0 && t < ENG_TRACKS ? choir_parts(t, note, nv, out) : 0;
 }
-int eng_duck_track(int k) { return k <= 0 ? duck_src() : duck_knob_track(k); }   // (0.16.42)
+MI_COLD int eng_duck_track(int k) { return k <= 0 ? duck_src() : duck_knob_track(k); }   // (0.16.42)
 int eng_lead_ok(int t) {                // (0.16.42) a track that plays chords: SCALE can follow it
   const int k = t >= 0 && t < ENG_TRACKS ? track_kind(t) : -1;
   return k == MK_PADS || k == MK_POLY || k == MK_PROPHET || k == MK_VOCODER;
 }
-int eng_scale_step(int sc, int e) {     // (0.16.42) SCALE turned e detents, past FOLLOW's tracks that play no chords
+MI_COLD int eng_scale_step(int sc, int e) {   // (0.16.42) SCALE turned e detents, past FOLLOW's tracks that play no
+                                              // chords
   const int d = e > 0 ? 1 : -1;
   for (int i = 0; i < (e < 0 ? -e : e); ++i) {
     int n = sc + d;
@@ -3498,7 +3501,7 @@ int eng_scale_step(int sc, int e) {     // (0.16.42) SCALE turned e detents, pas
   }
   return sc;
 }
-int eng_pads_pos(void) { return pad_track >= 0 ? pad_pos : -1; }
+MI_COLD int eng_pads_pos(void) { return pad_track >= 0 ? pad_pos : -1; }
 // a chord's name from its notes (semitones, its root first; pc0: the pitch class of 0): its root, its quality (m, dim,
 // +, sus2, sus4, 5), its extension (7, Maj7, 9, 11, add9, 6, b6); a note none of them explains: + (0.16.12)
 MI_COLD void chord_name(const int* notes, int nn, int pc0, char* b, int n) {
@@ -3563,8 +3566,9 @@ void eng_pads_chord(char* b, int n) {   // PADS' chord now
   if (pad_track < 0 || pad_n < 3) return;
   chord_name(pad_chord, pad_n, Pi(PG_GLOBAL, 2), b, n);
 }
-void eng_chord_name(const int* notes, int nn, char* b, int n) {   // (a step's: its notes over an octave folded in,
-  int f[4], m = 0;                                                  // its ninth, eleventh and thirteenth kept)
+// (a step's: its notes over an octave folded in, its ninth, eleventh and thirteenth kept)
+MI_COLD void eng_chord_name(const int* notes, int nn, char* b, int n) {
+  int f[4], m = 0;
   nn = nn > 4 ? 4 : nn;
   for (int i = 0; i < nn; ++i) {
     int d = notes[i] - notes[0];
@@ -3697,7 +3701,7 @@ int eng_model_lockable(int t, int m) {   // (0.16.40) 1: m may be a step's model
   const int k = mdef(proj.algo[PG_TRACK(t, 0)]).kind;
   return family(k) && mdef(m).kind == k;
 }
-int eng_model_lock(int lane, int step) {   // a step's model, -1 none
+MI_COLD int eng_model_lock(int lane, int step) {   // a step's model, -1 none
   if (lane < 0 || lane >= ENG_TRACKS) return -1;
   int i = lock_find(lane, step, kTpModel);
   return i >= 0 ? proj.lock[i].v : -1;
@@ -3827,7 +3831,7 @@ MI_COLD int eng_sound_set(int t, const eng_sound_t* s) {
   }
   return 0;
 }
-const char* eng_factory_name(int i) { return i >= 0 && i < ENG_FACTORY ? kFactory[i].name : ""; }
+MI_COLD const char* eng_factory_name(int i) { return i >= 0 && i < ENG_FACTORY ? kFactory[i].name : ""; }
 MI_COLD int eng_factory(int i, eng_sound_t* s) {
   if (i < 0 || i >= ENG_FACTORY) return -1;
   const FactorySound& f = kFactory[i];
@@ -3874,7 +3878,7 @@ const eng_pdef_t* eng_pdef(int param) {   // (a table, made once: the render ask
   return table[param];
 }
 
-int eng_param_mod(int param) {
+MI_COLD int eng_param_mod(int param) {
   int k = eng_pdef(param)->kind;
   return (k == K_UNI || k == K_BIP) && param / 4 != PG_GLOBAL;
 }
@@ -4242,7 +4246,7 @@ MI_COLD void eng_param_text(int param, float v, char* b, int n) {
   }
 }
 
-const char* eng_src_name(int s) { return s >= 0 && s < NSRC ? kSrcNames[s] : "?"; }
+MI_COLD const char* eng_src_name(int s) { return s >= 0 && s < NSRC ? kSrcNames[s] : "?"; }
 
 MI_COLD int eng_algo_count(int page) {
   switch (page_type(page)) {
@@ -4264,7 +4268,7 @@ MI_COLD const char* eng_algo_name(int page, int a) {
   return page_type(page) == PT_PLAITS1 ? kModelDef[a].name : page_type(page) == PT_COMP ? kBusModes[a] : kDelayAlgos[a];
 }
 
-project_t* eng_project(void) { return &proj; }
+MI_COLD project_t* eng_project(void) { return &proj; }
 
 static void cable(project_t* p, int g, int c, int s, int dst, int depth) {
   p->cable[g][c].src = static_cast<uint8_t>(s);
@@ -4661,8 +4665,8 @@ MI_COLD void locks_from(project_t* p, const plock_t* o, int n = kOldLocks) {
 
 extern "C" {
 
-float eng_dice_span(int param) { return dice_span(param); }
-void eng_trauma(int dose, float* gain, float* fm, float* warps, float* delay) {
+MI_COLD float eng_dice_span(int param) { return dice_span(param); }
+MI_COLD void eng_trauma(int dose, float* gain, float* fm, float* warps, float* delay) {
   float d = static_cast<float>(dose < 0 ? 0 : dose > 100 ? 100 : dose) * 0.01f, w = ramp01(d, 0.5f, 1.0f);
   if (gain) *gain = 1.0f + 7.0f * d * d;
   if (fm) *fm = 0.1f * ramp01(d, 0.4f, 1.0f);
@@ -4685,24 +4689,24 @@ MI_COLD void eng_bend_preview(int t, float* y, int n) {   // a cycle of a sine t
       if (pass == 6) y[i] = clampf(v, -1.2f, 1.2f);
     }
 }
-void eng_bend_mask(int t, uint8_t* inv, uint8_t* cut) {
+MI_COLD void eng_bend_mask(int t, uint8_t* inv, uint8_t* cut) {
   int m = t >= 0 && t < ENG_TRACKS ? bend[t].mask : 0;
   if (inv) *inv = kMaskInv[m];
   if (cut) *cut = kMaskCut[m];
 }
-int eng_glitch_state(int t, int* reps, float* speed) {
+MI_COLD int eng_glitch_state(int t, int* reps, float* speed) {
   if (t < 0 || t >= ENG_TRACKS) return 0;
   if (reps) *reps = glitch[t].reps;
   if (speed) *speed = glitch[t].speed;
   return glitch[t].on;
 }
-float eng_filter_hz(int t) { return mf_cutoff_hz(t); }
-float eng_filter_env(int t) { return mf_env(t); }
-uint32_t eng_filter_load(int t) {
+MI_COLD float eng_filter_hz(int t) { return mf_cutoff_hz(t); }
+MI_COLD float eng_filter_env(int t) { return mf_env(t); }
+MI_COLD uint32_t eng_filter_load(int t) {
   return t >= 0 && t < ENG_TRACKS && proj.algo[PG_FILT(t, 0)] ? pct10(static_cast<uint32_t>(filt_cost[t]), kN) : 0u;
 }
 
-void eng_rnd_redraw(project_t* p, int lane, int tp) {
+MI_COLD void eng_rnd_redraw(project_t* p, int lane, int tp) {
   if (lane >= 0 && lane < ENG_LANES && tp >= 0 && tp < ENG_NTP) p->rseed[lane][tp] = static_cast<uint8_t>(p->rseed[lane][tp] + 1u);
 }
 
@@ -5274,7 +5278,7 @@ void eng_play(int on) {
     }
   playing = on != 0;
 }
-int eng_playing(void) { return playing; }
+MI_COLD int eng_playing(void) { return playing; }
 
 MI_COLD void eng_back_at_bar(const float* val, const uint8_t* algo, const int8_t* rnd) {
   back_pending = 0;
@@ -5284,8 +5288,8 @@ MI_COLD void eng_back_at_bar(const float* val, const uint8_t* algo, const int8_t
     for (int i = 0; i < ENG_NTP; ++i) back_rnd[t][i] = rnd[t * ENG_NTP + i];
   back_pending = 1;
 }
-int eng_back_pending(void) { return back_pending; }
-void eng_back_cancel(void) { back_pending = 0; }
+MI_COLD int eng_back_pending(void) { return back_pending; }
+MI_COLD void eng_back_cancel(void) { back_pending = 0; }
 
 // the patterns (0.15, app.c's: each a whole project): the next one cued by the main loop, taken by the render in the
 // block where the playing one ends (its longest lane's LENGTH in sixteenths), the lanes from their first step
@@ -5317,16 +5321,16 @@ MI_COLD void take_pattern(const project_t* c) {   // the machine's settings stay
     e_dir[t] = 1;
   }
 }
-void eng_cue(const project_t* next) {   // (its bytes all written before the pointer is)
+MI_COLD void eng_cue(const project_t* next) {   // (its bytes all written before the pointer is)
   asm volatile("" ::: "memory");          // (the project read whole before the cue: a compiler barrier, no call)
   cue_p = next;
 }
-int eng_cue_pending(void) { return cue_p != 0; }
-uint32_t eng_cycles(void) { return pat_cycles; }
+MI_COLD int eng_cue_pending(void) { return cue_p != 0; }
+MI_COLD uint32_t eng_cycles(void) { return pat_cycles; }
 MI_COLD int eng_pattern_len(void) { return pattern_len(); }
 MI_COLD int eng_pattern_pos(void) { return playing && tick >= 0 ? static_cast<int>(tick % pattern_len()) : -1; }
 
-void eng_key(int track, int note, int on) {
+MI_COLD void eng_key(int track, int note, int on) {
   if (track < 0 || track >= ENG_TRACKS) return;
   if (on) trig_model[track] = 0;        // (0.16.40: the keys play the track's model, not the last trig's)
   int n = kb_n[track], j = 0;           // (0.16.15) the keys held: this one out, then on top if pressed
@@ -5355,17 +5359,17 @@ void eng_key(int track, int note, int on) {
     }
   }
 }
-void eng_key_release_all(void) {        // (no key down any more: none held anywhere, whatever the track then)
+MI_COLD void eng_key_release_all(void) {        // (no key down any more: none held anywhere, whatever the track then)
   for (int t = 0; t < ENG_TRACKS; ++t) kb_n[t] = 0, key_on[t] = 0;
 }
 
-void eng_core1(int on) { use_core1 = on; }
+MI_COLD void eng_core1(int on) { use_core1 = on; }
 
-void eng_cut(void) {
+MI_COLD void eng_cut(void) {
   eng_play(0);
   if (!cut_req) cut_req = 1;
 }
-int eng_cut_pending(void) { return cut_req != 0; }
+MI_COLD int eng_cut_pending(void) { return cut_req != 0; }
 
 #if ENG_USB_TRACKS
 const int16_t* eng_usb_frames(uint32_t n, int live) {
@@ -5766,16 +5770,16 @@ void eng_render(float* l, float* r, uint32_t n) {
 }
 
 float eng_final(int param) { return param >= 0 && param < ENG_NPARAMS ? fin[param] : 0.0f; }
-float eng_now(int param) {
+MI_COLD float eng_now(int param) {
   int lane, tp = eng_param_tp(param, &lane);
   if (tp >= 0 && tp < ENG_NTP && lane >= 0 && lane < ENG_LANES && lane_param[lane][tp] == param) return E(lane, tp);
   return eng_final(param);
 }
-float eng_src(int s) { return src_value(s); }
-float eng_lfo_phase(int i) { return i >= 0 && i < 3 ? lfo[i].phase : 0.0f; }
-uint32_t eng_gates(void) { return gates_now; }
-int eng_note(int t) { return t >= 0 && t < ENG_TRACKS ? static_cast<int>(vnote[t] + 0.5f) : 0; }
-uint32_t eng_load(int core) { return core ? load1 : load0; }
+MI_COLD float eng_src(int s) { return src_value(s); }
+MI_COLD float eng_lfo_phase(int i) { return i >= 0 && i < 3 ? lfo[i].phase : 0.0f; }
+MI_COLD uint32_t eng_gates(void) { return gates_now; }
+MI_COLD int eng_note(int t) { return t >= 0 && t < ENG_TRACKS ? static_cast<int>(vnote[t] + 0.5f) : 0; }
+MI_COLD uint32_t eng_load(int core) { return core ? load1 : load0; }
 
 // the delay's ALGORITHM, SYNC or FREE (and 0.16.65, the BBD's): its TIME the same (the division's length now in ms, or
 // the nearest division); MODE and WIDTH the same knob (Mono 0, Ping-pong 1)
@@ -5806,28 +5810,28 @@ MI_COLD void eng_delay_mode(int mode) {
   }
   fin[PG_DELAY(0) * 4] = v;
 }
-uint32_t eng_peak_part(int i) {         // the worst block's: 0..3 the voices, 4 Warps, 5 the effects, 6 the
+MI_COLD uint32_t eng_peak_part(int i) {         // the worst block's: 0..3 the voices, 4 Warps, 5 the effects, 6 the
   return i >= 0 && i < kTasks + 9 ? pct10(peak_of[i], peak_n) : 0u;   // preparation, 7 core 0, 8 core 1, 9 all,
 }                                                                      // 10..14 the preparation's parts
-uint32_t eng_prep_load(void) { return ready ? pct10(static_cast<uint32_t>(prep_cost), kN) : 0u; }
-uint32_t eng_peak(void) { return peak; }
-int eng_guard(void) { return guard; }
-uint32_t eng_peak_core1(void) { return peak_c1; }
-uint32_t eng_guard_blocks(void) { return guard_blocks; }
-void eng_guard_test(int on, int level) {   // (the tests: the guard on, or held at a level)
+MI_COLD uint32_t eng_prep_load(void) { return ready ? pct10(static_cast<uint32_t>(prep_cost), kN) : 0u; }
+MI_COLD uint32_t eng_peak(void) { return peak; }
+MI_COLD int eng_guard(void) { return guard; }
+MI_COLD uint32_t eng_peak_core1(void) { return peak_c1; }
+MI_COLD uint32_t eng_guard_blocks(void) { return guard_blocks; }
+MI_COLD void eng_guard_test(int on, int level) {   // (the tests: the guard on, or held at a level)
   guard_on = on;
   if (level >= 0) guard = level, mf_guard(level);
 }
-float eng_meter(int t) { return t >= 0 && t < ENG_TRACKS + 2 ? meter[t] : 0.0f; }
-float eng_duck(void) { return duck_s; }
-float eng_spread_width(int t) { return t >= 0 && t < ENG_TRACKS ? sp_w[t] : 0.0f; }
-float eng_gr(int band) { return ready ? mms_gain(master, band) : 0.0f; }
-int eng_hist(int s, int i) {
+MI_COLD float eng_meter(int t) { return t >= 0 && t < ENG_TRACKS + 2 ? meter[t] : 0.0f; }
+MI_COLD float eng_duck(void) { return duck_s; }
+MI_COLD float eng_spread_width(int t) { return t >= 0 && t < ENG_TRACKS ? sp_w[t] : 0.0f; }
+MI_COLD float eng_gr(int band) { return ready ? mms_gain(master, band) : 0.0f; }
+MI_COLD int eng_hist(int s, int i) {
   if (s <= SRC_NONE || s >= NSRC || i < 0 || i >= ENG_HIST) return 0;
   return hist[s][(hist_at + static_cast<uint32_t>(i)) % ENG_HIST];
 }
-int eng_core1_running(void) { return on_core1_last; }
-uint32_t eng_task_load(int task) {
+MI_COLD int eng_core1_running(void) { return on_core1_last; }
+MI_COLD uint32_t eng_task_load(int task) {
   if (task < 0 || task >= kTasks) return 0;
   return task == kTaskWarps && !w_job ? 0 : pct10(static_cast<uint32_t>(task_cost[task]), kN);
 }
@@ -5837,8 +5841,8 @@ int eng_warps_algo(void) {
   if (car <= WC_OFF || car > WC_OSC3) return -1;
   return Pi(PG_WARPS(1), 3) == WM_SHIFT ? 6 : warps_pos(E(LANE_WARPS, 2));
 }
-const char* eng_warps_name(int algo) { return algo >= 0 && algo < 7 ? kWarpsNames[algo] : "WARPS"; }
-int eng_warps_track(void) { return w_dst; }
+MI_COLD const char* eng_warps_name(int algo) { return algo >= 0 && algo < 7 ? kWarpsNames[algo] : "WARPS"; }
+MI_COLD int eng_warps_track(void) { return w_dst; }
 
 int eng_trig(int lane, int step) {
   if (lane < 0 || lane >= ENG_LANES || step < 0 || step >= ENG_STEPS) return 0;
@@ -5850,13 +5854,13 @@ MI_COLD void eng_trig_set(int lane, int step, int on) {
   else proj.trig[lane][step / 8] = static_cast<uint8_t>(proj.trig[lane][step / 8] & ~(1u << (step % 8)));
   if (!on && !eng_lane_has_trigs(lane)) lane_fresh(lane);   // (its last trig gone: its last lock with it)
 }
-void eng_fills(int dice, int* every, int* beats, int* tracks) {
+MI_COLD void eng_fills(int dice, int* every, int* beats, int* tracks) {
   int q = fill_amount_q(dice), span = 0;
   *every = *tracks = 0;
   if (q) fill_shape(q, every, &span, tracks);
   *beats = span / 4;
 }
-uint32_t eng_fill_trigs(int t) { return t >= 0 && t < ENG_TRACKS ? fill_trigs[t] : 0u; }
+MI_COLD uint32_t eng_fill_trigs(int t) { return t >= 0 && t < ENG_TRACKS ? fill_trigs[t] : 0u; }
 
 int eng_lane_has_trigs(int lane) {
   if (lane < 0 || lane >= ENG_LANES) return 0;
@@ -5890,12 +5894,12 @@ MI_COLD int eng_lock_set(int lane, int step, int tp, float v) {   // the value f
   ++lock_gen;
   return 0;
 }
-void eng_lock_clear(int lane, int step) {
+MI_COLD void eng_lock_clear(int lane, int step) {
   for (int i = 0; i < ENG_PLOCKS; ++i)
     if (proj.lock[i].lane == lane && proj.lock[i].step == step) proj.lock[i].lane = 0xFF;
   ++lock_gen;
 }
-void eng_steps_clear(int lane) {        // a lane's pattern: its trigs and its locks (its knobs and randoms stay)
+MI_COLD void eng_steps_clear(int lane) {   // a lane's pattern: its trigs and its locks (its knobs and randoms stay)
   if (lane < 0 || lane >= ENG_LANES) return;
   for (int b = 0; b < ENG_STEPS / 8; ++b) proj.trig[lane][b] = 0;
   for (int i = 0; i < ENG_PLOCKS; ++i)
@@ -5907,12 +5911,12 @@ MI_COLD void eng_fresh(void) {                   // another project: no trig's l
   for (int l = 0; l < ENG_LANES; ++l) lane_fresh(l);
   ++lock_gen;
 }
-int eng_step_tie(int lane, int step) {  // (0.16.15) a trig's length over the steps after it (0: its own step)
+MI_COLD int eng_step_tie(int lane, int step) {  // (0.16.15) a trig's length over the steps after it (0: its own step)
   for (int i = 0; i < ENG_PLOCKS; ++i)
     if (proj.lock[i].lane == lane && proj.lock[i].step == step && proj.lock[i].tp == kTpTie) return proj.lock[i].v;
   return 0;
 }
-int eng_step_tie_set(int lane, int step, int steps) {   // 0 ok, -1 no room; steps 0: none
+MI_COLD int eng_step_tie_set(int lane, int step, int steps) {   // 0 ok, -1 no room; steps 0: none
   if (lane < 0 || lane >= ENG_TRACKS || step < 0 || step >= ENG_STEPS) return -1;
   steps = steps < 0 ? 0 : steps > 63 ? 63 : steps;
   int i = lock_find(lane, step, kTpTie);
@@ -5931,7 +5935,7 @@ int eng_step_tie_set(int lane, int step, int steps) {   // 0 ok, -1 no room; ste
   ++lock_gen;
   return 0;
 }
-void eng_step_ties(int lane, uint8_t* out) {   // every step's (ENG_STEPS), one look
+MI_COLD void eng_step_ties(int lane, uint8_t* out) {   // every step's (ENG_STEPS), one look
   for (int s = 0; s < ENG_STEPS; ++s) out[s] = 0;
   for (int i = 0; i < ENG_PLOCKS; ++i)
     if (proj.lock[i].lane == lane && proj.lock[i].tp == kTpTie && proj.lock[i].step < ENG_STEPS)
@@ -5989,45 +5993,45 @@ MI_COLD int eng_step_notes_set(int lane, int step, const int* notes, int n) {   
   ++lock_gen;
   return 0;
 }
-void eng_step_chords(int lane, uint8_t* out) {   // every step's notes over its NOTE (0: a note alone), one look
+MI_COLD void eng_step_chords(int lane, uint8_t* out) {   // every step's notes over its NOTE (0: a note alone), one look
   for (int s = 0; s < ENG_STEPS; ++s) out[s] = 0;
   for (int i = 0; i < ENG_PLOCKS; ++i)
     if (proj.lock[i].lane == lane && proj.lock[i].tp >= kTpNote2 && proj.lock[i].tp < kTpNote2 + 3 &&
         proj.lock[i].step < ENG_STEPS && proj.lock[i].v)
       ++out[proj.lock[i].step];
 }
-int eng_track_chords(int t) {           // (0.16.43: CHOIR past Solo sings a step's chord, its keys one at a time)
+MI_COLD int eng_track_chords(int t) {   // (0.16.43: CHOIR past Solo sings a step's chord, its keys one at a time)
   return t >= 0 && t < ENG_TRACKS &&
          (kb_poly(t) || (track_kind(t) == MK_CHOIR && choir_voices(lx_u(lx_param(t, 1), E(t, 2))) > 1));
 }
-int eng_step_locked(int lane, int step) {
+MI_COLD int eng_step_locked(int lane, int step) {
   int n = 0;
   for (int i = 0; i < ENG_PLOCKS; ++i) n += proj.lock[i].lane == lane && proj.lock[i].step == step;
   return n;
 }
-int eng_step_now(int lane) {
+MI_COLD int eng_step_now(int lane) {
   return playing && lane >= 0 && lane < ENG_LANES && tick >= 0 ? cur_step[lane] : -1;
 }
 // (0.16.31) live recording: a lane's place since PLAY in its own steps (whole: the steps it took; the fraction: how far
 // into the one playing), -1 stopped or counting in; the step the keys wrote just ahead of it (not played when it gets
 // there: the key was heard); the next PLAY's count-in; the metronome
-float eng_lane_pos(int lane) {
+MI_COLD float eng_lane_pos(int lane) {
   if (!playing || restart || tick < 0 || lane < 0 || lane >= ENG_LANES) return -1.0f;
   return seq_at * kSpeedMul[lane_speed(lane)];
 }
-void eng_rec_skip(int lane, int step) {
+MI_COLD void eng_rec_skip(int lane, int step) {
   if (lane >= 0 && lane < ENG_TRACKS) rec_skip[lane] = static_cast<int8_t>(step);
 }
-void eng_count_in(int sixteenths) { count_in = sixteenths; }
-void eng_click(int on) { click_on = on != 0; }
+MI_COLD void eng_count_in(int sixteenths) { count_in = sixteenths; }
+MI_COLD void eng_click(int on) { click_on = on != 0; }
 const float* eng_click_out(void) { return clk_n ? clk_out : nullptr; }
-float eng_lane_open(int lane) {
+MI_COLD float eng_lane_open(int lane) {
   return lane >= ENG_TRACKS && lane < ENG_LANES ? fx_open[lane - ENG_TRACKS] : 1.0f;
 }
 MI_COLD int eng_quantize(int note) { return quantize_mask(note, scale_mask(Pi(PG_GLOBAL, 1)), Pi(PG_GLOBAL, 2)); }
-uint32_t eng_rises(int t) { return t >= 0 && t < ENG_TRACKS ? vrises[t] : 0u; }
+MI_COLD uint32_t eng_rises(int t) { return t >= 0 && t < ENG_TRACKS ? vrises[t] : 0u; }
 
-void eng_endless_rec(int t, int on) {
+MI_COLD void eng_endless_rec(int t, int on) {
   if (t < 0 || t >= ENG_TRACKS) return;
   e_rec[t] = on != 0;
   if (!on) {
@@ -6037,13 +6041,13 @@ void eng_endless_rec(int t, int on) {
     e_dir[t] = 1;
   }
 }
-int eng_endless_add(int t, int note) {
+MI_COLD int eng_endless_add(int t, int note) {
   if (t < 0 || t >= ENG_TRACKS || proj.endless_len[t] >= ENG_ENDLESS) return -1;
   proj.endless[t][proj.endless_len[t]] = static_cast<uint8_t>(note == ENDLESS_REST ? ENDLESS_REST : note & 127);
   ++proj.endless_len[t];
   return 0;
 }
-void eng_endless_clear(int t) {
+MI_COLD void eng_endless_clear(int t) {
   if (t < 0 || t >= ENG_TRACKS) return;
   proj.endless_len[t] = 0;
   proj.endless_key[t] = 0;
@@ -6051,7 +6055,7 @@ void eng_endless_clear(int t) {
 int eng_endless_on(int t) {
   return t >= 0 && t < ENG_TRACKS && proj.endless_len[t] > 0 && !e_rec[t];
 }
-void eng_endless_key(int t, int note) {   // from its first note
+MI_COLD void eng_endless_key(int t, int note) {   // from its first note
   if (!eng_endless_on(t)) return;
   for (int i = 0; i < proj.endless_len[t]; ++i)
     if (proj.endless[t][i] != ENDLESS_REST) {
@@ -6075,7 +6079,7 @@ int eng_arp_opt(int t, int o) {
   if (o == AO_ORDER) return static_cast<int>((b >> 5) & 1u);
   return 0;
 }
-void eng_arp_opt_set(project_t* p, int t, int o, int v) {
+MI_COLD void eng_arp_opt_set(project_t* p, int t, int o, int v) {
   if (t < 0 || t >= ENG_TRACKS) return;
   unsigned b = p->arp_opt[t];
   if (o == AO_MODE) b = (b & ~3u) | static_cast<unsigned>(v < 0 ? 0 : v >= AM_N ? AM_N - 1 : v);
@@ -6085,8 +6089,8 @@ void eng_arp_opt_set(project_t* p, int t, int o, int v) {
   p->arp_opt[t] = static_cast<uint8_t>(b);
   if (p == &proj && o == AO_LATCH && !v && !arp_down[t]) arp_n[t] = 0;   // (LATCH off, no key down: let go)
 }
-const char* eng_arp_mode_name(int v) { return kArpModes[v < 0 || v >= AM_N ? 0 : v]; }
-void eng_arp_key(int t, int note, int on) {
+MI_COLD const char* eng_arp_mode_name(int v) { return kArpModes[v < 0 || v >= AM_N ? 0 : v]; }
+MI_COLD void eng_arp_key(int t, int note, int on) {
   if (t < 0 || t >= ENG_TRACKS) return;
   int n = arp_n[t], latch = eng_arp_opt(t, AO_LATCH);
   if (on) {
@@ -6113,7 +6117,7 @@ MI_COLD void eng_arp_release_all(void) {        // (every key let go: the ARPs n
     if (!eng_arp_opt(t, AO_LATCH)) arp_n[t] = 0;
   }
 }
-int eng_arp_list(int t, uint8_t* out, int max) {
+MI_COLD int eng_arp_list(int t, uint8_t* out, int max) {
   if (t < 0 || t >= ENG_TRACKS || arp_mode(t) == AM_LOOP) return 0;
   return arp_build(t, out, max);
 }
@@ -6125,10 +6129,10 @@ MI_COLD void eng_endless_free(int t, int on) {   // (0.16.11) the sequencer stop
     e_free[i] = on;
   }
 }
-int eng_climb_now(int t, int step) {
+MI_COLD int eng_climb_now(int t, int step) {
   return t >= 0 && t < ENG_TRACKS && step >= 0 && step < ENG_STEPS && playing ? climb_off[t][step] : 0;
 }
-int eng_endless_state(int t) {
+MI_COLD int eng_endless_state(int t) {
   return t >= 0 && t < ENG_TRACKS && eng_endless_on(t) && (playing || e_free[t]) ? e_state[t] : ES_NOTE;
 }
 

@@ -1157,6 +1157,14 @@ distortion, VA-VCF, ses trois batteries) sortent du firmware : un moteur muet ti
 leurs numéros), une cinquantaine de Ko de flash et 26 Ko de mémoire rendus (l'arène du son passe de 280 à 260 Ko ; le
 projet de travail et le tampon de lecture des anciens projets passent dans le pool, hors de la RAM).
 
+**Plus de place** (0.16.69 et 0.16.70), sans rien changer au son ni à l'écran : les trois banques de patchs du
+six-opérateurs de Plaits (12 Ko) restaient dans le firmware, gardées par une seule ligne qui les cherchait pour ses
+modèles devenus muets en 0.16.1 ; la ligne partie, elles partent aussi. Les deux polices décoratives (le nom à
+l'allumage, les signes de la dose d'aléatoire) sont gardées en plages, comme le slogan de TRAUMA : 6,4 Ko au lieu de
+21,5, les mêmes pixels, dessinés deux à quatre fois plus vite (moins d'octets à lire, et les blancs sautés d'un coup).
+Les fonctions du moteur que seuls l'écran et les boutons appellent, et en 0.16.69 la boucle des boutons, le choix de
+la page dessinée et le magasin des patterns, sont compilés pour la taille ; le code du son reste à -O2.
+
 **Moins de calcul** (0.16.64), le même son (à −113 dB près au pire, des arrondis) : PADS ajoute les décalages de
 ses scies une fois pour toutes les voix et écrit les corrections de ses polyBLEP là où elles tombent, au lieu de les
 porter à chaque échantillon, et garde ses états (enveloppe, filtre, cloche) en variables locales sur le bloc : son

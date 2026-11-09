@@ -129,9 +129,8 @@ void Voice::Render(
   if (engine_index != previous_engine_index_ || reload_user_data_) {
     UserData user_data;
     const uint8_t* data = user_data.ptr(engine_index);
-    if (!data && engine_index >= 2 && engine_index <= 4) {
-      data = fm_patches_table[engine_index - 2];
-    }
+    // (MIFM1 0.16.70: the six-op FM's factory banks no longer fetched for engines 2..4, silent since 0.16.1: their
+    // 12 KB, kept by this line alone, out of the image)
     e->LoadUserData(data);
     e->Reset();
 

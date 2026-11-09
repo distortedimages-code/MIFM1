@@ -3,9 +3,11 @@
 # Copyright (C) 2026 Yoann
 """MIFM1's name at power-on and the random dose's screen, in Syne ExtraBold (firmware/fonts: Syne[wght].ttf from
 google/fonts' ofl/syne, SIL OFL 1.1, Syne-OFL.txt): firmware/logo_font.h (FONT_LOGO, 31 px) and firmware/rand_font.h
-(FONT_RAND, 48 px: RAN over DOM). Felucca fonts (fm1-base tools/gen_font.py's format and rendering: 4-bit
-anti-aliasing) with only the signs written, the words' and those their letters pass through on their way (the others
-are empty: nothing drawn, no room taken). TRAUMA's screen: tools/gen_noise_glyphs.py.
+(FONT_RAND, 48 px: RAN over DOM). Felucca fonts (fm1-base tools/gen_font.py's rendering: 4-bit anti-aliasing, its
+glyph box and metrics) with only the signs written, the words' and those their letters pass through on their way (the
+others are empty: nothing drawn, no room taken). (0.16.70) Their glyphs' rows in runs, as TRAUMA's slogan's (a byte:
+the coverage << 4 | the length - 1, never across a row's end): 4.8 and 16.7 KB before, a third now, the same pixels
+(app.c cv_text_runs). TRAUMA's screen: tools/gen_noise_glyphs.py.
 
     tools/gen_logo_font.py"""
 from pathlib import Path
@@ -52,9 +54,14 @@ def make(name, face, PX, SIGNS, file, what):
         img = img.crop((0, top, bw, top + h))
         px_ = [min(15, (v + 8) // 17) for v in img.tobytes()]
         for y in range(h):
-            row = px_[y * bw:(y + 1) * bw] + [0]
-            for x in range(0, bw, 2):
-                data.append((row[x] << 4) | row[x + 1])
+            row = px_[y * bw:(y + 1) * bw]
+            x = 0
+            while x < bw:                      # (a run: up to 16 pixels of one coverage, in its row)
+                n = 1
+                while x + n < bw and n < 16 and row[x + n] == row[x]:
+                    n += 1
+                data.append((row[x] << 4) | (n - 1))
+                x += n
         advs.append(adv)
         bws.append(bw)
     shown = "".join(MAP.get(ch, ch) + (f" (at {ch})" if ch in MAP else "") for ch in used)
@@ -62,7 +69,8 @@ def make(name, face, PX, SIGNS, file, what):
              f"{PX} px (SIL OFL 1.1: fonts/{lic}), the signs {shown!r} alone */"]
     if OUT not in written:
         lines.append("#pragma once")
-    lines.append(f"static const uint8_t {name}_DATA[{max(1, len(data))}] = {{")
+    assert len(data) < 65536                   # (OFF: 16 bits)
+    lines.append(f"static const uint8_t {name}_DATA[{max(1, len(data))}] = {{   /* (each glyph's rows in runs) */")
     for i in range(0, len(data), 24):
         lines.append("    " + ", ".join(f"0x{b:02x}" for b in data[i:i + 24]) + ",")
     lines += ["};",

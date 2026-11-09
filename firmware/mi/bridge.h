@@ -10,7 +10,8 @@
 #include <stdint.h>
 #include <stddef.h>
 /* what runs outside the sound (the screen's texts, a project made or read): compiled for size (0.15.1: the flash's
- * room), the sound's code at -O2 as ever */
+ * room), the sound's code at -O2 as ever. (0.16.70) Every eng_* the engine itself never calls, the screen's and the
+ * buttons' (eng_render aside): some 750 bytes */
 #define MI_COLD __attribute__((minsize))
 
 #ifdef __cplusplus
