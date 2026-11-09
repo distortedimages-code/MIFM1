@@ -19,7 +19,7 @@ static const float kWebModel[28] = {   /* a voice playing, by model */
     212.3f,  /* 11 SDS PERC */
     317.8f,  /* 12 ZERO */
     379.3f,  /* 13 FM */
-    207.8f,  /* 14 PADS */
+    207.7f,  /* 14 PADS */
     311.0f,  /* 15 POLY */
     424.9f,  /* 16 REV3 */
     186.0f,  /* 17 TAURUS */
@@ -27,12 +27,12 @@ static const float kWebModel[28] = {   /* a voice playing, by model */
     172.8f,  /* 19 CHOIR */
     127.1f,  /* 20 STATIC */
     243.6f,  /* 21 EASEL */
-    303.7f,  /* 22 SPEECH */
-    491.7f,  /* 23 SWARM */
-    402.0f,  /* 24 NOISE */
-    615.8f,  /* 25 PARTICLES */
-    516.1f,  /* 26 STRING */
-    781.6f,  /* 27 MODAL */
+    303.6f,  /* 22 SPEECH */
+    491.5f,  /* 23 SWARM */
+    401.9f,  /* 24 NOISE */
+    615.6f,  /* 25 PARTICLES */
+    516.0f,  /* 26 STRING */
+    781.5f,  /* 27 MODAL */
 };
 static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, VOX): plain, its FM's extra, its NOISE's */
     {0.0f, 0.0f, 0.0f},
@@ -44,7 +44,7 @@ static const float kWebFilter[5][3] = {   /* a filter (OFF, LADDER, MS-20, SEM, 
 static const float kWebFm[3] = {37.1f, 81.8f, 22.2f};   /* the FM's extra: its square, PW, SYNC */
 static const float kWebPads[3] = {124.1f, 11.0f, 19.2f};   /* PADS: its floor, a note (one saw, three) */
 static const float kWebPadsWave[2] = {20.4f, 26.1f};   /* (0.16.57) PADS' WAVE off Saw: a note's more (one saw, three) */
-static const float kWebPadsLayer[9] = {0.0f, 74.2f, 121.3f, 100.0f, 115.8f, 80.4f, 114.6f, 91.6f, 100.2f};   /* its LAYER */
+static const float kWebPadsLayer[9] = {0.0f, 74.2f, 121.3f, 100.0f, 116.0f, 80.3f, 114.6f, 91.6f, 100.2f};   /* its LAYER */
 static const float kWebPadsTex[5] = {0.0f, 10.8f, 0.1f, 25.3f, 13.3f};   /* its TEXTURE (Down: a note's) */
 static const float kWebPoly[2] = {33.5f, 76.6f};   /* POLY: its floor, a voice */
 static const float kWebPro[2] = {34.0f, 108.4f};   /* REV3: its floor, a voice */
@@ -58,10 +58,12 @@ static const float kWebWarps[2][6] = {   /* Warps, its algorithm's mark (Eco, HQ
     {569.6f, 567.0f, 637.7f, 538.2f, 585.4f, 605.8f},
     {983.6f, 978.4f, 1119.7f, 920.9f, 1015.1f, 1056.0f},
 };
-static const float kWebFx[2] = {519.2f, 542.9f};   /* the effects, the mix and the master bus (OFF, COMP) */
+static const float kWebFx[2] = {519.4f, 543.2f};   /* the effects, the mix and the master bus (OFF, COMP) */
 static const float kWebFxEq = 37.3f, kWebFxDuck = 6.9f, kWebFxDelay = 14.5f;   /* a track's EQ (playing), the duck on a track, the delay's filter and drive */
 static const float kWebFxWarps = 87.6f;   /* Warps in the mix (the rest of the stress test's effects) */
 static const float kWebFxSpread = 75.2f;   /* (0.16.19) a track's SPREAD */
 static const float kWebFxMetal[2] = {78.3f, 113.6f};   /* (0.16.41) the reverb METAL, SHIMMER: over Clouds' */
 static const float kWebFxBbd = 21.6f;   /* (0.16.65) the delay's BBD: over the clean one's */
+static const float kWebFxRev = 229.4f, kWebFxDly = 75.4f;   /* (0.16.71) the reverb, the delay: awake (in kWebFx) */
+static const float kWebFxSkip[2] = {5.2f, 7.8f};   /* (0.16.71) asleep: their clocks moved on */
 static const float kWebPrep = 362.0f, kWebPrepTrack = 0.0f, kWebPrepCable = 2.9f;   /* the preparation: its floor, a track playing, a cable */

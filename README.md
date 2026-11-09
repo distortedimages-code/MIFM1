@@ -1165,6 +1165,15 @@ l'allumage, les signes de la dose d'aléatoire) sont gardées en plages, comme l
 Les fonctions du moteur que seuls l'écran et les boutons appellent, et en 0.16.69 la boucle des boutons, le choix de
 la page dessinée et le magasin des patterns, sont compilés pour la taille ; le code du son reste à -O2.
 
+**La reverb et le delay en veille** (0.16.71), le même son : quand plus rien ne leur arrive et que ce qu'ils rendent
+est passé sous −120 dB depuis plus longtemps qu'un son ne peut rester en eux sans être entendu (deux fois leur
+mémoire : 0,74 s pour la reverb, 2,4 s pour le delay), ils ne sont plus calculés ; leur horloge avance quand même
+(leurs LFO, leur tête d'écriture, leurs glissements), et le premier échantillon envoyé les réveille là où ils en
+seraient. Côte à côte, la même reverb et le même delay, l'un toujours calculé et l'autre mis en veille, rendent les
+mêmes échantillons, au bit près, réveil compris ; le reste des tests donne les mêmes valeurs qu'avant. Au repos, le
+FM-1 gagne environ 220 µs par bloc pour la reverb et 75 µs pour le delay (environ 10 % d'un cœur) ; quand ils servent,
+rien ne change. METAL, SHIMMER et le BBD restent toujours éveillés.
+
 **Moins de calcul** (0.16.64), le même son (à −113 dB près au pire, des arrondis) : PADS ajoute les décalages de
 ses scies une fois pour toutes les voix et écrit les corrections de ses polyBLEP là où elles tombent, au lieu de les
 porter à chaque échantillon, et garde ses états (enveloppe, filtre, cloche) en variables locales sur le bloc : son

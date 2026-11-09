@@ -31,6 +31,8 @@ void mdl_set(void* v, float time, float feedback, float filter, float resonance,
   static_cast<DelayMod*>(v)->delay.set(time, feedback, filter, resonance, drive, ping_pong, mod);
 }
 
+int mdl_skip(void* v, uint32_t n) { return static_cast<DelayMod*>(v)->delay.Skip(n); }   // (0.16.71: asleep)
+
 void mdl_bbd(void* v, int on, float dirt, float width) { static_cast<DelayMod*>(v)->delay.set_bbd(on, dirt, width); }
 
 void mdl_process(void* v, const float* in, float* out_l, float* out_r, uint32_t n) {

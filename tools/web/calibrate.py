@@ -62,7 +62,8 @@ def build():
 
 
 FUNCS = {"total": r"\beng_render\b", "tasks": r"run_task\(", "voice": r"render_voice\(", "plaits": r"\bmp_render\b",
-         "lx": r"\blx_render\b", "filter": r"\bmf_process\b", "bend": r"apply_bend\(", "warps": r"\bmw_render\b"}
+         "lx": r"\blx_render\b", "filter": r"\bmf_process\b", "bend": r"apply_bend\(", "warps": r"\bmw_render\b",
+         "reverb": r"\bmrv_process\b", "delay": r"\bmdl_process\b", "rskip": r"\bmrv_skip\b", "dskip": r"\bmdl_skip\b"}
 
 
 def count(exe, *args):
@@ -86,12 +87,14 @@ def count(exe, *args):
                 got[k] = n
     res = {k: got.get(k, 0) / blocks for k in FUNCS}
     res["nv"] = float(nv.group(1)) if nv else 0.0         # (POLY's voices, on average)
+    sl = re.search(r"slept (\d+) (\d+)", r.stdout)       # (0.16.71: the blocks the reverb and the delay slept)
+    res["slept"] = [int(sl.group(1)) / blocks, int(sl.group(2)) / blocks] if sl else [0.0, 0.0]
     return res
 
 
 def main():
     exe = build()
-    jobs = {"blank": ("blank", SECS), "stress": ("stress", SECS * 2)}
+    jobs = {"blank": ("blank", SECS), "stress": ("stress", SECS * 2), "asleep": ("asleep", SECS * 4)}
     for m in range(len(NAMES)):                          # every model (engine.cc's kModelDef)
         jobs[f"model{m}"] = ("one", m, 0, 0, 0, 0, 0, -1, 0, SECS)
     for x, bit in (("sq", 8), ("pw", 16), ("sync", 32)):   # the FM's square, PW, SYNC: their extra
@@ -170,6 +173,12 @@ def main():
     vov = max((vo["four"] - vo["one"]) / max(w4 - w1, 0.5), 0.0)
     vocc = [max(vo["one"] - w1 * vov, 0.0), vov, max(vo["bands"] - vo["one"] - (wb - w1) * vov, 0.0)]
     statc = [model[STAT]] + [k(res[f"stat{x}"]["voice"] - 3 * rest, K_VOICE) for x in ("arc", "spark")]
+    rev, dly = k(res["bus0"]["reverb"], K_FX), k(res["bus0"]["delay"], K_FX)   # (0.16.71: awake, each block)
+    a = res["asleep"]                                    # (asleep: their clocks moved on, a block slept)
+    skip = [k(a[x] / max(a["slept"][i], 1e-9), K_FX) if a["slept"][i] > 0 else 0.0
+            for i, x in enumerate(("rskip", "dskip"))]
+    print(f"asleep: the reverb {a['slept'][0] * 100:.0f} % of the blocks, the delay {a['slept'][1] * 100:.0f} %; "
+          f"awake {rev:.0f} and {dly:.0f} us a block, asleep {skip[0]:.1f} and {skip[1]:.1f}")
     prep0 = k(res["blank"]["total"] - res["blank"]["tasks"], K_PREP)
     prep1 = k(va["total"] - va["tasks"] - 3 * rest, K_PREP)             # (a track playing: its trigs, its knobs)
     prep_s = k(res["stress"]["total"] - res["stress"]["tasks"], K_PREP)
@@ -228,6 +237,10 @@ def main():
           f"static const float kWebFxMetal[2] = {{{f1(max(fxe[4], 0.0))}, {f1(max(fxe[5], 0.0))}}};   /* (0.16.41) the "
           "reverb METAL, SHIMMER: over Clouds' */",
           f"static const float kWebFxBbd = {f1(max(fxe[6], 0.0))};   /* (0.16.65) the delay's BBD: over the clean one's */",
+          f"static const float kWebFxRev = {f1(rev)}, kWebFxDly = {f1(dly)};   /* (0.16.71) the reverb, the delay: "
+          "awake (in kWebFx) */",
+          f"static const float kWebFxSkip[2] = {{{f1(skip[0])}, {f1(skip[1])}}};   /* (0.16.71) asleep: their clocks "
+          "moved on */",
           f"static const float kWebPrep = {f1(prep0)}, kWebPrepTrack = {f1(track)}, kWebPrepCable = {f1(cable)};   /* the "
           "preparation: its floor, a track playing, a cable */",
           ""]

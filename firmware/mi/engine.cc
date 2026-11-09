@@ -30,6 +30,9 @@ extern "C" {
 
 #ifdef PLAT_HOST
 float eng_test_prebus[2][128];           // (the tests: the master before its bus, what the USB channels sum to)
+int eng_test_awake;                      // (0.16.71: 1, the reverb and the delay never asleep: the tests' reference,
+                                         // tools/web/calib.cc's counts)
+uint32_t eng_test_slept[2];              // (the blocks each slept)
 #endif
 
 #ifdef PLAT_WEB
@@ -2974,7 +2977,52 @@ void mix_job(uint32_t n) {
   }
 }
 
+// (0.16.71) The reverb and the delay asleep: once nothing has reached one (its send under -120 dB) for longer than a
+// sound can stay in it unheard (twice its memory: the reverb's 16384 cells, the delay's 1.2 s line) and all it gave
+// meanwhile stayed under -120 dB, it is not run: its output 0, its cells as they were, its clock moved on (mrv_skip,
+// mdl_skip: the LFOs, the write position, the glides, as running would); the first block sent to it wakes it. The
+// same sound to -120 dB, and while they rest the FM-1's ~220 us (the reverb) and ~75 us (the delay) a block back.
+// METAL, SHIMMER and the BBD stay awake (their states their own)
+const float kFxSleep = 1e-6f;           // -120 dB
+const uint32_t kFxStill[2] = {2u * 16384u, 2u * 52920u};
+uint32_t fx_still[2];                   // samples in a row: nothing in, under kFxSleep out (the reverb, the delay)
+
+inline int block_quiet(const float* a, uint32_t n) {   // every sample under kFxSleep (out at the first that is not)
+  for (uint32_t i = 0; i < n; ++i)
+    if (fm_fabsf(a[i]) >= kFxSleep) return 0;
+  return 1;
+}
+
+// one of them (0 the reverb, 1 the delay) for this block: run, or asleep (its outputs 0); 1 if asleep. (Not inlined:
+// run_task, which calls it, is in the RAM the FM-1 keeps for code, nearly full; this runs from the flash, twice a
+// block)
+__attribute__((noinline)) int fx_run(int which, void* fx, const float* in, float* out_l, float* out_r, uint32_t n) {
+#ifdef PLAT_HOST
+  if (eng_test_awake) {                 // (the tests' reference, tools/web/calib.cc's counts: as before 0.16.71)
+    if (which) mdl_process(fx, in, out_l, out_r, n);
+    else mrv_process(fx, in, out_l, out_r, n);
+    return 0;
+  }
+#endif
+  const int quiet = block_quiet(in, n);   // (sent to: out at its first sample, the cost nothing)
+  if (quiet && fx_still[which] >= kFxStill[which] &&
+      (which ? mdl_skip(fx, n) : mrv_skip(fx, n))) {
+    for (uint32_t i = 0; i < n; ++i) out_l[i] = out_r[i] = 0.0f;
+#ifdef PLAT_HOST
+    ++eng_test_slept[which];
+#endif
+    return 1;
+  }
+  if (which) mdl_process(fx, in, out_l, out_r, n);
+  else mrv_process(fx, in, out_l, out_r, n);
+  fx_still[which] = quiet && block_quiet(out_l, n) && block_quiet(out_r, n) ? fx_still[which] + n : 0u;
+  return 0;
+}
+
 void fx_job(uint32_t n) {
+  mix_job(n);
+  const int rv_asleep = fx_run(0, reverb, fx_rsend, wet_l, wet_r, n);
+  const int dl_asleep = fx_run(1, delay, fx_dsend, echo_l, echo_r, n);
 #ifdef PLAT_WEB
   {                                     // (the bus's mode; the EQ of the tracks playing, the duck, the delay's filter,
     int bus = proj.algo[PG_COMP] >= MB_OTT ? static_cast<int>(MB_COMP) : proj.algo[PG_COMP];   // Warps in the mix)
@@ -2989,14 +3037,15 @@ void fx_job(uint32_t n) {
     if (proj.algo[PG_REVERB] == RV_METAL || proj.algo[PG_REVERB] == RV_SHIMMER)   // (0.16.41) METAL's over Clouds'
       us += kWebFxMetal[proj.algo[PG_REVERB] - RV_METAL];
     if (proj.algo[PG_DELAY(0)] >= DL_BBD_SYNC) us += kWebFxBbd;   // (0.16.65) the BBD over the clean delay
+    if (rv_asleep) us -= kWebFxRev - kWebFxSkip[0];   // (0.16.71) asleep: their own work off, their clock's on
+    if (dl_asleep) us -= kWebFxDly - kWebFxSkip[1];
     web_spend(us * static_cast<float>(n) / 128.0f);
   }
+#else
+  (void)rv_asleep, (void)dl_asleep;
 #endif
-  mix_job(n);
   float inv = 1.0f / static_cast<float>(n), ret = fx_ret0, dret = (fx_ret1 - fx_ret0) * inv, eret = fx_dret0;
   float deret = (fx_dret1 - fx_dret0) * inv, pr = 0.0f, pd = 0.0f;
-  mrv_process(reverb, fx_rsend, wet_l, wet_r, n);
-  mdl_process(delay, fx_dsend, echo_l, echo_r, n);
   for (uint32_t i = 0; i < n; ++i) {
     ret += dret;
     eret += deret;

@@ -134,6 +134,23 @@ class Delay {
     blend_now_ = blend_;
   }
 
+  // (MIFM1 0.16.71) n samples passed asleep (the engine's fx_job: nothing in, its line silent): its clock as Process
+  // moves it, the time's glide, the wow's phase, the write position, the level's release, FILTER's blend; 0 (run it)
+  // on the BBD, whose state is its own
+  int Skip(uint32_t n) {
+    if (bbd_) return 0;
+    const float kGlide = 0.0004f, kRelease = 1.0f - 1.0f / (0.5f * 44100.0f), lfo_inc = 0.45f / sr_;
+    for (uint32_t i = 0; i < n; ++i) {
+      time_ += (target_ - time_) * kGlide;
+      phase_ += lfo_inc;
+      if (phase_ >= 1.0f) phase_ -= 1.0f;
+      env_ *= kRelease;
+    }
+    write_ = (write_ + n) % size_;
+    blend_now_ = blend_;
+    return 1;
+  }
+
   // the BBD's block (see above), at half the rate (its band under 8 kHz: half the work): the input two samples into
   // one ([1 2 1] / 4), the output each half-rate sample and halfway to it before; the clock's rate and the filters'
   // cutoff from the time at its start

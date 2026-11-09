@@ -36,9 +36,14 @@ int plat_cpu2_busy(void) { return 0; }
 void plat_cpu2_sync(void) {}
 }
 
+extern int eng_test_awake;              // (engine.cc: the reverb and the delay never asleep)
+extern uint32_t eng_test_slept[2];      // (the blocks each slept)
+
 int main(int argc, char** argv) {
   if (eng_init() != 0) return 1;
   const char* what = argc > 1 ? argv[1] : "stress";
+  eng_test_awake = strcmp(what, "asleep") != 0;   // (0.16.71: every count with them awake, but "asleep": blank's, with
+  if (!strcmp(what, "asleep")) what = "blank";    // them asleep, what their clock costs then)
   project_t* p = eng_project();
   float secs = 2.0f;
   if (!strcmp(what, "stress") || !strcmp(what, "groove")) {   // (the stress test, or the demo groove: TRAUMA's
@@ -149,6 +154,7 @@ int main(int argc, char** argv) {
     nv += kind == MK_PROPHET ? pro_voices(0) : kind == MK_CHOIR ? 0 : kind == MK_VOCODER ? voc_voices(0)
                                                                                                      : poly_voices(0);
   }
-  printf("blocks %u\nvoices %.4f\n", nb, nv / static_cast<double>(nb ? nb : 1));
+  printf("blocks %u\nvoices %.4f\nslept %u %u\n", nb, nv / static_cast<double>(nb ? nb : 1), eng_test_slept[0],
+         eng_test_slept[1]);
   return 0;
 }

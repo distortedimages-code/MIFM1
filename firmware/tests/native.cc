@@ -7304,6 +7304,95 @@ int main(int argc, char** argv) {
     }
   }
 
+  // 80. (0.16.71) the reverb and the delay asleep (last: its 16 s of rendering would move the states the tests
+  // after it start from). Each module twice side by side, the same input (a burst of noise,
+  // 8 s of silence, a burst again): one always run, the other put to sleep by the engine's rule (nothing in, under
+  // -120 dB out, for twice its memory) with its clock moved on while asleep (mrv_skip, mdl_skip): the same output to
+  // -120 dB, the second burst's tail too. Then in the engine: a kick into both, its tails let die out, they sleep,
+  // the kick again comes back through them as loud
+  {
+    const float kSleep = 1e-6f;
+    const uint32_t still_for[2] = {2u * 16384u, 2u * 52920u};
+    float worst[2] = {0.0f, 0.0f};
+    uint32_t slept[2] = {0, 0}, blocks = 0;
+    for (int m = 0; m < 2; ++m) {                         // the reverb, the delay
+      static uint64_t buf[2][256 * 1024 / 8];             // (no operator new here: the C runtime alone)
+      const uint32_t sz = m ? mdl_size() : mrv_size();
+      if (sz > sizeof buf[0]) { ++failures, printf("FAIL: the sleep test's buffers (%u)\n", sz); break; }
+      void* mem[2] = {buf[0], buf[1]};
+      for (int k = 0; k < 2; ++k) {
+        if (m) {
+          mdl_init(mem[k]);
+          mdl_set(mem[k], 0.25f * 44100.0f, 0.45f, 0.0f, 0.2f, 0.0f, 1, 0.3f);   // (ping-pong, a little wow)
+        } else {
+          mrv_init(mem[k]);
+          mrv_set(mem[k], RV_CLOUDS, 0.7f, 0.5f, 0.6f);
+        }
+      }
+      uint32_t still = 0, seed = 12345;
+      float in[128], ol[2][128], orr[2][128];
+      const uint32_t nb = 44100 * 20 / 128;
+      blocks = nb;
+      for (uint32_t blk = 0; blk < nb; ++blk) {
+        const uint32_t t = blk * 128;
+        for (int i = 0; i < 128; ++i) {
+          const uint32_t ti = t + static_cast<uint32_t>(i);
+          seed = seed * 1664525u + 1013904223u;
+          const int burst = ti < 2205 || (ti >= 44100 * 12 && ti < 44100 * 12 + 2205);
+          in[i] = burst ? (static_cast<float>(seed >> 9) / 4194304.0f - 1.0f) * 0.5f : 0.0f;
+        }
+        for (int k = 0; k < 2; ++k) {
+          float pin = 0.0f;
+          for (int i = 0; i < 128; ++i) pin = std::max(pin, std::fabs(in[i]));
+          const int quiet = pin < kSleep;
+          if (k && quiet && still >= still_for[m] && (m ? mdl_skip(mem[k], 128) : mrv_skip(mem[k], 128))) {
+            for (int i = 0; i < 128; ++i) ol[k][i] = orr[k][i] = 0.0f;
+            ++slept[m];
+            continue;
+          }
+          if (m) mdl_process(mem[k], in, ol[k], orr[k], 128);
+          else mrv_process(mem[k], in, ol[k], orr[k], 128);
+          if (k) {
+            float po = 0.0f;
+            for (int i = 0; i < 128; ++i) po = std::max(po, std::max(std::fabs(ol[k][i]), std::fabs(orr[k][i])));
+            still = quiet && po < kSleep ? still + 128u : 0u;
+          }
+        }
+        for (int i = 0; i < 128; ++i)
+          worst[m] = std::max(worst[m], std::max(std::fabs(ol[0][i] - ol[1][i]), std::fabs(orr[0][i] - orr[1][i])));
+      }
+    }
+    extern uint32_t eng_test_slept[2];
+    eng_play(0);
+    eng_defaults(p);
+    p->algo[PG_TRACK(0, 0)] = static_cast<uint8_t>(eng_model_find(MK_DRUM, 0));   // the kick
+    p->val[PG_RSEND * 4 + 0] = 1.0f;
+    p->val[PG_DSEND * 4 + 0] = 1.0f;
+    p->val[PG_MIX * 4 + 0] = 1.0f;
+    p->val[PG_DELAY(0) * 4 + 1] = 0.3f;                   // (FEEDBACK: its echoes gone in a few seconds)
+    eng_cut();
+    eng_test_slept[0] = eng_test_slept[1] = 0;
+    float kick[2] = {0.0f, 0.0f};
+    const int nb = 44100 * 16 / 128;
+    for (int b = 0; b < nb; ++b) {
+      const int second = b >= 44100 * 12 / 128;
+      if (b == 3 || b == 44100 * 12 / 128) eng_key(0, 48, 1);
+      if (b == 10 || b == 44100 * 12 / 128 + 7) eng_key(0, 48, 0);
+      eng_render(l, r, n);
+      kick[second] = std::max(kick[second], std::min(eng_meter(4), eng_meter(5)));   // (both returns: the weaker)
+    }
+    printf("the reverb and the delay asleep: side by side %.0f and %.0f dB apart at most (asleep %u and %u of %u "
+           "blocks); in the engine asleep %u and %u of %d blocks, the kick's returns %.3f, then after %.3f\n",
+           20.0 * std::log10(std::max(static_cast<double>(worst[0]), 1e-12)),
+           20.0 * std::log10(std::max(static_cast<double>(worst[1]), 1e-12)), slept[0], slept[1], blocks,
+           eng_test_slept[0], eng_test_slept[1], nb, kick[0], kick[1]);
+    if (worst[0] > 1e-6f || worst[1] > 1e-6f || slept[0] < blocks / 4 || slept[1] < blocks / 8 ||
+        eng_test_slept[0] < static_cast<uint32_t>(nb) / 4 || eng_test_slept[1] < static_cast<uint32_t>(nb) / 8 ||
+        kick[0] < 0.01f || kick[1] < 0.8f * kick[0])
+      ++failures, printf("FAIL: the reverb and the delay asleep\n");
+    eng_defaults(p);
+  }
+
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
   return failures ? 1 : 0;
 }

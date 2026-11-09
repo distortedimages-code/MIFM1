@@ -350,6 +350,7 @@ void mrv_init(void *mem);
 /* 0..1 each: Clouds' time, damping, diffusion; METAL's decay (FREEZE from 0.97), size, tone */
 void mrv_set(void *r, int mode, float time, float damping, float diffusion);
 void mrv_process(void *r, const float *in, float *out_l, float *out_r, uint32_t n);
+int mrv_skip(void *r, uint32_t n);       /* (0.16.71) n samples asleep: its clock on; 0: not Clouds' (run it) */
 
 /* ---- the delay (mi_delay.h: Mutable's filter and saturation in a 16-bit line, Zen Delay's knobs) ---- */
 uint32_t mdl_size(void);                 /* its 1.2 s line included */
@@ -358,6 +359,7 @@ void mdl_init(void *mem);
 void mdl_set(void *d, float time, float feedback, float filter, float resonance, float drive, int ping_pong,
              float mod);
 void mdl_process(void *d, const float *in, float *out_l, float *out_r, uint32_t n);
+int mdl_skip(void *d, uint32_t n);       /* (0.16.71) n samples asleep: its clock on; 0: the BBD (run it) */
 void mdl_bbd(void *d, int on, float dirt, float width);   /* (0.16.65) the BBD (a Memory Man): on, DIRT, WIDTH 0..1 */
 
 /* ---- the master bus (mi_master.cc): a compressor, then stmlib's limiter on each side ---- */

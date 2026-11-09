@@ -148,6 +148,14 @@ class Reverb {
     lp_decay_2_ = lp_2;
   }
 
+  // (MIFM1 0.16.71) n samples passed asleep (mi_clouds.cc mrv_skip): the engine's clock as Process moves it, its
+  // write pointer and its two LFOs (a new value each 32 samples), so the modulation picks up where it would be; the
+  // cells untouched (their tail under -120 dB)
+  void Skip(size_t n) {
+    E::Context c;
+    while (n--) engine_.Start(&c);
+  }
+
   inline void set_amount(float amount) { amount_ = amount; }
   inline void set_input_gain(float input_gain) { input_gain_ = input_gain; }
   inline void set_time(float reverb_time) { reverb_time_ = reverb_time; }

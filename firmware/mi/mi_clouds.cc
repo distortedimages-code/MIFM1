@@ -168,6 +168,13 @@ void mrv_set(void* v, int mode, float time, float damping, float diffusion) {
   apply(r);
 }
 
+int mrv_skip(void* v, uint32_t n) {   // (0.16.71) asleep: Clouds' reverb's clock moved on (not METAL's: 0, run it)
+  ReverbFx* r = static_cast<ReverbFx*>(v);
+  if (r->mode != RV_CLOUDS || r->want != r->mode) return 0;
+  r->reverb.Skip(n);
+  return 1;
+}
+
 void mrv_process(void* v, const float* in, float* out_l, float* out_r, uint32_t n) {
   ReverbFx* r = static_cast<ReverbFx*>(v);
   const int swap = r->want != r->mode;  // (from Clouds to METAL or back: this block the last of the old one, faded)
