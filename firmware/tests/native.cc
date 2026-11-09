@@ -2690,12 +2690,12 @@ int main(int argc, char** argv) {
       for (int i = 0; i < 4; ++i) x5[i] = rnd() < 0.15f ? (rnd() < 0.5f ? 0.0f : 1.0f) : rnd();   // LAYER, LEVEL,
       x4[2] = static_cast<float>(static_cast<int>(rnd() * 4.999f));   // CHARACTER, TRANSP)
       x5[0] = static_cast<float>(static_cast<int>(rnd() * 8.999f));
-      x5[3] = static_cast<float>(static_cast<int>(rnd() * 48.999f) - 24);
+      x5[3] = static_cast<float>(static_cast<int>(rnd() * 28.999f) - 14);   // (0.16.68: steps of the scale)
       pads_set_page4(x4);
       pads_set_page5(x5);
       int prog = static_cast<int>(rnd() * static_cast<float>(pads_progs()));
       int cn = pads_chord(prog, s2, s2 % 7, 0x5AD, k[1], ch, &raised);
-      pads_set(24.0f + 60.0f * rnd(), k, ch, cn, s2 % 12);
+      pads_set(24.0f + 60.0f * rnd(), k, ch, cn, s2 % 12, 0x5AD);
       pads_gate(1);
       for (int b = 0; b < 200; ++b) {
         float tmp[32];
@@ -2716,7 +2716,7 @@ int main(int argc, char** argv) {
     k[6] = 0.5f;
     {
       int cn = pads_chord(1, 0, 0, 0x5AD, k[1], ch, &raised);
-      pads_set(57.0f, k, ch, cn, 9);
+      pads_set(57.0f, k, ch, cn, 9, 0);
     }
     pads_gate(1);
     double e_early = 0.0, e_late = 0.0;
@@ -2740,6 +2740,31 @@ int main(int argc, char** argv) {
     if (!ok || !once || !roots_ok || !thirds_ok || !folia || !avoid || q0 != 64 || q1 != 59 || pk < 0.02f || nan ||
         nan_any || pk_any > 1.2f || std::fabs(held) > 0.1 || e_early < 1.0)
       ++failures, printf("FAIL: PADS\n");
+    // (0.16.68) LAYER's TRANSP in steps of the scale: in C major +4 a fifth over each degree (B's: F, not F#), +2 a
+    // third (D's minor), +7 the octave, -2 a third under; in C's major pentatonic +1 the next note (E: G); a note off
+    // the scale (F#) as far over the one under it; no scale: semitones. A project of 0.16.67 (42): +12 semitones -> +7
+    {
+      const int c_maj[7] = {0, 2, 4, 5, 7, 9, 11};
+      int st = 1;
+      for (int i = 0; i < 7; ++i) {
+        st &= (c_maj[i] + pads_steps(0xAB5, c_maj[i], 4)) % 12 == c_maj[(i + 4) % 7];
+        st &= (c_maj[i] + pads_steps(0xAB5, c_maj[i], 2)) % 12 == c_maj[(i + 2) % 7];
+        st &= pads_steps(0xAB5, c_maj[i], 7) == 12 && pads_steps(0xAB5, c_maj[i], -7) == -12;
+        st &= (c_maj[i] + pads_steps(0xAB5, c_maj[i], -2) + 12) % 12 == c_maj[(i + 5) % 7];
+      }
+      st &= pads_steps(0xAB5, 11, 4) == 6 && pads_steps(0xAB5, 2, 2) == 3 && pads_steps(0x295, 4, 1) == 3 &&
+            pads_steps(0xAB5, 6, 2) == 4 && pads_steps(0, 3, 5) == 5 && pads_steps(0xAB5, 4, 14) == 24;
+      static project_t q42;
+      eng_defaults(&q42);
+      q42.version = 42;
+      q42.theme = 3;
+      q42.val[PG_PADS5 * 4 + 3] = 12.0f;
+      const int up = eng_upgrade(&q42, sizeof q42) && eng_check(&q42) && q42.val[PG_PADS5 * 4 + 3] == 7.0f &&
+                     q42.theme == 3;
+      printf("PADS' LAYER TRANSP in steps of the scale: %s; a project of 0.16.67: +12 semitones -> %+.0f steps, its "
+             "theme kept (%s)\n", st ? "ok" : "WRONG", static_cast<double>(q42.val[PG_PADS5 * 4 + 3]), up ? "ok" : "WRONG");
+      if (!st || !up) ++failures, printf("FAIL: PADS' TRANSP\n");
+    }
   }
 
   // 48. POLY (mi_poly.cc, 0.12): its knobs; its chords (a chord memory's Min9; the scale's triad and seventh in A minor
@@ -4321,7 +4346,7 @@ int main(int argc, char** argv) {
       k[5] = 0.7f;                      // (bright enough to see)
       if (one) x[1] = 0.5f;
       pads_set_page4(x);
-      pads_set(48.0f, k, chord, one ? 1 : 3, 0);
+      pads_set(48.0f, k, chord, one ? 1 : 3, 0, 0);
       pads_gate(1);
       for (uint32_t i = 0; i < 44100 * 2; i += 128) pads_render(&buf[i], 128);
       pads_gate(0);
@@ -4408,7 +4433,7 @@ int main(int argc, char** argv) {
       if (n == 1) x[1] = 0.5f;          // (one saw)
       pads_set_page4(x);
       pads_set_page5(x5);
-      pads_set(48.0f, k, chord, n, 0);
+      pads_set(48.0f, k, chord, n, 0, 0);
       for (int i = 0; i < kN; i += 128) {
         if (i % 44100 < 128) pads_gate(0), pads_gate(1);   // (at 0, 1.001 s, 2.003 s)
         pads_render(&buf[i], 128);
@@ -4566,7 +4591,7 @@ int main(int argc, char** argv) {
       x[0] = w;
       x[1] = 0.5f;
       pads_set_page4(x);
-      pads_set(note, k, chord, 1, 0);
+      pads_set(note, k, chord, 1, 0, 0);
       pads_gate(1);
       for (int i = 0; i < 44100; i += 128) pads_render(&b[i], 128);
       pads_gate(0);
@@ -4662,12 +4687,12 @@ int main(int argc, char** argv) {
       k[7] = rel;
       x[1] = 0.5f;
       pads_set_page4(x);
-      pads_set(48.0f, k, chord, 1, 0);
+      pads_set(48.0f, k, chord, 1, 0, 0);
       pads_gate(1);
       for (int i = 0; i < 44100 * 3; i += 128) {
         if (i == 344 * 128) {             // (1 s: F3, a trig)
           pads_gate(0);
-          pads_set(48.0f, k, fourth, 1, 0);
+          pads_set(48.0f, k, fourth, 1, 0, 0);
           pads_gate(1);
         }
         if (i == 689 * 128) pads_gate(0);  // (2 s: let go)
@@ -7172,13 +7197,13 @@ int main(int argc, char** argv) {
       const int c3[3] = {0, 4, 7}, c4[4] = {0, 4, 7, 11};
       static float o[44100 * 3];
       int at[2] = {0, 0};
-      pads_set(48.0f, k, c3, 3, 0);
+      pads_set(48.0f, k, c3, 3, 0, 0);
       pads_gate(1);
       for (int b = 0; b < 44100 * 3 / 32; ++b) {
         if (b == 44100 / 32 || b == 2 * 44100 / 32) {   // (a trig: the gate down and up, the next chord)
           pads_gate(0);
-          if (b == 44100 / 32) pads_set(48.0f, k, c4, 4, 0);
-          else pads_set(48.0f, k, c3, 3, 0);
+          if (b == 44100 / 32) pads_set(48.0f, k, c4, 4, 0, 0);
+          else pads_set(48.0f, k, c3, 3, 0, 0);
           pads_gate(1);
           at[b == 44100 / 32 ? 0 : 1] = b * 32;
         }

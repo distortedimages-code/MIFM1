@@ -2,7 +2,7 @@
  * Copyright (C) 2026 Yoann */
 /* The patterns (0.15): 11 banks of 16, each a whole project (its sounds too), kept in the flash's two windows for an
  * app's big data (plat.h: PLAT_XDATA1, 23 sectors, then PLAT_XDATA0, 4), outside the store (its objects take a sector
- * pair each: 176 would not fit). Each one packed (LZSS, lz_pack: a project's 3776 bytes in 650 to 1000 or so), so
+ * pair each: 176 would not fit). Each one packed (LZSS, lz_pack: a project's 3824 bytes in 700 to 1500 or so), so
  * some 100 fit where 27 whole ones would. And the presets (0.15.1): a track's sound each (engine.h eng_sound_t), 10
  * banks of 16 (B to K; A is the firmware's own), in the same records: the keys from PAT_SLOTS on (PRE_KEY). On the
  * flash a preset's slot byte is 176 or more, its high part in the pad byte (pat_key): 0.15.0 reads those as no
@@ -412,18 +412,25 @@ static int pat_append(int slot, uint32_t kind, const uint8_t *p, uint32_t n)
     return 0;
 }
 
-static int pat_save(int slot, const void *src, uint32_t n)   /* 0 done, -1 no room, -2 flash, -3 (pat_quick) */
+/* 0 done, -1 no room, -2 flash, -3 (pat_quick), -4 too big for a record even packed (nothing written). A record's
+ * bytes at most PAT_REC_MAX: a project (3824 bytes since 0.16.7) only packed, as it always is (some 700 to 1500
+ * bytes; every knob, lock and trig at random some 3100). (0.16.68: it was refused before being packed, from 0.16.2 on,
+ * its 3820 bytes over 3808: NOT SAVED) */
+#define PAT_REC_MAX (PAT_USE - (uint32_t)sizeof(pat_sec_t) - (uint32_t)sizeof(pat_rec_t))   /* 3808 */
+static int pat_save(int slot, const void *src, uint32_t n)
 {
-    uint8_t buf[PAT_USE - 16u - sizeof(pat_sec_t)];   /* (a record's most: a sector's bytes, its header and the record's) */
+    uint8_t buf[PAT_REC_MAX];
     uint32_t k;
     int e;
-    if (!pat_ok || slot < 0 || slot >= PAT_KEYS || n > sizeof buf)
+    if (!pat_ok || slot < 0 || slot >= PAT_KEYS || n > 0xFFFFu)
         return -2;
     k = lz_pack((const uint8_t *)src, n, buf, sizeof buf);
     if (k && k < n)
         e = pat_append(slot, PAT_LZ, buf, k);
-    else
+    else if (n <= sizeof buf)
         e = pat_append(slot, PAT_RAW, (const uint8_t *)src, n);
+    else
+        return -4;
     if (e == 0 && slot < PAT_SLOTS)
         pat_last = slot;
     return e;

@@ -257,7 +257,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 42u              /* (41: 0.16.66's, the same layout: its theme in the list before 0.16.67's (Acid,
+#define PROJECT_VERSION 43u              /* (42: 0.16.67's, the same layout: PADS' LAYER TRANSP in semitones then:
+                                          * read, in steps of the scale (transp_steps); 41: 0.16.66's, the same layout: its theme in the list before 0.16.67's (Acid,
                                           * Ember, Neon, Ice, Rust, Mono, Mutable, Graphite): read onto the new one
                                           * (theme_v42); 40: 0.16.63's to 0.16.65's, the same layout: NOTE -24..24 then, its locks'
                                           * bytes over it: read, over the new travel (note_widen); 39: 0.16.60's to 0.16.62's, the same layout: EASEL not yet at 21: read, the
@@ -322,7 +323,7 @@ typedef struct {
     uint8_t dice_out;                    /* (0.16.51, in the spare) the tracks the random dose leaves alone: bit t, track
                                           * t (0: all four taken, as ever; GLO's third face) */
     uint8_t trauma_out;                  /* (0.16.51) the tracks TRAUMA leaves clean (GLO's fourth face) */
-    uint8_t rsv[1];                      /* (0.16.7) spare, 0: the project at the patterns' record's size */
+    uint8_t rsv[1];                      /* (0.16.7) spare, 0 (a pattern's record packs it: pat_store.h PAT_REC_MAX) */
 } project_t;
 #define PROJECT_SIZE_24 3804u            /* (0.16.0's and 0.16.1's project, version 24) */
 #define PROJECT_SIZE_26 3820u            /* (0.16.2's to 0.16.6's, versions 25, 26) */

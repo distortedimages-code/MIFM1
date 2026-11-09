@@ -55,8 +55,10 @@ int plat_data_write(uint32_t off, const void *src, uint32_t n)
 
 #include "../pat_store.h"
 
-#define PSIZE 3776u                      /* a project's bytes (engine.h project_t) */
-#define SSIZE 212u                       /* a preset's (engine.h eng_sound_t) */
+#include "../mi/engine.h"
+#define PSIZE ((uint32_t)sizeof(project_t))     /* a project's bytes (0.16.68: the real ones, 3824; 3776 here before,
+                                                 * a save refused on the FM-1 since 0.16.2 passed) */
+#define SSIZE ((uint32_t)sizeof(eng_sound_t))   /* a preset's */
 static uint32_t ksize(int s) { return s < PAT_SLOTS ? PSIZE : SSIZE; }
 static int bad;
 static void check(const char *what, int ok)
@@ -197,6 +199,33 @@ int main(void)
     full[7] = 0;
     pat_init();
     check("a slot erased: empty, after a reboot too, the others as they were", all_match());
+
+    /* (0.16.68) a project as full as it gets: every knob a float at random, every lock, every trig; then one that
+     * does not pack at all (bytes at random): refused, nothing written, the slot as it was */
+    {
+        static project_t h;
+        static uint8_t snap[sizeof flash];
+        memset(&h, 0, sizeof h);
+        for (int i = 0; i < ENG_NPARAMS; i++)
+            h.val[i] = (float)(rnd() % 100000u) / 100000.0f;
+        for (int i = 0; i < ENG_PLOCKS; i++)
+            h.lock[i] = (plock_t){(uint8_t)(rnd() % ENG_LANES), (uint8_t)(rnd() % ENG_STEPS), (uint8_t)(rnd() % ENG_NTP),
+                                  (uint8_t)rnd()};
+        for (uint32_t i = 0; i < sizeof h.trig; i++)
+            ((uint8_t *)h.trig)[i] = (uint8_t)rnd();
+        uint32_t packed = lz_pack((const uint8_t *)&h, PSIZE, z, sizeof z);
+        memcpy(model[30], &h, PSIZE);
+        full[30] = pat_save(30, model[30], PSIZE) == 0;
+        pat_init();
+        snprintf(what, sizeof what, "every knob, lock and trig at random: saved (%u bytes packed), loads as saved", packed);
+        check(what, full[30] && packed < PAT_REC_MAX && all_match());
+        for (uint32_t i = 0; i < PSIZE; i++)
+            p[i] = (uint8_t)(rnd() >> 13);
+        memcpy(snap, flash, sizeof flash);
+        int e = pat_save(30, p, PSIZE);
+        check("a project that does not pack: refused (-4), the flash untouched, the slot as it was",
+              e == -4 && !memcmp(snap, flash, sizeof flash) && all_match());
+    }
 
     /* over and over: the room made again and again */
     {

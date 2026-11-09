@@ -611,7 +611,10 @@ wait 100
 shot 18p2_patterns_order.png
 release SEQ
 wait 300
-shot 18p3_pattern_a2_new.png
+shot 18p3_patterns_stay.png
+tap SEQ
+wait 300
+shot 18p3b_pattern_a2_new.png
 turn K1 6
 wait 200
 press SAVE
@@ -637,6 +640,8 @@ wait 200
 shot 18p6_order_a1_a1_a2.png
 release SEQ
 wait 300
+tap SEQ
+wait 300
 tap PLAY
 wait 2500
 press SEQ
@@ -661,6 +666,15 @@ wait 200
 shot 18p9_a2_erased.png
 release SEQ
 wait 300
+turn SELECT 1
+wait 150
+shot 18p9b_open_select_bank_b.png
+turn SELECT -1
+wait 100
+key 0 down
+key 0 up
+wait 300
+shot 18p9c_open_a1_alone.png
 press EDIT
 wait 450
 shot 18q1_presets_factory.png

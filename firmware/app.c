@@ -160,8 +160,9 @@ static int chain_n, chain_new_n, chain_pos = -1;   /* chain_pos: its entry playi
 static int chain_staged = -1, chain_again;          /* the entry next (cued in scratch, or the same again), -1 none */
 static uint32_t chain_cycles;            /* eng_cycles seen */
 static int pat_bank;                     /* the bank its screen shows */
-static int pat_open;                     /* SEQ held: its screen */
+static int pat_open;                     /* SEQ held: its screen (0.16.68: open until SEQ again) */
 static int pat_used;                     /* a key pressed while SEQ held (its tap not SEQ's page then) */
+static int pat_in;                       /* SEQ pressed with the screen open (let go without a key: it closes) */
 /* the presets (0.15.1): a track's sound each, A the factory's (engine.cc), B to K saved (pat_store.h's keys from
  * PRE_KEY on); their section further down */
 static int pre_open;                     /* EDIT held: their screen */
@@ -3736,7 +3737,7 @@ static uint32_t hold_ms(int b, char *label, uint32_t max)
     l[0] = 0;
     if (b == B_SEL && held(B_REC)) {      /* REC and SEL: REC's hold */
         ms = 0xFFFFFFFFu;
-    } else if (b == B_REC && held(B_SEQ)) {   /* (SEQ held: REC and a white key erase a pattern) */
+    } else if (b == B_REC && (held(B_SEQ) || pat_open)) {   /* (the patterns: REC and a white key erase one) */
         ms = 0xFFFFFFFFu;
     } else if ((b == B_REC || b == B_SAVE) && held(B_EDIT)) {   /* (EDIT held: with a white key, a sound erased or
                                           * saved) */
@@ -4339,7 +4340,9 @@ static void dice_close(void)             /* back to the page, all of it drawn ag
 /* The patterns (0.15, pat_store.h): 11 banks (A to K) of 16, each a whole project. SEQ held: their screen; a black
  * key a bank, a white key a pattern. One pressed plays it, looped: from the playing one's end (its longest lane's
  * LENGTH), at once when stopped; several in a row, an order played in a loop (A1 A1 A2 A5: A1 twice, A2, then A5),
- * after Teenage Engineering's Pocket Operators. With REC held, a white key erases one (stopped). SAVE held (stopped):
+ * after Teenage Engineering's Pocket Operators. (0.16.68) The screen stays when SEQ is let go: a white key alone the
+ * next pattern, SEQ held again and keys an order, SELECT the bank, SEQ (a press, no key) closes it, as does another
+ * module's button. With REC held, a white key erases one (stopped). SAVE held (stopped):
  * the pattern saved in its slot, and the project as before (the backup's). An empty slot takes the pattern playing as
  * it is (a copy to make another one from); a pattern left without SAVE comes back as it was saved. The machine's
  * settings (the output, Warps' quality, the colours) stay whatever plays */
@@ -4483,6 +4486,10 @@ static void pattern_key(int k, int down) /* SEQ held: a black key a bank, a whit
             }
             else
                 app_say("COULD NOT ERASE", n);
+        } else if (!held(B_SEQ)) {       /* (0.16.68: the screen open, SEQ let go) that one next, alone */
+            chain_new[0] = (uint8_t)slot;
+            chain_new_n = 1;
+            chain_apply();
         } else if (chain_new_n < (int)sizeof chain_new) {
             chain_new[chain_new_n++] = (uint8_t)slot;
         }
@@ -4490,10 +4497,8 @@ static void pattern_key(int k, int down) /* SEQ held: a black key a bank, a whit
     }
 }
 
-static void pattern_seq_up(void)         /* SEQ let go: the order made, if keys were pressed */
+static void pattern_close(void)          /* the patterns' screen closed (the page under it back) */
 {
-    if (chain_new_n)
-        chain_apply();
     if (pat_open) {
         pat_open = 0;
         ui.full = 1;
@@ -4572,7 +4577,7 @@ static void draw_patterns(void)
                 text_cat(line, n, sizeof line);
             }
             if (!on)
-                text_cat(line, "A KEY: A PATTERN, SEVERAL: AN ORDER", sizeof line);
+                text_cat(line, "A KEY: NEXT   SEQ HELD + KEYS: AN ORDER", sizeof line);
             cv_text(10, 190, &FONT_XS, line, chain_new_n ? AC3 : on > 1 ? TXT : MUTED);
         }
         line[0] = 0;                     /* a message (0.15.1), or what REC does and the room left */
@@ -4582,7 +4587,7 @@ static void draw_patterns(void)
                 text_cat(line, "  ", sizeof line), text_cat(line, ui.msg[1], sizeof line);
         } else {
             int_text((int32_t)(pat_room() / 1024u), v);
-            text_cat(line, "REC+KEY ERASES   ", sizeof line);
+            text_cat(line, "SEQ CLOSES  REC+KEY ERASES  ", sizeof line);
             text_cat(line, v, sizeof line);
             text_cat(line, " KB FREE", sizeof line);
         }
@@ -5383,6 +5388,14 @@ static void lrec_bars(int d);
 static void button_down(int b)
 {
     ui.used[b] = 0;
+    if (pat_open && b != B_SEQ && b != B_PLAY && b != B_SAVE) {   /* (0.16.68) the patterns' screen: REC only with a
+                                          * key (erasing), another module's button closes it and goes on */
+        if (b == B_REC) {
+            ui.long_done[B_REC] = 1;
+            return;
+        }
+        pattern_close();
+    }
     switch (b) {
     case B_PLAY:                         /* the clock runs or stops; again at once (STOP twice): stopped, every sound
                                           * cut, the effects' tails too */
@@ -5450,8 +5463,10 @@ static void button_down(int b)
         break;
     case B_SAVE: case B_ENV:
         break;                           /* on release (a tap), held long, or held with a knob */
-    case B_SEQ:                          /* a tap: the steps (let go); held: the patterns (0.15) */
+    case B_SEQ:                          /* a tap: the steps (let go); held: the patterns (0.15), open until SEQ
+                                          * again (0.16.68) */
         pat_used = 0;
+        pat_in = pat_open;
         chain_new_n = 0;
         break;
     case B_EDIT:                         /* a tap: the track's sets (let go); held: the presets (0.15.1) */
@@ -5515,7 +5530,7 @@ static void erase_all(void)              /* GLO and REC held 3 s: the project as
 
 static void button_long(int b)
 {
-    if (b == B_SEQ) {                    /* the patterns' screen, as long as SEQ is held */
+    if (b == B_SEQ) {                    /* the patterns' screen (until SEQ again) */
         pat_open = 1;
         ui.full = 1;
         return;
@@ -5525,7 +5540,7 @@ static void button_long(int b)
         ui.full = 1;
         return;
     }
-    if ((b == B_REC && held(B_SEQ)) || ((b == B_REC || b == B_SAVE) && held(B_EDIT)))
+    if ((b == B_REC && (held(B_SEQ) || pat_open)) || ((b == B_REC || b == B_SAVE) && held(B_EDIT)))
         return;
     if (b == B_REC && held(B_SEL)) {     /* REC and SEL: every cable, the tracks' and the global ones */
         for (int g = 0; g <= ENG_TRACKS; g++)
@@ -5563,7 +5578,7 @@ static void button_long(int b)
         else if ((e = pat_save(pat_cur, eng_project(), sizeof(project_t))) == 0)
             app_say(l1, "SAVED");
         else
-            app_say(l1, e == -1 ? "NO ROOM LEFT" : "NOT SAVED");
+            app_say(l1, e == -1 ? "NO ROOM LEFT" : e == -4 ? "TOO DENSE TO SAVE" : "NOT SAVED");   /* (-4: pat_save) */
     } else if (b == B_REC) {
         if (ui.page == VP_SYS) {
             project_init(ui.init_sel);
@@ -5605,10 +5620,14 @@ static void button_up(int b)
 {
     int pt = ptype(ui.page);
     switch (b) {
-    case B_SEQ:                          /* a tap: the lane's steps; held: the order made, the screen closed */
-        if (!pat_used && !ui.long_done[b])
+    case B_SEQ:                          /* a tap: the lane's steps; held: the screen, the order made (keys
+                                          * pressed); the screen open: closed (no key) */
+        if (!pat_in && !pat_used && !ui.long_done[b])
             module_button(B_SEQ);
-        pattern_seq_up();
+        else if (pat_in && !pat_used)
+            pattern_close();
+        else if (chain_new_n)
+            chain_apply();
         break;
     case B_EDIT:                         /* a tap: the track's sets; held: the screen closed */
         if (!pre_used && !ui.long_done[b])
@@ -6173,7 +6192,7 @@ static void poll_keys(void)
         int note = 53 + (int)k + 12 * ui.octave;
         if (!down && !up)
             continue;
-        if (held(B_SEQ)) {               /* the patterns' (a note let go meanwhile: let go) */
+        if (held(B_SEQ) || pat_open) {   /* the patterns' (a note let go meanwhile: let go) */
             pattern_key((int)k, down);
             if (up && !ui.grid && !ui.mod && ui.erec < 0)
                 eng_key(ui.track, note, 0);
@@ -6256,6 +6275,18 @@ static void input(void)
     }
     ui.btn = btn;
     poll_keys();
+    if (pat_open) {                      /* (0.16.68) the patterns' screen: SELECT its bank; the other knobs nothing (the
+                                          * page under it not moved unseen) */
+        e = plat_enc(EN_SELECT);
+        if (e) {
+            pat_bank = clamp(pat_bank + e, 0, PAT_BANKS - 1);
+            pat_used |= held(B_SEQ);
+            ui.full = 1;
+        }
+        plat_enc(EN_PRESET), plat_enc(EN_ALGO);
+        for (int i = 0; i < 4; i++)
+            plat_enc(EN_K1 + i);
+    }
     /* encoders */
     e = plat_enc(EN_PRESET);
     if (e && held(B_EDIT)) {             /* (the presets' screen: another track's; EDIT's tap not taken) */
@@ -6510,6 +6541,16 @@ static void input(void)
             for (int i = 0; i < 3; i++)
                 if (eng_lfo_phase(i) < 0.5f)
                     kk |= 1u << W[i];
+        }
+        if (pat_open) {                  /* (0.16.68) the patterns: SEQ lit; the bank's black key, its saved ones (the
+                                          * one playing blinks) */
+            bb = 1u << B_SEQ | (bb & (LED_PLAY_GREEN | 1u << B_SAVE));
+            kk = 1u << Bk[pat_bank], mk = 0;
+            for (int i = 0; i < 16; i++) {
+                int s = pat_bank * PAT_PER_BANK + i;
+                if (!!pat_full(s) != (s == pat_cur && ((now / 250u) & 1u)))
+                    kk |= 1u << W[i];
+            }
         }
         plat_leds(bb, kk);
         plat_lights_mid(0, mk);

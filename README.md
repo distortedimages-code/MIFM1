@@ -645,7 +645,12 @@ et **dérivant lentement à sa façon**, comme celles d'un vieux polyphonique, d
 projet) : **LAYER** (Off, puis les huit couches, une par cran), **LEVEL** (son volume : du silence, à gauche, à +6 dB ;
 0 dB, au trois quarts environ, le niveau qu'avait la couche en 0.16.57 au milieu de sa part), **CHARACTER** (ce que la
 couche fait de plus, détaillé ci-dessous : l'écran écrit son nom, *Wind* pour Chime…) et **TRANSP** (la couche
-transposée de −24 à +24 demi-tons, la nappe non : +7 pour une quinte, +12 ou −12 pour une octave). Une couche tire au
+transposée, la nappe non, **en crans de la gamme** depuis 0.16.68, de −14 à +14 : chaque note de la couche va au même
+nombre de notes de la gamme au-dessus ou au-dessous de sa note dans l'accord, donc reste dans la gamme. Dans une gamme
+de sept notes, +2 donne une tierce, +4 une quinte, +7 l'octave, −7 l'octave du dessous ; dans une pentatonique, +5
+fait l'octave. La gamme est celle des accords : SCALE, ou le mode de la progression quand SCALE est sur Off ou Prog.
+Avant, TRANSP comptait en demi-tons, et une quinte sur le septième degré sortait de la gamme. Un projet d'avant passe
+de ses demi-tons à autant de crans, arrondi : +12 devient +7, +7 devient +4). Une couche tire au
 sort avec son propre hasard : la nappe dessous reste exactement la même, et la TEXTURE les use ensemble. Une frappe ou
 une corde lancée sonne jusqu'au bout, même si on change de couche.
 
@@ -664,7 +669,8 @@ une corde lancée sonne jusqu'au bout, même si on change de couche.
 - **Vox** : la nappe elle-même passée dans les trois premiers formants d'une voix d'alto (l'annexe D du manuel de
   Csound), la voyelle allant lentement de A à O, vers U, et retour ; elle suit l'enveloppe de la nappe. CHARACTER
   (*Vowels*) : la vitesse de la voyelle, un tour en 57 s à gauche, 14 s au milieu, 3,6 s à droite. TRANSP déplace ses
-  formants (vers une voix plus grave ou plus aiguë), pas ses notes, qui sont celles de la nappe.
+  formants (vers une voix plus grave ou plus aiguë, d'autant de demi-tons que ses crans en font sur la note du haut),
+  pas ses notes, qui sont celles de la nappe.
 - **Air** : un souffle accordé : un bruit en bandes étroites sur les quatre notes du haut, une octave au-dessus, et un
   peu de souffle large ; il suit l'enveloppe de la nappe. CHARACTER (*Focus*) : ses bandes, de larges (Q 10, un souffle)
   à fines (Q 79, presque un sifflement ; Q 28 au milieu), au même volume.
@@ -697,7 +703,7 @@ jusqu'à 0,7 octave plus bas.
 
 | 5/5 : 1 | 5/5 : 2 | 5/5 : 3 | 5/5 : 4 |
 | --- | --- | --- | --- |
-| **LAYER** (Off, Bell, Chime, Kalimba, Pluck, Vox, Air, Halo, Swell) | **LEVEL** (Off, puis jusqu'à +6 dB) | **CHARACTER** (selon la couche) | **TRANSP** (−24 à +24 demi-tons) |
+| **LAYER** (Off, Bell, Chime, Kalimba, Pluck, Vox, Air, Halo, Swell) | **LEVEL** (Off, puis jusqu'à +6 dB) | **CHARACTER** (selon la couche) | **TRANSP** (−14 à +14 crans de la gamme) |
 
 (Dans ces tableaux, « 1/5 : 2 » se lit page 1, potard 2.) L'écran de la quatrième page dessine
 l'onde (deux cycles, telle qu'elle se fond) et écrit la texture et la couche ; celui de la cinquième, la couche en grand,
@@ -1090,7 +1096,7 @@ circuit bending ni sur les enveloppes : ALGORITHM n'y fait rien. Les potards d'u
 | **PRESETS** | la piste active, de 1 à 4 (les presets eux-mêmes : EDIT tenu) |
 | **EDIT** | **tapé** : les trois ensembles de la piste active, l'un après l'autre : son **SON** (FREQ, HARMO, TIMBRE, MORPH ; SELECT : GATE, TRANSP, OCTAVE, F.KEY), son **BEND** (les bits : CLOCK, BITS, MASK, SHAPE ; SELECT : le glitch, GLITCH, SIZE, BEND, DROP), son **FILTRE** (TYPE, CUTOFF, RESO, ENV ; SELECT : DRIVE, NOISE, COLOR, FM), puis de nouveau le son ; **tenu : les presets** de la piste (touches noires : la banque, A celle d'usine ; blanches : le son, posé sur la piste et joué ; SAVE tenu : l'y garde ; REC tenu : l'efface) ; **tenu + SELECT** (0.16.39) : **le niveau de la piste active** (« T1 LEVEL 85 » ; MASTER, lui, est le volume de sortie) |
 | **LFO** | les trois LFO, l'un après l'autre (SELECT aussi) |
-| **SEQ** | tapé : les pas de la piste (NOTE, PROB, SPEED, LENGTH ; puis RATCHETS : RATCH, SPAN, CURVE, DIR ; puis CLIMB : CLIMB et LIMIT d'un pas tenu, ON, SHAPE ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns** (touches noires : la banque, blanches : le pattern, plusieurs : un enchaînement ; REC tenu : efface) |
+| **SEQ** | tapé : les pas de la piste (NOTE, PROB, SPEED, LENGTH ; puis RATCHETS : RATCH, SPAN, CURVE, DIR ; puis CLIMB : CLIMB et LIMIT d'un pas tenu, ON, SHAPE ; puis RANDOM, puis EUCLID) ou de l'effet (DECAY, PROB, DEPTH, LENGTH) ; **tenu : les patterns**, qui restent ouverts quand on lâche SEQ (touches noires ou SELECT : la banque, blanches : le pattern ; SEQ tenu et plusieurs : un enchaînement ; REC tenu : efface ; SEQ à nouveau : on en sort) |
 | **ARP** | Endless, celui de la piste (voir plus bas) ; à nouveau : ses options (STRIDE, REST, HOLES, LEAP) |
 | **HOME** | le mixer : les niveaux des 4 pistes, leurs pans, leur SPREAD, leurs filtres (EQ), le DUCK, puis le bus master (COMP) ; ALGORITHM sur COMP : le compresseur allumé ou coupé |
 | **FX** | les effets l'un après l'autre : le delay, la réverbe, Warps, chacun sur sa première face, **les envois des pistes** (0.16.39 ; avant, ses potards) ; SELECT parcourt leurs faces (les envois, leurs potards, leurs pas). Revenu d'ailleurs, FX retrouve la face où l'on était |
@@ -1288,15 +1294,24 @@ interne de Plaits sur la hauteur, pour des toms, des kicks qui plongent, des bul
 
 **Les patterns** (0.15 ; **SEQ tenu**, d'après les Pocket Operator de Teenage Engineering) : 11 banques (A à K) de
 16 patterns, **chacun un projet entier**, sons compris (seuls les réglages de la machine, la sortie, la qualité de
-Warps et les couleurs, restent communs). SEQ tenu, l'écran des patterns s'ouvre : en haut les banques, sur les
-**touches noires** ; dessous les 16 patterns de la banque, sur les **touches blanches** (pleins : remplis ; vides :
-un cadre ; celui qui joue dans la première couleur ; le suivant encadré dans la deuxième, qui clignote). **Une touche
-joue ce pattern**, en boucle ; **plusieurs à la suite font un enchaînement**, joué en boucle dans l'ordre : A1, A1,
-A2, A5 joue A1 deux fois, puis A2, puis A5 (le mode song). Le changement se fait **à la fin du pattern en cours** (sa
-plus longue LENGTH), tout de suite à l'arrêt. **SAVE tenu** (à l'arrêt) enregistre le pattern en cours dans sa case ;
+Warps et les couleurs, restent communs). SEQ tenu, l'écran des patterns s'ouvre, et **depuis 0.16.68 il reste ouvert
+quand on lâche SEQ** : on y choisit, efface et sauve les patterns tranquillement, puis **SEQ à nouveau** (un appui, sans
+touche) le referme ; le bouton d'un autre module le referme aussi et ouvre sa page. En haut les banques, sur les
+**touches noires** (ou SELECT) ; dessous les 16 patterns de la banque, sur les **touches blanches** (pleins : remplis ;
+vides : un cadre ; celui qui joue dans la première couleur ; le suivant encadré dans la deuxième, qui clignote). Les
+LED suivent : SEQ allumé, la touche noire de la banque, les touches blanches des patterns remplis, celle du pattern en
+cours qui clignote. **Une touche joue ce pattern**, en boucle ; **SEQ tenu et plusieurs touches à la suite font un
+enchaînement**, joué en boucle dans l'ordre quand on lâche SEQ : A1, A1, A2, A5 joue A1 deux fois, puis A2, puis A5 (le
+mode song). Les potards ne touchent pas la page cachée dessous tant que l'écran est ouvert. Le changement se fait **à
+la fin du pattern en cours** (sa plus longue LENGTH), tout de suite à l'arrêt. **SAVE tenu** (à l'arrêt) enregistre le
+pattern en cours dans sa case (de 0.16.2 à 0.16.67 cela échouait, « NOT SAVED » : le projet avait grandi au-delà de ce
+qu'un enregistrement prend tel quel, et il était refusé avant même d'être compressé ; il est maintenant compressé
+d'abord, comme toujours une fois écrit) ;
 un pattern quitté sans SAVE revient tel qu'il était sauvé (ses modifs perdues). Une case vide prend le pattern en
 cours tel quel : c'est ainsi qu'on fait une variation (SAVE la remplit). **REC tenu et une touche blanche** efface un
-pattern (à l'arrêt). Ils sont gardés compressés dans la flash (un projet de 3,8 Ko en tient dans 0,7 à 1,5 Ko : de
+pattern (à l'arrêt). Ils sont gardés compressés dans la flash (un projet de 3,8 Ko en tient dans 0,7 à 1,5 Ko, 3 Ko
+quand tous ses potards, ses P-locks et ses pas sont pris au hasard ; un projet qui ne se compresse plus du tout
+afficherait « TOO DENSE TO SAVE » plutôt que de rien écrire à moitié : de
 70 à 100 patterns selon leurs P-locks ; l'écran dit la place qui reste), à l'abri d'une coupure (une sauvegarde
 coupée laisse le pattern comme il était). Au premier démarrage, le projet sauvé devient A1. **Depuis 0.16.32, les
 projets et les patterns d'avant 0.16** (de 0.1.4 à 0.15) **ne se lisent plus** : un projet sauvé d'avant laisse la

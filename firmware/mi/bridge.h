@@ -137,7 +137,11 @@ int pads_chord(int prog, int pos, int degree, uint16_t mask, float color, int *o
 uint16_t pads_chord_scale(const int *chord, int n, uint16_t mask, int raised);   /* its scale, the avoid notes out */
 void pads_init(void);
 void pads_silence(void);
-void pads_set(float note, const float *k, const int *chord, int n, int tonic);   /* the note: the chord's register */
+void pads_set(float note, const float *k, const int *chord, int n, int tonic, uint16_t scale);   /* the note: the
+                                          * chord's register; (0.16.68) the scale: the chords', over the tonic (LAYER's
+                                          * TRANSP in its steps) */
+int pads_steps(uint16_t mask, int pc, int tr);   /* (0.16.68) LAYER's TRANSP: from pc (over the tonic), the semitones
+                                          * to the note tr steps of the scale away */
 void pads_gate(int g);
 void pads_render(float *out, uint32_t n);
 int pads_voices(void);                   /* the notes sounding (0: silent) */

@@ -165,7 +165,7 @@ const eng_pdef_t kPages[NPT][4] = {
   {{"Source", K_ENUM, 0, 3, kTrackNames}, {"Gain", K_BIP, 0, 0, 0}, {"Thresh", K_UNI, 0, 0, 0},
    {"Filter", K_BIP, 0, 0, 0}},
   {{"Layer", K_ENUM, 0, 8, kPadsLayNames}, {"Level", K_UNI, 0, 0, 0}, {"Character", K_UNI, 0, 0, 0},
-   {"Transp", K_INT, -24, 24, 0}},       // (0.16.59: page 71, PADS' fifth: one track plays it)
+   {"Transp", K_INT, -14, 14, 0}},      // (0.16.68: steps of the scale, two octaves of seven; semitones before)       // (0.16.59: page 71, PADS' fifth: one track plays it)
 };
 const char* const kBusModes[2] = {"OFF", "COMP"};   // (0.16.43: OTT gone; a project's OTT read as COMP)
 const char* const kDelayAlgos[4] = {"SYNC", "FREE", "BBD SYNC", "BBD FREE"};   // (0.16.65: the BBD's)
@@ -819,6 +819,7 @@ int8_t vc_pos[4] = {-1, -1, -1, -1};
 uint8_t vc_n[4];
 float vc_ch[4][4];
 uint16_t pad_mask = 0;                  // the chord's scale (over the root)
+uint16_t pad_base = 0;                  // (0.16.68) the scale its chords are built in (LAYER's TRANSP steps in it)
 int quantize_mask(int n, uint32_t m, int root) {   // the nearest note of the scale (a tie: the lower)
   if (!m) return n;
   int rel = ((n - root) % 12 + 12) % 12;
@@ -1829,6 +1830,7 @@ void pads_now(float note) {
   pad_n = pads_chord(prog, pad_pos < 0 ? 0 : pad_pos, prog ? 0 : note_degree(note, root, m), m, E(t, 2), pad_chord,
                      &pad_raised);
   pad_mask = pads_chord_scale(pad_chord, pad_n, m, pad_raised);
+  pad_base = m;
 }
 // (0.16.28) VOCODER's PLAY, in FREQ's place (its knob from the middle): to the left Mono, at noon Poly (the trig's
 // chord, the keys), to the right Manual (the key picks the scale's chord, as PADS'), then PADS' 26 progressions
@@ -2137,7 +2139,7 @@ __attribute__((noinline)) void step_kit(int t, int m, float* k) {
 __attribute__((noinline)) void pads_voice(float note, const float* k) {
   pads_set_page4(&fin[PG_PADS4 * 4]);
   pads_set_page5(&fin[PG_PADS5 * 4]);
-  pads_set(note, k, pad_chord, pad_n, Pi(PG_GLOBAL, 2));
+  pads_set(note, k, pad_chord, pad_n, Pi(PG_GLOBAL, 2), pad_base);
 }
 void set_voice(int t) {
   mclaim(t);
@@ -4797,6 +4799,12 @@ MI_COLD void theme_v42(project_t* p) {
   static const uint8_t kTo[8] = {0, 0, 0, 0, 0, 0, 0, 6};
   p->theme = kTo[p->theme & 7u];
 }
+// (0.16.68) a project before: PADS' LAYER TRANSP in semitones (-24..24), now steps of the scale (-14..14): as many as
+// the interval makes in a scale of seven (+12 the octave, +7: +4, a fifth)
+MI_COLD void transp_steps(project_t* p) {
+  float& t = p->val[PG_PADS5 * 4 + 3];
+  t = static_cast<float>(iround(clampf(t, -24.0f, 24.0f) * (7.0f / 12.0f)));
+}
 // (0.16.66) a project before: NOTE -24..24 (C1 to C5), now -48..60 (C-1 to C8: all the keyboard reaches, its octaves
 // up and down; the live recording's high notes, out of it, were left a trig on the track's note). Its locks' bytes
 // over the new travel, the same notes
@@ -4830,8 +4838,9 @@ MI_COLD void models_v27(project_t* p) {   // (0.13 to 0.16.13's numbers: ..., PR
 }
 
 
-static_assert(sizeof(project_t) <= 3824u, "a project in one record of the patterns' store (pat_store.h: a sector's 0xF00 "
-                                          "bytes, its header and the record's), in one object of the platform's store");
+static_assert(sizeof(project_t) <= 3824u, "a project in one object of the platform's store; in one record of the "
+                                          "patterns' store packed (pat_store.h PAT_REC_MAX, 3808 bytes: a sector's 0xF00, "
+                                          "its header and the record's; packed always, 700 to 3100 bytes)");
 // the old layouts read in place of the live one (one at a time, the main loop's: a project read)
 // 0.16.0's to 0.16.6's (versions 24 to 26; 24 without Endless' options, its bytes 0): 42 parameters a lane, 384 locks
 struct project_v26 {
@@ -5069,12 +5078,13 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
     theme_v42(p);
     return 1;
   }
-  if (v >= 38 && v <= 41 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
-    p->version = PROJECT_VERSION;       // (0.16.59's to 0.16.66's: the same layout; 0.16.60: CLIMB a step's alone,
-    if (v == 38) climb_v39(p);          // 0.16.63: EASEL at 21, 0.16.66: NOTE wider, 0.16.67: the themes)
-    if (v <= 39) easel_in(p);
+  if (v >= 38 && v <= 42 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+    p->version = PROJECT_VERSION;       // (0.16.59's to 0.16.67's: the same layout; 0.16.60: CLIMB a step's alone,
+    if (v == 38) climb_v39(p);          // 0.16.63: EASEL at 21, 0.16.66: NOTE wider, 0.16.67: the themes, 0.16.68:
+    if (v <= 39) easel_in(p);           // TRANSP in steps)
     if (v <= 40) note_widen(p);
-    theme_v42(p);
+    if (v <= 41) theme_v42(p);
+    transp_steps(p);
     return 1;
   }
   if (v >= 27 && v <= 32 && bytes == static_cast<int>(sizeof(project_v32)) && p->size == sizeof(project_v32)) {
