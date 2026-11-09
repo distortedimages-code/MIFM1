@@ -90,12 +90,17 @@ struct Prog {
 #define CA(d, a) {d, 0, a, -1, 0, -1}
 #define CX(d, x) {d, 0, -1, -1, 0, x}
 #define CR(semi, q) {0, q, -1, -1, semi, -1}
-// 0.11's sixteen where a project of then finds them (PROG's travel in 27 now: its share's middle, (i + 0.5) / 17,
-// lands on the same one), 0.16.12's ten between them: darker, suspended, off the scale (after the way Trent Reznor
-// and Atticus Ross's records and scores move: a line falling inside a minor chord, the flat second, the tritone, the
-// major fourth in a minor key, chromatic mediants, a pedal under moving chords)
-const int kProgs = 26;
+// 0.11's sixteen, 0.16.12's ten between them: darker, suspended, off the scale (after the way Trent Reznor and Atticus
+// Ross's records and scores move: a line falling inside a minor chord, the flat second, the tritone, the major fourth
+// in a minor key, chromatic mediants, a pedal under moving chords); (0.16.84) nine more between those, after Nils
+// Frahm (six) and his neighbours (Max Richter, Olafur Arnalds, Johann Johannsson), PROG's travel in 36: the 26 where a
+// project of 0.16.12 to 0.16.83 finds them (its share's middle, (j + 0.5) / 27, in the same one); 0.11's, before
+// 0.16.12, may land on a neighbour
+const int kProgs = 35;
 const Prog kProg[kProgs] = {
+    // (0.16.84) after Nils Frahm's Says (Spaces, 2013): i VI iv III i VII, its arpeggio's chords in C minor (as
+    // several recordings' detected chords agree; not a transcription)
+    {"Says", M_MINOR, 6, {C1(0), C1(5), C1(3), C1(2), C1(0), C1(6)}},
     // (0.16.12) the line cliché: a minor chord, a voice inside it falling by half steps: i, i(maj7), i7, i6 (0.16.83:
     // the names six letters at most, the knob's ring holds them; Descent, Flat II, Pachelbel, Tritone, Gymnopedie,
     // Prelude, Mediant, Phrygian and Dominant before)
@@ -104,18 +109,27 @@ const Prog kProg[kProgs] = {
     {"Tintin", M_MINOR, 8, {CA(0, 7), CA(0, 6), CA(0, 5), CA(0, 3), CA(0, 1), CA(0, 3), CA(0, 5), CA(0, 6)}},
     // the same in a major key, the tonic and its fourth degree (a mirror)
     {"Mirror", M_MAJOR, 8, {CA(0, 1), C1(0), CA(3, 1), CA(0, 5), CA(4, 3), C1(0), CA(3, 6), C1(4)}},
+    // (0.16.84) after Frahm's Ambre (Wintermusik, 2009): i III bII VI III V in F minor, the flat second (the Neapolitan)
+    // and the major fifth off the scale
+    {"Ambre", M_MINOR, 6, {C1(0), C1(2), CR(1, Q_MAJ), C1(5), C1(2), CQ(4, Q_MAJ)}},
     // (0.16.12) the flat second (the Neapolitan, a half step over the tonic): i bII bVII i
     {"Napoli", M_MINOR, 4, {C1(0), CR(1, Q_MAJ), C1(6), C1(0)}},
     // Pachelbel's canon: I V vi iii IV I IV V
     {"Canon", M_MAJOR, 8, {C1(0), C1(4), C1(5), C1(2), C1(3), C1(0), C1(3), C1(4)}},
     // (0.16.12) the tritone away: i bV i bVI
     {"Devil", M_MINOR, 4, {C1(0), CR(6, Q_MAJ), C1(0), C1(5)}},
+    // (0.16.84) after Frahm's Over There, It's Raining (The Bells, 2009): i VII III VI iv v, down in fifths, B flat
+    // minor
+    {"Rain", M_MINOR, 6, {C1(0), C1(6), C1(2), C1(5), C1(3), C1(4)}},
     // la Folia: i V i VII III VII i V (its dominant major)
     {"Folia", M_MINOR, 8, {C1(0), CQ(4, Q_MAJ), C1(0), C1(6), C1(2), C1(6), C1(0), CQ(4, Q_MAJ)}},
     // the lament (a descending tetrachord, Purcell's ground, the Andalusian cadence): i VII VI V
     {"Lament", M_MINOR, 4, {C1(0), C1(6), C1(5), CQ(4, Q_MAJ)}},
     // (0.16.12) the major fourth in a minor key (the dorian's, lifting): i III IV i
     {"Rise", M_MINOR, 4, {C1(0), C1(2), CQ(3, Q_MAJ), C1(0)}},
+    // (0.16.84) after Frahm's Them (Victoria, 2015): I III v VII, then i III v VII, its tonic major the first time,
+    // minor the second (E flat)
+    {"Them", M_MINOR, 8, {CQ(0, Q_MAJ), C1(2), C1(4), C1(6), C1(0), C1(2), C1(4), C1(6)}},
     // the circle of fifths (the baroque sequence): vi ii V I IV vii iii vi
     {"Fifths", M_MAJOR, 8, {C1(5), C1(1), C1(4), C1(0), C1(3), C1(6), C1(2), C1(5)}},
     // Satie's first Gymnopedie: IVmaj7 Imaj7 twice, then where its melody takes it (0.16.83: eight; before, the first
@@ -123,30 +137,43 @@ const Prog kProg[kProgs] = {
     {"Satie", M_MAJOR, 8, {CA(3, 6), CA(0, 6), CA(3, 6), CA(0, 6), CA(1, 6), {4, Q_MIN, 6, -1, 0, -1}, CA(1, 6), CA(0, 6)}},
     // (0.16.12) suspended, nothing resolving: i(sus2) bVI(sus2) bIII bVII(sus4)
     {"Hover", M_MINOR, 4, {CQ(0, Q_SUS2), CQ(5, Q_SUS2), C1(2), CQ(6, Q_SUS4)}},
+    // (0.16.84) after Frahm's Re (Screws, 2012): IV (major: the dorian's) VII i iv, then ii VII iv: F sharp minor
+    {"Re", M_MINOR, 8, {CQ(3, Q_MAJ), C1(6), C1(0), C1(3), C1(1), C1(3), C1(6), C1(3)}},
     // Bach's first prelude (the Well-Tempered Clavier), its opening: I ii7 V7 I vi ii V7 I
     {"Bach", M_MAJOR, 8, {C1(0), CA(1, 6), CA(4, 6), C1(0), C1(5), C1(1), CA(4, 6), C1(0)}},
     // (0.16.12) the major and the minor on one tonic: I i bVI bVII
     {"Shift", M_MINOR, 4, {CQ(0, Q_MAJ), CQ(0, Q_MIN), C1(5), C1(6)}},
     // the plagal (the amen): I IV I IV vi IV I I
     {"Plagal", M_MAJOR, 8, {C1(0), C1(3), C1(0), C1(3), C1(5), C1(3), C1(0), C1(0)}},
+    // (0.16.84) after Frahm's Hammers (Spaces, 2013): i V i III iv v under its octaves, B flat minor, the fifth major
+    // the first time
+    {"Hammer", M_MINOR, 6, {C1(0), CQ(4, Q_MAJ), C1(0), C1(2), C1(3), C1(4)}},
     // the dorian vamp: i7 IV7, then (0.16.83: four) bVII and IV7 back to it
     {"Dorian", M_DORIAN, 4, {CA(0, 6), CA(3, 6), C1(6), CA(3, 6)}},
     // (0.16.12) chromatic mediants (a film's): i bVI i III (major, off the scale)
     {"Filmic", M_MINOR, 4, {C1(0), C1(5), C1(0), CR(4, Q_MAJ)}},
     // dub: i7 iv7 i7 VII
     {"Dub", M_MINOR, 4, {CA(0, 6), CA(3, 6), CA(0, 6), C1(6)}},
+    // (0.16.84) after Max Richter's On the Nature of Daylight (The Blue Notebooks, 2004): i v III VI VII, its ground
+    // in B flat minor, the bass stepping down then up
+    {"Nature", M_MINOR, 5, {C1(0), C1(4), C1(2), C1(5), C1(6)}},
     // a chorale's: I vi IV V I IV V I
     {"Hymn", M_MAJOR, 8, {C1(0), C1(5), C1(3), C1(4), C1(0), C1(3), C1(4), C1(0)}},
     // (0.16.12) chords moving over the tonic held: i, then bVII, v, bVII with the tonic in them
     {"Pedal", M_MINOR, 4, {C1(0), CA(6, 1), CA(4, 3), CA(6, 1)}},
     // the phrygian: i II i VII VI VII II i
     {"Phryg", M_PHRYGIAN, 8, {C1(0), C1(1), C1(0), C1(6), C1(5), C1(6), C1(1), C1(0)}},
+    // (0.16.84) after Olafur Arnalds' saman (re:member, 2018): VI III VI III VII iv VI VII, C minor never landing on it
+    {"Saman", M_MINOR, 8, {C1(5), C1(2), C1(5), C1(2), C1(6), C1(3), C1(5), C1(6)}},
     // (0.16.12) the phrygian dominant's: I bII bvii bII
     {"Hijaz", M_PHRYGDOM, 4, {C1(0), C1(1), C1(6), C1(1)}},
     // the epic (aeolian): i VI III VII
     {"Epic", M_MINOR, 4, {C1(0), C1(5), C1(2), C1(6)}},
     // a slow minor (lento): i(add9) VI i(add9) iv
     {"Lento", M_MINOR, 4, {CA(0, 1), C1(5), CA(0, 1), C1(3)}},
+    // (0.16.84) after Johann Johannsson's Flight from the City (Orphee, 2016): I IV vi IV I vi, then II (major: the
+    // lydian's) and ii, B flat major
+    {"Flight", M_MAJOR, 8, {C1(0), C1(3), C1(5), C1(3), C1(0), C1(5), CQ(1, Q_MAJ), C1(1)}},
     // (0.16.12) slow, wide: i(add9) bVI(maj7) iv(add9) bVI
     {"Haze", M_MINOR, 4, {CA(0, 8), CA(5, 6), CA(3, 8), C1(5)}},
     // the tonic (a drone: with SCALE Prog, everything on its chord), breathing (0.16.83: four, before one): I, Isus2,

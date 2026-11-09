@@ -86,14 +86,61 @@ const char* const kLfoWaves[LW_N] = {"Sine",  "Triangle", "Saw",   "Ramp",   "Sq
                                      "Stairs", "Clave",   "Bounce", "Rises", "Falls",  "Zigzag", "Chaos",  "Follow"};
 const char* const kLfoModes[6] = {"Free", "Sync", "T1", "T2", "T3", "T4"};
 const char* const kOnOff[2] = {"Off", "On"};
-const char* const kScaleNames[22] = {"Off", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
+const char* const kScaleNames[28] = {"Off", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
                                      "Locrian", "Harm. minor", "Mel. minor", "Maj. penta", "Min. penta", "Blues",
                                      "Whole tone", "Hirajoshi", "Prog", "Phryg. dom", "Flip",
-                                     "Follow T1", "Follow T2", "Follow T3", "Follow T4"};
+                                     "Follow T1", "Follow T2", "Follow T3", "Follow T4",
+                                     "Carlos", "Harmonic", "Turkish", "Pythag", "Stretch", "Split"};
 // (Prog: PADS' chord, as it goes; 0.16.12, after it (the projects' scales where they were): the phrygian dominant
 // (its major third over the flat second), FLIP (minor one bar, dorian the next: the sixth flat, then not); 0.16.42,
 // FOLLOW T1..T4: that track's chord, whatever plays it (a track that plays chords: SCALE turns past the others))
-const int kScaleProg = 15, kScaleFlip = 17, kScaleT1 = 18, kScales = 22;
+const int kScaleProg = 15, kScaleFlip = 17, kScaleT1 = 18, kScaleMicro = 22, kScales = 28;
+// (0.16.84) the microtonal SCALEs, after FOLLOW's: each its notes over ROOT (a mask, as the others: the quantizer, the
+// chords built in it; 0: all twelve, nothing quantized, PADS' chords in their progression's mode, as with Off), a
+// stretch (cents an octave) and each of the 12 notes' move from the equal temperament, in cents: under ROOT's middle
+// octave (C4's), in it, over it. Every machine plays its notes so tuned (mi_tuned, mi_shared.cc)
+struct Micro {
+  uint16_t mask;
+  int8_t stretch;
+  int8_t lo[12], mid[12], hi[12];
+};
+const Micro kMicro[kScales - kScaleMicro] = {
+    // Wendy Carlos' Super Just (1/1 17/16 9/8 6/5 5/4 4/3 11/8 3/2 13/8 5/3 7/4 15/8): the eighth table of the
+    // Bass Station II's micro-tuning (Novation, 2019), which Richard D. James (Aphex Twin) advised on
+    {0x000, 0,   // Carlos
+     {0, 5, 4, 16, -14, -2, -49, 2, 41, -16, -31, -12},
+     {0, 5, 4, 16, -14, -2, -49, 2, 41, -16, -31, -12},
+     {0, 5, 4, 16, -14, -2, -49, 2, 41, -16, -31, -12}},
+    // the harmonic series, six notes (1/1 9/8 5/4 11/8 3/2 7/4: the 11th a quarter tone low, the 7th a third of
+    // one): the Bass Station II's second table
+    {0x4D5, 0,   // Harmonic
+     {0, 0, 4, 0, -14, 0, -49, 2, 0, 0, -31, 0},
+     {0, 0, 4, 0, -14, 0, -49, 2, 0, 0, -31, 0},
+     {0, 0, 4, 0, -14, 0, -49, 2, 0, 0, -31, 0}},
+    // a just Hijaz, seven notes (1/1 16/15 5/4 4/3 3/2 5/3 16/9): the Bass Station II's sixth
+    {0x6B3, 0,   // Turkish
+     {0, 12, 0, 0, -14, -2, 0, 2, 0, -16, -4, 0},
+     {0, 12, 0, 0, -14, -2, 0, 2, 0, -16, -4, 0},
+     {0, 12, 0, 0, -14, -2, 0, 2, 0, -16, -4, 0}},
+    // Pythagorean (fifths pure, D flat to F sharp: the wolf between them), on the Korg monologue's tuning menu by
+    // Aphex Twin's own AFX001..006 (2016, their values never published)
+    {0x000, 0,   // Pythag
+     {0, -10, 4, -6, 8, -2, 12, 2, -8, 6, -4, 10},
+     {0, -10, 4, -6, 8, -2, 12, 2, -8, 6, -4, 10},
+     {0, -10, 4, -6, 8, -2, 12, 2, -8, 6, -4, 10}},
+    // after his SH-101 "improperly calibrated", which he matched a monologue tuning to: a 1 V/oct trimmed a
+    // hair wide (an octave 1212 cents, around C4's), each key a few cents its own way
+    {0x000, 12,   // Stretch
+     {0, 2, -1, 3, -2, 1, -3, 2, 0, -2, 3, -1},
+     {0, 2, -1, 3, -2, 1, -3, 2, 0, -2, 3, -1},
+     {0, 2, -1, 3, -2, 1, -3, 2, 0, -2, 3, -1}},
+    // his own way, "combining several tuning tables within one map" (as AFX001..006 change with the register):
+    // equal under ROOT's middle octave, Carlos' in it, Pythagorean over it
+    {0x000, 0,   // Split
+     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+     {0, 5, 4, 16, -14, -2, -49, 2, 41, -16, -31, -12},
+     {0, -10, 4, -6, 8, -2, 12, 2, -8, 6, -4, 10}},
+};
 const uint16_t kScaleMasks[17] = {0xFFF, 0xAB5, 0x5AD, 0x6AD, 0x5AB, 0xAD5, 0x6B5, 0x56B, 0x9AD, 0xAAD, 0x295, 0x4A9,
                                   0x4E9, 0x555, 0x18D, 0, 0x5B3};   // bit i: i semitones over the root
 const char* const kNoteName[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
@@ -854,7 +901,22 @@ int quantize_mask(int n, uint32_t m, int root) {   // the nearest note of the sc
 }
 uint16_t base_mask(int sc) {            // a scale's notes, not PADS' chord's (Off, Prog: none); FLIP's this bar's
   if (sc == kScaleFlip) return playing && tick >= 0 && (tick / 16) % 2 ? kScaleMasks[3] : kScaleMasks[2];
+  if (sc >= kScaleMicro && sc < kScales) return kMicro[sc - kScaleMicro].mask;   // (0.16.84)
   return sc > 0 && sc < kScaleFlip && sc != kScaleProg ? kScaleMasks[sc] : 0u;
+}
+// (0.16.84) the machines' tuning: a microtonal SCALE's (none: the equal temperament), made again when SCALE or ROOT
+// changes (each block looks: two compares)
+int tune_sc = -1, tune_root = -1;
+inline void tune_now() {
+  const int sc = Pi(PG_GLOBAL, 1), root = Pi(PG_GLOBAL, 2);
+  if (sc == tune_sc && root == tune_root) return;
+  tune_sc = sc, tune_root = root;
+  if (sc >= kScaleMicro && sc < kScales) {
+    const Micro& m = kMicro[sc - kScaleMicro];
+    mi_tune_set(m.lo, m.mid, m.hi, m.stretch, root);
+  } else {
+    mi_tune_set(0, 0, 0, 0, root);
+  }
 }
 // (0.16.42) FOLLOW T1..T4: the track's chord leads. Each track's last chord (two notes or more: their pitch classes
 // over ROOT) and the scale it makes: its notes, and the passing notes of the nearest major scale that holds them all
@@ -864,7 +926,7 @@ uint16_t lead_cm[ENG_TRACKS], lead_scale[ENG_TRACKS];
 int8_t lead_root[ENG_TRACKS] = {-1, -1, -1, -1};
 inline int lead_track() {
   const int sc = Pi(PG_GLOBAL, 1);
-  return sc >= kScaleT1 && sc < kScales ? sc - kScaleT1 : -1;
+  return sc >= kScaleT1 && sc < kScaleMicro ? sc - kScaleT1 : -1;
 }
 void lead_chord(int t, const float* notes, int n) {
   if (n < 2) return;
@@ -889,7 +951,7 @@ void lead_chord(int t, const float* notes, int n) {
 }
 uint32_t scale_mask(int sc) {           // SCALE's notes (Prog: the chord's, none without PADS)
   if (sc == kScaleProg) return pad_track >= 0 ? pad_mask : 0u;
-  if (sc >= kScaleT1 && sc < kScales) return sc - kScaleT1 == pad_track ? pad_mask : lead_scale[sc - kScaleT1];
+  if (sc >= kScaleT1 && sc < kScaleMicro) return sc - kScaleT1 == pad_track ? pad_mask : lead_scale[sc - kScaleT1];
   return base_mask(sc);
 }
 void pads_now(float note);              // (its chord now: after track_kind, further down)
@@ -1889,8 +1951,9 @@ void pads_now(float note) {
   pad_base = m;
 }
 // (0.16.28) VOCODER's PLAY, in FREQ's place (its knob from the middle): to the left Mono, at noon Poly (the trig's
-// chord, the keys), to the right Manual (the key picks the scale's chord, as PADS'), then PADS' 26 progressions
-const float kVocPlays = 27.0f;          // (Manual and the progressions: pads_progs())
+// chord, the keys), to the right Manual (the key picks the scale's chord, as PADS'), then PADS' progressions (0.16.84:
+// 35, before 26; their detents 1/36 apart, the 26 where a project of then has them: c / 27 rounds to the same)
+const float kVocPlays = 36.0f;          // (Manual and the progressions: pads_progs(), the tests check it)
 inline int voc_play(float v) { return v < -1.0f / 54.0f ? -1 : iround(clampf(v, 0.0f, 1.0f) * kVocPlays); }
 __attribute__((noinline)) MI_COLD int voc_pl(int t) { return voc_play(E(t, 0)); }   // (a track's, now)
 inline int voc_play_param(int param) {
@@ -3722,7 +3785,7 @@ MI_COLD int eng_scale_step(int sc, int e) {   // (0.16.42) SCALE turned e detent
   const int d = e > 0 ? 1 : -1;
   for (int i = 0; i < (e < 0 ? -e : e); ++i) {
     int n = sc + d;
-    while (n >= kScaleT1 && n < kScales && !eng_lead_ok(n - kScaleT1)) n += d;
+    while (n >= kScaleT1 && n < kScaleMicro && !eng_lead_ok(n - kScaleT1)) n += d;
     if (n < 0 || n >= kScales) break;
     sc = n;
   }
@@ -5845,6 +5908,7 @@ PREP_SMALL void eng_render(float* l, float* r, uint32_t n) {
   pp[0] = plat_ticks24();
   // 2. every parameter, the cables over the knobs
   apply_cables();
+  tune_now();                           // (0.16.84) a microtonal SCALE's tuning, for the machines (SCALE, ROOT changed)
   WEB_SPEND(prep_us * 1.6f);
   pp[1] = plat_ticks24();
   // 3. the trigs

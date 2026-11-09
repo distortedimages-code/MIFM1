@@ -383,6 +383,15 @@ turn K4 8
 wait 300
 shot 16a_swing.png
 turn K4 -8
+turn K2 40
+wait 400
+shot 16a2_scale_split.png
+turn K2 -2
+wait 400
+shot 16a3_scale_pythag.png
+turn K2 -40
+turn K2 2
+wait 300
 turn SELECT 1
 wait 600
 shot 16b_project.png

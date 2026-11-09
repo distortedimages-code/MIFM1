@@ -28,9 +28,11 @@ void put_time(char *b, int n, int *at, float s);
 /* their output: n samples of y (times g) through the coupling capacitor (~5 Hz: *dcx, *dcy its states) and a soft
  * knee above 0.8 (at most 1.2) */
 void mi_finish(float *y, uint32_t n, float g, float *dcx, float *dcy);
-/* (0.16.84) the microtonal SCALEs: the 12 notes over ROOT each moved by its cents (0: none, the equal temperament),
- * set by the engine each block; a machine's note (MIDI, fractional) as the tuning has it, a note between two blended */
-void mi_tune_set(const int8_t *cents, int root);
+/* (0.16.84) the microtonal SCALEs: the 12 notes over ROOT each moved by its cents (mid 0: none, the equal
+ * temperament), lo and hi under and over ROOT's middle octave (0: mid's), a stretch in cents an octave; set by the
+ * engine when SCALE or ROOT changes; a machine's note (MIDI, fractional) as the tuning has it, a note between two
+ * blended */
+void mi_tune_set(const int8_t *lo, const int8_t *mid, const int8_t *hi, int stretch, int root);
 float mi_tuned(float note);
 int mi_tuning(void);
 

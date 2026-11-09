@@ -74,7 +74,7 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   piste (à droite nouveau à chaque trig, à gauche en boucle) ; un **swing** global ; des **rythmes euclidiens** sur
   chaque piste de pas ;
 - un **quantiseur global** (15 gammes et la tonique, Prog : les accords de PADS, et Follow T1 à T4 : l'accord d'une
-  piste, 0.16.42) : aucune fausse note, sur toutes
+  piste, 0.16.42 ; et six gammes **microtonales**, 0.16.84, qui accordent toutes les machines) : aucune fausse note, sur toutes
   les pistes et au clavier, FREQ, la transposition et l'oscillateur de Warps compris ;
 - **trois LFO** comme modulateurs (sinus, triangle, dent de scie, rampe, carré, S&H, aléatoire lissé ; depuis
   0.16.22, sept formes rythmiques et le chaos de Lorenz), chacun libre, calé sur le tempo ou relancé par les trigs d'une
@@ -575,32 +575,48 @@ l'accord : son degré dans la gamme (une touche, un accord ; les pas, leurs lock
 | PROG | Les accords | D'après |
 | --- | --- | --- |
 | Manual | celui de la note jouée | |
+| Says | i VI iv III i VII (0.16.84) | Nils Frahm, *Says* (*Spaces*, 2013), en do mineur |
 | Cliche | i, i(maj7), i7, i6 : une voix qui descend par demi-tons à l'intérieur de l'accord mineur (0.16.12) | le « line cliché » des musiques de film |
 | Tintin | i tenu, et au-dessus une voix qui descend par degrés depuis l'octave et remonte (les notes de l'accord, déjà là, sautées ; mineur) | Arvo Pärt, *Für Alina* (1976) : les tintinnabuli |
 | Mirror | I, IV et V, une note ajoutée qui tourne autour (majeur) | Pärt, *Spiegel im Spiegel* (1978) |
+| Ambre | i III ♭II VI III V : le ♭II napolitain et le V majeur, hors gamme (0.16.84) | Frahm, *Ambre* (*Wintermusik*, 2009), en fa mineur |
 | Napoli | i ♭II ♭VII i : le ♭II majeur, un demi-ton au-dessus de la tonique, hors gamme (0.16.12) | la sixte napolitaine, le phrygien des bandes originales sombres |
 | Canon | I V vi iii IV I IV V | Pachelbel, le Canon en ré |
 | Devil | i ♭V i ♭VI : un accord majeur à la quarte augmentée, hors gamme (0.16.12) | le triton, inquiétant |
+| Rain | i VII III VI iv v : descendant par quintes (0.16.84) | Frahm, *Over There, It's Raining* (*The Bells*, 2009), en si♭ mineur |
 | Folia | i V i VII III VII i V | la Folia (Corelli, Vivaldi, Rachmaninov) |
 | Lament | i VII VI V | la basse de lamentation (Purcell, *Didon et Énée*), la cadence andalouse |
 | Rise | i III IV i : le IV majeur dans une tonalité mineure, qui soulève (0.16.12) | l'emprunt au dorien |
+| Them | I III v VII, puis i III v VII : la tonique majeure la première fois, mineure la seconde (0.16.84) | Frahm, *Them* (*Victoria*, 2015), en mi♭ |
 | Fifths | vi ii V I IV vii iii vi | le cercle des quintes baroque |
 | Satie | IVmaj7 Imaj7 deux fois, puis ii7 v7 ii7 Imaj7 : là où sa mélodie l'emmène, le v mineur de son tour dorien (0.16.83 : huit accords ; avant, les deux premiers) | Satie, la première *Gymnopédie* |
 | Hover | i(sus2) ♭VI(sus2) ♭III ♭VII(sus4) : suspendu, rien ne se résout (0.16.12) | les nappes des musiques de film d'aujourd'hui |
+| Re | IV (majeur : celui du dorien) VII i iv, puis ii VII iv (0.16.84) | Frahm, *Re* (*Screws*, 2012), en fa♯ mineur |
 | Bach | I ii7 V7 I vi ii V7 I | Bach, le premier prélude du *Clavier bien tempéré* |
 | Shift | I i ♭VI ♭VII : le majeur puis le mineur sur la même tonique (0.16.12) | l'échange de modes |
 | Plagal | I IV I IV vi IV I I | l'amen des chorals |
+| Hammer | i V i III iv v : le V majeur, sous ses octaves (0.16.84) | Frahm, *Hammers* (*Spaces*, 2013), en si♭ mineur |
 | Dorian | i7 IV7 ♭VII IV7 (0.16.83 : quatre ; avant, i7 IV7) | le vamp dorien |
 | Filmic | i ♭VI i III : le III majeur, hors gamme, une médiante chromatique (0.16.12) | les médiantes des musiques de film |
 | Dub | i7 iv7 i7 VII | le dub |
+| Nature | i v III VI VII : sa basse qui descend puis remonte (0.16.84) | Max Richter, *On the Nature of Daylight* (*The Blue Notebooks*, 2004), en si♭ mineur |
 | Hymn | I vi IV V I IV V I | un choral |
 | Pedal | i, puis ♭VII, v, ♭VII avec la tonique dedans : des accords qui bougent sur la tonique tenue (0.16.12) | la pédale |
 | Phryg | i II i VII VI VII II i | le phrygien |
+| Saman | VI III VI III VII iv VI VII : le mineur sans jamais se poser sur sa tonique (0.16.84) | Ólafur Arnalds, *saman* (*re:member*, 2018), en do mineur |
 | Hijaz | I ♭II ♭vii ♭II, en phrygien dominant (0.16.12) | le phrygien dominant (flamenco, musiques du Moyen-Orient) |
 | Epic | i VI III VII | l'éolien des musiques de film |
 | Lento | i(add9) VI i(add9) iv | un mineur lent |
+| Flight | I IV vi IV I vi, puis II (majeur : celui du lydien) et ii (0.16.84) | Jóhann Jóhannsson, *Flight from the City* (*Orphée*, 2016), en si♭ majeur |
 | Haze | i(add9) ♭VI(maj7) iv(add9) ♭VI : lent, large (0.16.12) | les nappes ambient |
 | Static | I, Isus2, I, Isus4 : la fondamentale et la quinte toujours là (0.16.83 : quatre ; avant, I seul) | un bourdon qui respire : en Prog, toute la machine sur un accord |
+
+Les neuf de la 0.16.84 (d'après Nils Frahm, six, et trois de ses voisins) sont rangées entre celles d'avant, sur 36
+crans : un projet, un pattern ou un preset de la 0.16.12 à la 0.16.83 retrouve sa progression (et le PLAY du VOCODER la
+sienne) ; ceux d'avant la 0.16.12 peuvent tomber sur une voisine. Leurs accords viennent de ce que plusieurs analyses
+d'enregistrements s'accordent à y entendre (et de la TheoryTab de Hooktheory pour Richter) : des progressions
+« d'après », pas des transcriptions. Depuis la 0.16.83, chaque nom tient en six lettres (dans l'anneau du potard) et
+chaque progression a au moins quatre accords.
 
 **COLOR** : la couleur de l'accord (0.16.12 : neuf ; avant, quatre) : **Power** (la fondamentale, la quinte et l'octave,
 sans tierce), **Triad**, **Sus2** et **Sus4** (la tierce remplacée par la seconde, la quarte), **7th**, **9th**, **11th**
@@ -686,7 +702,7 @@ jusqu'à 0,7 octave plus bas.
 
 | 1/5 : 2 | 1/5 : 3 | 1/5 : 4 | 2/5 : 1 | 2/5 : 2 | 2/5 : 3 | 2/5 : 4 | 3/5 : 1 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **PROG** (Manual, 26 progressions) | **COLOR** (Power, Triad, Sus2, 7th, Sus4, 9th, Add9, 11th, Add6) | **VOICING** (Close, Open, Wide, Bass) | **DECAY** (0,2 à 20 s ; au bout, Hold) | **ATTACK** (1 ms à 4 s) | **TONE** (− : sombre, + : brillant) | **GLIDE** (Off, 20 ms à 2 s) | **RELEASE** (30 ms à 7,7 s) |
+| **PROG** (Manual, 35 progressions) | **COLOR** (Power, Triad, Sus2, 7th, Sus4, 9th, Add9, 11th, Add6) | **VOICING** (Close, Open, Wide, Bass) | **DECAY** (0,2 à 20 s ; au bout, Hold) | **ATTACK** (1 ms à 4 s) | **TONE** (− : sombre, + : brillant) | **GLIDE** (Off, 20 ms à 2 s) | **RELEASE** (30 ms à 7,7 s) |
 
 | 4/5 : 1 | 4/5 : 2 | 4/5 : 3 | 4/5 : 4 |
 | --- | --- | --- | --- |
@@ -736,6 +752,27 @@ puis à une quinte, à deux…), moins celles qui frottent (un demi-ton au-dessu
 majeur, ROOT en do : la gamme de sol majeur sans le sol, fa tombe sur mi, sol sur fa#. Une note seule de la piste
 suivie garde l'accord d'avant ; un accord qu'aucune gamme majeure ne contient (augmenté, diminué) donne ses seules
 notes. Avec PADS sur la piste suivie, c'est Prog.
+
+**Les gammes microtonales** (0.16.84, GLO, SCALE après Follow T4). Six accordages, chacun les 12 notes au-dessus de
+ROOT déplacées de leurs cents par rapport au tempérament égal ; **toutes les machines** jouent leurs notes ainsi
+accordées (Plaits, ZERO, les batteries, la FM, PADS et ses couches, POLY, REV3, CHOIR, TAURUS, VOCODER, STATIC, EASEL),
+leurs accords compris, et une note entre deux (un glide, un vibrato) glisse de l'un à l'autre. Les vrais accordages
+d'Aphex Twin, **AFX001 à AFX006** du Korg monologue (2016), ne sont pas publiés (des tables de 128 touches que Korg
+garde) : ceux-ci viennent des instruments dont il a conseillé le micro-accordage, ou de ce qu'il en a dit.
+
+| SCALE | L'accordage | D'où |
+| --- | --- | --- |
+| Carlos | le *Super Just* de Wendy Carlos (1/1 17/16 9/8 6/5 5/4 4/3 11/8 3/2 13/8 5/3 7/4 15/8) : la tierce majeure 14 cents plus basse, le triton presque un quart de ton plus bas, la sixte mineure 41 cents plus haute ; les 12 notes | la 8ᵉ table du Bass Station II (firmware 2.5, 2019), dont Novation dit que Richard D. James a guidé le micro-accordage |
+| Harmonic | la série des harmoniques, six notes (1/1 9/8 5/4 11/8 3/2 7/4 : la onzième un quart de ton bas, la septième un tiers de ton) | la 2ᵉ table du Bass Station II |
+| Turkish | un Hijaz juste, sept notes (1/1 16/15 5/4 4/3 3/2 5/3 16/9) | la 6ᵉ table du Bass Station II |
+| Pythag | pythagoricien : les quintes pures, de ré♭ à fa♯ (le loup entre les deux), la tierce majeure 8 cents plus haute ; les 12 notes | dans le menu d'accordages du monologue, à côté de ses AFX001..006 |
+| Stretch | une octave de 1 212 cents autour de celle de do4 (+12 cents par octave en montant, −12 en descendant), chaque touche quelques cents à sa façon | son SH-101 « mal calibré », sur lequel il a accordé un monologue : un 1 V/oct réglé un rien trop large |
+| Split | tempéré sous l'octave du milieu de ROOT (celle de do4), Carlos dedans, pythagoricien au-dessus | sa manière : « combiner plusieurs tables d'accordage dans une seule » (comme AFX001..006 changent avec le registre) |
+
+Harmonic et Turkish quantisent sur leurs notes, comme une gamme ; les quatre autres gardent les 12 notes (rien n'est
+quantisé, et PADS bâtit ses accords dans le mode de sa progression, comme avec Off), seul l'accord change. Tout
+s'accorde sur ROOT : Pythag en ré, c'est le ré qui est juste. Un accord des PADS sonne avec ses propres battements :
+la tierce de Carlos est pure, celle de Pythag rugueuse.
 
 Choisir PADS met ces réglages aux siens (Tintin, des triades ouvertes, tenues, une montée lente, un peu sombre, sans
 glide, la dent de scie, en ensemble, sans couche ni texture) et garde l'OCTAVE de la piste. Elle coûte au FM-1 de 6 %
@@ -909,7 +946,7 @@ VOCODER lui-même : quatre voix par piste, jouées par les pas, leurs accords, l
   chaque trig (sa fin tenue par RELEASE devient l'attaque de la suivante), le clavier joue une note. Au **milieu**,
   **Poly** (le réglage d'avant, celui d'un projet ou d'un son enregistré avant la 0.16.28) : la note du trig et
   l'accord du pas, ou les touches tenues, quatre voix. À **droite**, un cran par accord : **Manual** (la touche ou la
-  note du pas choisit l'accord de la gamme, son degré, comme PADS) puis les **26 progressions de PADS** : à chaque
+  note du pas choisit l'accord de la gamme, son degré, comme PADS) puis les **35 progressions de PADS** : à chaque
   trig (ou chaque touche) l'**accord suivant**, construit comme PADS le construit (dans la gamme du projet, ou dans le
   mode de la progression si SCALE est sur Off ou Prog ; sa triade et les notes que la progression ajoute, quatre au
   plus) et **placé au plus près du précédent**, chaque voix bougeant le moins possible, autour de la note jouée.
@@ -944,7 +981,7 @@ MOD sur Off : la porteuse seule, une machine à cordes à quatre voix.
 
 | PLAY | MOD | TONE | ENSEMBLE | ATTACK | RELEASE | FOLLOW | SHIFT | AIR |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **Mono**, **Poly**, **Manual**, puis les 26 progressions de PADS | **Off**, ou la piste qui parle (**T1** à **T4**) | **Saws**, **Strings**, **Choir**, et entre les deux | la profondeur et le mélange de l'ensemble, 0 à 100 | 3 ms à 3 s | 30 ms à 6 s | la retombée des bandes, 10 ms à 1 s, puis **Hold** | les bandes de la voix décalées, −3,0 à +3,0 | les aigus de la voix, 0 à 100 |
+| **Mono**, **Poly**, **Manual**, puis les 35 progressions de PADS | **Off**, ou la piste qui parle (**T1** à **T4**) | **Saws**, **Strings**, **Choir**, et entre les deux | la profondeur et le mélange de l'ensemble, 0 à 100 | 3 ms à 3 s | 30 ms à 6 s | la retombée des bandes, 10 ms à 1 s, puis **Hold** | les bandes de la voix décalées, −3,0 à +3,0 | les aigus de la voix, 0 à 100 |
 
 Choisir VOCODER met ses réglages aux siens : MOD sur Off (à tourner vers la piste qui parle), les cordes, l'ensemble à
 70, une attaque de 27 ms, un relâchement d'un tiers de seconde, FOLLOW à 40 ms, AIR à 35. Il coûte au FM-1 environ

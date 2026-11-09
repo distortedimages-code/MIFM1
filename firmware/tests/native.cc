@@ -2710,21 +2710,26 @@ int main(int argc, char** argv) {
     // the chords
     int ch[6], raised, roots_ok = 1, thirds_ok = 1;
     const int kRoot[8] = {0, 7, 9, 4, 5, 0, 5, 7}, kThird[8] = {4, 4, 3, 3, 4, 4, 4, 4};
-    const float kTriad = 1.5f / 9.0f;     // (0.16.12: COLOR's nine, TRIAD the second; Pachelbel the fifth of 26)
-    for (int i = 0; i < 8; ++i) {         // Pachelbel, C major (0xAB5)
-      int nn = pads_chord(5, i, 0, 0xAB5, kTriad, ch, &raised);
+    const float kTriad = 1.5f / 9.0f;     // (0.16.12: COLOR's nine, TRIAD the second)
+    auto pnum = [&](const char* name) {   // (0.16.84: a progression by its name, its number in PROG's 36)
+      for (int i = 1; i < pads_progs(); ++i)
+        if (!std::strcmp(pads_prog_name(i), name)) return i;
+      return -1;
+    };
+    for (int i = 0; i < 8; ++i) {         // Pachelbel's (Canon), C major (0xAB5)
+      int nn = pads_chord(pnum("Canon"), i, 0, 0xAB5, kTriad, ch, &raised);
       roots_ok &= nn == 3 && (ch[0] % 12) == kRoot[i];
       thirds_ok &= ch[1] - ch[0] == kThird[i];
     }
-    int nf = pads_chord(7, 1, 0, 0x5AD, kTriad, ch, &raised);   // la Folia's V in A minor (over A): E major, G#
+    int nf = pads_chord(pnum("Folia"), 1, 0, 0x5AD, kTriad, ch, &raised);   // la Folia's V in A minor: E major, G#
     uint16_t fm = pads_chord_scale(ch, nf, 0x5AD, raised);
     int folia = nf == 3 && ch[0] % 12 == 7 && ch[1] - ch[0] == 4 && raised == 11 && ((fm >> 11) & 1) && !((fm >> 10) & 1);
-    int nc = pads_chord(5, 0, 0, 0xAB5, kTriad, ch, &raised);   // C major in C major: F out (over E)
+    int nc = pads_chord(pnum("Canon"), 0, 0, 0xAB5, kTriad, ch, &raised);   // C major in C major: F out (over E)
     uint16_t cm = pads_chord_scale(ch, nc, 0xAB5, raised);
     int avoid = cm == 0xAB5 - (1u << 5);
     // SCALE Prog through the engine: PADS on track 4, Pachelbel, a trig each beat
     for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(3, st, st % 4 == 0 && st < 16);
-    p->val[PG_TRACK(3, 0) * 4 + 1] = 3.5f / 17.0f;
+    p->val[PG_TRACK(3, 0) * 4 + 1] = (static_cast<float>(pnum("Canon")) + 0.5f) / static_cast<float>(pads_progs());
     p->val[PG_GLOBAL * 4 + 1] = 15.0f;
     p->val[PG_GLOBAL * 4 + 2] = 0.0f;
     eng_play(1);
@@ -2781,7 +2786,7 @@ int main(int argc, char** argv) {
     k[5] = 0.0f;
     k[6] = 0.5f;
     {
-      int cn = pads_chord(1, 0, 0, 0x5AD, k[1], ch, &raised);
+      int cn = pads_chord(pnum("Cliche"), 0, 0, 0x5AD, k[1], ch, &raised);
       pads_set(57.0f, k, ch, cn, 9, 0);
     }
     pads_gate(1);
@@ -2983,7 +2988,7 @@ int main(int argc, char** argv) {
     eng_set_model(2, poly_m);
     p->val[PG_TRACK(2, 1) * 4 + 3] = 2.0f * 0.5f / 15.0f - 1.0f;   // CHORD: Root
     for (int st = 0; st < ENG_STEPS; ++st) eng_trig_set(3, st, st % 4 == 0), eng_trig_set(2, st, st % 2 == 0);
-    p->val[PG_TRACK(3, 0) * 4 + 1] = 3.5f / 17.0f;   // Pachelbel
+    p->val[PG_TRACK(3, 0) * 4 + 1] = 6.5f / 36.0f;   // Pachelbel's (Canon, 0.16.84: the sixth of 36)
     eng_play(1);
     float epk = 0.0f;
     int enan = 0;
@@ -3997,15 +4002,30 @@ int main(int argc, char** argv) {
   {                                     // 63. the harmony (0.16.12): PADS' progressions and colours of then where a
     // project of then finds them; the new chords (off the scale, suspended, the cliché's line, POWER, the eleventh);
     // the phrygian dominant; FLIP minor one bar, dorian the next
-    static const char* const kOldProg[17] = {"Manual", "Tintin", "Mirror", "Canon", "Folia", "Lament", "Fifths",
-                                             "Satie", "Bach", "Plagal", "Dorian", "Dub", "Hymn", "Phryg",
-                                             "Epic", "Lento", "Static"};   // (0.16.83: their names six letters)
+    // (0.16.84: PROG's 26 of 0.16.12 to 0.16.83, nine more between them, where a project of then finds them, (i + 0.5)
+    // / 27; VOCODER's PLAY too, c / 27; 0.11's sixteen, (i + 0.5) / 17, no longer kept; 0.16.83: the names six letters)
+    static const char* const kOldProg[27] = {"Manual", "Cliche", "Tintin", "Mirror", "Napoli", "Canon", "Devil",
+                                             "Folia", "Lament", "Rise", "Fifths", "Satie", "Hover", "Bach",
+                                             "Shift", "Plagal", "Dorian", "Filmic", "Dub", "Hymn", "Pedal",
+                                             "Phryg", "Hijaz", "Epic", "Lento", "Haze", "Static"};
     static const char* const kOldColor[4] = {"Triad", "7th", "9th", "11th"};
     char nm[24];
-    int kept = 1;
-    for (int i = 0; i < 17; ++i) {
-      pads_knob_text(0, (static_cast<float>(i) + 0.5f) / 17.0f, nm, sizeof nm);
+    int kept = pads_progs() == 36;
+    for (int i = 0; i < 27; ++i) {
+      pads_knob_text(0, (static_cast<float>(i) + 0.5f) / 27.0f, nm, sizeof nm);
       if (strcmp(nm, kOldProg[i])) kept = 0, printf("  PROG %d of then: now %s\n", i, nm);
+    }
+    {                                   // (VOCODER's PLAY: c / 27 of then, the same progression; its detents 1/36)
+      project_t* pv = eng_project();
+      eng_set_model(0, eng_model_find(MK_VOCODER, 0));
+      for (int c = 1; c < 27; ++c) {
+        eng_param_text(PG_TRACK(0, 0) * 4, static_cast<float>(c) / 27.0f, nm, sizeof nm);
+        if (strcmp(nm, kOldProg[c - 1])) kept = 0, printf("  VOCODER's PLAY %d of then: now %s\n", c, nm);
+      }
+      eng_param_text(PG_TRACK(0, 0) * 4, eng_lx_step(PG_TRACK(0, 0) * 4, 1.0f, -1), nm, sizeof nm);
+      if (strcmp(nm, "Haze")) kept = 0, printf("  VOCODER's PLAY one under the last: %s\n", nm);
+      eng_defaults(pv);
+      eng_fresh();
     }
     for (int i = 0; i < 4; ++i) {
       pads_knob_text(1, (static_cast<float>(i) + 0.5f) / 4.0f, nm, sizeof nm);
@@ -5864,19 +5884,19 @@ int main(int argc, char** argv) {
     char tx[24];
     int texts = eng_voc_play(fq) && !eng_voc_play(PG_TRACK(1, 0) * 4) && !eng_voc_play(fq + 1) &&
                 std::strcmp(eng_param_name(fq), "Play") == 0;
-    struct { float v; const char* want; } kTx[] = {{0.0f, "Poly"}, {-1.0f, "Mono"}, {1.0f / 27.0f, "Manual"},
-                                                   {2.0f / 27.0f, pads_prog_name(1)}, {1.0f, pads_prog_name(26)}};
+    struct { float v; const char* want; } kTx[] = {{0.0f, "Poly"}, {-1.0f, "Mono"}, {1.0f / 36.0f, "Manual"},
+                                                   {2.0f / 36.0f, pads_prog_name(1)}, {1.0f, pads_prog_name(35)}};
     for (auto& x : kTx) {
       eng_param_text(fq, x.v, tx, sizeof tx);
       if (std::strcmp(tx, x.want) != 0) texts = 0, printf("  PLAY at %.3f: %s, not %s\n", x.v, tx, x.want);
     }
     const int steps = eng_lx_step(fq, 0.0f, -1) == -1.0f && eng_lx_step(fq, -1.0f, 1) == 0.0f &&
-                      std::fabs(eng_lx_step(fq, 0.0f, 1) - 1.0f / 27.0f) < 1e-6f && eng_lx_step(fq, 1.0f, 5) == 1.0f &&
+                      std::fabs(eng_lx_step(fq, 0.0f, 1) - 1.0f / 36.0f) < 1e-6f && eng_lx_step(fq, 1.0f, 5) == 1.0f &&
                       eng_lx_step(fq, -1.0f, -3) == -1.0f;
     eng_steps_clear(0);
     for (int st = 0; st < 16; st += 4) eng_trig_set(0, st, 1);
     p->val[PG_TRACK(0, 0) * 4 + 1] = 0.0f;   // (MOD Off: the carrier alone)
-    p->val[fq] = 2.0f / 27.0f;
+    p->val[fq] = 2.0f / 36.0f;           // (0.16.84: PADS' first progression, 36 detents)
     static float l[128], r[128];
     const int len = pads_prog_len(1);
     float got[40][4];
@@ -6276,7 +6296,8 @@ int main(int argc, char** argv) {
     int fol = eng_step_notes_set(1, 0, dmaj, 3) == 0;
     p->val[PG_GLOBAL * 4 + 1] = 17.0f;            // Flip, then turned: FOLLOW T2, the only one
     const int up1 = eng_scale_step(17, 1), up2 = eng_scale_step(up1, 1), down = eng_scale_step(up1, -1);
-    fol &= up1 == 19 && up2 == 19 && down == 17 && eng_lead_ok(1) && !eng_lead_ok(0);
+    fol &= up1 == 19 && up2 == 22 && down == 17 && eng_lead_ok(1) && !eng_lead_ok(0);   // (0.16.84: on, the
+                                                                                      // microtonal scales)
     p->val[PG_GLOBAL * 4 + 1] = static_cast<float>(up1);
     eng_play(1);
     for (int b = 0; b < 30; ++b) eng_render(l, r, 128);
@@ -7348,6 +7369,8 @@ int main(int argc, char** argv) {
       p->val[PG_MIX * 4 + t] = t == 2 ? 0.9f : 0.0f;
       p->val[eng_track_param(t, TP_SEND)] = p->val[eng_track_param(t, TP_DSEND)] = 0.0f;
     }
+    p->val[PG_REVERB * 4 + 3] = 0.0f;   // (0.16.84: the effects' returns shut too: what the tests before left in them,
+    p->val[PG_DELAY(1) * 4 + 3] = 0.0f; // the reverb's tail on its 12 bits, its last grains -90 dB apart, as ticks)
     p->trauma = 50;
     eng_fresh();
     eng_cut();
@@ -7899,6 +7922,52 @@ int main(int argc, char** argv) {
       ++failures, printf("FAIL: PADS high up, a NaN in the mix\n");
     eng_defaults(p);
     eng_fresh();
+  }
+
+  {                                     // 85. (0.16.84) the microtonal SCALEs: after FOLLOW T4, each a tuning of the 12
+    // notes over ROOT (cents), every machine's note through it (mi_tuned): Pythagorean's major third 8 cents wide, on D
+    // too; Carlos' 5/4 14 cents narrow, a glide between two notes blended; Stretch's octave 1212 cents; Split equal
+    // under ROOT's middle octave, Carlos' in it, Pythagorean over it; Harmonic's six notes the quantizer's; Major: none
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    eng_defaults(p);
+    eng_fresh();
+    auto at = [&](int sc, int root) {
+      p->val[PG_GLOBAL * 4 + 1] = static_cast<float>(sc);
+      p->val[PG_GLOBAL * 4 + 2] = static_cast<float>(root);
+      eng_render(l, r, 128);            // (the render sets the tuning)
+    };
+    auto cents = [&](float note) { return (mi_tuned(note) - note) * 100.0f; };
+    char nm[6][16];
+    for (int i = 0; i < 6; ++i) eng_param_text(PG_GLOBAL * 4 + 1, static_cast<float>(22 + i), nm[i], sizeof nm[i]);
+    int ok = !strcmp(nm[0], "Carlos") && !strcmp(nm[3], "Pythag") && !strcmp(nm[5], "Split");
+    at(25, 0);
+    const float py_e = cents(64.0f), py_g = cents(67.0f);
+    at(25, 2);
+    const float py_fs = cents(66.0f);   // (F#: D's third)
+    at(22, 0);
+    const float ca_e = cents(64.0f), ca_mid = cents(64.5f), ca_f = cents(65.0f);
+    at(26, 0);
+    const float st_oct = (mi_tuned(72.0f) - mi_tuned(60.0f)) * 100.0f, st_low = cents(48.0f);
+    at(27, 0);
+    const float sp[3] = {cents(52.0f), cents(64.0f), cents(76.0f)};
+    at(23, 0);
+    const int hq = eng_quantize(65), hq2 = eng_quantize(69);
+    at(1, 0);
+    const float off = cents(64.0f);
+    ok &= std::fabs(py_e - 8.0f) < 0.01f && std::fabs(py_g - 2.0f) < 0.01f && std::fabs(py_fs - 8.0f) < 0.01f;
+    ok &= std::fabs(ca_e + 14.0f) < 0.01f && std::fabs(ca_mid - 0.5f * (ca_e + ca_f)) < 0.01f;
+    ok &= std::fabs(st_oct - 1212.0f) < 0.01f && std::fabs(st_low + 12.0f) < 0.01f;
+    ok &= std::fabs(sp[0]) < 0.01f && std::fabs(sp[1] + 14.0f) < 0.01f && std::fabs(sp[2] - 8.0f) < 0.01f;
+    ok &= (hq == 64 || hq == 66) && (hq2 == 67 || hq2 == 70) && off == 0.0f;
+    printf("the microtonal SCALEs (%s .. %s): Pythag's E %+.1f, G %+.1f, on D its F# %+.1f; Carlos' E %+.1f, E-F's middle "
+           "%+.1f; Stretch's octave %.0f cents, C3 %+.1f; Split's E3 E4 E5 %+.1f %+.1f %+.1f; Harmonic F->%d, A->%d; Major "
+           "%+.1f: %s\n", nm[0], nm[5], py_e, py_g, py_fs, ca_e, ca_mid, st_oct, st_low, sp[0], sp[1], sp[2], hq, hq2, off,
+           ok ? "ok" : "WRONG");
+    if (!ok) ++failures, printf("FAIL: the microtonal SCALEs\n");
+    eng_defaults(p);
+    eng_fresh();
+    eng_render(l, r, 128);
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);
