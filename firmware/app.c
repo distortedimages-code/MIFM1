@@ -6141,9 +6141,17 @@ static void lrec_key(int k, int note, int down)
     n = s == ui.lr_s && t == ui.lr_t && pos - ui.lr_last < 1.0f ? eng_step_notes(t, s, nt) : 0;
     if (n < 4)
         nt[n++] = note - 48;
-    eng_trig_set(t, s, 1);
-    if (eng_step_notes_set(t, s, nt, n) == -1)
-        app_say("LIVE REC", "NO ROOM");
+    {                                    /* (0.16.66) a note it cannot hold: said, and no trig left on the track's note */
+        int had = eng_trig(t, s), e;
+        eng_trig_set(t, s, 1);
+        e = eng_step_notes_set(t, s, nt, n);
+        if (e) {
+            if (!had)
+                eng_trig_set(t, s, 0);
+            app_say("LIVE REC", e == -2 ? "OUT OF RANGE" : "NO ROOM");
+            return;
+        }
+    }
     if (n == 1)
         eng_step_tie_set(t, s, 0);
     ui.lr_s = s, ui.lr_t = t, ui.lr_last = pos;

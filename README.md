@@ -1224,7 +1224,11 @@ rouge** et REC clignote ; **REC** à nouveau arrête l'enregistrement (les pas c
 l'arrêt, le **métronome compte une mesure** avant le premier pas : un ping à chaque temps (do 6), une quinte plus haut sur
 le premier de la mesure, ~25 ms, au casque et au haut-parleur seulement (ni dans les effets ni sur l'USB, qui enregistre le mix sans lui) ; il bat ensuite tant qu'on enregistre.
 **GLO tenu + PLAY** l'allume ou l'éteint (éteint : l'enregistrement part tout de suite). Le pas d'arrivée suit la
-SPEED de la piste ; dans une autre DIRECTION qu'en avant, une note va toujours au pas qui joue. Une piste en Endless ou
+SPEED de la piste ; dans une autre DIRECTION qu'en avant, une note va toujours au pas qui joue. Depuis 0.16.66, **la
+NOTE d'un pas va du do −1 au do 8** (−48 à +60 autour du do 3, au lieu de −24 à +24 : du do 1 au do 5) : tout ce que
+le clavier atteint avec ses octaves s'enregistre. Avant, une note jouée plus haut que le do 5 (OCT+) ou plus bas que le
+do 1 n'était pas écrite, et son trig jouait la note de la piste. Une note qu'un pas ne peut pas tenir (un accord de plus
+de huit octaves) le dit, « OUT OF RANGE », et n'y laisse pas de trig. Les projets d'avant se lisent avec leurs notes. Une piste en Endless ou
 en ARP joue les touches à sa manière : rien ne s'écrit sur ses pas. Depuis 0.16.39, **en bas de l'écran, les pas de la
 piste** qu'on enregistre (ses trigs, ses notes longues, le pas qui joue), la page de 16 pas qui joue ; et **REC tenu +
 OCT+ / OCT−** change sa longueur d'une mesure (16 pas ; de 1 à 4 mesures, « T1 LENGTH 2 BARS » ; une longueur entre deux

@@ -101,6 +101,11 @@ struct V26 {
   uint8_t endless_opt[ENG_TRACKS][4];
 };
 static_assert(sizeof(V26) == PROJECT_SIZE_26 && sizeof(V26) <= sizeof(project_t), "0.16.6's layout");
+// (0.16.66) a NOTE lock's byte from before (NOTE -24..24) as the upgrade makes it (over -48..60: the same note)
+static uint8_t note_byte_v41(uint8_t u) {
+  const int v = -24 + static_cast<int>(std::floor(u * 48.0f / 255.0f + 0.5f));
+  return static_cast<uint8_t>(std::floor((v + 48) * 255.0f / 108.0f + 0.5f));
+}
 static int as_v26(project_t* q, int version) {   // (its bytes: what eng_upgrade is given)
   static V26 o;
   memset(&o, 0, sizeof o);
@@ -3729,7 +3734,7 @@ int main(int argc, char** argv) {
              q.rseed[3][TP_GDROP] == 9 && q.rnd[2][TP_CLIMB] == 0 && q.endless_opt[1][3] == 0;
     int found = 0;
     for (int i = 0; i < ENG_PLOCKS; ++i)
-      found += (q.lock[i].lane == 1 && q.lock[i].step == 9 && q.lock[i].tp == TP_NOTE && q.lock[i].v == 77) +
+      found += (q.lock[i].lane == 1 && q.lock[i].step == 9 && q.lock[i].tp == TP_NOTE && q.lock[i].v == note_byte_v41(77)) +
                (q.lock[i].lane == 2 && q.lock[i].step == 1 && q.lock[i].tp == TP_PROB && q.lock[i].v == 33);
     up &= found == 2;
     ok = ramp && bounce && ratch && both && scale && oct && none && two && v59 && up;
@@ -4241,8 +4246,22 @@ int main(int argc, char** argv) {
     char name2[16];
     eng_chord_name(wide, 3, name2, sizeof name2);
     ok &= !std::strcmp(name, "C") && !std::strcmp(name2, "C");
-    const int far[2] = {-30, 0};
+    const int far[2] = {-50, 0};        // (0.16.66: NOTE -48..60, C-1 to C8)
     ok &= eng_step_notes_set(0, 0, far, 2) == -2;
+    {                                   // (0.16.66) the keyboard's reach (F0 to G#7, its octaves up and down) held, a
+      const int lo[1] = {-31}, hi[2] = {44, 56};   // chord too; a project of 0.16.65 (40): its NOTE +12, then
+      int got[4];
+      ok &= eng_step_notes_set(0, 1, lo, 1) == 0 && eng_step_notes(0, 1, got) == 1 && got[0] == -31;
+      ok &= eng_step_notes_set(0, 1, hi, 2) == 0 && eng_step_notes(0, 1, got) == 2 && got[0] == 44 && got[1] == 56;
+      eng_lock_clear(0, 1);
+      static project_t q40;
+      eng_defaults(&q40);
+      q40.version = 40;
+      for (int i = 0; i < ENG_PLOCKS; ++i) q40.lock[i].lane = 0xFF;
+      q40.lock[0] = plock_t{1, 3, TP_NOTE, 191};   // (+12 over -24..24)
+      ok &= eng_upgrade(&q40, sizeof q40) && eng_check(&q40) && q40.lock[0].v == note_byte_v41(191) &&
+            static_cast<int>(std::floor(-48.0f + q40.lock[0].v * (108.0f / 255.0f) + 0.5f)) == 12;
+    }
     eng_play(1);
     int vmax = 0;
     for (int b = 0; b < 30; ++b) {
@@ -5494,7 +5513,8 @@ int main(int argc, char** argv) {
     reinterpret_cast<V32*>(&q)->lock[379] = plock_t{2, 5, TP_NOTE, 99};   // (its last place: the second used)
     const int up32 = eng_upgrade(&q, sizeof q) && eng_check(&q) && q.val[lf + 0] == static_cast<float>(LW_CHAOS) &&
                      q.val[PG_GLITCH(3) * 4 + 2] == 0.7f && q.val[fp + 1] == 0.0f && q.val[fp + 3] == 0.0f &&
-                     q.lock[0].lane == 1 && q.lock[0].v == 77 && q.lock[1].lane == 2 && q.lock[1].v == 99 &&
+                     q.lock[0].lane == 1 && q.lock[0].v == note_byte_v41(77) && q.lock[1].lane == 2 &&
+                     q.lock[1].v == note_byte_v41(99) &&
                      q.lock[2].lane == 0xFF;
     eng_defaults(p);
     eng_fresh();

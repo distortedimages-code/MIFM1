@@ -136,7 +136,7 @@ const eng_pdef_t kPages[NPT][4] = {
    {"Drive", K_UNI, 0, 0, 0}},
   {{"Reso", K_UNI, 0, 0, 0}, {"Mode", K_ENUM, 0, 1, kDelayMode}, {"Mod", K_UNI, 0, 0, 0}, {"Return", K_UNI, 0, 0, 0}},
   {{"Delay", K_UNI, 0, 0, 0}, {"Delay", K_UNI, 0, 0, 0}, {"Delay", K_UNI, 0, 0, 0}, {"Delay", K_UNI, 0, 0, 0}},
-  {{"Note", K_INT, -24, 24, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Ratch", K_INT, 1, ENG_RATCH_MAX, 0}, {"Length", K_INT, 1, 64, 0}},
+  {{"Note", K_INT, -48, 60, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Ratch", K_INT, 1, ENG_RATCH_MAX, 0}, {"Length", K_INT, 1, 64, 0}},
   {{"Decay", K_UNI, 0, 0, 0}, {"Prob", K_UNI, 0, 0, 0}, {"Depth", K_UNI, 0, 0, 0}, {"Length", K_INT, 1, 64, 0}},
   {{"Tempo", K_UNI, 0, 0, 0}, {"Scale", K_ENUM, 0, kScales - 1, kScaleNames}, {"Root", K_ENUM, 0, 11, kNoteName},
    {"Swing", K_UNI, 0, 0, 0}},
@@ -4791,6 +4791,16 @@ MI_COLD void sds_in(project_t* p) {      // (0.16.49) 0.16.43's to 0.16.48's num
       p->lock[i].v = static_cast<uint8_t>(sds_at(p->lock[i].v));
 }
 MI_COLD void taurus_in(project_t* p) { models_from(p, 16); }   // (0.16.20)
+// (0.16.66) a project before: NOTE -24..24 (C1 to C5), now -48..60 (C-1 to C8: all the keyboard reaches, its octaves
+// up and down; the live recording's high notes, out of it, were left a trig on the track's note). Its locks' bytes
+// over the new travel, the same notes
+MI_COLD void note_widen(project_t* p) {
+  for (int i = 0; i < ENG_PLOCKS; ++i)
+    if (p->lock[i].lane < ENG_TRACKS && p->lock[i].tp == TP_NOTE) {
+      const int v = -24 + iround(static_cast<float>(p->lock[i].v) * (48.0f / 255.0f));
+      p->lock[i].v = static_cast<uint8_t>(iround(static_cast<float>(v + 48) * (255.0f / 108.0f)));
+    }
+}
 MI_COLD void easel_in(project_t* p) {    // (0.16.63) a project before: EASEL at 21, after STATIC, Plaits' models from
   for (int t = 0; t < ENG_TRACKS; ++t) { // there one further on, a step's model too
     const int o = p->algo[PG_TRACK(t, 0)];
@@ -5049,12 +5059,14 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
     pads_v37_in(p);                     // (0.16.59: its fourth page now, its fifth)
     climb_v39(p);
     easel_in(p);
+    note_widen(p);
     return 1;
   }
-  if ((v == 38 || v == 39) && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
-    p->version = PROJECT_VERSION;       // (0.16.59's to 0.16.62's: the same layout; 0.16.60: CLIMB a step's alone,
-    if (v == 38) climb_v39(p);          // 0.16.63: EASEL at 21)
-    easel_in(p);
+  if (v >= 38 && v <= 40 && bytes == static_cast<int>(sizeof(project_t)) && p->size == sizeof(project_t)) {
+    p->version = PROJECT_VERSION;       // (0.16.59's to 0.16.65's: the same layout; 0.16.60: CLIMB a step's alone,
+    if (v == 38) climb_v39(p);          // 0.16.63: EASEL at 21, 0.16.66: NOTE wider)
+    if (v <= 39) easel_in(p);
+    note_widen(p);
     return 1;
   }
   if (v >= 27 && v <= 32 && bytes == static_cast<int>(sizeof(project_v32)) && p->size == sizeof(project_v32)) {
@@ -5074,6 +5086,7 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
     pads_in(p);
     pads_v37_in(p);
     climb_v39(p);
+    note_widen(p);
     return 1;
   }
   if (!upgrade_any(p, bytes)) return 0;   // (0.16.32: before 0.16, a project is no longer read: 0)
@@ -5083,6 +5096,7 @@ MI_COLD int eng_upgrade(project_t* p, int bytes) {   // (p: room for any of them
   pads_in(p);
   pads_v37_in(p);
   easel_in(p);
+  note_widen(p);
   return 1;
 }
 MI_COLD int upgrade_any(project_t* p, int bytes) {

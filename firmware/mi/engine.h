@@ -257,7 +257,8 @@ typedef struct {
 
 /* the project: everything the sound depends on */
 #define PROJECT_MAGIC 0x314A5250u        /* "PRJ1" */
-#define PROJECT_VERSION 40u              /* (39: 0.16.60's to 0.16.62's, the same layout: EASEL not yet at 21: read, the
+#define PROJECT_VERSION 41u              /* (40: 0.16.63's to 0.16.65's, the same layout: NOTE -24..24 then, its locks'
+                                          * bytes over it: read, over the new travel (note_widen); 39: 0.16.60's to 0.16.62's, the same layout: EASEL not yet at 21: read, the
                                           * models from there one further on (easel_in); 38: 0.16.59's, CLIMB the track's and its TIMES: read, the track's CLIMB 0, a
                                           * step's lock its jump, its LIMIT TIMES - 1 jumps (climb_v39); 37: 0.16.57's and 0.16.58's: 71 pages, 367 locks, PADS' fourth page as 0.16.57 had
                                           * it: read, its fourth and fifth pages made from it (pads_from_v37), its
