@@ -64,8 +64,10 @@ Instruments et les voix de batterie du firmware de l'Erica Synths LXR-02, sur la
   clavier joue la piste) et **STEP** (le clavier est la grille, les touches noires choisissent la piste ou l'effet) ;
   depuis 0.16.31, un **enregistrement en direct** (REC + PLAY : ce qu'on joue au clavier écrit sur les pas, avec un
   métronome) ;
-- **Endless** sur chaque piste, comme sur l'OP-1 : on enregistre des notes et des silences un par un, ils tournent
-  en boucle, une touche les transpose ; séquenceur arrêté, une touche tenue les joue (0.16.11) ;
+- **Endless** sur chaque piste, comme sur l'OP-1 : on enregistre des notes et des silences un par un ; depuis 0.16.73
+  la boucle se joue **comme un arpégiateur**, tant qu'une touche la tient (transposée par la touche) ou qu'un trig de
+  la piste la tient (sa note, sa longueur), séquenceur en marche ou arrêté ; en enregistrement en direct, les touches
+  s'écrivent sur les pas et la boucle rejoue pareil ;
 - sur chaque trig : **probabilité**, **ratchets**, **longueur**, et un **aléatoire** sur n'importe quel réglage de la
   piste (à droite nouveau à chaque trig, à gauche en boucle) ; un **swing** global ; des **rythmes euclidiens** sur
   chaque piste de pas ;
@@ -1254,8 +1256,11 @@ SPEED de la piste ; dans une autre DIRECTION qu'en avant, une note va toujours a
 NOTE d'un pas va du do −1 au do 8** (−48 à +60 autour du do 3, au lieu de −24 à +24 : du do 1 au do 5) : tout ce que
 le clavier atteint avec ses octaves s'enregistre. Avant, une note jouée plus haut que le do 5 (OCT+) ou plus bas que le
 do 1 n'était pas écrite, et son trig jouait la note de la piste. Une note qu'un pas ne peut pas tenir (un accord de plus
-de huit octaves) le dit, « OUT OF RANGE », et n'y laisse pas de trig. Les projets d'avant se lisent avec leurs notes. Une piste en Endless ou
-en ARP joue les touches à sa manière : rien ne s'écrit sur ses pas. Depuis 0.16.39, **en bas de l'écran, les pas de la
+de huit octaves) le dit, « OUT OF RANGE », et n'y laisse pas de trig. Les projets d'avant se lisent avec leurs notes. Sur une
+piste en Endless ou en ARP (0.16.73), les touches s'écrivent aussi sur les pas : leurs trigs tiennent Endless comme les
+touches l'ont tenu, avec la même note (la transposition de la boucle, ou les notes de l'ARP en *Keys*, accord compris)
+et une longueur au plus près du temps où la touche est restée enfoncée (son TIE et la part d'un pas de sa LENGTH) :
+à la lecture, les mêmes notes rejouent (avant 0.16.73, rien ne s'y écrivait). Depuis 0.16.39, **en bas de l'écran, les pas de la
 piste** qu'on enregistre (ses trigs, ses notes longues, le pas qui joue), la page de 16 pas qui joue ; et **REC tenu +
 OCT+ / OCT−** change sa longueur d'une mesure (16 pas ; de 1 à 4 mesures, « T1 LENGTH 2 BARS » ; une longueur entre deux
 mesures va d'abord à la mesure où elle est). Chaque piste garde la sienne : un kick sur une mesure, des nappes sur
@@ -1609,10 +1614,14 @@ interne de Plaits, un glissando voulu.
 
 **Endless** (ARP, comme sur l'OP-1) : sur sa page, **REC** lance l'enregistrement (la frise passe en REC, le bouton
 clignote) ; chaque touche ajoute une note (on l'entend), **SEL** ajoute un silence, jusqu'à 64 pas. **REC** à
-nouveau : la piste joue ces notes en boucle sur le tempo, à la place de ses pas. Pendant qu'elle joue, **une
-touche transpose** la boucle depuis sa première note (la transposition reste). **Le séquenceur à l'arrêt** (0.16.11),
-une touche tenue la joue : depuis sa première note, transposée par la touche, au tempo et à sa RATE ; on lâche, elle
-s'arrête (une autre touche pendant qu'on tient : la transposition suit). Ses potards : RATE (1/32 à 1/4, avec
+nouveau : la boucle est prête. Depuis 0.16.73 elle se joue **comme un arpégiateur** : rien ne part tout seul avec
+PLAY ; **une touche tenue** la joue, depuis sa première note, transposée par la touche (la touche de sa première note :
+telle qu'enregistrée), au tempo et à sa RATE, séquenceur en marche ou arrêté ; on lâche, elle s'arrête (une autre
+touche pendant qu'on tient : la transposition suit). **Les trigs de la piste** font de même : chacun la relance depuis sa
+première note, transposée par sa note, tant que dure sa longueur (son TIE, sa LENGTH), avec sa probabilité ; sans trig
+ni touche, la piste se tait. En **enregistrement en direct** (REC + PLAY), les touches s'écrivent sur les pas, avec leur
+note et le temps où elles sont restées enfoncées : à la lecture, la boucle rejoue les mêmes notes. Avant 0.16.73, la
+boucle tournait seule dès PLAY à la place des pas, une touche la transposait (et la transposition restait). Ses potards : RATE (1/32 à 1/4, avec
 les triolets), GATE (la longueur des notes), DIRECTION (avant, arrière, aller-retour, au hasard ; depuis 0.16.13,
 +2-1 : deux en avant, une en arrière, et CONVERGE : la première, la dernière, la deuxième, l'avant-dernière…), TRANSPOSE. **REC
 tenu** efface la boucle (la piste retrouve ses pas). Probabilité, ratchets, aléatoire et quantiseur s'appliquent aussi
@@ -1626,14 +1635,16 @@ pendant un silence de REST (en gris) ou un trou de HOLES (en blanc), relevée av
 monte d'une octave.
 
 **L'ARP** (0.16.13 : la troisième face d'Endless, ARP encore ou SELECT) : **MODE** choisit ce qu'Endless parcourt :
-*Loop*, la boucle enregistrée (comme avant) ; *Keys*, **les touches tenues** (un arpégiateur) ; *Chord*, **l'accord que
-joue PADS**, qui change avec la progression. **OCTAVES** (1 à 4) les répète plus haut ; **LATCH** garde les notes une
+*Loop*, la boucle enregistrée ; *Keys*, **les touches tenues** (un arpégiateur), ou **les notes d'un trig de la piste**
+(son accord compris, 0.16.73) ; *Chord*, **l'accord que joue PADS**, qui change avec la progression. Les trois ne jouent
+que tenus (0.16.73) : par une touche, ou par un trig de la piste le temps de sa longueur ; une piste en *Keys* ou en
+*Chord* ne joue plus ses pas elle-même, ses trigs tiennent l'ARP. **OCTAVES** (1 à 4) les répète plus haut ; **LATCH** garde les notes une
 fois lâchées (la touche suivante, après avoir tout lâché, recommence un nouvel accord ; LATCH remis à Off : tout
 s'arrête) ; **ORDER** les range par hauteur (*Pitch*) ou dans l'ordre où on les a jouées (*Played*). Tout le reste
 d'Endless s'y applique : RATE, GATE, DIRECTION (montée, descente, aller-retour, au hasard, +2-1, CONVERGE), STRIDE
 (des sauts), REST, HOLES, LEAP, les ratchets, l'aléatoire et le quantiseur. Il joue avec le séquenceur et **sans lui** :
-séquenceur arrêté, une touche tenue le lance (en *Keys*, les touches elles-mêmes ; en *Chord*, n'importe laquelle),
-on lâche, il s'arrête, sauf ce que LATCH garde. Les touches n'y transposent pas : en *Keys* elles sont les notes. En bas,
+séquenceur en marche ou arrêté, une touche tenue le lance (en *Keys*, les touches elles-mêmes ; en *Chord*, n'importe
+laquelle), on lâche, il s'arrête, sauf ce que LATCH garde. Les touches n'y transposent pas : en *Keys* elles sont les notes. En bas,
 les notes qu'il parcourt, la jouée en blanc.
 
 **Warps** (FX, troisième effet) : le module de modulation croisée de Mutable, entre deux pistes. Sa première page

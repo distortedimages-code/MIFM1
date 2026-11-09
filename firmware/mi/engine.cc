@@ -435,6 +435,15 @@ int e_pos[ENG_TRACKS], e_dir[ENG_TRACKS], e_note[ENG_TRACKS];
 int32_t e_cnt[ENG_TRACKS];              // (0.16.2) Endless' steps since PLAY (its REST counts them)
 int e_state[ENG_TRACKS];                // (0.16.3) what its last step did (ES_*: the screen shows it)
 volatile int e_rec[ENG_TRACKS];
+// (0.16.73) Endless and its ARP played as an arpeggiator: only while pressed, by the keys (e_free; KEYS: the keys held,
+// LATCH's) or by one of the track's trigs (as long as its length, e_hold), from its first note at each press; the
+// trig's note the loop's transposition (LOOP), its notes the keys (KEYS: arp_trig). Before, LOOP and CHORD played on
+// their own from PLAY, the track's trigs silent
+float e_hold[ENG_TRACKS];               // (a trig's: its frames left)
+int e_was[ENG_TRACKS];                  // (pressed the frame before; 0: a press anew, from its first note)
+int e_key_now[ENG_TRACKS];              // (LOOP: the press's transposition, a key's or a trig's)
+uint8_t arp_trig[ENG_TRACKS][4];        // (KEYS: a trig's notes, its chord)
+int arp_trig_n[ENG_TRACKS];
 
 // the voices' blocks, two: the voices play this one (vbuf) while the mix takes the last one (mbuf), a block behind
 // with the effects, on either core
@@ -1427,13 +1436,19 @@ int arp_len[ENG_TRACKS];
 int arp_mode(int t) { return eng_arp_opt(t, AO_MODE); }
 int arp_has(int t) {                    // (something to walk)
   int m = arp_mode(t);
-  return m == AM_KEYS ? arp_n[t] > 0 : m == AM_CHORD ? pad_track >= 0 && pad_n > 0 : 0;
+  return m == AM_KEYS ? arp_n[t] > 0 || (e_hold[t] > 0.0f && arp_trig_n[t] > 0)
+       : m == AM_CHORD ? pad_track >= 0 && pad_n > 0 : 0;
 }
 int arp_build(int t, uint8_t* out, int max) {
   int base[8], n = 0, m = arp_mode(t);
   if (m == AM_KEYS) {
     int c = arp_n[t];
     for (int i = 0; i < c && i < 8; ++i) base[n++] = arp_held[t][i];
+    for (int i = 0; e_hold[t] > 0.0f && i < arp_trig_n[t] && n < 8; ++i) {   // (0.16.73: a trig's notes, with the keys)
+      int dup = 0;
+      for (int j = 0; j < n; ++j) dup |= base[j] == arp_trig[t][i];
+      if (!dup) base[n++] = arp_trig[t][i];
+    }
     if (!eng_arp_opt(t, AO_ORDER))      // (by pitch)
       for (int i = 1; i < n; ++i)
         for (int j = i; j > 0 && base[j] < base[j - 1]; --j) { int x = base[j]; base[j] = base[j - 1]; base[j - 1] = x; }
@@ -1511,6 +1526,15 @@ MI_COLD void climb_fresh() {                    // (PLAY, another pattern: each 
 }
 
 // the trigs of one block, frame by frame: fg (the gates) and fnote (the notes) for the voices; the effects' trigs
+int loop_key(int t, int note) {         // (LOOP: a note as the loop's transposition, from its first note)
+  for (int i = 0; i < proj.endless_len[t] && i < ENG_ENDLESS; ++i)
+    if (proj.endless[t][i] != ENDLESS_REST) {
+      const int k = note - proj.endless[t][i];
+      return k < -48 ? -48 : k > 48 ? 48 : k;
+    }
+  return 0;
+}
+
 void sequence(uint32_t n) {
   float fl = static_cast<float>(n / kFrames);
   float sl = step_len_now();
@@ -1538,8 +1562,9 @@ void sequence(uint32_t n) {
   int endless[ENG_TRACKS];
   float el[ENG_TRACKS];
   for (int t = 0; t < ENG_TRACKS; ++t) {
-    endless[t] = (arp_mode(t) == AM_LOOP ? proj.endless_len[t] > 0 && proj.endless_len[t] <= ENG_ENDLESS : arp_has(t)) &&
-                 !e_rec[t];
+    endless[t] = (arp_mode(t) == AM_LOOP ? proj.endless_len[t] > 0 && proj.endless_len[t] <= ENG_ENDLESS : 1) &&
+                 !e_rec[t];                // (0.16.73: KEYS and CHORD: the track's trigs press them, always)
+    if (!playing) e_hold[t] = 0.0f;     // (stopped: no trig holds it)
     int r = Pi(PG_ARP(t), 0);
     el[t] = sl * kArpMult[r < 0 ? 0 : r > 5 ? 5 : r];
     gate_seen[t] = 0;
@@ -1594,27 +1619,41 @@ void sequence(uint32_t n) {
         }
         if (!(adv && eng_trig(l, cur_step[l])) && !(l < ENG_TRACKS && fhit[l])) continue;
         if (l >= ENG_TRACKS) new_trig(l, cur_step[l], 1);
-        else if (!endless[l] && !e_rec[l]) fresh[l] = 1;
+        else if (!e_rec[l]) fresh[l] = 1;   // (0.16.73: on Endless too: it presses it, below)
       }
     }
     for (int oi = 0; oi < ENG_TRACKS; ++oi) {   // (PADS' track first: its trig moves the others' scale)
       int t = pad_track < 0 ? oi : oi == 0 ? pad_track : oi <= pad_track ? oi - 1 : oi;
       int raw, g, rise = 0;
-      if (e_free_go[t]) {               // (0.16.11) a key held, stopped: Endless from its first note, at once
-        e_free_go[t] = 0;
+      const int am = arp_mode(t);
+      if (fresh[t] && endless[t]) {     // (0.16.73) a trig on Endless: it presses it, as long as its length (its
+        fresh[t] = 0;                   // probability, its locks), from its first note; its note the transposition
+        new_trig(t, cur_step[t], 1);    // (LOOP), its notes the keys (KEYS)
+        if (rat_on[t]) {
+          const int key = 48 + iround(E(t, TP_NOTE));
+          e_hold[t] = fm_maxf(fl * 2.0f, lane_sl[t] * (static_cast<float>(trig_tie[t]) + gate_frac(E(t, TP_LENGTH))));
+          e_key_now[t] = loop_key(t, key);
+          arp_trig_n[t] = 0;
+          arp_trig[t][arp_trig_n[t]++] = static_cast<uint8_t>(key < 0 ? 0 : key > 127 ? 127 : key);
+          for (int j = 0; j < trig_cn[t] && arp_trig_n[t] < 4; ++j) {
+            const int v = key + trig_iv[t][j];
+            arp_trig[t][arp_trig_n[t]++] = static_cast<uint8_t>(v < 0 ? 0 : v > 127 ? 127 : v);
+          }
+          e_was[t] = 0;
+        }
+        rat_on[t] = 0;
+      }
+      if (e_free_go[t]) e_free_go[t] = 0, e_was[t] = 0;   // (0.16.11) a key, the first held: from its first note
+      const int e_run = endless[t] && ((am == AM_KEYS ? arp_n[t] > 0 : e_free[t]) || e_hold[t] > 0.0f);
+      if (e_run && (!e_was[t] || (am != AM_LOOP && !arp_len[t]))) {   // a press anew (ARP: something to walk again)
         e_clk[t] = 1e9f;
         e_pos[t] = -1;
         e_dir[t] = 1;
         e_cnt[t] = 0;
       }
-      int e_run = playing || (e_free[t] && endless[t]), am = arp_mode(t);
-      if (am != AM_LOOP && endless[t] && !arp_len[t]) {   // (ARP: something to walk again: from its first, at once)
-        e_clk[t] = 1e9f;
-        e_pos[t] = -1;
-        e_dir[t] = 1;
-        e_cnt[t] = 0;
-      }
-      if (am != AM_LOOP && !endless[t]) arp_len[t] = 0;
+      e_was[t] = e_run;
+      if (e_hold[t] > 0.0f) e_hold[t] -= fl;
+      if (am != AM_LOOP && !e_run) arp_len[t] = 0;
       if (endless[t] && e_run && (e_clk[t] += fl) >= el[t]) {   // Endless: its next note (or rest)
         const uint8_t* src = proj.endless[t];
         if (am != AM_LOOP) {            // (ARP: the keys or the chord now, its place kept within them)
@@ -1717,14 +1756,14 @@ void sequence(uint32_t n) {
           ratchet_layout(t);
           lane_sl[t] = keep;
         }
-        tnote[t] = static_cast<float>(quantize_t(t, e_note[t] + (am == AM_LOOP ? proj.endless_key[t] : 0) + Pi(PG_ARP(t), 3) +
+        tnote[t] = static_cast<float>(quantize_t(t, e_note[t] + (am == AM_LOOP ? e_key_now[t] : 0) + Pi(PG_ARP(t), 3) +
                                                12 * iround(E(t, TP_OCTAVE)) + iround(E(t, TP_TRANSPOSE)) +
                                                iround(tdelta[t][TP_NOTE])));
       }
       if (e_rec[t]) {
         raw = 0;
       } else {
-        raw = (playing || (e_free[t] && endless[t])) && raw_left[t] > 0.0f;
+        raw = (playing || (endless[t] && e_was[t])) && raw_left[t] > 0.0f;
         raw_left[t] -= fl;
       }
       if (!rat_on[t]) {
@@ -6104,19 +6143,15 @@ MI_COLD void eng_endless_clear(int t) {
 int eng_endless_on(int t) {
   return t >= 0 && t < ENG_TRACKS && proj.endless_len[t] > 0 && !e_rec[t];
 }
-MI_COLD void eng_endless_key(int t, int note) {   // from its first note
+MI_COLD void eng_endless_key(int t, int note) {   // from its first note (0.16.73: the press's, now)
   if (!eng_endless_on(t)) return;
-  for (int i = 0; i < proj.endless_len[t]; ++i)
-    if (proj.endless[t][i] != ENDLESS_REST) {
-      int k = note - proj.endless[t][i];
-      proj.endless_key[t] = static_cast<int8_t>(k < -48 ? -48 : k > 48 ? 48 : k);
-      return;
-    }
+  e_key_now[t] = loop_key(t, note);
+  proj.endless_key[t] = static_cast<int8_t>(e_key_now[t]);
 }
-MI_COLD int eng_endless_pos(int t) {
+MI_COLD int eng_endless_pos(int t) {    // (0.16.73: while pressed)
   if (t < 0 || t >= ENG_TRACKS) return -1;
-  if (arp_mode(t) != AM_LOOP) return arp_has(t) && arp_len[t] && (playing || e_free[t]) ? e_pos[t] : -1;
-  return eng_endless_on(t) && (playing || e_free[t]) ? e_pos[t] : -1;
+  if (arp_mode(t) != AM_LOOP) return arp_has(t) && arp_len[t] && e_was[t] ? e_pos[t] : -1;
+  return eng_endless_on(t) && e_was[t] ? e_pos[t] : -1;
 }
 const char* const kArpModes[AM_N] = {"Loop", "Keys", "Chord"};
 int eng_arp_opt(int t, int o) {
@@ -6170,10 +6205,9 @@ MI_COLD int eng_arp_list(int t, uint8_t* out, int max) {
   if (t < 0 || t >= ENG_TRACKS || arp_mode(t) == AM_LOOP) return 0;
   return arp_build(t, out, max);
 }
-MI_COLD void eng_endless_free(int t, int on) {   // (0.16.11) the sequencer stopped: Endless by a key held (-1: all let go;
-  for (int i = 0; i < ENG_TRACKS; ++i) { // 0.16.13: an ARP's latched notes go on)
+MI_COLD void eng_endless_free(int t, int on) {   // (0.16.11) Endless by a key held (-1: all let go; 0.16.73: playing or
+  for (int i = 0; i < ENG_TRACKS; ++i) { // not; KEYS by its keys, LATCH's too: arp_n)
     if (t >= 0 && i != t) continue;
-    if (!on && t < 0 && arp_mode(i) == AM_KEYS && eng_arp_opt(i, AO_LATCH) && arp_n[i] > 0) continue;
     if (on && !e_free[i]) e_free_go[i] = 1;
     e_free[i] = on;
   }
@@ -6182,7 +6216,7 @@ MI_COLD int eng_climb_now(int t, int step) {
   return t >= 0 && t < ENG_TRACKS && step >= 0 && step < ENG_STEPS && playing ? climb_off[t][step] : 0;
 }
 MI_COLD int eng_endless_state(int t) {
-  return t >= 0 && t < ENG_TRACKS && eng_endless_on(t) && (playing || e_free[t]) ? e_state[t] : ES_NOTE;
+  return t >= 0 && t < ENG_TRACKS && eng_endless_on(t) && e_was[t] ? e_state[t] : ES_NOTE;
 }
 
 }  // extern "C"

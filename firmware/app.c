@@ -6180,9 +6180,17 @@ static void lrec_key(int k, int note, int down)
         return;
     len = lane_len(t);
     if (!down) {                         /* held over so many steps: its length */
-        n = (int)(pos - ui.lr_at[k] + 0.5f);
-        if (n >= 2)
-            eng_step_tie_set(t, ui.lr_step[k], (n > len ? len : n) - 1);
+        if (eng_endless_on(t) || eng_arp_opt(t, AO_MODE) != AM_LOOP) {   /* (0.16.73) Endless, its ARP: its trig
+                                          * holds it as long as the key was (its TIE and its LENGTH's share of a step
+                                          * nearest the time held), so it plays the same notes again */
+            float v = eng_project()->val[eng_track_param(t, TP_LENGTH)], h = pos - ui.lr_at[k];
+            n = (int)(h - (0.05f + 0.9f * v) + 0.5f);
+            eng_step_tie_set(t, ui.lr_step[k], n < 0 ? 0 : n > len - 1 ? len - 1 : n);
+        } else {
+            n = (int)(pos - ui.lr_at[k] + 0.5f);
+            if (n >= 2)
+                eng_step_tie_set(t, ui.lr_step[k], (n > len ? len : n) - 1);
+        }
         ui.lr_trk[k] = 0;
         return;
     }
@@ -6258,25 +6266,30 @@ static void poll_keys(void)
             eng_key(ui.erec, note, down);
             dirty = 1;
         } else if (eng_arp_opt(ui.track, AO_MODE) == AM_KEYS && ui.erec < 0) {   /* (0.16.13) the ARP: the keys held
-                                          * its notes; stopped, a key held plays it */
+                                          * its notes, played while held (0.16.73: playing or not) */
             eng_arp_key(ui.track, note, down);
-            if (down && !eng_playing())
+            if (down)
                 eng_endless_free(ui.track, 1);
+            if (ui.lrec)                 /* (0.16.73) live: the keys written on the steps, their trigs press it */
+                lrec_key((int)k, note, down);
             dirty = 1;
-        } else if (eng_arp_opt(ui.track, AO_MODE) == AM_CHORD && ui.erec < 0) {   /* PADS' chord: stopped, a key held
-                                          * plays it */
-            if (down && !eng_playing())
+        } else if (eng_arp_opt(ui.track, AO_MODE) == AM_CHORD && ui.erec < 0) {   /* PADS' chord: a key held plays it */
+            if (down)
                 eng_endless_free(ui.track, 1);
-        } else if (eng_endless_on(ui.track)) {   /* Endless: a key transposes it (0.16.11: stopped, it plays it from
-                                          * there, while held); 0.16.15: the newest key held, back to the one
+            if (ui.lrec)
+                lrec_key((int)k, note, down);
+        } else if (eng_endless_on(ui.track)) {   /* Endless: a key held plays it, from its first note transposed by the
+                                          * key (0.16.73: playing or not; before, playing, the loop went on its own
+                                          * and a key transposed it); 0.16.15: the newest key held, back to the one
                                           * before when it is let go */
             int top = endless_keys(note, down);
             if (top >= 0) {
                 eng_endless_key(ui.track, top);
-                if (!eng_playing())
-                    eng_endless_free(ui.track, 1);
+                eng_endless_free(ui.track, 1);
                 dirty = 1;
             }
+            if (ui.lrec)
+                lrec_key((int)k, note, down);
         } else {
             eng_key(ui.track, note, down);
             if (ui.lrec)
@@ -6289,7 +6302,7 @@ static void poll_keys(void)
         eng_key_release_all();
         ui.ekn = 0;
     }
-    if (!keys || eng_playing())          /* (every key let go, or PLAY: Endless by the keys stops) */
+    if (!keys)                           /* (every key let go: Endless by the keys stops; 0.16.73: not PLAY) */
         eng_endless_free(-1, 0);
     ui.keys = keys;
 }

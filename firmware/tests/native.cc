@@ -7,6 +7,7 @@
 //   build/native build/wav [seconds]
 #include <array>
 #include <cmath>
+#include <functional>
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -525,7 +526,8 @@ int main(int argc, char** argv) {
     if (kr != 3) ++failures, printf("FAIL: legato keys\n");
   }
 
-  // 10. Endless: track 1 records C3, a rest, D#3, G3, then loops them on sixteenths; a key transposes it
+  // 10. Endless: track 1 records C3, a rest, D#3, G3, then loops them on sixteenths while a trig holds it (0.16.73:
+  // one a bar, held the bar, on C3: as recorded); the trig on F3 transposes it
   eng_defaults(p);
   eng_endless_rec(0, 1);
   eng_endless_add(0, 60);
@@ -533,10 +535,16 @@ int main(int argc, char** argv) {
   eng_endless_add(0, 63);
   eng_endless_add(0, 67);
   eng_endless_rec(0, 0);
+  int e_at[1] = {12};
+  eng_steps_clear(0);
+  eng_trig_set(0, 0, 1);
+  eng_step_notes_set(0, 0, e_at, 1);
+  eng_step_tie_set(0, 0, 15);
   run(4, sr, slo, shi, &ok_scale);
   int e1lo = slo[0], e1hi = shi[0];
   uint32_t e1 = sr[0];
-  eng_endless_key(0, 65);                                // up a fourth
+  e_at[0] = 17;                                          // up a fourth
+  eng_step_notes_set(0, 0, e_at, 1);
   run(4, sr, slo, shi, &ok_scale);
   printf("endless: %u notes in 2 bars (24 expected), %d..%d; transposed by a key: %d..%d, %s\n", e1, e1lo, e1hi, slo[0],
          shi[0], ok_scale ? "in the scale" : "OUT OF THE SCALE");
@@ -3273,6 +3281,10 @@ int main(int argc, char** argv) {
         for (int i = 1; i < 4; ++i) p->endless[0][i] = ENDLESS_REST;
         p->endless_len[0] = 4;
         p->val[PG_ARP(0) * 4 + 0] = 5.0f;     // (quarters: four a bar, one note then three rests)
+        int at[1] = {12};                     // (0.16.73: a trig holding it the bar)
+        eng_trig_set(0, 0, 1);
+        eng_step_notes_set(0, 0, at, 1);
+        eng_step_tie_set(0, 0, 15);
       } else {
         eng_trig_set(0, 0, 1);
       }
@@ -3421,6 +3433,10 @@ int main(int argc, char** argv) {
       eng_endless_opt_set(p, 0, EO_REST, rest);
       eng_endless_opt_set(p, 0, EO_HOLES, holes);
       eng_endless_opt_set(p, 0, EO_LEAP, leap);
+      int at[1] = {12};                       // (0.16.73: a trig holding it the bar, on its first note)
+      eng_trig_set(0, 0, 1);
+      eng_step_notes_set(0, 0, at, 1);
+      eng_step_tie_set(0, 0, 15);
       eng_play(1);
       int k = 0;
       for (int b = 0; b < 10 * 43 + 20 && k < 10; ++b) {
@@ -3916,6 +3932,8 @@ int main(int argc, char** argv) {
     eng_fresh();
   }
 
+
+
   {                                     // 63. the harmony (0.16.12): PADS' progressions and colours of then where a
     // project of then finds them; the new chords (off the scale, suspended, the cliché's line, POWER, the eleventh);
     // the phrygian dominant; FLIP minor one bar, dorian the next
@@ -4092,7 +4110,7 @@ int main(int argc, char** argv) {
     eng_arp_opt_set(p, 0, AO_LATCH, 0);  // (LATCH off: let go)
     listen(30);
     int unlatched = listen(200) == 0;
-    // PADS' chord, playing: Static in C major (C E G) on T4, T1 walking it
+    // PADS' chord, playing: Static in C major (C E G) on T4, T1 walking it (0.16.73: while its trig holds it, a bar)
     eng_blank(p);
     eng_fresh();
     p->val[PG_GLOBAL * 4 + 0] = 0.60206f;
@@ -4105,6 +4123,8 @@ int main(int argc, char** argv) {
     eng_trig_set(3, 0, 1);
     eng_arp_opt_set(p, 0, AO_MODE, AM_CHORD);
     eng_arp_opt_set(p, 0, AO_OCT, 1);
+    eng_trig_set(0, 0, 1);
+    eng_step_tie_set(0, 0, 15);
     n = last = 0;
     eng_play(1);
     listen(6 * 43 + 20);
@@ -7302,6 +7322,97 @@ int main(int argc, char** argv) {
              fworst, p_in, p_out, dworst, tick, ticks, notes, ok ? "" : " WRONG");
       if (!ok) ++failures, printf("FAIL: the clicks\n");
     }
+  }
+
+  {                                     // 79. (0.16.73) Endless and its ARP as an arpeggiator, the sequencer playing (near the end: its rendering
+    // would move the states the tests after it start from):
+    // nothing on their own; a key held plays the loop from its first note, transposed by the key, until let go; the
+    // track's trigs do the same, each its length, each from the first note, its note the transposition (LOOP) or its
+    // notes the ARP's (KEYS); CHORD the same, nothing without a trig or a key
+    project_t* p = eng_project();
+    static float l[128], r[128];
+    auto setup = [&](int mode) {
+      eng_play(0);
+      eng_blank(p);
+      eng_fresh();
+      eng_set_model(0, eng_model_find(MK_DRUM, 0));
+      p->val[PG_GLOBAL * 4 + 0] = 0.60206f;   // (120 BPM: a sixteenth 43 blocks)
+      p->val[PG_GLOBAL * 4 + 1] = 0.0f;
+      for (int i = 0; i < 4; ++i) p->endless[0][i] = static_cast<uint8_t>(60 + 2 * i);   // C D E F#
+      p->endless_len[0] = 4;
+      p->val[PG_ARP(0) * 4 + 0] = 2.0f;       // (sixteenths)
+      eng_arp_opt_set(p, 0, AO_MODE, mode);
+      eng_endless_free(-1, 0);                // (no key held: as the keyboard leaves it)
+      eng_arp_release_all();
+    };
+    int got[32], n = 0, last = 0;
+    auto listen = [&](int sixteenths, std::function<void(int)> at) {   // (the notes risen; at(s): at each sixteenth)
+      for (int b = 0; b < sixteenths * 43; ++b) {
+        if (b % 43 == 0 && at) at(b / 43);
+        eng_render(l, r, 128);
+        int g = (eng_gates() & 1u) != 0;
+        if (g && !last && n < 32) got[n++] = eng_note(0) - 12 * static_cast<int>(std::lround(p->val[PG_TRACK(0, 2) * 4 + 3]));
+        last = g;
+      }
+    };
+    auto seq = [&](const int* want, int k) {
+      int ok = n == k;
+      for (int i = 0; i < k && ok; ++i) ok &= got[i] == want[i];
+      return ok;
+    };
+    // LOOP, nothing: silent
+    setup(AM_LOOP);
+    eng_play(1);
+    n = 0, last = 0;
+    listen(16, nullptr);
+    const int alone = n;
+    // a key (E: +4) held 4 sixteenths, then let go
+    n = 0;
+    listen(8, [&](int st) {
+      if (st == 1) eng_endless_key(0, 64), eng_endless_free(0, 1);
+      if (st == 5) eng_endless_free(-1, 0);
+    });
+    const int kKey[4] = {64, 66, 68, 70};
+    const int key_ok = seq(kKey, 4), key_n = n;
+    eng_play(0);
+    // trigs: step 0 (C, 4 long), step 8 (D, 4 long)
+    setup(AM_LOOP);
+    int c4[1] = {12}, d4[1] = {14};
+    eng_trig_set(0, 0, 1), eng_step_notes_set(0, 0, c4, 1), eng_step_tie_set(0, 0, 3);
+    eng_trig_set(0, 8, 1), eng_step_notes_set(0, 8, d4, 1), eng_step_tie_set(0, 8, 3);
+    eng_play(1);
+    n = 0, last = 0;
+    listen(16, nullptr);
+    const int kTrig[8] = {60, 62, 64, 66, 62, 64, 66, 68};
+    const int trig_ok = seq(kTrig, 8);
+    eng_play(0);
+    // KEYS: a trig at step 0, C E G (its chord), 8 long: the ARP over them by pitch, then silent
+    setup(AM_KEYS);
+    int ceg[3] = {12, 16, 19};
+    eng_trig_set(0, 0, 1), eng_step_notes_set(0, 0, ceg, 3), eng_step_tie_set(0, 0, 7);
+    eng_play(1);
+    n = 0, last = 0;
+    listen(16, nullptr);
+    const int kKeys[8] = {60, 64, 67, 60, 64, 67, 60, 64};
+    const int keys_ok = seq(kKeys, 8);
+    eng_play(0);
+    // CHORD: PADS on track 2, no trig on track 1: silent
+    setup(AM_CHORD);
+    eng_set_model(1, eng_model_find(MK_PADS, 0));
+    eng_play(1);
+    n = 0, last = 0;
+    listen(16, nullptr);
+    const int chord_alone = n;
+    eng_play(0);
+    printf("Endless as an arpeggiator, playing: LOOP alone %d notes; a key held 4 sixteenths %d (%d %d %d %d); two "
+           "trigs %d (%d %d %d %d, %d %d %d %d); KEYS by a trig's chord %d (%d %d %d %d %d %d); CHORD alone %d%s\n", alone,
+           key_n, kKey[0], kKey[1], kKey[2], kKey[3], trig_ok ? 8 : -1, kTrig[0], kTrig[1], kTrig[2], kTrig[3],
+           kTrig[4], kTrig[5], kTrig[6], kTrig[7], keys_ok ? 8 : -1, kKeys[0], kKeys[1], kKeys[2], kKeys[3], kKeys[4],
+           kKeys[5], chord_alone, key_ok ? "" : " (the key's WRONG)");
+    if (alone || !key_ok || !trig_ok || !keys_ok || chord_alone)
+      ++failures, printf("FAIL: Endless as an arpeggiator\n");
+    eng_defaults(p);
+    eng_fresh();
   }
 
   // 80. (0.16.71) the reverb and the delay asleep (last: its 16 s of rendering would move the states the tests
