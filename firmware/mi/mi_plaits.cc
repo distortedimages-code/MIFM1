@@ -74,7 +74,7 @@ void mp_set(void* v, int model, float note, float harmonics, float timbre, float
             float colour) {
   PlaitsVoice* p = static_cast<PlaitsVoice*>(v);
   p->patch.engine = model < 0 ? 0 : model >= MP_MODELS ? MP_MODELS - 1 : model;
-  p->note = note;
+  p->note = mi_tuned(note);             // (0.16.84: the microtonal SCALEs' tuning)
   p->target[0] = harmonics;
   p->target[1] = timbre;
   p->target[2] = morph;

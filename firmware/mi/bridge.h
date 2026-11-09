@@ -28,6 +28,11 @@ void put_time(char *b, int n, int *at, float s);
 /* their output: n samples of y (times g) through the coupling capacitor (~5 Hz: *dcx, *dcy its states) and a soft
  * knee above 0.8 (at most 1.2) */
 void mi_finish(float *y, uint32_t n, float g, float *dcx, float *dcy);
+/* (0.16.84) the microtonal SCALEs: the 12 notes over ROOT each moved by its cents (0: none, the equal temperament),
+ * set by the engine each block; a machine's note (MIDI, fractional) as the tuning has it, a note between two blended */
+void mi_tune_set(const int8_t *cents, int root);
+float mi_tuned(float note);
+int mi_tuning(void);
 
 /* ---- Plaits (Plaits 1.2: 24 models; the kSampleRate of the copy is 44.1 kHz) ---- */
 #define MP_MODELS 24

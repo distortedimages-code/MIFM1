@@ -1860,6 +1860,13 @@ static void panel_duck(void)             /* the duck: its source's trigs (0.16.4
     int src = eng_duck_track(0);
     hero_icon(IC_DUCK, track_accent(src));
     int y = hero_title("DUCK");
+    {                                    /* (0.16.83) its source by the name: T1..T4 in a red square, as tall as its
+                                          * capitals (ALGORITHM changes it; before, only in the line under it) */
+        char n[3] = {'T', (char)('1' + src), 0};
+        int bx = 84 + text_w(&FONT_L, "DUCK") + 8, tw = text_w(&FONT_S, n), bw = tw + 8 > 21 ? tw + 8 : 21;
+        cv_rect(bx, 10, bw, 21, AC3);
+        cv_text(bx + (bw - tw + 1) / 2, 12, &FONT_S, n, BG);
+    }
     s[0] = 0;
     text_cat(s, "AT T1'S TRIGS|DECAY ", sizeof s);
     s[4] = (char)('1' + src);
@@ -2511,15 +2518,16 @@ APP_SMALL static void panel_reverb(void) /* the reverb: its algorithm (CLOUDS, M
     hero_icon(IC_REV, AC3);
     int y = hero_title("REVERB");
     s[0] = 0;
-    if (ui.page == PG_RSEND)
-        text_cat(s, "THE SENDS|", sizeof s);
-    if (a == RV_CLOUDS) {
-        text_cat(s, "FROM CLOUDS", sizeof s);
-    } else {
-        text_cat(s, a == RV_SHIMMER ? "SHIMMER|" : "METAL|", sizeof s);
+    if (ui.page == PG_RSEND)             /* (0.16.83: the algorithm in its pill, under the name) */
+        text_cat(s, "THE SENDS", sizeof s);
+    if (a != RV_CLOUDS) {                /* METAL's and SHIMMER's decay */
+        if (s[0])
+            text_cat(s, "|", sizeof s);
         eng_param_text(PG_REVERB * 4, eng_final(PG_REVERB * 4), v, sizeof v);
         label_text(v, v, sizeof v);
         text_cat(s, v, sizeof s);
+    } else if (!s[0]) {
+        text_cat(s, "FROM CLOUDS", sizeof s);
     }
     hero_line(y, s);
 }
@@ -2531,17 +2539,15 @@ static void panel_delay(void)            /* the delay: its time, its mode, its r
     hero_icon(IC_DELAY, AC2);
     int y = hero_title("DELAY");
     s[0] = 0;
-    if (ui.page == PG_DSEND)
-        text_cat(s, p->algo[PG_DELAY(0)] >= DL_BBD_SYNC ? "THE SENDS|BBD " : "THE SENDS|", sizeof s);
+    if (ui.page == PG_DSEND)             /* (0.16.83: SYNC, FREE, the BBD in its pill, under the name) */
+        text_cat(s, "THE SENDS|", sizeof s);
     eng_param_text(PG_DELAY(0) * 4, eng_final(PG_DELAY(0) * 4), v, sizeof v);
     label_text(v, v, sizeof v);
     text_cat(s, v, sizeof s);
-    if (p->algo[PG_DELAY(0)] & 1)        /* FREE: in ms, off the tempo */
-        text_cat(s, ", FREE", sizeof s);
     if (ui.page != PG_DSEND) {
         text_cat(s, "|", sizeof s);
         if (p->algo[PG_DELAY(0)] >= DL_BBD_SYNC) {   /* (0.16.65) the BBD: its width */
-            text_cat(s, "BBD ", sizeof s);
+            text_cat(s, "WIDTH ", sizeof s);
             eng_param_text(PG_DELAY(1) * 4 + 1, eng_final(PG_DELAY(1) * 4 + 1), v, sizeof v);
             text_cat(s, v, sizeof s);
         } else {
@@ -2554,6 +2560,103 @@ static void panel_delay(void)            /* the delay: its time, its mode, its r
         text_cat(s, v, sizeof s);
     }
     hero_line(y, s);
+}
+
+/* (0.16.83) the algorithms of the reverb, the delay, a track's filter: a row of pills under the name, the one playing
+ * filled in the page's colour, the others outlined. Another chosen (ALGORITHM), the fill slides to it (an ease out),
+ * and a row longer than its room slides with it, right to left going on, the other way back: the one playing as near
+ * the middle as the row's ends allow. Its own canvas, left of the meter (226): drawn again alone while it slides */
+#define STRIP_X 84
+#define STRIP_Y 32
+#define STRIP_W 138
+#define STRIP_H 13
+#define STRIP_MS 260u
+static int strip_of(int page, const char *const **names, int *cur, uint16_t *ac)   /* its pills (0: none here) */
+{
+    static const char *const RV[RV_ALGOS] = {"CLOUDS", "METAL", "SHIMMER"};
+    static const char *const DL[4] = {"SYNC", "FREE", "BBD SYNC", "BBD FREE"};
+    static const char *const MF[MF_MODELS] = {"OFF", "LADDER", "MS-20", "SEM", "VOX"};
+    project_t *p = eng_project();
+    int pt = ptype(page);
+    if (ui.matrix)
+        return 0;
+    if (pt == PT_REVERB || pt == PT_RSEND) {
+        *names = RV, *cur = clamp(p->algo[PG_REVERB], 0, RV_ALGOS - 1), *ac = AC3;
+        return RV_ALGOS;
+    }
+    if (pt == PT_DELAY1 || pt == PT_DELAY2 || pt == PT_DSEND) {
+        *names = DL, *cur = clamp(p->algo[PG_DELAY(0)], DL_SYNC, DL_BBD_FREE), *ac = AC2;
+        return 4;
+    }
+    if (pt == PT_VFLT1 || pt == PT_VFLT2) {
+        int t = ptrack(page);
+        *names = MF, *cur = clamp(p->algo[PG_FILT(t, 0)], 0, MF_MODELS - 1), *ac = page_accent(page);
+        return MF_MODELS;
+    }
+    return 0;
+}
+static void algo_strip(int force)
+{
+    static int group = -1, target;
+    static float pos, from;
+    static uint32_t at;
+    static int32_t shown = -1;
+    const char *const *nm = 0;
+    int cur = 0, xs[8], ws[8], x = 0;
+    uint16_t ac = HI;
+    int n = strip_of(ui.page, &nm, &cur, &ac);
+    if (!n) {
+        group = -1;
+        return;
+    }
+    int g = ptype(ui.page) == PT_VFLT1 || ptype(ui.page) == PT_VFLT2 ? 3 + ptrack(ui.page)
+            : ptype(ui.page) == PT_REVERB || ptype(ui.page) == PT_RSEND ? 1 : 2;
+    if (g != group) {                    /* another page: in place at once */
+        group = g, target = cur, pos = from = (float)cur;
+        force = 1;
+    } else if (cur != target) {          /* another algorithm: from where it is */
+        from = pos, target = cur, at = plat_ms();
+    }
+    if (pos != (float)target) {
+        uint32_t t = plat_ms() - at;
+        if (t >= STRIP_MS) {
+            pos = (float)target;
+        } else {
+            float u = 1.0f - (float)t / (float)STRIP_MS;
+            pos = (float)target + (from - (float)target) * u * u * u;
+        }
+    }
+    for (int i = 0; i < n && i < 8; i++) {   /* each pill's place along the row, its width */
+        ws[i] = text_w(&FONT_T, nm[i]) + 10;
+        xs[i] = x;
+        x += ws[i] + 4;
+    }
+    int a = clamp((int32_t)pos, 0, n - 1), b = a + 1 < n ? a + 1 : a, len = x - 4;
+    float f = pos - (float)a;
+    float hx = (float)xs[a] + (float)(xs[b] - xs[a]) * f, hw = (float)ws[a] + (float)(ws[b] - ws[a]) * f;
+    float off = hx + hw * 0.5f - (float)STRIP_W * 0.5f;   /* (the fill in the middle, the row's ends kept in) */
+    off = len <= STRIP_W ? 0.0f : fm_clampf(off, 0.0f, (float)(len - STRIP_W));
+    int o = (int)(off + 0.5f);
+    int32_t key = (int32_t)(hx * 4.0f) * 4096 + (int32_t)(hw * 4.0f) * 16 + o + cur * 7 + g * 13 + (int32_t)ac * 31;
+    if (!force && key == shown)
+        return;
+    shown = key;
+    uint16_t dim = tint(ac, BG, 4);
+    cv_begin(STRIP_W, STRIP_H, BG);
+    for (int i = 0; i < n && i < 8; i++) {   /* the outlines */
+        int px = xs[i] - o;
+        if (px + ws[i] > 0 && px < STRIP_W) {
+            pill(px, 0, ws[i], STRIP_H, dim);
+            pill(px + 1, 1, ws[i] - 2, STRIP_H - 2, BG);
+        }
+    }
+    pill((int)(hx + 0.5f) - o, 0, (int)(hw + 0.5f), STRIP_H, ac);   /* the fill, where it is */
+    for (int i = 0; i < n && i < 8; i++) {   /* the names: dark on the fill */
+        int px = xs[i] - o, c = xs[i] + ws[i] / 2;
+        if (px + ws[i] > 0 && px < STRIP_W)
+            cv_text(px + 5, 1, &FONT_T, nm[i], (float)c >= hx && (float)c <= hx + hw ? BG : dim);
+    }
+    blit(STRIP_X, PANEL_Y + STRIP_Y);
 }
 
 /* a page's meter, alone (the rest is not drawn again for it): an effect's return (the delay's, the reverb's; how open
@@ -2760,6 +2863,7 @@ APP_SMALL static void draw_panel(void)
             fx_meter(0);
         if (pt == PT_LFO || pt == PT_FOLLOW)
             lfo_scope(0);
+        algo_strip(0);                   /* (0.16.83: sliding, alone) */
         return;
     }
     memcpy(ui.panel_shown, s, sizeof s);
@@ -2802,6 +2906,7 @@ APP_SMALL static void draw_panel(void)
         fx_meter(1);
     if (pt == PT_LFO || pt == PT_FOLLOW)
         lfo_scope(1);
+    algo_strip(1);
 }
 
 /* the knobs: a ring each, lit from its start (or its middle) to its value ---------------------------------------- */

@@ -60,7 +60,8 @@ inline float sin_cyc(float ph) {        // a sine of a phase in cycles, 0..1 (9t
 __attribute__((noinline)) float exp2_b(float x) { return fm_exp2f(x); }
 __attribute__((noinline)) float exp_b(float x) { return fm_expf(x); }
 __attribute__((noinline)) float sin_b(float ph) { return sin_cyc(ph); }
-inline float note_hz(float note) { return 440.0f * exp2_b((note - 69.0f) * (1.0f / 12.0f)); }
+// (0.16.84) every note the pad sounds (its voices, its layer's) as the microtonal SCALEs tune it
+inline float note_hz(float note) { return 440.0f * exp2_b((mi_tuned(note) - 69.0f) * (1.0f / 12.0f)); }
 inline uint32_t xs(uint32_t& s) {
   s ^= s << 13;
   s ^= s >> 17;
@@ -95,18 +96,20 @@ struct Prog {
 // major fourth in a minor key, chromatic mediants, a pedal under moving chords)
 const int kProgs = 26;
 const Prog kProg[kProgs] = {
-    // (0.16.12) the line cliché: a minor chord, a voice inside it falling by half steps: i, i(maj7), i7, i6
-    {"Descent", M_MINOR, 4, {C1(0), CX(0, 11), CX(0, 10), CX(0, 9)}},
+    // (0.16.12) the line cliché: a minor chord, a voice inside it falling by half steps: i, i(maj7), i7, i6 (0.16.83:
+    // the names six letters at most, the knob's ring holds them; Descent, Flat II, Pachelbel, Tritone, Gymnopedie,
+    // Prelude, Mediant, Phrygian and Dominant before)
+    {"Cliche", M_MINOR, 4, {C1(0), CX(0, 11), CX(0, 10), CX(0, 9)}},
     // after Arvo Part: the tonic triad held, a voice over it going down by steps and back (tintinnabuli)
     {"Tintin", M_MINOR, 8, {CA(0, 7), CA(0, 6), CA(0, 5), CA(0, 3), CA(0, 1), CA(0, 3), CA(0, 5), CA(0, 6)}},
     // the same in a major key, the tonic and its fourth degree (a mirror)
     {"Mirror", M_MAJOR, 8, {CA(0, 1), C1(0), CA(3, 1), CA(0, 5), CA(4, 3), C1(0), CA(3, 6), C1(4)}},
     // (0.16.12) the flat second (the Neapolitan, a half step over the tonic): i bII bVII i
-    {"Flat II", M_MINOR, 4, {C1(0), CR(1, Q_MAJ), C1(6), C1(0)}},
+    {"Napoli", M_MINOR, 4, {C1(0), CR(1, Q_MAJ), C1(6), C1(0)}},
     // Pachelbel's canon: I V vi iii IV I IV V
-    {"Pachelbel", M_MAJOR, 8, {C1(0), C1(4), C1(5), C1(2), C1(3), C1(0), C1(3), C1(4)}},
+    {"Canon", M_MAJOR, 8, {C1(0), C1(4), C1(5), C1(2), C1(3), C1(0), C1(3), C1(4)}},
     // (0.16.12) the tritone away: i bV i bVI
-    {"Tritone", M_MINOR, 4, {C1(0), CR(6, Q_MAJ), C1(0), C1(5)}},
+    {"Devil", M_MINOR, 4, {C1(0), CR(6, Q_MAJ), C1(0), C1(5)}},
     // la Folia: i V i VII III VII i V (its dominant major)
     {"Folia", M_MINOR, 8, {C1(0), CQ(4, Q_MAJ), C1(0), C1(6), C1(2), C1(6), C1(0), CQ(4, Q_MAJ)}},
     // the lament (a descending tetrachord, Purcell's ground, the Andalusian cadence): i VII VI V
@@ -115,20 +118,21 @@ const Prog kProg[kProgs] = {
     {"Rise", M_MINOR, 4, {C1(0), C1(2), CQ(3, Q_MAJ), C1(0)}},
     // the circle of fifths (the baroque sequence): vi ii V I IV vii iii vi
     {"Fifths", M_MAJOR, 8, {C1(5), C1(1), C1(4), C1(0), C1(3), C1(6), C1(2), C1(5)}},
-    // Satie's first Gymnopedie: IVmaj7 Imaj7
-    {"Gymnopedie", M_MAJOR, 2, {CA(3, 6), CA(0, 6)}},
+    // Satie's first Gymnopedie: IVmaj7 Imaj7 twice, then where its melody takes it (0.16.83: eight; before, the first
+    // two): ii7, v7 (its minor fifth: the piece's dorian turn), ii7, Imaj7
+    {"Satie", M_MAJOR, 8, {CA(3, 6), CA(0, 6), CA(3, 6), CA(0, 6), CA(1, 6), {4, Q_MIN, 6, -1, 0, -1}, CA(1, 6), CA(0, 6)}},
     // (0.16.12) suspended, nothing resolving: i(sus2) bVI(sus2) bIII bVII(sus4)
     {"Hover", M_MINOR, 4, {CQ(0, Q_SUS2), CQ(5, Q_SUS2), C1(2), CQ(6, Q_SUS4)}},
     // Bach's first prelude (the Well-Tempered Clavier), its opening: I ii7 V7 I vi ii V7 I
-    {"Prelude", M_MAJOR, 8, {C1(0), CA(1, 6), CA(4, 6), C1(0), C1(5), C1(1), CA(4, 6), C1(0)}},
+    {"Bach", M_MAJOR, 8, {C1(0), CA(1, 6), CA(4, 6), C1(0), C1(5), C1(1), CA(4, 6), C1(0)}},
     // (0.16.12) the major and the minor on one tonic: I i bVI bVII
     {"Shift", M_MINOR, 4, {CQ(0, Q_MAJ), CQ(0, Q_MIN), C1(5), C1(6)}},
     // the plagal (the amen): I IV I IV vi IV I I
     {"Plagal", M_MAJOR, 8, {C1(0), C1(3), C1(0), C1(3), C1(5), C1(3), C1(0), C1(0)}},
-    // the dorian vamp: i7 IV7
-    {"Dorian", M_DORIAN, 2, {CA(0, 6), CA(3, 6)}},
+    // the dorian vamp: i7 IV7, then (0.16.83: four) bVII and IV7 back to it
+    {"Dorian", M_DORIAN, 4, {CA(0, 6), CA(3, 6), C1(6), CA(3, 6)}},
     // (0.16.12) chromatic mediants (a film's): i bVI i III (major, off the scale)
-    {"Mediant", M_MINOR, 4, {C1(0), C1(5), C1(0), CR(4, Q_MAJ)}},
+    {"Filmic", M_MINOR, 4, {C1(0), C1(5), C1(0), CR(4, Q_MAJ)}},
     // dub: i7 iv7 i7 VII
     {"Dub", M_MINOR, 4, {CA(0, 6), CA(3, 6), CA(0, 6), C1(6)}},
     // a chorale's: I vi IV V I IV V I
@@ -136,17 +140,18 @@ const Prog kProg[kProgs] = {
     // (0.16.12) chords moving over the tonic held: i, then bVII, v, bVII with the tonic in them
     {"Pedal", M_MINOR, 4, {C1(0), CA(6, 1), CA(4, 3), CA(6, 1)}},
     // the phrygian: i II i VII VI VII II i
-    {"Phrygian", M_PHRYGIAN, 8, {C1(0), C1(1), C1(0), C1(6), C1(5), C1(6), C1(1), C1(0)}},
+    {"Phryg", M_PHRYGIAN, 8, {C1(0), C1(1), C1(0), C1(6), C1(5), C1(6), C1(1), C1(0)}},
     // (0.16.12) the phrygian dominant's: I bII bvii bII
-    {"Dominant", M_PHRYGDOM, 4, {C1(0), C1(1), C1(6), C1(1)}},
+    {"Hijaz", M_PHRYGDOM, 4, {C1(0), C1(1), C1(6), C1(1)}},
     // the epic (aeolian): i VI III VII
     {"Epic", M_MINOR, 4, {C1(0), C1(5), C1(2), C1(6)}},
     // a slow minor (lento): i(add9) VI i(add9) iv
     {"Lento", M_MINOR, 4, {CA(0, 1), C1(5), CA(0, 1), C1(3)}},
     // (0.16.12) slow, wide: i(add9) bVI(maj7) iv(add9) bVI
     {"Haze", M_MINOR, 4, {CA(0, 8), CA(5, 6), CA(3, 8), C1(5)}},
-    // the tonic alone (a drone: with SCALE Prog, everything on its chord)
-    {"Static", M_MAJOR, 1, {C1(0)}},
+    // the tonic (a drone: with SCALE Prog, everything on its chord), breathing (0.16.83: four, before one): I, Isus2,
+    // I, Isus4, the root and the fifth always there
+    {"Static", M_MAJOR, 4, {C1(0), CQ(0, Q_SUS2), C1(0), CQ(0, Q_SUS4)}},
 };
 #undef C1
 #undef CQ

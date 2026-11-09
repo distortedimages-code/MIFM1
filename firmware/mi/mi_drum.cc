@@ -132,7 +132,7 @@ void drum_set(int t, int model, float note, const float* k) {
   if (t < 0 || t >= MF_TRACKS) return;
   Drum& d = drum[t];
   d.model = model < 0 ? 0 : model >= DR_MODELS ? DR_MODELS - 1 : model;
-  d.note = note;
+  d.note = mi_tuned(note);   // (0.16.84: the microtonal SCALEs' tuning)
   for (int i = 0; i < 8; ++i) d.k[i] = clampf(k[i], 0.0f, 1.0f);
 }
 

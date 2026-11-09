@@ -3997,9 +3997,9 @@ int main(int argc, char** argv) {
   {                                     // 63. the harmony (0.16.12): PADS' progressions and colours of then where a
     // project of then finds them; the new chords (off the scale, suspended, the cliché's line, POWER, the eleventh);
     // the phrygian dominant; FLIP minor one bar, dorian the next
-    static const char* const kOldProg[17] = {"Manual", "Tintin", "Mirror", "Pachelbel", "Folia", "Lament", "Fifths",
-                                             "Gymnopedie", "Prelude", "Plagal", "Dorian", "Dub", "Hymn", "Phrygian",
-                                             "Epic", "Lento", "Static"};
+    static const char* const kOldProg[17] = {"Manual", "Tintin", "Mirror", "Canon", "Folia", "Lament", "Fifths",
+                                             "Satie", "Bach", "Plagal", "Dorian", "Dub", "Hymn", "Phryg",
+                                             "Epic", "Lento", "Static"};   // (0.16.83: their names six letters)
     static const char* const kOldColor[4] = {"Triad", "7th", "9th", "11th"};
     char nm[24];
     int kept = 1;
@@ -4036,9 +4036,9 @@ int main(int argc, char** argv) {
     };
     const int kFlat2[3] = {1, 5, 8}, kCliche[4] = {0, 3, 7, 11}, kSus2[3] = {0, 2, 7}, kPower[3] = {0, 7, 12};
     const int k11[5] = {0, 7, 10, 14, 17}, kTritone[3] = {6, 10, 13}, kHover[3] = {0, 2, 7};
-    int chords = chord_is(prog_at("Flat II"), 1, "Triad", kFlat2, 3) && chord_is(prog_at("Descent"), 1, "Triad", kCliche, 4) &&
+    int chords = chord_is(prog_at("Napoli"), 1, "Triad", kFlat2, 3) && chord_is(prog_at("Cliche"), 1, "Triad", kCliche, 4) &&
                  chord_is(0, 0, "Sus2", kSus2, 3) && chord_is(0, 0, "Power", kPower, 3) && chord_is(0, 0, "11th", k11, 5) &&
-                 chord_is(prog_at("Tritone"), 1, "Triad", kTritone, 3) && chord_is(prog_at("Hover"), 0, "Triad", kHover, 3);
+                 chord_is(prog_at("Devil"), 1, "Triad", kTritone, 3) && chord_is(prog_at("Hover"), 0, "Triad", kHover, 3);
     project_t* p = eng_project();
     static float l[128], r[128];
     eng_blank(p);
@@ -4068,7 +4068,7 @@ int main(int argc, char** argv) {
     for (int i = 0; i < pads_progs(); ++i) {
       float u = (static_cast<float>(i) + 0.5f) / static_cast<float>(pads_progs());
       pads_knob_text(0, u, nm, sizeof nm);
-      if (!strcmp(nm, "Descent")) p->val[PG_TRACK(3, 0) * 4 + 1] = u;
+      if (!strcmp(nm, "Cliche")) p->val[PG_TRACK(3, 0) * 4 + 1] = u;
     }
     for (int st = 0; st < 16; ++st) eng_trig_set(3, st, st % 4 == 0);
     static char names[4][16];

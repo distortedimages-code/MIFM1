@@ -575,32 +575,32 @@ l'accord : son degré dans la gamme (une touche, un accord ; les pas, leurs lock
 | PROG | Les accords | D'après |
 | --- | --- | --- |
 | Manual | celui de la note jouée | |
-| Descent | i, i(maj7), i7, i6 : une voix qui descend par demi-tons à l'intérieur de l'accord mineur (0.16.12) | le « line cliché » des musiques de film |
+| Cliche | i, i(maj7), i7, i6 : une voix qui descend par demi-tons à l'intérieur de l'accord mineur (0.16.12) | le « line cliché » des musiques de film |
 | Tintin | i tenu, et au-dessus une voix qui descend par degrés depuis l'octave et remonte (les notes de l'accord, déjà là, sautées ; mineur) | Arvo Pärt, *Für Alina* (1976) : les tintinnabuli |
 | Mirror | I, IV et V, une note ajoutée qui tourne autour (majeur) | Pärt, *Spiegel im Spiegel* (1978) |
-| Flat II | i ♭II ♭VII i : le ♭II majeur, un demi-ton au-dessus de la tonique, hors gamme (0.16.12) | la sixte napolitaine, le phrygien des bandes originales sombres |
-| Pachelbel | I V vi iii IV I IV V | le Canon en ré |
-| Tritone | i ♭V i ♭VI : un accord majeur à la quarte augmentée, hors gamme (0.16.12) | le triton, inquiétant |
+| Napoli | i ♭II ♭VII i : le ♭II majeur, un demi-ton au-dessus de la tonique, hors gamme (0.16.12) | la sixte napolitaine, le phrygien des bandes originales sombres |
+| Canon | I V vi iii IV I IV V | Pachelbel, le Canon en ré |
+| Devil | i ♭V i ♭VI : un accord majeur à la quarte augmentée, hors gamme (0.16.12) | le triton, inquiétant |
 | Folia | i V i VII III VII i V | la Folia (Corelli, Vivaldi, Rachmaninov) |
 | Lament | i VII VI V | la basse de lamentation (Purcell, *Didon et Énée*), la cadence andalouse |
 | Rise | i III IV i : le IV majeur dans une tonalité mineure, qui soulève (0.16.12) | l'emprunt au dorien |
 | Fifths | vi ii V I IV vii iii vi | le cercle des quintes baroque |
-| Gymnopedie | IVmaj7 Imaj7 | Satie, la première *Gymnopédie* |
+| Satie | IVmaj7 Imaj7 deux fois, puis ii7 v7 ii7 Imaj7 : là où sa mélodie l'emmène, le v mineur de son tour dorien (0.16.83 : huit accords ; avant, les deux premiers) | Satie, la première *Gymnopédie* |
 | Hover | i(sus2) ♭VI(sus2) ♭III ♭VII(sus4) : suspendu, rien ne se résout (0.16.12) | les nappes des musiques de film d'aujourd'hui |
-| Prelude | I ii7 V7 I vi ii V7 I | Bach, le premier prélude du *Clavier bien tempéré* |
+| Bach | I ii7 V7 I vi ii V7 I | Bach, le premier prélude du *Clavier bien tempéré* |
 | Shift | I i ♭VI ♭VII : le majeur puis le mineur sur la même tonique (0.16.12) | l'échange de modes |
 | Plagal | I IV I IV vi IV I I | l'amen des chorals |
-| Dorian | i7 IV7 | le vamp dorien |
-| Mediant | i ♭VI i III : le III majeur, hors gamme, une médiante chromatique (0.16.12) | les médiantes des musiques de film |
+| Dorian | i7 IV7 ♭VII IV7 (0.16.83 : quatre ; avant, i7 IV7) | le vamp dorien |
+| Filmic | i ♭VI i III : le III majeur, hors gamme, une médiante chromatique (0.16.12) | les médiantes des musiques de film |
 | Dub | i7 iv7 i7 VII | le dub |
 | Hymn | I vi IV V I IV V I | un choral |
 | Pedal | i, puis ♭VII, v, ♭VII avec la tonique dedans : des accords qui bougent sur la tonique tenue (0.16.12) | la pédale |
-| Phrygian | i II i VII VI VII II i | le phrygien |
-| Dominant | I ♭II ♭vii ♭II, en phrygien dominant (0.16.12) | le phrygien dominant (flamenco, musiques du Moyen-Orient) |
+| Phryg | i II i VII VI VII II i | le phrygien |
+| Hijaz | I ♭II ♭vii ♭II, en phrygien dominant (0.16.12) | le phrygien dominant (flamenco, musiques du Moyen-Orient) |
 | Epic | i VI III VII | l'éolien des musiques de film |
 | Lento | i(add9) VI i(add9) iv | un mineur lent |
 | Haze | i(add9) ♭VI(maj7) iv(add9) ♭VI : lent, large (0.16.12) | les nappes ambient |
-| Static | I | un bourdon : en Prog, toute la machine sur un accord |
+| Static | I, Isus2, I, Isus4 : la fondamentale et la quinte toujours là (0.16.83 : quatre ; avant, I seul) | un bourdon qui respire : en Prog, toute la machine sur un accord |
 
 **COLOR** : la couleur de l'accord (0.16.12 : neuf ; avant, quatre) : **Power** (la fondamentale, la quinte et l'octave,
 sans tierce), **Triad**, **Sus2** et **Sus4** (la tierce remplacée par la seconde, la quarte), **7th**, **9th**, **11th**
@@ -1417,6 +1417,14 @@ Son coût, compté en instructions : **22 µs de plus** par bloc de 2,9 ms que l
 machine, c'est la part **FX** de la page machine (GLO) qui le montre : la comparer, le delay net puis le BBD, sur le même
 projet.
 
+**Les pastilles d'algorithme** (0.16.83). Sous le nom de la réverbe, du delay et du filtre d'une piste, une rangée de
+pastilles : leurs algorithmes (CLOUDS, METAL, SHIMMER ; SYNC, FREE, BBD SYNC, BBD FREE ; OFF, LADDER, MS-20, SEM, VOX),
+celui qui joue plein, à la couleur de la page, les autres en contour. ALGORITHM en choisit un autre : le plein glisse
+jusqu'à lui en ralentissant, et une rangée plus longue que sa place glisse avec lui, de droite à gauche quand on avance
+(l'inverse en revenant), celui qui joue au milieu autant que les bouts de la rangée le permettent. La ligne sous le nom
+ne répète plus l'algorithme (FROM CLOUDS, METAL, FREE, BBD) : elle garde le reste (les envois, le temps, la largeur du
+BBD).
+
 **La réverbe** (FX) : **ALGORITHM** choisit **CLOUDS**, **METAL** ou **SHIMMER** (0.16.41 ; les potards gardent leur
 place d'un algorithme à l'autre, et les projets d'avant restent sur CLOUDS). CLOUDS est celle du module (TIME, DAMP,
 DIFFUSE, RETURN). **METAL** est la réverbe de MIFM1, d'après ce que fait l'**Erbe-Verb** de Make Noise (des tailles
@@ -1479,7 +1487,8 @@ piste active par-dessus.
 T1 (un pas, un ratchet, une touche), ces pistes baissent d'autant et remontent avec DECAY. Le duck agit sur la piste
 avant ses envois : ses échos et sa réverbe partent baissés avec elle (les queues déjà dans les effets continuent).
 Sa profondeur se locke pas par pas, comme le reste de la piste. **La source** (0.16.42) : sur cette page, ALGORITHM
-choisit la piste dont les trigs font plonger les autres, de T1 à T4 (le panneau écrit « AT T2'S TRIGS ») ; les trois
+choisit la piste dont les trigs font plonger les autres, de T1 à T4 (le panneau écrit « AT T2'S TRIGS », et depuis la
+0.16.83 un petit carré rouge « T2 » à côté de DUCK, de la hauteur de ses capitales) ; les trois
 potards de profondeur deviennent ceux des trois autres pistes, dans l'ordre (source T2 : T1, T3, T4), chacun à sa
 couleur. Le kick n'est plus obligé d'être sur T1, et on peut faire plonger les pistes sous n'importe quel son. La
 source elle-même ne plonge jamais ; ses locks de profondeur sont gardés et reviennent quand elle n'est plus la

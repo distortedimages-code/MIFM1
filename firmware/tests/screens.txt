@@ -253,7 +253,9 @@ turn ALGO 1
 wait 400
 shot 11b2_delay_free.png
 turn ALGO 1
-wait 400
+wait 80
+shot 11b2a_delay_pills_sliding.png
+wait 320
 shot 11b3_delay_bbd.png
 turn SELECT 2
 wait 400

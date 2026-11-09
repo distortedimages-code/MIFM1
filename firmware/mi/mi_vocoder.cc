@@ -183,7 +183,7 @@ MI_COLD void take(Voc& s) {
 // late: its edges found when they come)
 __attribute__((noinline)) void voice_saws(VVoice& v, float d_cents, float r3, float g3, float e0, float e1,
                                          float* __restrict y, int n) {
-  const float f = note_hz(v.note);
+  const float f = note_hz(mi_tuned(v.note));   // (0.16.84: the microtonal SCALEs' tuning)
   const float r = fm_exp2f(d_cents * (1.0f / 1200.0f));
   const float d[3] = {clampf(f / kSr, 1e-6f, 0.45f), clampf(f * r / kSr, 1e-6f, 0.45f), clampf(f * r3 / kSr, 1e-6f, 0.45f)};
   const float g[3] = {1.0f, 1.0f, g3};

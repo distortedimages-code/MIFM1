@@ -346,7 +346,7 @@ MI_COLD void static_render(int t, float* out, uint32_t n) {   // (its glue for s
   const int ni = static_cast<int>(n);
   if (mode == BODY) {
     RunBody r;
-    r.inc0 = clampf(note_hz(s.note - 12.0f) / kSr, 0.0f, 0.45f);
+    r.inc0 = clampf(note_hz(mi_tuned(s.note) - 12.0f) / kSr, 0.0f, 0.45f);   // (0.16.84: tuned)
     r.kp = exn(-1.0f / (body_sweep(k[2]) * kSr));
     r.mix = k[3];
     r.drive = body_drive(k[4]);
@@ -359,7 +359,7 @@ MI_COLD void static_render(int t, float* out, uint32_t n) {   // (its glue for s
   } else if (mode == ARC) {
     arc_drift(s, k[5], ni);
     RunArc r;
-    const float f0 = clampf(note_hz(s.note), 20.0f, 8000.0f);
+    const float f0 = clampf(note_hz(mi_tuned(s.note)), 20.0f, 8000.0f);   // (0.16.84: tuned)
     r.incc = clampf(f0 * ex2(s.dr[0] * (1.0f / 1200.0f)) / kSr, 0.0f, 0.45f);
     r.incm = clampf(arc_mod(k[1]) * ex2(s.dr[1] * (1.0f / 1200.0f) + s.jump * (1.0f / 12.0f)) / kSr, 0.0f, 0.45f);
     const float inv = 1.0f / static_cast<float>(ni > 0 ? ni : 1), turns = 1.0f / 6.2831853f;

@@ -485,7 +485,7 @@ void poly_render(int t, float* out, uint32_t n) {
     float ct = v.tol[0] * 7.0f * vint + v.dr * 5.0f * vint;
     if (unison) ct += v.uni * (3.0f + 27.0f * uni);
     else if (chord) ct += v.uni * 9.0f * uni;
-    float f = note_hz(v.note + ct * 0.01f);
+    float f = note_hz(mi_tuned(v.note) + ct * 0.01f);   // (0.16.84: the microtonal SCALEs' tuning)
     VBlock c;
     c.d = clampf(f / kSr, 1e-5f, 0.45f);
     c.id = 1.0f / c.d;

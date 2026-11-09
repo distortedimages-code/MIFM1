@@ -37,7 +37,7 @@ pat-store: $(OUT)/pat_store_test
 
 # the FM drums (third_party/lxr) as the FM-1 computes them, against the LXR-02's arithmetic (doubles, fused
 # multiply-adds): the same voices, sample by sample
-LXR_SRC = firmware/mi/mi_lxr.cc $(wildcard firmware/third_party/lxr/*.cc firmware/third_party/lxr/Soundengine/DSPAudio/*.cc)
+LXR_SRC = firmware/mi/mi_lxr.cc firmware/mi/mi_shared.cc $(wildcard firmware/third_party/lxr/*.cc firmware/third_party/lxr/Soundengine/DSPAudio/*.cc)
 $(OUT)/lxr_port: tools/lxr_check.cc $(LXR_SRC)
 	@mkdir -p $(OUT)
 	$(CXX) -std=gnu++11 $(FLAGS) -w $(INC) tools/lxr_check.cc $(LXR_SRC) -lm -o $@

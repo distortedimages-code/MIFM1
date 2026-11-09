@@ -462,8 +462,9 @@ void pro_render(int t, float* out, uint32_t n) {
     const float spread = o.sync ? 0.0f : 7.0f * vint;   // (cents, A down, B up)
     const float ca = v.tol[0] * 6.0f * vint + v.dr * 5.0f * vint - spread;
     const float cb = v.tol[1] * 6.0f * vint + v.dr * 4.0f * vint + spread;
-    const float fb = note_hz(v.note + o.bint + cb * 0.01f);
-    const float fa0 = o.sync ? fb * fm_exp2f(o.aint * (1.0f / 12.0f)) : note_hz(v.note + ca * 0.01f);
+    const float tn = mi_tuned(v.note);   // (0.16.84: the microtonal SCALEs' tuning; B's interval over it as it was)
+    const float fb = note_hz(tn + o.bint + cb * 0.01f);
+    const float fa0 = o.sync ? fb * fm_exp2f(o.aint * (1.0f / 12.0f)) : note_hz(tn + ca * 0.01f);
     XBlock c;
     c.db = clampf(fb / kSr, 1e-6f, 0.45f);
     c.idb = 1.0f / c.db;

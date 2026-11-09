@@ -281,6 +281,7 @@ MI_COLD void lx_init(void) {
 
 void lx_set(int t, int model, float note, const float* k) {
   if (t < 0 || t >= LXR_VOICES || model < 0 || model >= LX_MODELS) return;
+  note = mi_tuned(note);               // (0.16.84: the microtonal SCALEs' tuning)
   Track& tr = tracks[t];
   if (tr.model != model) start(tr, t, model);
   int pitch_dirty = 0;

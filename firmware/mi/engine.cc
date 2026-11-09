@@ -1890,7 +1890,8 @@ void pads_now(float note) {
 }
 // (0.16.28) VOCODER's PLAY, in FREQ's place (its knob from the middle): to the left Mono, at noon Poly (the trig's
 // chord, the keys), to the right Manual (the key picks the scale's chord, as PADS'), then PADS' 26 progressions
-inline int voc_play(float v) { return v < -1.0f / 54.0f ? -1 : iround(clampf(v, 0.0f, 1.0f) * 27.0f); }
+const float kVocPlays = 27.0f;          // (Manual and the progressions: pads_progs())
+inline int voc_play(float v) { return v < -1.0f / 54.0f ? -1 : iround(clampf(v, 0.0f, 1.0f) * kVocPlays); }
 __attribute__((noinline)) MI_COLD int voc_pl(int t) { return voc_play(E(t, 0)); }   // (a track's, now)
 inline int voc_play_param(int param) {
   const int t = param / 12;
@@ -3863,8 +3864,9 @@ int eng_model_find(int kind, int sub) {
 MI_COLD float eng_lx_step(int param, float v, int detents) {
   if (voc_play_param(param)) {          // (VOCODER's PLAY: a choice a detent; Mono at the left end)
     int c = voc_play(v) + detents;
-    c = c < -1 ? -1 : c > 27 ? 27 : c;
-    return c < 0 ? -1.0f : static_cast<float>(c) * (1.0f / 27.0f);
+    const int top = static_cast<int>(kVocPlays);
+    c = c < -1 ? -1 : c > top ? top : c;
+    return c < 0 ? -1.0f : static_cast<float>(c) * (1.0f / kVocPlays);
   }
   int lk = eng_lx_knob(param), bip = eng_pdef(param)->kind == K_BIP;
   if (lk < 0) return v;

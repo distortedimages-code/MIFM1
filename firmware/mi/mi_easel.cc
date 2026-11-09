@@ -252,7 +252,7 @@ MI_COLD void easel_render(int t, float* out, uint32_t n) {   // (its glue for si
     mi_finish(out, n, 0.3f, &p.dcx, &p.dcy);
     return;
   }
-  const float fc = note_hz(p.note);
+  const float fc = note_hz(mi_tuned(p.note));   // (0.16.84: the microtonal SCALEs' tuning)
   const float ratio = kRatio[ratio_of(p.k[1])];
   const float dc = clampf(fc / kSr, 1e-6f, 0.45f), dm = clampf(dc * ratio, 1e-6f, 0.45f);
   const int mode = gate_of(p.k[4]);

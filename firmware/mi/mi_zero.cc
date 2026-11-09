@@ -222,7 +222,7 @@ void zero_render(int t, float* out, uint32_t n) {
   }
   v.dr += (v.dr_t - v.dr) * clampf(static_cast<float>(n) * 3e-5f, 0.0f, 1.0f);
   float a = fm_fabsf(v.vary);
-  float f0 = note_hz(v.note + v.dr * 0.12f * a * a);
+  float f0 = note_hz(mi_tuned(v.note) + v.dr * 0.12f * a * a);   // (0.16.84: the microtonal SCALEs' tuning)
   float bh = 8.0f * v.beat * v.beat * (1.0f + v.t_beat);   // the pulse's rate (Hz)
   float on = clampf(v.beat * 40.0f, 0.0f, 1.0f);           // (off at 0, faded in just above)
   float to_level = 0.5f * (1.0f - v.pulse), to_timbre = 0.5f * (1.0f + v.pulse);

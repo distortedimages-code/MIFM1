@@ -377,7 +377,7 @@ void fm4_silence(int t) {
 void fm4_set(int t, float note, const float* k) {
   if (t < 0 || t >= MF_TRACKS) return;
   Voice& v = voice[t];
-  v.note = note;
+  v.note = mi_tuned(note);              // (0.16.84: the microtonal SCALEs' tuning)
   for (int i = 0; i < 8; ++i) v.k[i] = clampf(k[i], 0.0f, 1.0f);
   v.algo = algo_of(v.k[0]);
   v.voi = voicing_of(v.k[1]);

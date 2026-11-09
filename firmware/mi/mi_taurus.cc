@@ -303,7 +303,7 @@ MI_COLD void taurus_render(int t, float* out, uint32_t n) {   // (its glue for s
     const uint32_t m = n - s0 < static_cast<uint32_t>(kSub) ? n - s0 : static_cast<uint32_t>(kSub);
     // the glide (an RC's lag), the pitches
     p.note = p.target + (p.note - p.target) * kg;
-    const float fa = note_hz(p.note + p.o[0].dr * 0.01f);
+    const float fa = note_hz(mi_tuned(p.note) + p.o[0].dr * 0.01f);   // (0.16.84: the microtonal SCALEs' tuning)
     const float da = clampf(fa / kSr, 1e-6f, 0.45f);
     const float db = clampf(da * fm_exp2f((static_cast<float>(vd.b_semis) * 100.0f + beat + p.o[1].dr) * (1.0f / 1200.0f)),
                             1e-6f, 0.45f);

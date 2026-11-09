@@ -337,7 +337,7 @@ MI_COLD void choir_render(int t, float* out, uint32_t n) {   // (its glue small:
       p.js += 0.0016f * (bip(c.rnd) - p.js);
       p.vph += kRate[i] * (1.0f + 0.6f * p.js) * static_cast<float>(m) * (1.0f / kSr);
       p.vph -= p.vph >= 1.0f ? 1.0f : 0.0f;
-      const float semi = p.semi + p.scoop + vib * p.venv * fm_sin_turns(p.vph) + 0.5f * p.jf + 2.0f * p.js;
+      const float semi = mi_tuned(p.semi) + p.scoop + vib * p.venv * fm_sin_turns(p.vph) + 0.5f * p.jf + 2.0f * p.js;   // (0.16.84: tuned)
       const float f0 = note_hz(clampf(semi, 28.0f, 92.0f));
       // its loudness over these samples: up to 1 while the gate is (ATTACK), down after (RELEASE); a little shimmer
       const float aim = c.gate && on ? 1.0f + 0.25f * p.jf : 0.0f;
