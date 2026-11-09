@@ -253,6 +253,7 @@ static struct {
     int lrec, lr_combo, noclick;         /* (0.16.31) live recording (REC and PLAY); REC's release taken; no metronome */
     int lr_s, lr_t;                      /* the step it wrote last, its track, the lane's place then (keys within a */
     float lr_last;                       /* step: a chord) */
+    uint32_t lr_ms;                      /* (0.16.72) when (a key within LREC_CHORD_MS: the same chord, its step) */
     float lr_at[NKEYS];                  /* each key held: the lane's place at its press, its step, its track + 1 */
     int8_t lr_step[NKEYS], lr_trk[NKEYS];
     int oct_was, spage_was;              /* the octave, the steps' page before an OCT press (both: put back) */
@@ -6170,9 +6171,10 @@ static void lrec_bars(int d)
     }
 }
 
+#define LREC_CHORD_MS 60u               /* (keys this close: one chord) */
 static void lrec_key(int k, int note, int down)
 {
-    int t = down ? ui.track : ui.lr_trk[k] - 1, len, s, nt[4], n;
+    int t = down ? ui.track : ui.lr_trk[k] - 1, len, s, nt[4], n, chord;
     float pos = t >= 0 ? eng_lane_pos(t) : -1.0f;
     if (pos < 0.0f)                      /* (counting in, stopped) */
         return;
@@ -6184,14 +6186,22 @@ static void lrec_key(int k, int note, int down)
         ui.lr_trk[k] = 0;
         return;
     }
-    s = eng_step_now(t);
-    if (s < 0 || s >= len)
-        return;
-    if (pos - (float)(int)pos >= 0.5f && eng_project()->dir[t] == DIR_FWD) {   /* nearer the next: there */
-        s = (s + 1) % len;
-        eng_rec_skip(t, s);
+    /* (0.16.72) a key within LREC_CHORD_MS of the last one written: the same chord, on that one's step. Before, each
+     * key went to the step nearer its own press: a chord's keys a few ms apart across the step's half (one chord in
+     * five, played as a hand plays them) split, its first notes on a step, the others on the next */
+    chord = t == ui.lr_t && ui.lr_s >= 0 && ui.lr_s < len && plat_ms() - ui.lr_ms <= LREC_CHORD_MS;
+    if (chord) {
+        s = ui.lr_s;
+    } else {
+        s = eng_step_now(t);
+        if (s < 0 || s >= len)
+            return;
+        if (pos - (float)(int)pos >= 0.5f && eng_project()->dir[t] == DIR_FWD) {   /* nearer the next: there */
+            s = (s + 1) % len;
+            eng_rec_skip(t, s);
+        }
     }
-    n = s == ui.lr_s && t == ui.lr_t && pos - ui.lr_last < 1.0f ? eng_step_notes(t, s, nt) : 0;
+    n = chord || (s == ui.lr_s && t == ui.lr_t && pos - ui.lr_last < 1.0f) ? eng_step_notes(t, s, nt) : 0;
     if (n < 4)
         nt[n++] = note - 48;
     {                                    /* (0.16.66) a note it cannot hold: said, and no trig left on the track's note */
@@ -6207,7 +6217,7 @@ static void lrec_key(int k, int note, int down)
     }
     if (n == 1)
         eng_step_tie_set(t, s, 0);
-    ui.lr_s = s, ui.lr_t = t, ui.lr_last = pos;
+    ui.lr_s = s, ui.lr_t = t, ui.lr_last = pos, ui.lr_ms = plat_ms();
     ui.lr_at[k] = pos, ui.lr_step[k] = (int8_t)s, ui.lr_trk[k] = (int8_t)(t + 1);
     dirty = 1;
 }

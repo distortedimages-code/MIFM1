@@ -1240,7 +1240,10 @@ octaves), effacés avec les autres ; un trig joué au clavier ou par Endless n'a
 **L'enregistrement en direct** (0.16.31) : **tenir REC et appuyer sur PLAY**, puis jouer au clavier. Chaque note tombe
 sur le pas le plus proche de la piste active, avec sa hauteur (sa NOTE, comme le dirait la vue des notes d'un pas) ;
 **juste avant un pas**, elle y est écrite et ce pas ne la rejoue pas quand le séquenceur y arrive (on l'a déjà
-entendue) ; des touches pressées dans le même pas font un **accord** (quatre notes au plus) ; une touche **tenue** sur
+entendue) ; des touches pressées dans le même pas font un **accord** (quatre notes au plus), et depuis 0.16.72 des
+touches pressées à moins de 60 ms l'une de l'autre aussi, même si elles tombent de part et d'autre du milieu d'un pas
+(avant, un accord sur cinq joué comme la main le joue, quelques ms entre les doigts, se coupait en deux : ses
+premières notes sur un pas, les autres sur le suivant) ; une touche **tenue** sur
 plusieurs pas donne sa **longueur** à la note (comme un trig tenu avec un pas plus loin en STEP). On enregistre par-dessus
 ce qui est là : un pas joué remplace ses notes, les autres pas restent, et les autres locks du pas aussi. **PLAY passe au
 rouge** et REC clignote ; **REC** à nouveau arrête l'enregistrement (les pas continuent), PLAY arrête tout. Depuis
