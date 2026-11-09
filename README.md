@@ -170,7 +170,7 @@ silencieux (0.16.29).
 **Les petites animations** (0.16.79). Les exemples à jouer (de la 0.16.25 à la 0.16.78 : de petits modules qu'on
 jouait en tirant leur schéma, chacun sur deux copies de plus du firmware, l'une dans son propre worklet audio, l'autre
 sur la page pour le dessin) sont retirés : ils alourdissaient la page, et `firmware/web.c` comme
-`web/emu/app_worklet.js` perdent leur code (~1 500 lignes de moins en tout). À leur place, huit petites animations,
+`web/emu/app_worklet.js` perdent leur code (~1 500 lignes de moins en tout). À leur place, de petites animations,
 rien que du SVG et du CSS, au pied des fiches :
 - **KICK** : un coup, son onde qui s'éteint, sa hauteur qui tombe (en pointillé) ;
 - **SDS TOM** : la hauteur qui descend moins vite que le son ne s'éteint ;
@@ -181,8 +181,20 @@ rien que du SVG et du CSS, au pied des fiches :
 - **la réverbe** : un coup, puis ses réflexions, de plus en plus denses, qui s'éteignent ;
 - **Warps** : la porteuse fois la modulante, le produit d'un modulateur en anneau.
 
+En 0.16.80, les autres voix des batteries et du SDS ont la leur, pour qu'aucune fiche d'une rangée ne reste vide à
+côté d'une animée (et la légende garde la hauteur de quatre lignes : les dessins d'une rangée sont à niveau) :
+- **SNARE** : le triangle de la peau, qui tombe à peine, et dessous le bruit du timbre ;
+- **CLAP** : un bruit frappé trois fois à quelques millisecondes d'écart, puis la pièce ;
+- **HAT** : N.DECAY qui l'ouvre, fermé puis ouvert ;
+- **TOM** : la note de chaque pas qui l'accorde, une mélodie sur des peaux ;
+- **PERC** : entre triangle et dent de scie, sous une enveloppe toute droite ;
+- **SDS KICK** : un triangle bancal arrondi par un condensateur, frappé d'un clic, qui plie vers le bas en mourant ;
+- **SDS SNARE** : le ton et le bruit à moitié-moitié, puis une note fantôme (HIT verrouillé bas) ;
+- **SDS PERC** : aiguë, son bruit qui sonne dans un filtre résonant, sa hauteur pliée vers le haut.
+
 Elles ne bougent que tant qu'elles sont à l'écran, et restent entières et immobiles quand le système demande moins de
-mouvement. Pour entendre un moteur, « Essayer » le charge toujours sur la machine.
+mouvement. Pour entendre un moteur, « Essayer » le charge toujours sur la machine. Un onglet ouvert avant une mise à
+jour garde l'ancienne page, qui va chercher le nouveau firmware : la recharger.
 
 Les histoires des machines récentes (POLY, REV3, TAURUS, VOCODER, CHOIR, STATIC, et EASEL depuis la 0.16.63) ont leurs
 photos d'archives depuis la 0.16.44, et METAL la sienne : la plaque EMT 140 (1957), puis l'Erbe-Verb de Tom Erbe et
