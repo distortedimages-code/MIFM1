@@ -4803,7 +4803,7 @@ MI_COLD void theme_v42(project_t* p) {
 // the interval makes in a scale of seven (+12 the octave, +7: +4, a fifth)
 MI_COLD void transp_steps(project_t* p) {
   float& t = p->val[PG_PADS5 * 4 + 3];
-  t = static_cast<float>(iround(clampf(t, -24.0f, 24.0f) * (7.0f / 12.0f)));
+  t = static_cast<float>(iround(t * (7.0f / 12.0f)));
 }
 // (0.16.66) a project before: NOTE -24..24 (C1 to C5), now -48..60 (C-1 to C8: all the keyboard reaches, its octaves
 // up and down; the live recording's high notes, out of it, were left a trig on the track's note). Its locks' bytes

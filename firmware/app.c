@@ -163,6 +163,7 @@ static int pat_bank;                     /* the bank its screen shows */
 static int pat_open;                     /* SEQ held: its screen (0.16.68: open until SEQ again) */
 static int pat_used;                     /* a key pressed while SEQ held (its tap not SEQ's page then) */
 static int pat_in;                       /* SEQ pressed with the screen open (let go without a key: it closes) */
+static int pat_go;                       /* the order made (chain_new): applied after the buttons and keys (input) */
 /* the presets (0.15.1): a track's sound each, A the factory's (engine.cc), B to K saved (pat_store.h's keys from
  * PRE_KEY on); their section further down */
 static int pre_open;                     /* EDIT held: their screen */
@@ -4489,7 +4490,7 @@ static void pattern_key(int k, int down) /* SEQ held: a black key a bank, a whit
         } else if (!held(B_SEQ)) {       /* (0.16.68: the screen open, SEQ let go) that one next, alone */
             chain_new[0] = (uint8_t)slot;
             chain_new_n = 1;
-            chain_apply();
+            pat_go = 1;
         } else if (chain_new_n < (int)sizeof chain_new) {
             chain_new[chain_new_n++] = (uint8_t)slot;
         }
@@ -5626,8 +5627,8 @@ static void button_up(int b)
             module_button(B_SEQ);
         else if (pat_in && !pat_used)
             pattern_close();
-        else if (chain_new_n)
-            chain_apply();
+        else
+            pat_go = 1;                  /* (the order made, if keys were pressed: input) */
         break;
     case B_EDIT:                         /* a tap: the track's sets; held: the screen closed */
         if (!pre_used && !ui.long_done[b])
@@ -6275,6 +6276,10 @@ static void input(void)
     }
     ui.btn = btn;
     poll_keys();
+    if (pat_go && chain_new_n)           /* (SEQ let go, or a key alone on the open screen: one place, chain_apply
+                                          * inlined once) */
+        chain_apply();
+    pat_go = 0;
     if (pat_open) {                      /* (0.16.68) the patterns' screen: SELECT its bank; the other knobs nothing (the
                                           * page under it not moved unseen) */
         e = plat_enc(EN_SELECT);
@@ -6542,16 +6547,8 @@ static void input(void)
                 if (eng_lfo_phase(i) < 0.5f)
                     kk |= 1u << W[i];
         }
-        if (pat_open) {                  /* (0.16.68) the patterns: SEQ lit; the bank's black key, its saved ones (the
-                                          * one playing blinks) */
-            bb = 1u << B_SEQ | (bb & (LED_PLAY_GREEN | 1u << B_SAVE));
-            kk = 1u << Bk[pat_bank], mk = 0;
-            for (int i = 0; i < 16; i++) {
-                int s = pat_bank * PAT_PER_BANK + i;
-                if (!!pat_full(s) != (s == pat_cur && ((now / 250u) & 1u)))
-                    kk |= 1u << W[i];
-            }
-        }
+        if (pat_open)                    /* (0.16.68) the patterns: SEQ lit, the bank's black key */
+            bb = 1u << B_SEQ | (bb & (LED_PLAY_GREEN | 1u << B_SAVE)), kk = 1u << Bk[pat_bank], mk = 0;
         plat_leds(bb, kk);
         plat_lights_mid(0, mk);
         plat_glow(1);

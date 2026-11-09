@@ -522,15 +522,16 @@ MI_COLD void pads_from_v36(const float* k, float* k_now, float* x) {
 // its notes away (+2 a third, +4 a fifth, +7 the octave in a scale of seven; the scale's own, so always in it); a note
 // off the scale as far from the one under it as it was. Semitones before (a fifth over the seventh degree: off the scale)
 MI_COLD int pads_steps(uint16_t mask, int pc, int tr) {   // from pc (0..11 over the tonic): the semitones to the note
-  int s[12];                                              // tr steps of the scale away
-  const int n = scale_notes(mask ? mask : 0xFFFu, s);
-  int d = n - 1;
-  while (d > 0 && s[d] > pc) --d;
-  return tone(s, n, d + tr) - s[d];
+  if (!mask) mask = 0xFFFu;                               // tr steps of the scale away (none: semitones)
+  int p = pc, q;
+  while (p > 0 && !((mask >> p) & 1u)) --p;              // (the scale's note at or under it)
+  for (q = p; tr > 0; tr -= (mask >> ((++q + 120) % 12)) & 1u) {}
+  for (; tr < 0; tr += (mask >> ((--q + 120) % 12)) & 1u) {}
+  return q - p;
 }
 MI_COLD void lay_steps(Pad& v, int tr) {
   for (int i = 0; i < v.nv; ++i)
-    v.lt[i] = static_cast<float>(pads_steps(v.smask, ((static_cast<int>(v.pitch[i]) - v.tonic) % 12 + 12) % 12, tr));
+    v.lt[i] = static_cast<float>(pads_steps(v.smask, (static_cast<int>(v.pitch[i]) - v.tonic + 120) % 12, tr));
   v.lt_tr = tr;
   v.lt_new = 0;
 }
@@ -1196,8 +1197,7 @@ void pads_render(float* out, uint32_t n) {
   // (0.16.59) Vox: its vowels' speed (CHARACTER: 57 s .. 3.6 s a round, 14 s at 0.5), its formants with TRANSP; Air:
   // its bands' Q (9.9 .. 79, 28 at 0.5)
   const float vox_rate = ly == LY_VOX ? 0.07f * exp2_b(4.0f * la - 2.0f) : 0.0f;
-  const float vox_ft = ly == LY_VOX ? exp2_b((v.nv > 0 ? v.lt[v.nv - 1] : 0.0f) * (1.0f / 12.0f)) : 1.0f;   // (the top
-                                        // voice's TRANSP)
+  const float vox_ft = ly == LY_VOX ? exp2_b(v.lt[0] * (1.0f / 12.0f)) : 1.0f;   // (its lowest voice's TRANSP)
   const float air_q = ly == LY_AIR ? 28.0f * exp2_b(4.5f * la - 2.25f) : 28.0f;
   // (0.16.64) the pad's states in locals over the block, put back after it (the compiler kept them in memory, out[]
   // might have been one of them: loaded and stored again every sample); its 32 samples' chunks, a loop each

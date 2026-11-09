@@ -1299,8 +1299,7 @@ quand on lâche SEQ** : on y choisit, efface et sauve les patterns tranquillemen
 touche) le referme ; le bouton d'un autre module le referme aussi et ouvre sa page. En haut les banques, sur les
 **touches noires** (ou SELECT) ; dessous les 16 patterns de la banque, sur les **touches blanches** (pleins : remplis ;
 vides : un cadre ; celui qui joue dans la première couleur ; le suivant encadré dans la deuxième, qui clignote). Les
-LED suivent : SEQ allumé, la touche noire de la banque, les touches blanches des patterns remplis, celle du pattern en
-cours qui clignote. **Une touche joue ce pattern**, en boucle ; **SEQ tenu et plusieurs touches à la suite font un
+LED suivent : SEQ allumé, et la touche noire de la banque. **Une touche joue ce pattern**, en boucle ; **SEQ tenu et plusieurs touches à la suite font un
 enchaînement**, joué en boucle dans l'ordre quand on lâche SEQ : A1, A1, A2, A5 joue A1 deux fois, puis A2, puis A5 (le
 mode song). Les potards ne touchent pas la page cachée dessous tant que l'écran est ouvert. Le changement se fait **à
 la fin du pattern en cours** (sa plus longue LENGTH), tout de suite à l'arrêt. **SAVE tenu** (à l'arrêt) enregistre le
