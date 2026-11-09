@@ -315,6 +315,13 @@ float comp_release(float v) { return 0.02f * fm_exp2f(v * 6.0f); }
 
 // ------------------------------------------------------------------ engine ---
 const uint32_t kN = 128;                // app.h APP_BLOCK
+// (0.16.77) the block's preparation (the sequencer, the trigs, the effects' lanes, the bits' knobs, the render's own
+// steps) small rather than fast: it runs from the flash, through its cache, after the voices and the effects (from the
+// flash too) have taken it, so each block reads it in again, ~1 us a 32-byte line: its bytes cost more than its
+// instructions (the machine page: SEQ up to 13.5 % of a block, some 6500 instructions on average). The loops that
+// count are the RAM's (run_task, render_voice, set_voice, set_filter, apply_cables), as they were. In the riscv proxy
+// (tools/device_check.sh): the render 26.2 KB with the sequencer in it, now 7.1 + 7.2, new_trig 5.6 KB, now 4.5
+#define PREP_SMALL MI_COLD
 const uint32_t kFrames = 8;             // control frames per block (16 audio frames each: a trig lands within 0.4 ms)
 const float kSr = 44100.0f;
 const int kFx = ENG_LANES - ENG_TRACKS; // the effect lanes
@@ -1180,7 +1187,8 @@ uint8_t trig_model_at[ENG_TRACKS];      // (0.16.52) the last trig's, played or 
 // (0.16.60) a step's CLIMB LIMIT: a lock of its own (tp kTpClimbLim, its value the semitones, 1..ENG_CLIMB_MAX)
 const int kTpClimbLim = ENG_NTP + 5;
 uint8_t trig_lim[ENG_TRACKS];           // the trig playing's (0: none, ENG_CLIMB_LIM)
-void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_param, lane_lockable, the bounds)
+// (0.16.77: the block's preparation, from the flash, for size: prep_small)
+PREP_SMALL void new_trig(int lane, int step, int locks) {   // (on the RAM tables: lane_param, lane_lockable, the bounds)
   int16_t at[ENG_NTP];
   for (int tp = 0; tp < ENG_NTP; ++tp) at[tp] = -1;
   if (lock_gen_seen != lock_gen) make_lock_steps();
@@ -1538,7 +1546,7 @@ int loop_key(int t, int note) {         // (LOOP: a note as the loop's transposi
   return 0;
 }
 
-void sequence(uint32_t n) {
+__attribute__((noinline)) PREP_SMALL void sequence(uint32_t n) {
   float fl = static_cast<float>(n / kFrames);
   float sl = step_len_now();
   if (restart) {
@@ -1817,7 +1825,7 @@ void sequence(uint32_t n) {
 
 // the effects' openings this block: a trig opens its effect, DECAY closes it down to 1 - DEPTH; a lane without a trig
 // (or the steps stopped) leaves it open
-void fx_lanes(uint32_t n, float* open) {
+__attribute__((noinline)) PREP_SMALL void fx_lanes(uint32_t n, float* open) {
   for (int f = 0; f < kFx; ++f) {
     int lane = ENG_TRACKS + f, kk = kLaneKnobs[lane];
     if (fx_hit[f]) {
@@ -2282,7 +2290,7 @@ Bend bend[ENG_TRACKS];
 
 inline float note_hz(float note) { return 440.0f * fm_exp2f((note - 69.0f) * (1.0f / 12.0f)); }
 
-void set_bend(int t) {
+__attribute__((noinline)) PREP_SMALL void set_bend(int t) {
   Bend& g = bend[t];
   float ck = E(t, TP_CLOCK), cr = E(t, TP_CRUSH);
   g.mask = iround(E(t, TP_MASK));
@@ -3290,7 +3298,11 @@ void make_sub_costs() {
 }
 inline float cost_of(uint32_t m) { return sub_cost[m & ((1u << kTasks) - 1u)]; }
 
-// the voices core 1 plays (its share of v), it free at a, core 0 at b: the busier core's least (16 ways at most)
+// the voices core 1 plays (its share of v), it free at a, core 0 at b: the busier core's least (16 ways at most). (0.16.77)
+// a: when core 1 can start its voices, its first job done AND the block prepared (core 0's preparation: the voices
+// need it). Until then a counted core 1 free from the block's start: with the effects on core 0, all the voices went
+// to core 1 as if it had started them with the block (a tie, the first found), and played after the preparation they
+// ended a quarter of a block late (the machine page: core 0 73 %, core 1 72 %, the whole 106 %)
 uint32_t split_voices(uint32_t v, float a, float b, float* worst) {
   float best = 1e30f;
   uint32_t pick = 0;
@@ -3314,7 +3326,7 @@ uint32_t split_early(uint32_t early, uint32_t voices) {
   uint32_t pick = 0;
   for (uint32_t a = 0; a < (1u << kTasks); ++a) {
     if (a & ~early) continue;
-    split_voices(voices, cost_of(a), prep_cost + cost_of(early & ~a), &w);
+    split_voices(voices, fm_maxf(cost_of(a), prep_cost), prep_cost + cost_of(early & ~a), &w);
     if (w < best - 0.5f) {
       best = w;
       pick = a;
@@ -4919,6 +4931,18 @@ MI_COLD void eng_bend_preview(int t, float* y, int n) {   // a cycle of a sine t
     }
 }
 #ifdef PLAT_HOST
+MI_COLD void eng_test_split(const float* cost, float prep, uint32_t early, uint32_t voices, uint32_t* ja,
+                            uint32_t* jb, float* worst) {   // (0.16.77, the tests: the cores' split as the render makes
+  float keep[kTasks], kp = prep_cost;                          // it, from these costs)
+  for (int i = 0; i < kTasks; ++i) keep[i] = task_cost[i], task_cost[i] = cost[i];
+  prep_cost = prep;
+  make_sub_costs();
+  *ja = split_early(early, voices);
+  *jb = split_voices(voices, fm_maxf(cost_of(*ja), prep), prep + cost_of(early & ~*ja), worst);
+  for (int i = 0; i < kTasks; ++i) task_cost[i] = keep[i];
+  prep_cost = kp;
+  make_sub_costs();
+}
 MI_COLD void eng_test_bend(int t, float* x, uint32_t n) {   // (0.16.74, the tests: a buffer through the track's bits,
   set_bend(t);                                             // its knobs as the last block took them)
   apply_bend(t, x, n);
@@ -5691,7 +5715,7 @@ const int16_t* eng_usb_frames(uint32_t n, int live) {
 }
 #endif
 
-void eng_render(float* l, float* r, uint32_t n) {
+PREP_SMALL void eng_render(float* l, float* r, uint32_t n) {
 #if ENG_USB_TRACKS
   usb_ok = 0;
 #endif
@@ -5817,7 +5841,8 @@ void eng_render(float* l, float* r, uint32_t n) {
 #ifdef ENG_PROFILE
   eng_prof[0] += plat_ticks24() - t0;
 #endif
-  uint32_t jb = c1ok ? split_voices(v, cost_of(ja), prep_cost + cost_of(early & ~ja), 0) : 0u;
+  const float prepped = static_cast<float>(prep_t);   // (core 1's voices from now on, at the soonest)
+  uint32_t jb = c1ok ? split_voices(v, fm_maxf(cost_of(ja), prepped), prepped + cost_of(early & ~ja), 0) : 0u;
   uint32_t mine = (early & ~ja) | (v & ~jb), done = 0;
   int offered = 0;
   if (jb && pending) {                  // core 1 still on its first job: its voices offered, taken as it ends

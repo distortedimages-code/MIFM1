@@ -23,6 +23,8 @@ extern "C" {
 #include "Soundengine/DSPAudio/SlopeEg2.h"
 extern "C" int mi_res_check(const uint8_t* payload, uint32_t len);
 extern "C" void eng_test_bend(int t, float* x, uint32_t n);   // (0.16.74: engine.cc, PLAT_HOST)
+extern "C" void eng_test_split(const float* cost, float prep, uint32_t early, uint32_t voices, uint32_t* ja,
+                               uint32_t* jb, float* worst);   // (0.16.77)
 
 extern "C" {
 uint32_t plat_ticks24(void) {
@@ -7752,6 +7754,31 @@ int main(int argc, char** argv) {
       ++failures, printf("FAIL: the bits' second page\n");
     eng_defaults(p);
     eng_fresh();
+  }
+
+  {                                     // 83. (0.16.77) the cores' split: core 1's voices once the block is prepared.
+    // The machine page's worst block of a project (% of a block): the preparation 27, T1 16, T2 21, T3 12, T4 22, the
+    // effects 45. Before, the effects stayed on core 0 and the four voices went to core 1, as if it started them with
+    // the block: 27 + 71, the whole 106 % with the handing over. Now: each core's end as the split counts it, and as
+    // the render plays it (core 1's voices after the preparation and its first job)
+    const float cost[6] = {16.0f, 21.0f, 12.0f, 22.0f, 0.0f, 45.0f};
+    auto sum = [&](uint32_t m) { float c = 0.0f; for (int i = 0; i < 6; ++i) if ((m >> i) & 1u) c += cost[i]; return c; };
+    uint32_t ja = 0, jb = 0;
+    float worst = 0.0f;
+    const uint32_t fx = 1u << (ENG_TRACKS + 1);
+    eng_test_split(cost, 27.0f, fx, 0xFu, &ja, &jb, &worst);
+    const float c1 = std::max(sum(ja), 27.0f) + sum(jb), c0 = 27.0f + sum(fx & ~ja) + sum(0xFu & ~jb);
+    const float old_end = 27.0f + sum(0xFu);   // (the old split's: the effects here, the voices there)
+    // a light block (the effects 10): the voices shared, both from the preparation's end: 27 + 37 (16 + 21) at best
+    const float light[6] = {16.0f, 21.0f, 12.0f, 22.0f, 0.0f, 10.0f};
+    uint32_t la = 0, lb = 0;
+    float lw = 0.0f;
+    eng_test_split(light, 27.0f, fx, 0xFu, &la, &lb, &lw);
+    printf("the cores' split, a worst block (prep 27, voices 16 21 12 22, effects 45): core 1 the effects %s and voices "
+           "0x%X, the cores' ends %.0f and %.0f %% (the split's %.0f; the old split's %.0f); a light one (effects 10): "
+           "%.0f %%\n", ja == fx ? "yes" : "no", jb, c0, c1, worst, old_end, lw);
+    if (std::max(c0, c1) > 80.0f || std::fabs(std::max(c0, c1) - worst) > 0.01f || lw > 66.0f)
+      ++failures, printf("FAIL: the cores' split\n");
   }
 
   printf(failures ? "%d FAILURES\n" : "all good\n", failures);

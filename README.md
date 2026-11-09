@@ -1144,7 +1144,14 @@ les commence dès le début du bloc, pendant que le cœur 0 le prépare (le séq
 sur la page machine), puis les deux cœurs se partagent les voix : le cœur 0 propose les siennes au cœur 1 dès que le bloc est prêt, et
 le cœur 1 les prend à la fin de son premier travail, sans attendre que le cœur 0 ait fini une de ses voix pour les
 lui passer (sur le stress test, cette attente faisait monter le pic de 70 à 96 %). Une voix silencieuse depuis un moment, sa note finie, se repose jusqu'à son
-trig suivant (elle ne coûte plus rien).
+trig suivant (elle ne coûte plus rien). **Corrigé en 0.16.77** : le partage comptait le cœur 1 libre pour les voix
+dès le début du bloc, alors qu'il ne peut les jouer qu'une fois le bloc préparé. Quand les effets restaient au cœur 0,
+les quatre voix partaient au cœur 1 et finissaient un quart de bloc trop tard (un pic à 106 %, des clics : la
+préparation 27 %, puis 71 % de voix d'affilée) ; il compte maintenant ce temps, et les effets passent au cœur 1
+pendant la préparation (le même bloc : 73 % au lieu de 98). La préparation elle-même (le séquenceur, les trigs, les
+pistes des effets, les réglages des bits, le reste du rendu) est compilée pour la taille plutôt que pour la vitesse :
+elle tourne depuis la flash, que les voix et les effets lui reprennent à chaque bloc, et ce sont ses octets qui
+coûtent, pas ses instructions (le séquenceur y pesait jusqu'à 13,5 % d'un bloc) ; un tiers d'octets en moins.
 
 **Le code en RAM** (0.14.4) : le FM-1 exécute son programme depuis la flash, à travers un petit cache ; du code qui
 n'y est pas encore attend la flash, une ligne de 32 octets à la fois (environ 1 µs). Sur le stress test, la première
