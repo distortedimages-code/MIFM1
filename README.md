@@ -1885,7 +1885,9 @@ Sources : [Pretty Hate Machine](https://en.wikipedia.org/wiki/Pretty_Hate_Machin
 - `tools/` : la copie du code Mutable (`vendor_mi.sh`, `patch_mi.sh`, `split_tables.py`) et celle du LXR-02
   (`vendor_lxr.py`, depuis un clone de son dépôt ; `lxr_check.cc`), les vérifications « comme
   sur le FM-1 » (`device_check.sh`, `check_res_links.py`, `no_static_init.py`), le site (`make_installer.py`,
-  `make_index.py`, `make_fm1.py` : la page « Quel FM-1 ? ») ; `tools/bench/` : le
+  `make_index.py`, `make_fm1.py` : la page « Quel FM-1 ? » ; `site_kofi.py` : le bouton Ko-fi en bas à gauche de
+  chaque page, aux couleurs du site, qui ouvre le panneau de Ko-fi et s'écarte quand la machine de l'émulateur est
+  dessous) ; `tools/bench/` : le
   banc d'essai v0.0 (il se construit depuis le tag `bench-0.0` : les ponts vers les modules ont changé depuis)
 - `make test` : le patch par défaut joué 16 s sur l'ordinateur, chaque piste et chaque modèle entendus, sans NaN
   (WAV dans `build/wav`), et `make lxr-check` : les batteries FM comparées au calcul du LXR-02

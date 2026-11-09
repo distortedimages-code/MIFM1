@@ -127,6 +127,8 @@ jobs:
             firmware/build/*.fwsc
             firmware/build/*-res.bin
             firmware/build/rfm1/*.rfm1
+      - name: The Ko-fi button on the site's pages
+        run: python3 tools/site_kofi.py site
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
